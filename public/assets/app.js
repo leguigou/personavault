@@ -1,0 +1,2125 @@
+/* PersonaVault — interactions légères, sans dépendance */
+(() => {
+    "use strict";
+
+    /* ------------------------------------------------ toasts éphémères */
+    const toast = (msg, isError = false) => {
+        let el = document.querySelector(".toast");
+        if (!el) {
+            el = document.createElement("div");
+            el.className = "toast";
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.classList.toggle("is-error", Boolean(isError));
+        requestAnimationFrame(() => el.classList.add("is-on"));
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => el.classList.remove("is-on"), 1900);
+    };
+
+    /* ------------------------------- formulaires : ne jamais bloquer en silence */
+    document.addEventListener(
+        "submit",
+        (e) => {
+            const form = e.target;
+            if (!(form instanceof HTMLFormElement)) return;
+            if (!form.checkValidity()) {
+                e.preventDefault();
+                form.reportValidity();
+            }
+        },
+        true
+    );
+
+    /* --------------------------------------------------- confirmations */
+    document.addEventListener("submit", (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        const msg = form.dataset.confirm;
+        if (msg && !window.confirm(msg)) {
+            e.preventDefault();
+        }
+    });
+
+    /* ------------------------------ consigne de jeu proposée par l'IA */
+    document.querySelectorAll("[data-ai-directive]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            if (btn.disabled) return;
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Génération…";
+            try {
+                const fd = new FormData();
+                fd.append("_token", btn.dataset.token);
+                const res = await fetch(btn.dataset.url, {
+                    method: "POST",
+                    body: fd,
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const d = await res.json().catch(() => ({ ok: false, error: "réponse illisible" }));
+                if (!d.ok) throw new Error(d.error || "échec de la génération");
+
+                const area = document.querySelector("[data-directive]");
+                if (area) {
+                    area.value = d.directive;
+                    area.focus();
+                }
+                const temp = document.querySelector('input[name="temperature"]');
+                if (temp && d.temperature) temp.value = Number(d.temperature).toFixed(2);
+
+                toast("Consigne proposée — relis, ajuste, puis enregistre.");
+            } catch (e) {
+                toast("Erreur : " + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        });
+    });
+
+    /* ------------------------------------------------- copier un prompt */
+    document.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-copy]");
+        if (!btn) return;
+        const target = document.querySelector(btn.dataset.copy);
+        if (!target) return;
+        const text = target.textContent || "";
+        try {
+            await navigator.clipboard.writeText(text.trim());
+        } catch {
+            const ta = document.createElement("textarea");
+            ta.value = text.trim();
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+        }
+        const old = btn.textContent;
+        btn.textContent = "Copié";
+        toast("Prompt copié");
+        setTimeout(() => (btn.textContent = old), 1200);
+    });
+
+    /* ------------------------------------------------- réglages : onglets */
+    const tabsNav = document.querySelector("[data-tabs]");
+    if (tabsNav) {
+        const panels = document.querySelectorAll("[data-panel]");
+        const activate = (id) => {
+            tabsNav.querySelectorAll(".tab").forEach((t) => {
+                const on = t.dataset.tab === id;
+                t.classList.toggle("is-on", on);
+                if (on) {
+                    // garde l'onglet actif visible quand la barre défile
+                    t.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+                }
+            });
+            panels.forEach((p) => {
+                p.hidden = p.dataset.panel !== id;
+            });
+        };
+
+        // la barre d'onglets se défile horizontalement : le dégradé du bord
+        // disparaît une fois arrivé au bout
+        const syncTabsFade = () => {
+            const max = tabsNav.scrollWidth - tabsNav.clientWidth;
+            tabsNav.classList.toggle("is-end", tabsNav.scrollLeft >= max - 4);
+        };
+        tabsNav.addEventListener("scroll", syncTabsFade, { passive: true });
+        window.addEventListener("resize", syncTabsFade);
+        syncTabsFade();
+        tabsNav.addEventListener("click", (e) => {
+            const t = e.target.closest(".tab");
+            if (t) activate(t.dataset.tab);
+        });
+        const fromHash = () => {
+            const h = (location.hash || "").replace("#", "");
+            if (h && document.querySelector('[data-panel="' + h + '"]')) activate(h);
+        };
+        fromHash();
+        window.addEventListener("hashchange", fromHash);
+    }
+
+    /* ------------------------------------------- curseurs des réglages */
+    document.querySelectorAll("input.range[data-out]").forEach((input) => {
+        const out = document.querySelector('[data-out="' + input.dataset.out + '"]');
+        const suffix = input.dataset.suffix || "";
+        const paint = () => {
+            if (!out) return;
+            const v = parseFloat(input.value);
+            out.textContent = suffix ? v.toFixed(1).replace(".", ",") + suffix : String(v);
+        };
+        input.addEventListener("input", paint);
+        paint();
+    });
+
+    const rangeMin = document.querySelector('[name="chat_split_delay_min"]');
+    const rangeMax = document.querySelector('[name="chat_split_delay_max"]');
+    if (rangeMin && rangeMax) {
+        rangeMin.addEventListener("input", () => {
+            if (+rangeMin.value > +rangeMax.value) {
+                rangeMax.value = rangeMin.value;
+                rangeMax.dispatchEvent(new Event("input"));
+            }
+        });
+        rangeMax.addEventListener("input", () => {
+            if (+rangeMax.value < +rangeMin.value) {
+                rangeMin.value = rangeMax.value;
+                rangeMin.dispatchEvent(new Event("input"));
+            }
+        });
+    }
+
+    /* ------------------------------------------ sauvegarde : option conv */
+    const backupLink = document.querySelector("[data-backup-link]");
+    const backupConv = document.querySelector("[data-backup-conv]");
+    if (backupLink && backupConv) {
+        const syncHref = () => {
+            backupLink.href = "/backup/export.zip" + (backupConv.checked ? "?conv=1" : "");
+        };
+        backupConv.addEventListener("change", syncHref);
+        syncHref();
+    }
+
+    /* ------------------------------------ prompts internes : réinitialiser */
+    document.querySelectorAll("[data-reset-prompt]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const area = btn.closest(".prompt-block")?.querySelector(".prompt-area");
+            if (!area) return;
+            area.value = area.dataset.default || "";
+            area.focus();
+        });
+    });
+
+    /* -------------------------------------- aperçu live de l'apparence */
+    const uiForm = document.querySelector("[data-ui-form]");
+    const uiPreview = document.querySelector("[data-ui-preview]");
+    if (uiForm && uiPreview) {
+        const fontSel = uiForm.querySelector('[name="ui_font_size"]');
+        const bubbleSel = uiForm.querySelector('[name="ui_bubble_style"]');
+        const densSel = uiForm.querySelector('[name="ui_density"]');
+        const widthSel = uiForm.querySelector('[name="ui_width"]');
+        const avatarsBox = uiForm.querySelector('[name="ui_avatars"]');
+
+        const paint = () => {
+            uiPreview.style.setProperty("--pv-font", (fontSel?.value || "14.5") + "px");
+            uiPreview.dataset.bubble = bubbleSel?.value || "bulle";
+            uiPreview.dataset.density = densSel?.value || "confort";
+            uiPreview.dataset.avatars = avatarsBox?.checked ? "1" : "0";
+            uiPreview.style.setProperty("--pv-width", widthSel?.value === "large" ? "96%" : "86%");
+        };
+
+        ["change", "input"].forEach((ev) => uiForm.addEventListener(ev, paint));
+        paint();
+    }
+
+    /* ------------------------------------------------- panneaux à bascule */
+    document.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-toggle]");
+        if (!btn) return;
+        let panel = null;
+        try {
+            panel = document.querySelector(btn.dataset.toggle);
+        } catch (err) {
+            panel = null;
+        }
+        if (!panel) return;
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) {
+            const first = panel.querySelector("input, textarea, select");
+            if (first) setTimeout(() => first.focus({ preventScroll: true }), 60);
+            panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+    });
+
+    /* ----------------------------------------- auto-submit fichiers photo */
+    document.addEventListener("change", (e) => {
+        const input = e.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (input.matches("[data-autosubmit]") && input.files && input.files.length) {
+            input.closest("form")?.submit();
+        }
+        /* aperçu de l'avatar avant envoi */
+        if (input.matches("[data-preview]") && input.files && input.files[0]) {
+            const box = document.querySelector(input.dataset.preview);
+            if (!box) return;
+            const url = URL.createObjectURL(input.files[0]);
+            const old = box.querySelector("img, .avatar-fallback");
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = "Aperçu";
+            if (old) old.replaceWith(img);
+            else box.appendChild(img);
+        }
+    });
+
+    /* ------------------------------------------------------- lightbox */
+    const lb = document.getElementById("lightbox");
+    if (lb) {
+        const lbImg = lb.querySelector("img");
+        const close = () => {
+            lb.hidden = true;
+            document.body.style.overflow = "";
+        };
+        document.addEventListener("click", (e) => {
+            const img = e.target.closest("[data-full]");
+            if (!img) return;
+            lbImg.src = img.dataset.full;
+            lb.hidden = false;
+            document.body.style.overflow = "hidden";
+        });
+        document.addEventListener("keydown", (e) => {
+            const img = e.target.closest?.("[data-full]");
+            if (img && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                lbImg.src = img.dataset.full;
+                lb.hidden = false;
+                document.body.style.overflow = "hidden";
+            }
+            if (e.key === "Escape" && !lb.hidden) close();
+        });
+        lb.addEventListener("click", (e) => {
+            if (e.target === lb || e.target.closest(".lightbox-close")) close();
+        });
+    }
+
+    /* --------------------------------------------------- fermer flash */
+    document.addEventListener("click", (e) => {
+        if (e.target.closest(".flash-close")) {
+            e.target.closest(".flash")?.remove();
+        }
+    });
+    document.querySelectorAll(".flash").forEach((f) => {
+        setTimeout(() => {
+            f.style.transition = "opacity .4s, transform .4s";
+            f.style.opacity = "0";
+            f.style.transform = "translateY(-6px)";
+            setTimeout(() => f.remove(), 420);
+        }, 5200);
+    });
+
+    /* --------------------------------------------- sélecteur custom (listbox) */
+    document.querySelectorAll("[data-sel]").forEach((root) => {
+        const native = root.querySelector("select");
+        const btn = root.querySelector(".sel-btn");
+        const valueEl = root.querySelector(".sel-value");
+        if (!native || !btn || !valueEl) return;
+
+        const menu = document.createElement("ul");
+        menu.className = "sel-menu";
+        menu.setAttribute("role", "listbox");
+        menu.hidden = true;
+        root.appendChild(menu);
+
+        const sync = () => {
+            const opt = native.options[native.selectedIndex];
+            valueEl.textContent = opt ? opt.textContent.trim() : "";
+            [...menu.children].forEach((li) =>
+                li.setAttribute("aria-selected", String(li.dataset.value === native.value))
+            );
+        };
+
+        const rebuild = () => {
+            menu.innerHTML = "";
+            [...native.options].forEach((opt) => {
+                const li = document.createElement("li");
+                li.setAttribute("role", "option");
+                li.dataset.value = opt.value;
+                li.textContent = opt.textContent.trim();
+                menu.appendChild(li);
+            });
+            sync();
+        };
+
+        const open = () => {
+            menu.hidden = false;
+            btn.setAttribute("aria-expanded", "true");
+            const sel = menu.querySelector('[aria-selected="true"]') || menu.firstElementChild;
+            if (sel) sel.classList.add("is-focus");
+        };
+        const close = () => {
+            menu.hidden = true;
+            btn.setAttribute("aria-expanded", "false");
+            menu.querySelectorAll(".is-focus").forEach((el) => el.classList.remove("is-focus"));
+        };
+
+        btn.addEventListener("click", () => (menu.hidden ? open() : close()));
+
+        menu.addEventListener("click", (e) => {
+            const li = e.target.closest("li[data-value]");
+            if (!li) return;
+            native.value = li.dataset.value;
+            native.dispatchEvent(new Event("change", { bubbles: true }));
+            sync();
+            close();
+            btn.focus();
+        });
+
+        document.addEventListener("click", (e) => {
+            if (!root.contains(e.target)) close();
+        });
+
+        root.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+                close();
+                return;
+            }
+            if (e.key === "Tab") {
+                close();
+                return;
+            }
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                if (menu.hidden) {
+                    open();
+                    return;
+                }
+                const items = [...menu.children];
+                const idx = items.findIndex((i) => i.classList.contains("is-focus"));
+                const next = Math.min(items.length - 1, Math.max(0, (idx === -1 ? 0 : idx) + (e.key === "ArrowDown" ? 1 : -1)));
+                items.forEach((i) => i.classList.remove("is-focus"));
+                items[next]?.classList.add("is-focus");
+                items[next]?.scrollIntoView({ block: "nearest" });
+                return;
+            }
+            if ((e.key === "Enter" || e.key === " ") && !menu.hidden) {
+                const cur = menu.querySelector(".is-focus");
+                if (cur) {
+                    e.preventDefault();
+                    cur.click();
+                }
+            }
+        });
+
+        native.addEventListener("change", sync);
+        rebuild();
+    });
+
+    /* ------------------------------------------------- complétion par l'IA */
+    document.querySelectorAll("[data-ai-fill]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            if (btn.classList.contains("is-busy")) return;
+            const original = btn.innerHTML;
+            btn.classList.add("is-busy");
+            btn.disabled = true;
+            btn.textContent = "Analyse des prompts…";
+
+            try {
+                const fd = new FormData();
+                fd.append("_token", btn.dataset.token || "");
+                const res = await fetch(btn.dataset.aiFill, {
+                    method: "POST",
+                    body: fd,
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
+                if (!res.ok || !data.ok) throw new Error(data.error || "Échec de la complétion.");
+
+                if (!data.changed || data.changed.length === 0) {
+                    toast(data.message || "Rien à compléter.");
+                    btn.innerHTML = original;
+                    btn.disabled = false;
+                    btn.classList.remove("is-busy");
+                    return;
+                }
+                toast(data.message || "Fiche complétée.");
+                setTimeout(() => window.location.reload(), 800);
+            } catch (err) {
+                toast("Erreur : " + err.message, true);
+                btn.innerHTML = original;
+                btn.disabled = false;
+                btn.classList.remove("is-busy");
+            }
+        });
+    });
+
+    /* ------------------------------------------------------ réglages du LLM */
+    const settingsForm = document.querySelector("[data-settings-form]");
+    if (settingsForm) {
+        const PRESETS = {
+            deepseek: {
+                url: "https://api.deepseek.com/v1",
+                model: "deepseek-chat",
+                models: ["deepseek-chat", "deepseek-reasoner"],
+            },
+            openai: {
+                url: "https://api.openai.com/v1",
+                model: "gpt-4o-mini",
+                models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "o4-mini"],
+            },
+            openrouter: {
+                url: "https://openrouter.ai/api/v1",
+                model: "deepseek/deepseek-chat",
+                models: ["deepseek/deepseek-chat", "google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"],
+            },
+            lmstudio: {
+                url: "http://localhost:1234/v1",
+                model: "qwen3.5-9b",
+                models: ["qwen3.5-9b", "gemma-4-12b", "qwen3-vl-8b"],
+            },
+            custom: { models: [] },
+        };
+
+        const providerSel = settingsForm.querySelector('select[name="provider"]');
+        const urlInput = settingsForm.querySelector('input[name="base_url"]');
+        const modelInput = settingsForm.querySelector('input[name="model"]');
+
+        const applyPreset = (force) => {
+            const preset = PRESETS[providerSel?.value] || {};
+            if (preset.url && (force || !urlInput.value)) urlInput.value = preset.url;
+            if (preset.model && (force || !modelInput.value)) modelInput.value = preset.model;
+        };
+        providerSel?.addEventListener("change", () => applyPreset(true));
+        applyPreset(false);
+
+        const testBtn = settingsForm.querySelector("[data-llm-test]");
+        const status = settingsForm.querySelector("[data-llm-status]");
+        testBtn?.addEventListener("click", async () => {
+            const original = testBtn.textContent;
+            testBtn.classList.add("is-busy");
+            testBtn.disabled = true;
+            testBtn.textContent = "Test en cours…";
+            status.className = "llm-status";
+            status.textContent = "Connexion au modèle…";
+
+            try {
+                const fd = new FormData(settingsForm);
+                const res = await fetch("/settings/test", { method: "POST", body: fd });
+                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
+                if (!res.ok || !data.ok) throw new Error(data.error || "Échec du test.");
+                status.className = "llm-status is-ok";
+                status.innerHTML = `<span class="dot dot-ok"></span><span>Connecté · ${data.modele} · ${data.ms} ms</span>`;
+            } catch (err) {
+                status.className = "llm-status is-ko";
+                status.innerHTML = `<span class="dot dot-ko"></span><span></span>`;
+                status.lastElementChild.textContent = err.message;
+            } finally {
+                testBtn.classList.remove("is-busy");
+                testBtn.disabled = false;
+                testBtn.textContent = original;
+            }
+        });
+    }
+
+
+    /* -------------------------------------- recherche + autocomplétion tags */
+    const searchForm = document.querySelector("[data-search]");
+    if (searchForm) {
+        const input = searchForm.querySelector("[data-search-input]");
+        const box = searchForm.querySelector("[data-suggest]");
+        let tags = [];
+        try {
+            tags = JSON.parse(searchForm.dataset.tags || "[]");
+        } catch {
+            tags = [];
+        }
+
+        let items = [];
+        let active = -1;
+
+        const hideSuggest = () => {
+            box.hidden = true;
+            box.innerHTML = "";
+            items = [];
+            active = -1;
+        };
+
+        const goTag = (tag) => {
+            const params = new URLSearchParams();
+            searchForm.querySelectorAll('input[type="hidden"]').forEach((h) => {
+                if (h.name && h.name !== "tag" && h.value) params.set(h.name, h.value);
+            });
+            params.set("tag", tag);
+            window.location.href = "/?" + params.toString();
+        };
+
+        const renderSuggest = () => {
+            const q = (input.value || "").trim().toLowerCase();
+            const matches = tags.filter((t) => t.t.toLowerCase().includes(q)).slice(0, 7);
+            box.innerHTML = "";
+            items = [];
+
+            if (q !== "") {
+                const free = document.createElement("button");
+                free.type = "button";
+                free.className = "sug-free";
+                free.innerHTML = '<span>Rechercher «&nbsp;<strong></strong>&nbsp;»</span>';
+                free.querySelector("strong").textContent = input.value.trim();
+                free.addEventListener("click", () => {
+                    hideSuggest();
+                    searchForm.submit();
+                });
+                box.appendChild(free);
+                items.push(free);
+            }
+
+            matches.forEach((t) => {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.innerHTML = '<span class="hash">#</span><span class="sug-label"></span><em></em>';
+                b.querySelector(".sug-label").textContent = t.t;
+                b.querySelector("em").textContent = t.n;
+                b.addEventListener("click", () => goTag(t.t));
+                box.appendChild(b);
+                items.push(b);
+            });
+
+            box.hidden = items.length === 0;
+        };
+
+        const setActive = (i) => {
+            items.forEach((b) => b.classList.remove("is-active"));
+            if (i >= 0 && items[i]) {
+                active = i;
+                items[i].classList.add("is-active");
+                items[i].scrollIntoView({ block: "nearest" });
+            } else {
+                active = -1;
+            }
+        };
+
+        input.addEventListener("input", () => {
+            renderSuggest();
+            setActive(-1);
+        });
+        input.addEventListener("focus", renderSuggest);
+        input.addEventListener("keydown", (e) => {
+            if (box.hidden) return;
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive(active + 1 >= items.length ? 0 : active + 1);
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive(active - 1 < 0 ? items.length - 1 : active - 1);
+            } else if (e.key === "Escape") {
+                hideSuggest();
+            } else if (e.key === "Enter" && active >= 0) {
+                e.preventDefault();
+                items[active].click();
+            }
+        });
+        document.addEventListener("click", (e) => {
+            if (!searchForm.contains(e.target)) hideSuggest();
+        });
+        searchForm.addEventListener("submit", hideSuggest);
+    }
+
+
+    /* ------------------------------------------------- vue grille / liste */
+    const viewButtons = document.querySelectorAll("[data-view-btn]");
+    if (viewButtons.length) {
+        const applyView = (view) => {
+            document.documentElement.dataset.view = view;
+            viewButtons.forEach((b) => {
+                const on = b.dataset.viewBtn === view;
+                b.classList.toggle("is-on", on);
+                b.setAttribute("aria-pressed", String(on));
+            });
+            try {
+                localStorage.setItem("pv_view", view);
+            } catch (e) {
+                /* stockage indisponible : on garde juste la session */
+            }
+        };
+        applyView(document.documentElement.dataset.view === "list" ? "list" : "grid");
+        viewButtons.forEach((b) => b.addEventListener("click", () => applyView(b.dataset.viewBtn)));
+    }
+
+
+    /* ------------------------------- collage / dépôt d'images sur une fiche */
+    const photoForm = document.querySelector("[data-photo-upload]");
+    if (photoForm) {
+        const tokenInput = photoForm.querySelector('input[name="_token"]');
+        let sending = false;
+
+        const sendImage = async (file) => {
+            if (!file || !file.type || !file.type.startsWith("image/")) return false;
+            if (sending) return false;
+            sending = true;
+
+            const fd = new FormData();
+            fd.append("_token", tokenInput ? tokenInput.value : "");
+            fd.append("photos[]", file, file.name || "collage.png");
+            toast("Ajout de l’image…");
+
+            try {
+                const res = await fetch(photoForm.action, {
+                    method: "POST",
+                    body: fd,
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
+                if (!res.ok || !data.ok) throw new Error(data.error || "Échec de l’envoi.");
+                toast("Image ajoutée.");
+                setTimeout(() => window.location.reload(), 450);
+                return true;
+            } catch (err) {
+                toast("Erreur : " + err.message, true);
+                sending = false;
+                return false;
+            }
+        };
+
+        document.addEventListener("paste", (e) => {
+            const items = Array.from((e.clipboardData && e.clipboardData.items) || []);
+            const item = items.find((i) => i.kind === "file" && i.type.startsWith("image/"));
+            if (!item) return;
+            const file = item.getAsFile();
+            if (!file) return;
+            e.preventDefault();
+            sendImage(file);
+        });
+
+        photoForm.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            photoForm.classList.add("is-drop");
+        });
+        photoForm.addEventListener("dragleave", () => photoForm.classList.remove("is-drop"));
+        photoForm.addEventListener("drop", (e) => {
+            e.preventDefault();
+            photoForm.classList.remove("is-drop");
+            const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+            const img = files.find((f) => f.type.startsWith("image/"));
+            if (img) sendImage(img);
+        });
+    }
+
+
+    /* --------------------------------------------------------- chat personas */
+    const modalOpen = (el) => {
+        if (!el) return;
+        el.hidden = false;
+        document.body.style.overflow = "hidden";
+    };
+    const modalClose = (el) => {
+        if (!el) return;
+        el.hidden = true;
+        document.body.style.overflow = "";
+    };
+
+    const picker = document.getElementById("persona-picker");
+    if (picker) {
+        const search = picker.querySelector("[data-picker-search]");
+        document.querySelectorAll("[data-open-picker]").forEach((b) =>
+            b.addEventListener("click", () => {
+                modalOpen(picker);
+                search?.focus();
+            })
+        );
+        picker.querySelectorAll("[data-close-picker]").forEach((b) =>
+            b.addEventListener("click", () => modalClose(picker))
+        );
+        picker.addEventListener("click", (e) => {
+            if (e.target === picker) modalClose(picker);
+        });
+        search?.addEventListener("input", () => {
+            const q = search.value.trim().toLowerCase();
+            picker.querySelectorAll(".picker-item").forEach((item) => {
+                item.hidden = q !== "" && !(item.dataset.name || "").includes(q);
+            });
+        });
+    }
+
+    const chatSheet = document.getElementById("chat-settings");
+    const setSheet = (open) => {
+        if (!chatSheet) return;
+        chatSheet.classList.toggle("is-open", open);
+        chatSheet.setAttribute("aria-hidden", String(!open));
+        document.querySelectorAll("[data-open-settings]").forEach((b) =>
+            b.setAttribute("aria-expanded", String(open))
+        );
+        document.body.classList.toggle("sheet-open", open);
+
+        // le panneau se cale juste au-dessus de la zone de saisie (hauteur variable)
+        if (open && window.matchMedia("(max-width: 899px)").matches) {
+            const composer = document.querySelector(".chat-composer");
+            if (composer) {
+                const top = composer.getBoundingClientRect().top;
+                chatSheet.style.bottom = Math.max(12, window.innerHeight - top + 8) + "px";
+            }
+        }
+    };
+
+    window.addEventListener("resize", () => {
+        if (chatSheet && chatSheet.classList.contains("is-open") && window.matchMedia("(max-width: 899px)").matches) {
+            const composer = document.querySelector(".chat-composer");
+            if (composer) {
+                chatSheet.style.bottom = Math.max(12, window.innerHeight - composer.getBoundingClientRect().top + 8) + "px";
+            }
+        }
+    });
+
+    if (chatSheet) {
+        document.querySelectorAll("[data-open-settings]").forEach((b) =>
+            b.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSheet(!chatSheet.classList.contains("is-open"));
+            })
+        );
+        document.querySelectorAll("[data-close-settings]").forEach((b) =>
+            b.addEventListener("click", () => setSheet(false))
+        );
+        // clic à l'extérieur = fermeture (comportement popover)
+        document.addEventListener("click", (e) => {
+            if (!chatSheet.classList.contains("is-open")) return;
+            if (chatSheet.contains(e.target)) return;
+            if (e.target.closest("[data-open-settings]")) return;
+            setSheet(false);
+        });
+    }
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        if (chatSheet && chatSheet.classList.contains("is-open")) setSheet(false);
+        if (picker && !picker.hidden) modalClose(picker);
+    });
+
+    const chat = document.getElementById("chat");
+    if (chat) {
+        const form = chat.querySelector("[data-chat-form]");
+        const input = chat.querySelector("[data-chat-input]");
+        const scroll = chat.querySelector("[data-scroll]");
+        const sendBtn = form.querySelector(".chat-send");
+        const avatarHTML = chat.querySelector(".chat-avatar")?.innerHTML || "";
+        const endpoint = chat.dataset.send;
+        const token = chat.dataset.token;
+        let busy = false;
+
+        const scrollBottom = (smooth = true) => {
+            scroll.scrollTo({ top: scroll.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+        };
+        scrollBottom(false);
+
+        const clearIntro = () => chat.querySelector(".chat-intro")?.remove();
+
+        const bubble = (text, role) => {
+            const wrap = document.createElement("div");
+            wrap.className = "msg msg-" + (role === "user" ? "user" : "bot");
+            if (role !== "user") {
+                const av = document.createElement("span");
+                av.className = "msg-avatar";
+                av.innerHTML = avatarHTML;
+                wrap.appendChild(av);
+            }
+            const b = document.createElement("div");
+            b.className = "bubble";
+            b.textContent = text;
+            wrap.appendChild(b);
+            scroll.appendChild(wrap);
+            wrap.dataset.live = "1";
+            return wrap;
+        };
+
+        const renderMsg = (m) => {
+            if (m.role === "memory") {
+                const line = document.createElement("div");
+                line.className = "msg-memory";
+                line.dataset.msgId = m.id;
+                line.innerHTML =
+                    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a4 4 0 0 0-4 4 3 3 0 0 0 0 6 3.5 3.5 0 0 0 4 4V5Zm0 0a4 4 0 0 1 4 4 3 3 0 0 1 0 6 3.5 3.5 0 0 1-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span></span>';
+                line.querySelector("span").textContent = m.content;
+                return line;
+            }
+            if (m.role === "notice") {
+                const n = document.createElement("div");
+                n.className = "msg-notice";
+                n.dataset.msgId = m.id;
+                n.textContent = m.content;
+                return n;
+            }
+            const wrap = document.createElement("div");
+            wrap.className = "msg msg-" + (m.role === "user" ? "user" : "bot");
+            wrap.dataset.msgId = m.id;
+            if (m.role !== "user") {
+                const av = document.createElement("span");
+                av.className = "msg-avatar";
+                av.innerHTML = avatarHTML;
+                wrap.appendChild(av);
+            }
+            if (m.image) {
+                const img = document.createElement("img");
+                img.className = "bubble-img";
+                img.alt = "Photo envoyée";
+                img.src = "/media/" + m.image + ".thumb.webp";
+                img.dataset.full = "/media/" + m.image + ".webp";
+                wrap.appendChild(img);
+            }
+
+            const chars = Array.from(String(m.content || ""));
+            const pts = (Array.isArray(m.split_points) ? m.split_points : [])
+                .map(Number)
+                .filter((n) => n > 0 && n < chars.length);
+            if (pts.length) {
+                const holder = document.createElement("div");
+                holder.className = "bubbles";
+                const bounds = [0, ...pts, chars.length];
+                for (let i = 0; i < bounds.length - 1; i++) {
+                    const b = document.createElement("div");
+                    b.className = "bubble";
+                    b.textContent = chars.slice(bounds[i], bounds[i + 1]).join("").trim();
+                    holder.appendChild(b);
+                }
+                wrap.appendChild(holder);
+            } else {
+                const b = document.createElement("div");
+                b.className = "bubble";
+                b.textContent = m.content;
+                wrap.appendChild(b);
+            }
+            return wrap;
+        };
+
+        const olderBtn = chat.querySelector("[data-load-older]");
+        olderBtn?.addEventListener("click", async () => {
+            if (olderBtn.disabled) return;
+            olderBtn.disabled = true;
+            const before = parseInt(olderBtn.dataset.before, 10) || 0;
+            try {
+                const r = await fetch(olderBtn.dataset.url + "?before=" + before + "&limit=50", {
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const d = await r.json();
+                if (!d.ok) throw new Error("chargement impossible");
+                if (!d.messages.length) {
+                    olderBtn.remove();
+                    return;
+                }
+                const prevH = scroll.scrollHeight;
+                const prevTop = scroll.scrollTop;
+                const first = scroll.querySelector(".msg, .msg-notice");
+                const frag = document.createDocumentFragment();
+                d.messages.forEach((m) => frag.appendChild(renderMsg(m)));
+                scroll.insertBefore(frag, first || null);
+                scroll.scrollTop = prevTop + (scroll.scrollHeight - prevH);
+                olderBtn.dataset.before = d.messages[0].id;
+                if (d.left <= 0) {
+                    olderBtn.remove();
+                } else {
+                    const span = olderBtn.querySelector("[data-older-left]");
+                    if (span) span.textContent = d.left;
+                    olderBtn.disabled = false;
+                }
+            } catch (e) {
+                olderBtn.disabled = false;
+                notice("Erreur : " + e.message);
+            }
+        });
+
+        const notice = (text) => {
+            const n = document.createElement("div");
+            n.className = "msg-notice";
+            n.textContent = text;
+            scroll.appendChild(n);
+        };
+
+        const typing = () => {
+            const t = document.createElement("div");
+            t.className = "msg msg-bot typing";
+            t.id = "chat-typing";
+            t.innerHTML =
+                '<span class="msg-avatar">' + avatarHTML + '</span><div class="bubble"><i></i><i></i><i></i></div>';
+            scroll.appendChild(t);
+            scrollBottom();
+        };
+
+
+        const loadingLabel = (txt) => {
+            let el = document.getElementById("chat-loading");
+            if (!txt) {
+                el?.remove();
+                return;
+            }
+            if (!el) {
+                el = document.createElement("div");
+                el.id = "chat-loading";
+                el.className = "msg-loading";
+                scroll.appendChild(el);
+            }
+            if (el.textContent !== txt) el.textContent = txt;
+            scrollBottom(false);
+        };
+
+        const foot = document.querySelector("[data-chat-foot]");
+        const fmt = (n) => Number(n || 0).toLocaleString("fr-FR");
+        const ringSvgs = document.querySelectorAll("[data-ctx-ring] svg, [data-ctx-ring-big] svg");
+        const updateRing = (m) => {
+            if (!m) return;
+            const c = 2 * Math.PI * 15.5;
+            const cIn = 2 * Math.PI * 11.5;
+            const pct = Math.max(0, Math.min(100, Number(m.percent) || 0));
+            const color = pct >= 80 ? "#f87171" : pct >= 50 ? "#fbbf24" : "#34d399";
+            const memPct = m.window ? Math.min(100, (Number(m.summary_tokens) || 0) / m.window * 100) : 0;
+
+            ringSvgs.forEach((svg) => {
+                const fill = svg.querySelector(".ring-fill");
+                if (!fill) return;
+                fill.setAttribute("stroke-dasharray", (c * pct / 100).toFixed(2) + " " + c.toFixed(2));
+                fill.setAttribute("stroke", color);
+                const val = svg.querySelector(".ring-val");
+                if (val) {
+                    val.textContent = pct;
+                    val.setAttribute("fill", color);
+                }
+                const mem = svg.querySelector(".ring-mem");
+                if (mem && memPct > 0) {
+                    mem.setAttribute("stroke-dasharray", (cIn * memPct / 100).toFixed(2) + " " + cIn.toFixed(2));
+                }
+            });
+
+            const lg = document.querySelector(".mem-legend");
+            if (lg) {
+                const strongs = lg.querySelectorAll("strong");
+                if (strongs[0]) strongs[0].textContent = pct + " %";
+                if (strongs[1]) strongs[1].textContent = Math.round(memPct) + " %";
+                const dot = lg.querySelector(".dot-ctx");
+                if (dot) dot.style.background = color;
+            }
+        };
+
+        const updateFoot = (m) => {
+            if (!foot || !m) return;
+            foot.classList.remove("is-ko");
+            foot.textContent =
+                chat.dataset.model + " · contexte " + fmt(m.context_tokens) + " / " + fmt(m.window) +
+                " · " + m.compressions + " compression" + (m.compressions > 1 ? "s" : "");
+        };
+
+
+        /* --- état du serveur / du modèle chargé --- */
+        const statusBox = document.querySelector("[data-lms-status]");
+        const statusUrl = chat.dataset.status;
+        const dot = document.querySelector("[data-model-dot]");
+        let statusTimer = null;
+        let lastStatus = null;
+
+        const setDot = (state, title) => {
+            if (!dot) return;
+            dot.dataset.state = state;
+            dot.title = title || "";
+        };
+
+        const fetchStatus = async () => {
+            try {
+                const r = await fetch(statusUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                return await r.json();
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const paintStatus = (d) => {
+            lastStatus = d;
+            if (!d || d.ok === false) {
+                setDot("ko", "LM Studio n’est pas lancé" + (d && d.url ? " (" + d.url + ")" : ""));
+            } else if (d.is_loaded) {
+                setDot("ok", "Modèle chargé : " + d.wanted);
+            } else {
+                setDot("ko", d.wanted + " n’est pas chargé (se charge au premier message)");
+            }
+
+            if (attachBtn) {
+                attachBtn.hidden = !(d && d.vision === true);
+                if (attachBtn.hidden && pendingFile) clearAttach();
+            }
+
+            if (!statusBox) return;
+            const text = statusBox.querySelector(".lms-text");
+            if (!d || d.ok === false) {
+                statusBox.dataset.state = "ko";
+                text.innerHTML = "LM Studio n’est pas lancé" + (d && d.url ? " — aucune réponse sur " + d.url : "");
+                return;
+            }
+            if (d.is_loaded) {
+                const l = (d.loaded || []).find((x) => x.key === d.wanted || x.id === d.wanted) || (d.loaded || [])[0];
+                statusBox.dataset.state = "ok";
+                text.innerHTML =
+                    "Modèle chargé : <b>" + (l ? l.key : d.wanted) + "</b>" +
+                    (l && l.ctx ? " \u00b7 " + fmt(l.ctx) + " tokens" : "");
+            } else {
+                statusBox.dataset.state = "idle";
+                text.innerHTML = "<b>" + d.wanted + "</b> n\u2019est pas chargé \u2014 il se charge au premier message";
+            }
+        };
+
+        const loadStatus = async (pollMs = 0) => {
+            if (!statusBox || !statusUrl) return;
+            clearTimeout(statusTimer);
+            try {
+                const res = await fetch(statusUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const d = await res.json();
+                paintStatus(d);
+                if (d.ok && !d.is_loaded && pollMs) {
+                    statusTimer = setTimeout(() => loadStatus(pollMs), pollMs);
+                }
+            } catch (e) {
+                paintStatus(null);
+            }
+        };
+
+        document.querySelector("[data-lms-refresh]")?.addEventListener("click", () => loadStatus(2000));
+        loadStatus();
+        setInterval(() => {
+            if (!document.hidden) loadStatus();
+        }, 8000);
+        document.querySelectorAll("[data-open-settings]").forEach((b) =>
+            b.addEventListener("click", () => loadStatus(2500))
+        );
+
+        /* --- souvenirs partagés (mémoire profonde) --- */
+        const factBox = document.querySelector("[data-fact-box]");
+
+        const renderFacts = (list) => {
+            if (!factBox) return;
+            const ul = factBox.querySelector("[data-fact-list]");
+            if (!ul) return;
+            ul.innerHTML = "";
+            if (!list || !list.length) {
+                const li = document.createElement("li");
+                li.className = "fact-empty";
+                li.textContent = "Aucun souvenir pour l’instant.";
+                ul.appendChild(li);
+                return;
+            }
+            list.forEach((f) => {
+                const li = document.createElement("li");
+                li.dataset.fid = f.id;
+                const s = document.createElement("span");
+                s.className = "fact-txt";
+                s.textContent = f.content;
+                const b = document.createElement("button");
+                b.type = "button";
+                b.className = "fact-del";
+                b.dataset.factDel = f.id;
+                b.setAttribute("aria-label", "Supprimer ce souvenir");
+                b.innerHTML = "&times;";
+                li.append(s, b);
+                ul.appendChild(li);
+            });
+        };
+
+        if (factBox) {
+            const fToken = factBox.dataset.token;
+
+            factBox.querySelector("[data-fact-form]")?.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const input = e.target.querySelector("input[name=content]");
+                const v = (input.value || "").trim();
+                if (!v) return;
+                const fd = new FormData();
+                fd.append("_token", fToken);
+                fd.append("content", v);
+                try {
+                    const r = await fetch(factBox.dataset.add, { method: "POST", body: fd });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || "ajout impossible");
+                    input.value = "";
+                    renderFacts(d.memories);
+                    notice("Souvenir ajouté — partagé avec toutes les conversations de ce persona.");
+                } catch (err) {
+                    notice("Erreur : " + err.message);
+                }
+            });
+
+            factBox.addEventListener("click", async (e) => {
+                const b = e.target.closest("[data-fact-del]");
+                if (!b) return;
+                const fd = new FormData();
+                fd.append("_token", fToken);
+                fd.append("fid", b.dataset.factDel);
+                try {
+                    const r = await fetch(factBox.dataset.del, { method: "POST", body: fd });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || "suppression impossible");
+                    renderFacts(d.memories);
+                } catch (err) {
+                    notice("Erreur : " + err.message);
+                }
+            });
+
+            factBox.querySelector("[data-facts-toggle]")?.addEventListener("change", async (e) => {
+                const fd = new FormData();
+                fd.append("_token", fToken);
+                fd.append("enabled", e.target.checked ? "1" : "0");
+                try {
+                    const r = await fetch(factBox.dataset.factsUrl, { method: "POST", body: fd });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || "impossible");
+                    notice(d.enabled
+                        ? "Souvenirs activés pour cette conversation."
+                        : "Souvenirs désactivés — ils restent en mémoire pour les autres conversations.");
+                } catch (err) {
+                    e.target.checked = !e.target.checked;
+                    notice("Erreur : " + err.message);
+                }
+            });
+        }
+
+        /* --- recherche dans les autres conversations du persona --- */
+        const recallBox = document.querySelector("[data-recall-box]");
+        const recallList = document.querySelector("[data-recall-list]");
+
+        const recallItem = (x) => {
+            const li = document.createElement("li");
+            li.className = "recall-item";
+
+            const body = document.createElement("div");
+            body.className = "recall-body";
+            const meta = document.createElement("span");
+            meta.className = "recall-meta";
+            meta.textContent = x.date + " · ";
+            const link = document.createElement("a");
+            link.href = "/chat/" + x.conversation_id;
+            link.className = "recall-link";
+            link.textContent = x.title;
+            meta.appendChild(link);
+            const p = document.createElement("p");
+            p.className = "recall-txt";
+            p.textContent = x.excerpt;
+            body.append(meta, p);
+            li.appendChild(body);
+
+            if (factBox) {
+                const save = document.createElement("button");
+                save.type = "button";
+                save.className = "msg-tool";
+                save.textContent = "Mémoriser";
+                save.addEventListener("click", async () => {
+                    const fd = new FormData();
+                    fd.append("_token", factBox.dataset.token);
+                    fd.append("content", "Rappel : " + (x.content || x.excerpt).replace(/…/g, ""));
+                    try {
+                        const r = await fetch(factBox.dataset.add, { method: "POST", body: fd });
+                        const d = await r.json();
+                        if (!d.ok) throw new Error(d.error || "impossible");
+                        renderFacts(d.memories);
+                        notice("Ajouté aux souvenirs partagés.");
+                    } catch (err) {
+                        notice("Erreur : " + err.message);
+                    }
+                });
+                li.appendChild(save);
+            }
+            return li;
+        };
+
+        if (recallBox && recallList) {
+            const empty = (txt) => {
+                recallList.innerHTML = "";
+                const li = document.createElement("li");
+                li.className = "fact-empty";
+                li.textContent = txt;
+                recallList.appendChild(li);
+            };
+
+            recallBox.querySelector("[data-recall-form]")?.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const input = e.target.querySelector("input[name=q]");
+                const q = (input.value || "").trim();
+                if (q.length < 2) return;
+                empty("Recherche…");
+                try {
+                    const r = await fetch(recallBox.dataset.url + "?q=" + encodeURIComponent(q), {
+                        headers: { "X-Requested-With": "XMLHttpRequest" },
+                    });
+                    const d = await r.json();
+                    if (!d.results || !d.results.length) {
+                        empty("Rien trouvé dans les autres conversations.");
+                        return;
+                    }
+                    recallList.innerHTML = "";
+                    d.results.forEach((x) => recallList.appendChild(recallItem(x)));
+                } catch (err) {
+                    empty("Recherche impossible.");
+                }
+            });
+        }
+
+        const updateMemPanel = (m, summary) => {
+            if (!m) return;
+            const box = document.querySelector(".mem-box");
+            if (box) {
+                const vals = box.querySelectorAll(".mem-stats strong");
+                if (vals[0]) vals[0].textContent = m.messages;
+                if (vals[1]) vals[1].textContent = m.unsummarized;
+                if (vals[2]) vals[2].textContent = m.compressions;
+                if (vals[3]) vals[3].textContent = fmt(m.context_tokens);
+                const p = box.querySelector(".mem-pct");
+                if (p) {
+                    p.textContent = (m.percent || 0) + " %";
+                    p.classList.toggle("is-hot", (m.percent || 0) > 80);
+                }
+            }
+            const ctx = document.querySelector(".sheet-ctx-text");
+            if (ctx) {
+                const strong = ctx.querySelector("strong");
+                if (strong) strong.textContent = (m.percent || 0) + " % du contexte";
+                const sp = ctx.querySelectorAll("span");
+                if (sp[0]) sp[0].textContent = fmt(m.context_tokens) + " / " + fmt(m.window) + " tokens";
+                if (sp[1] && typeof m.compressions === "number") {
+                    sp[1].textContent = sp[1].textContent.replace(
+                        /\d+ faite(s?)/,
+                        m.compressions + " faite" + (m.compressions > 1 ? "s" : "")
+                    );
+                }
+            }
+            if (typeof summary === "string" && summary.trim() !== "") {
+                const ta = document.querySelector('.mem-form textarea[name="summary"]');
+                if (ta) ta.value = summary;
+            }
+        };
+
+        const compressMemory = async (force = false) => {
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                if (force) fd.append("force", "1");
+                const res = await fetch(chat.dataset.compress, { method: "POST", body: fd });
+                const data = await res.json();
+                if (!data.ok) return null;
+                updateFoot(data.memory);
+                updateRing(data.memory);
+                updateMemPanel(data.memory, data.summary);
+                return data;
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const rememberFacts = async () => {
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                const res = await fetch(chat.dataset.remember, { method: "POST", body: fd });
+                const data = await res.json();
+                if (data && Array.isArray(data.memories)) renderFacts(data.memories);
+                if (data && data.memory_msg) {
+                    scroll.appendChild(renderMsg({
+                        id: data.memory_msg.id,
+                        role: "memory",
+                        content: data.memory_msg.content,
+                    }));
+                    scrollBottom();
+                } else if (data.ok && Array.isArray(data.added) && data.added.length) {
+                    notice("Souvenir ajouté : " + data.added[0]);
+                    scrollBottom();
+                }
+            } catch (e) {
+                /* silencieux : la mémoire longue ne bloque jamais la conversation */
+            }
+        };
+
+        // titre généré à partir des premiers échanges (tant qu'il n'a pas été renommé à la main)
+        const autoTitle = async () => {
+            if (chat.dataset.autoTitle !== "1") return;
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                const r = await fetch(endpoint.replace(/\/send$/, "/autotitle"), { method: "POST", body: fd });
+                const d = await r.json();
+                if (!d.ok || !d.title) return;
+
+                chat.dataset.autoTitle = "0";
+                const row = document.querySelector(".chat-side-row.is-on .chat-side-name");
+                if (row) row.textContent = d.title;
+                const head = document.querySelector("#chat-settings .sheet-head h2");
+                if (head) head.textContent = d.title;
+            } catch (e) {
+                /* silencieux */
+            }
+        };
+
+        const compressBtn = document.querySelector("[data-compress-now]");
+        compressBtn?.addEventListener("click", async () => {
+            const original = compressBtn.textContent;
+            compressBtn.disabled = true;
+            compressBtn.textContent = "Compression…";
+            const data = await compressMemory(true);
+            if (data && data.compressed > 0) {
+                toast(data.compressed + " message" + (data.compressed > 1 ? "s" : "") + " résumé" + (data.compressed > 1 ? "s" : ""));
+                setTimeout(() => window.location.reload(), 700);
+            } else {
+                toast(data ? (data.reason || "Rien à résumer") : "Compression impossible", true);
+                compressBtn.disabled = false;
+                compressBtn.textContent = original;
+            }
+        });
+
+        const grow = () => {
+            input.style.height = "auto";
+            input.style.height = Math.min(input.scrollHeight, 132) + "px";
+        };
+
+        const syncSend = () => {
+            // pendant une génération le bouton reste actif : il sert à arrêter
+            sendBtn.disabled = !busy && input.value.trim() === "" && !pendingFile;
+        };
+
+        const streamUrl = endpoint.replace(/\/send$/, "/stream");
+
+        const splitOn    = chat.dataset.split === "1";
+        const splitWords = Math.max(8, parseInt(chat.dataset.splitWords || "50", 10));
+        const splitMax   = Math.max(1, parseInt(chat.dataset.splitMax || "2", 10));
+        const splitDmin  = Math.max(0.2, parseFloat(chat.dataset.splitDelayMin || "1"));
+        const splitDmax  = Math.max(splitDmin, parseFloat(chat.dataset.splitDelayMax || "2"));
+        const loadUrl = statusUrl.replace(/\/status$/, "/load");
+
+        const startLiveBubble = () => {
+            document.getElementById("chat-typing")?.remove();
+            const wrap = document.createElement("div");
+            wrap.className = "msg msg-bot";
+            wrap.dataset.live = "1";
+            const av = document.createElement("span");
+            av.className = "msg-avatar";
+            av.innerHTML = avatarHTML;
+            const b = document.createElement("div");
+            b.className = "bubble";
+            wrap.append(av, b);
+            scroll.appendChild(wrap);
+            return b;
+        };
+
+        /* --- chargement manuel du modèle, en 4 étapes --- */
+        const loadBtn = document.querySelector("[data-load-model]");
+        const progressBox = document.querySelector("[data-lms-progress]");
+        const stepsEl = document.querySelector("[data-lms-steps]");
+        const timerEl = document.querySelector("[data-lms-timer]");
+
+        const setStep = (name, state) => {
+            const li = stepsEl && stepsEl.querySelector('[data-step="' + name + '"]');
+            if (li) li.dataset.state = state;
+        };
+        const resetSteps = () => ["server", "request", "loading", "ready"].forEach((n) => setStep(n, ""));
+
+        const loadModel = async () => {
+            if (!loadBtn || loadBtn.disabled) return;
+            loadBtn.disabled = true;
+            if (progressBox) progressBox.hidden = false;
+            if (timerEl) timerEl.hidden = false;
+            resetSteps();
+
+            const t0 = Date.now();
+            const tick = setInterval(() => {
+                if (timerEl) timerEl.textContent = ((Date.now() - t0) / 1000).toFixed(1).replace(".", ",") + " s";
+            }, 100);
+
+            const label = loadBtn.querySelector("[data-load-label]") || loadBtn;
+            const done = (txt) => {
+                clearInterval(tick);
+                loadBtn.disabled = false;
+                label.textContent = txt;
+                setTimeout(() => (label.textContent = "Charger le modèle maintenant"), 4000);
+            };
+
+            // 1. le serveur répond ?
+            setStep("server", "active");
+            let st = await fetchStatus();
+            paintStatus(st);
+            if (!st || st.reachable === false) {
+                setStep("server", "fail");
+                done("LM Studio injoignable");
+                return;
+            }
+            setStep("server", "done");
+
+            if (st.is_loaded) {
+                setStep("request", "done");
+                setStep("loading", "done");
+                setStep("ready", "done");
+                if (timerEl) timerEl.textContent = "déjà chargé";
+                done("Déjà chargé");
+                return;
+            }
+
+            // 2. demande de chargement
+            setStep("request", "active");
+            let asked = null;
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                const r = await fetch(loadUrl, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                asked = await r.json();
+            } catch (e) {
+                asked = { ok: false, error: "Requête impossible." };
+            }
+            if (!asked || !asked.ok) {
+                setStep("request", "fail");
+                done("Échec du chargement");
+                notice("Chargement impossible : " + ((asked && asked.error) || "erreur inconnue"));
+                return;
+            }
+            setStep("request", "done");
+
+            // 3. chargement en cours -> 4. prêt
+            setStep("loading", "active");
+            const deadline = Date.now() + 180000;
+            for (;;) {
+                await new Promise((r) => setTimeout(r, 700));
+                st = await fetchStatus();
+                paintStatus(st);
+                if (st && st.is_loaded) {
+                    setStep("loading", "done");
+                    setStep("ready", "done");
+                    done("Modèle chargé");
+                    return;
+                }
+                if (Date.now() > deadline) {
+                    setStep("loading", "fail");
+                    done("Chargement trop long");
+                    return;
+                }
+            }
+        };
+
+        loadBtn?.addEventListener("click", loadModel);
+
+        /* --- bascule manuelle vers DeepSeek --- */
+        const fbModal = document.getElementById("fb-modal");
+        let lastText = "";
+
+        const askFallback = (text, msg, kind) => {
+            lastText = text;
+            if (!fbModal) {
+                notice("Erreur : " + msg);
+                return;
+            }
+            const h = fbModal.querySelector("h2");
+            if (h) {
+                h.textContent =
+                    kind === "down" ? "LM Studio n’est pas lancé"
+                    : kind === "not_loaded" ? "Le modèle n’est pas chargé"
+                    : "LM Studio n’a pas répondu";
+            }
+            const p = fbModal.querySelector("[data-fb-msg]");
+            if (p) p.textContent = msg;
+            fbModal.hidden = false;
+        };
+
+        fbModal?.querySelectorAll("[data-fb-wait]").forEach((b) =>
+            b.addEventListener("click", () => {
+                fbModal.hidden = true;
+                if (lastText) {
+                    input.value = lastText;
+                    grow();
+                    syncSend();
+                    input.focus();
+                }
+                notice("Message gardé dans le champ — renvoie-le quand LM Studio est prêt.");
+                scrollBottom();
+            })
+        );
+
+        fbModal?.querySelector("[data-fb-use]")?.addEventListener("click", () => {
+            fbModal.hidden = true;
+            const t = lastText;
+            if (t) send(t, "fallback", false);
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && fbModal && !fbModal.hidden) fbModal.hidden = true;
+        });
+
+        /* --- outils par message (modifier / supprimer / régénérer) --- */
+        const deleteUrl = endpoint.replace(/\/send$/, "/msg-delete");
+        const editUrl   = endpoint.replace(/\/send$/, "/msg-edit");
+
+        const ICONS = {
+            regen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            edit:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+            del:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9.5 7V5h5v2M7.5 7l.8 12h7.4l.8-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            ok:    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4.5 4.5L19 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            no:    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+        };
+
+        const toolBtn = (kind, icon, label) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "msg-tool msg-tool-" + kind;
+            b.setAttribute("data-" + kind, "1");
+            b.setAttribute("aria-label", label);
+            b.title = label;
+            b.innerHTML = icon;
+            return b;
+        };
+
+        const buildTools = (el) => {
+            if (!el.dataset.msgId) return null;
+            const isBot = el.classList.contains("msg-bot");
+            const bots = [...scroll.querySelectorAll(".msg-bot")];
+            const isLastBot = isBot && bots[bots.length - 1] === el;
+
+            const tools = document.createElement("div");
+            tools.className = "msg-tools";
+
+            if (isLastBot) tools.appendChild(toolBtn("regen", ICONS.regen, "Régénérer la réponse"));
+            // seuls mes messages sont modifiables : ceux du personnage se régénèrent ou se suppriment
+            if (!isBot) tools.appendChild(toolBtn("edit", ICONS.edit, "Modifier ce message"));
+            tools.appendChild(toolBtn("del", ICONS.del, "Supprimer ce message"));
+            return tools;
+        };
+
+        const removeMsg = async (id) => {
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                fd.append("mid", id);
+                const r = await fetch(deleteUrl, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!d.ok) throw new Error(d.error || "suppression impossible");
+                (d.deleted || []).forEach((mid) => {
+                    scroll.querySelector('[data-msg-id="' + mid + '"]')?.remove();
+                });
+                scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
+                loadStatus();
+            } catch (e) {
+                notice("Effacement impossible : " + e.message);
+            }
+        };
+
+        const startEdit = (el) => {
+            if (el.dataset.editing === "1") return;
+            const id = el.dataset.msgId;
+            const block = el.querySelector(".bubbles") || el.querySelector(".bubble");
+            if (!id || !block) return;
+
+            const full = [...el.querySelectorAll(".bubble")]
+                .map((b) => b.textContent.trim())
+                .join("\n\n");
+
+            const editor = document.createElement("div");
+            editor.className = "msg-edit";
+
+            const ta = document.createElement("textarea");
+            ta.className = "input";
+            ta.value = full;
+            ta.rows = Math.min(9, Math.max(3, Math.ceil(full.length / 42)));
+
+            const actions = document.createElement("div");
+            actions.className = "msg-edit-actions";
+            const ok = toolBtn("save", ICONS.ok, "Enregistrer");
+            const no = toolBtn("cancel", ICONS.no, "Annuler");
+            ok.classList.add("is-ok");
+            actions.append(ok, no);
+
+            editor.append(ta, actions);
+            el._editBackup = block;
+            block.replaceWith(editor);
+            el.dataset.editing = "1";
+            el.querySelectorAll(".msg-tools").forEach((t) => t.remove());
+            ta.focus();
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+        };
+
+        const saveEdit = async (el) => {
+            const id = el.dataset.msgId;
+            const ta = el.querySelector(".msg-edit textarea");
+            if (!id || !ta) return;
+            const content = ta.value.trim();
+            if (content === "") {
+                notice("Le message ne peut pas être vide.");
+                return;
+            }
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                fd.append("mid", id);
+                fd.append("content", content);
+                const r = await fetch(editUrl, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!d.ok) throw new Error(d.error || "modification impossible");
+
+                const isUser = el.classList.contains("msg-user");
+                const fresh = renderMsg({
+                    id,
+                    role: isUser ? "user" : "assistant",
+                    content: d.content,
+                    split_points: d.split_points || [],
+                });
+                fresh.dataset.msgId = id;
+                el.replaceWith(fresh);
+
+                if (d.replay) {
+                    // la suite de la conversation a été supprimée côté serveur : on rejoue la réponse
+                    let next = fresh.nextElementSibling;
+                    while (next) {
+                        const after = next.nextElementSibling;
+                        next.remove();
+                        next = after;
+                    }
+                    fresh.classList.remove("is-active");
+                    notice("Message modifié, nouvelle réponse…");
+                    send(null, "auto", false, true, Number(id));
+                } else {
+                    notice("Message modifié.");
+                }
+            } catch (e) {
+                notice("Modification impossible : " + e.message);
+            }
+        };
+
+        const regenerate = () => {
+            const bots = [...scroll.querySelectorAll(".msg-bot")];
+            const last = bots[bots.length - 1];
+            if (!last) return;
+            if (last.querySelector(".bubble")?.textContent === "") return;
+            last.remove();
+            scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
+            send(null, "auto", false, true);
+        };
+
+        scroll.addEventListener("click", (e) => {
+            const del = e.target.closest("[data-del]");
+            if (del) {
+                e.stopPropagation();
+                const el = del.closest(".msg");
+                if (el) removeMsg(el.dataset.msgId);
+                return;
+            }
+            if (e.target.closest("[data-regen]")) {
+                e.stopPropagation();
+                regenerate();
+                return;
+            }
+            const editBtn = e.target.closest("[data-edit]");
+            if (editBtn) {
+                e.stopPropagation();
+                const el = editBtn.closest(".msg");
+                if (el) startEdit(el);
+                return;
+            }
+            const saveBtn = e.target.closest("[data-save]");
+            if (saveBtn) {
+                e.stopPropagation();
+                const el = saveBtn.closest(".msg");
+                if (el) saveEdit(el);
+                return;
+            }
+            if (e.target.closest("[data-cancel]")) {
+                e.stopPropagation();
+                const el = e.target.closest(".msg");
+                const editor = el && el.querySelector(".msg-edit");
+                if (el && editor && el._editBackup) {
+                    editor.replaceWith(el._editBackup);
+                    el.dataset.editing = "0";
+                    delete el._editBackup;
+                }
+                return;
+            }
+
+            const msg = e.target.closest(".msg");
+            if (!msg) return;
+            if (msg.dataset.editing === "1") return;
+
+            if (msg.querySelector(".msg-tools")) {
+                msg.querySelector(".msg-tools").remove();
+                return;
+            }
+            scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
+            const tools = buildTools(msg);
+            if (tools) {
+                msg.appendChild(tools);
+                setTimeout(() => tools.scrollIntoView({ block: "nearest", behavior: "smooth" }), 40);
+            }
+        });
+
+        const SEND_SVG = sendBtn.innerHTML;
+        const STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.4" y="6.4" width="11.2" height="11.2" rx="2.6" fill="currentColor"/></svg>';
+        let controller = null;
+
+        const setStreaming = (on) => {
+            sendBtn.classList.toggle("is-stop", on);
+            sendBtn.innerHTML = on ? STOP_SVG : SEND_SVG;
+            sendBtn.setAttribute("aria-label", on ? "Arrêter la génération" : "Envoyer");
+            sendBtn.title = on ? "Arrêter" : "Envoyer";
+        };
+
+        sendBtn.addEventListener("click", (e) => {
+            if (busy && controller) {
+                e.preventDefault();
+                controller.abort();
+            }
+        });
+
+        /* --- photo jointe (uniquement si le modèle voit les images) --- */
+        const attachBtn = form.querySelector("[data-attach]");
+        const attachInput = form.querySelector("[data-attach-input]");
+        const attachPreview = document.querySelector("[data-attach-preview]");
+        let pendingFile = null;
+
+        const clearAttach = () => {
+            pendingFile = null;
+            if (attachInput) attachInput.value = "";
+            if (attachPreview) {
+                attachPreview.hidden = true;
+                const img = attachPreview.querySelector("img");
+                if (img) img.removeAttribute("src");
+            }
+            syncSend();
+        };
+
+        attachBtn?.addEventListener("click", () => attachInput?.click());
+        attachInput?.addEventListener("change", () => {
+            const f = attachInput.files && attachInput.files[0];
+            if (!f) return;
+            if (!/^image\//.test(f.type)) {
+                notice("Choisis une image (jpg, png, webp).");
+                return;
+            }
+            pendingFile = f;
+            const img = attachPreview?.querySelector("img");
+            if (img) img.src = URL.createObjectURL(f);
+            if (attachPreview) attachPreview.hidden = false;
+            syncSend();
+        });
+        attachPreview?.querySelector("[data-attach-remove]")?.addEventListener("click", clearAttach);
+
+        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null) => {
+            const text = regen ? "" : (overrideText || input.value.trim());
+            if (!regen && text === "" && !pendingFile) return;
+            if (busy) return;
+
+            busy = true;
+            syncSend();
+            setStreaming(true);
+            if (!overrideText && !regen) {
+                input.value = "";
+                grow();
+            }
+
+            let userEl = null;
+            if (!regen) {
+                clearIntro();
+                if (echo) userEl = bubble(text, "user");
+                scrollBottom();
+            }
+            typing();
+
+            if (mode === "auto" && lastStatus && lastStatus.reachable === false) {
+                document.getElementById("chat-typing")?.remove();
+                setStreaming(false);
+                askFallback(text, "LM Studio ne répond pas sur " + (lastStatus.url || "l’adresse configurée") + ".", "down");
+                busy = false;
+                syncSend();
+                input.value = text;
+                grow();
+                return;
+            }
+
+            if (lastStatus && lastStatus.reachable && !lastStatus.is_loaded) {
+                setDot("load", "Chargement du modèle…");
+            }
+
+            let live = null;
+            let streamed = "";
+            let cuts = [];
+            let bubbleEls = [];
+            let splitTimer = null;
+
+            const countWords = (s) => (s.trim() === "" ? 0 : s.trim().split(/\s+/).length);
+
+            // coupe une portion à la dernière fin de phrase avant la limite de mots
+            const cutInSegment = (seg) => {
+                const words = [];
+                const reW = /\S+/g;
+                let wm;
+                while ((wm = reW.exec(seg))) words.push(wm.index);
+                if (words.length <= splitWords) return 0;
+
+                const ends = [];
+                const reEnd = /[.!?…]+(?=\s|$)|\n/g;
+                let mm;
+                while ((mm = reEnd.exec(seg))) ends.push(mm.index + mm[0].length);
+                if (!ends.length) return 0;
+
+                const bounds = ends.map((at) => ({ at, n: words.filter((w) => w < at).length }));
+
+                let chosen = null;
+                for (const b of bounds) if (b.n <= splitWords) chosen = b;
+                if (chosen && chosen.n < 6) chosen = null;
+                if (!chosen) {
+                    for (const b of bounds) {
+                        if (b.n > splitWords) {
+                            chosen = b;
+                            break;
+                        }
+                    }
+                }
+                if (!chosen) chosen = bounds[bounds.length - 1];
+
+                let cut = chosen.at;
+                while (cut < seg.length && /\s/.test(seg[cut])) cut++;
+                return cut;
+            };
+
+            const paintParts = () => {
+                const bounds = [0, ...cuts, streamed.length];
+                bubbleEls.forEach((el, i) => {
+                    if (!el) return;
+                    const s = bounds[i] ?? 0;
+                    const e = bounds[i + 1] ?? streamed.length;
+                    el.textContent = streamed.slice(s, e).trim();
+                });
+            };
+
+            const maybeSplit = () => {
+                if (!splitOn || bubbleEls.length >= splitMax) return;
+                if (splitTimer || cuts.length >= bubbleEls.length) return;
+                const start = cuts.length ? cuts[cuts.length - 1] : 0;
+                const seg = streamed.slice(start);
+                if (countWords(seg) < splitWords) return;
+
+                const cut = cutInSegment(seg);
+                if (cut <= 0) return;
+
+                cuts.push(start + cut);
+                paintParts();
+
+                if (!splitTimer) {
+                    const delay = splitDmin + Math.random() * (splitDmax - splitDmin);
+
+                    // le personnage « écrit » la suite : trois points pendant la pause
+                    typing();
+
+                    splitTimer = setTimeout(() => {
+                        bubbleEls.push(startLiveBubble());
+                        paintParts();
+                        splitTimer = null;
+                        scrollBottom(false);
+                    }, delay * 1000);
+                }
+            };
+
+            const paintStream = () => {
+                if (!live) return;
+                if (!bubbleEls.length) bubbleEls.push(live);
+                maybeSplit();
+                paintParts();
+                scrollBottom(false);
+            };
+
+            let probed = 0;
+            const probe = setInterval(async () => {
+                if (live || probed++ > 40) return;
+                const d = await fetchStatus();
+                paintStatus(d);
+                if (!d || d.reachable === false) return;
+                // on n'affiche une étiquette que si le modèle doit VRAIMENT être chargé
+                // (les trois points suffisent à dire qu'il réfléchit)
+                if (!d.is_loaded) loadingLabel("Chargement du modèle…");
+            }, 1200);
+
+            controller = new AbortController();
+
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                fd.append("message", text);
+                if (mode === "fallback") fd.append("fallback", "1");
+                if (regen) fd.append("regen", "1");
+                if (regen && regenMid) fd.append("regen_mid", String(regenMid));
+                if (pendingFile) {
+                    fd.append("image", pendingFile);
+                    clearAttach();
+                }
+
+                const res = await fetch(streamUrl, {
+                    method: "POST",
+                    body: fd,
+                    headers: { "Accept": "text/event-stream", "X-Requested-With": "XMLHttpRequest" },
+                    signal: controller.signal,
+                });
+
+                const isSSE = res.ok && res.body && (res.headers.get("content-type") || "").includes("text/event-stream");
+
+                if (!isSSE) {
+                    const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
+                    document.getElementById("chat-typing")?.remove();
+                    if (!res.ok || !data.ok) throw new Error(data.error || "Échec de l’envoi.");
+                    scroll.appendChild(renderMsg({
+                        role: "assistant",
+                        content: data.reply.content,
+                        split_at: data.reply.split_at || 0,
+                    }));
+                    if (data.notice) notice(data.notice.content);
+                } else {
+                    const reader = res.body.getReader();
+                    const dec = new TextDecoder();
+                    let buf = "";
+                    let finalId = null;
+                    let failed = "";
+                    let failedKind = "error";
+
+                    for (;;) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buf += dec.decode(value, { stream: true });
+
+                        let cut;
+                        while ((cut = buf.indexOf("\n\n")) >= 0) {
+                            const frame = buf.slice(0, cut);
+                            buf = buf.slice(cut + 2);
+                            const line = frame.split("\n").find((l) => l.startsWith("data:"));
+                            if (!line) continue;
+                            let evt;
+                            try {
+                                evt = JSON.parse(line.slice(5).trim());
+                            } catch {
+                                continue;
+                            }
+
+                            if (typeof evt.delta === "string" && evt.delta !== "") {
+                                if (!live) {
+                                    clearInterval(probe);
+                                    loadingLabel("");
+                                }
+                                if (!live) live = startLiveBubble();
+                                streamed += evt.delta;
+                                paintStream();
+                            } else if (evt.start) {
+                                if (evt.user && userEl) {
+                                    userEl.dataset.msgId = evt.user.id;
+                                    if (evt.user.image) {
+                                        const img = document.createElement("img");
+                                        img.className = "bubble-img";
+                                        img.alt = "Photo envoyée";
+                                        img.src = "/media/" + evt.user.image + ".thumb.webp";
+                                        img.dataset.full = "/media/" + evt.user.image + ".webp";
+                                        userEl.insertBefore(img, userEl.querySelector(".bubble"));
+                                    }
+                                }
+                            } else if (evt.done) {
+                                finalId = (evt.reply && evt.reply.id) || null;
+
+                                // les coupes officielles viennent du serveur (stockées en base)
+                                const pts = Array.isArray(evt.reply && evt.reply.split_points)
+                                    ? evt.reply.split_points
+                                    : [];
+                                if (pts.length && live) {
+                                    const cps = Array.from(streamed);
+                                    const units = pts
+                                        .map((n) => cps.slice(0, Number(n)).join("").length)
+                                        .filter((n) => n > 0 && n < streamed.length);
+                                    if (units.length) {
+                                        cuts = units;
+                                        if (splitTimer) {
+                                            clearTimeout(splitTimer);
+                                            splitTimer = null;
+                                        }
+                                        while (bubbleEls.length < cuts.length + 1) {
+                                            bubbleEls.push(startLiveBubble());
+                                        }
+                                        paintParts();
+                                    }
+                                }
+
+                                if (evt.notice) notice(evt.notice.content);
+                            } else if (evt.error) {
+                                failed = evt.error;
+                                failedKind = evt.kind || "error";
+                            }
+                        }
+                    }
+
+                    document.getElementById("chat-typing")?.remove();
+                    if (live) {
+                        if (finalId) live.parentElement.dataset.msgId = finalId;
+                        live.parentElement.removeAttribute("data-live");
+                    }
+
+                    if (failed) {
+                        if (!live) {
+                            clearInterval(probe);
+                            askFallback(text, failed, failedKind);
+                            busy = false;
+                            setStreaming(false);
+                            syncSend();
+                            return;
+                        }
+                        notice("Réponse interrompue : " + failed);
+                    } else if (!live) {
+                        throw new Error("Réponse vide.");
+                    }
+                }
+
+                scrollBottom();
+                compressMemory()
+                    .then((d) => {
+                        if (d && d.compressed > 0) {
+                            notice("Mémoire mise à jour — " + d.compressed + " messages résumés.");
+                            scrollBottom();
+                        }
+                    })
+                    .then(() => rememberFacts())
+                    .then(() => autoTitle());
+            } catch (err) {
+                document.getElementById("chat-typing")?.remove();
+                if (err.name === "AbortError") {
+                    if (live) live.parentElement.removeAttribute("data-live");
+                    notice("Génération interrompue.");
+                } else {
+                    notice("Erreur : " + err.message);
+                }
+                scrollBottom();
+            } finally {
+                controller = null;
+                clearInterval(probe);
+                loadingLabel("");
+                loadStatus();
+                busy = false;
+                setStreaming(false);
+                syncSend();
+                input.focus();
+            }
+        };
+
+        form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            send();
+        });
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+            }
+        });
+        input.addEventListener("input", () => {
+            grow();
+            syncSend();
+        });
+        syncSend();
+    }
+
+
+    /* ------------------------------------------------- purge mémoire LM Studio */
+    const purgeBtn = document.querySelector("[data-purge-lms]");
+    if (purgeBtn) {
+        purgeBtn.addEventListener("click", async () => {
+            const status = document.querySelector("[data-purge-status]");
+            const original = purgeBtn.textContent;
+            purgeBtn.disabled = true;
+            purgeBtn.textContent = "Purge…";
+
+            try {
+                const tokenInput = document.querySelector('input[name="_token"]');
+                const fd = new FormData();
+                fd.append("_token", tokenInput ? tokenInput.value : "");
+                const res = await fetch("/settings/purge", { method: "POST", body: fd });
+                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
+                if (!res.ok || !data.ok) throw new Error(data.error || "Échec de la purge.");
+
+                const n = (data.unloaded || []).length;
+                if (status) {
+                    status.textContent = n
+                        ? n + " modèle(s) déchargé(s) : " + data.unloaded.join(", ")
+                        : "Aucun modèle chargé en mémoire — rien à purger.";
+                }
+                toast(n ? "Mémoire purgée (" + n + ")" : "Rien à purger");
+            } catch (err) {
+                toast("Erreur : " + err.message, true);
+            } finally {
+                purgeBtn.disabled = false;
+                purgeBtn.textContent = original;
+            }
+        });
+    }
+
+})();

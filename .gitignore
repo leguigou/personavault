@@ -1,0 +1,5 @@
+storage/
+*.sqlite
+*.sqlite-*
+config.local.php
+.DS_Store
