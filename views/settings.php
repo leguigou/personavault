@@ -7,22 +7,23 @@ $providers = [
     'lmstudio'   => 'LM Studio (local)',
     'custom'     => 'Autre / compatible OpenAI',
 ];
+// « 0 photo », « 1 photo », « 2 photos » (règle française : pluriel à partir de 2)
+$plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($n >= 2 ? $many : $one);
 ?>
-<a class="back" href="/">
+<a class="back settings-back" href="/">
     <svg viewBox="0 0 24 24" class="ico"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Bibliothèque
 </a>
 
-<section class="form-wrap">
-    <header class="form-head">
-        <p class="eyebrow">Réglages</p>
-        <h1>Paramètres</h1>
+<section class="form-wrap settings-page">
+    <header class="form-head settings-head">
+        <h1>Réglages</h1>
         <p class="form-sub">Connexions, discussions et apparence — un onglet par sujet.</p>
     </header>
 
-    <nav class="tabs" data-tabs>
-        <button type="button" class="tab is-on" data-tab="ia">Intelligence</button>
-        <button type="button" class="tab" data-tab="chat">Discussion</button>
+    <nav class="tabs" data-tabs aria-label="Sections des réglages">
+        <button type="button" class="tab is-on" data-tab="ia"><span class="tab-long">Intelligence</span><span class="tab-short">IA</span></button>
+        <button type="button" class="tab" data-tab="chat"><span class="tab-long">Discussion</span><span class="tab-short">Chat</span></button>
         <button type="button" class="tab" data-tab="look">Apparence</button>
         <button type="button" class="tab" data-tab="prompts">Prompts</button>
         <button type="button" class="tab" data-tab="backup">Sauvegarde</button>
@@ -34,7 +35,7 @@ $providers = [
         <p class="form-sub">Modèle qui remplit les fiches persona (bouton IA).</p>
     </header>
 
-    <form class="card-form" method="post" action="/settings" data-settings-form>
+    <form class="card-form" method="post" action="/settings" data-settings-form data-dirty-guard>
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 
         <div class="field">
@@ -92,11 +93,25 @@ $providers = [
             <?php endif; ?>
         </div>
 
-        <div class="form-actions">
+        <div class="form-actions save-bar">
+            <span class="dirty-note">Modifications non enregistrées</span>
             <button type="button" class="btn btn-ghost" data-llm-test>Test de connexion</button>
             <button class="btn btn-primary" type="submit">Enregistrer</button>
         </div>
     </form>
+
+    <section class="panel panel-help">
+        <h2>Comment ça marche</h2>
+        <p class="hint">
+            Sur une fiche, le bouton <strong>Compléter avec l’IA</strong> lit les prompts du persona et
+            remplit uniquement ce qui manque : accroche, description, tags et attributs.
+            Ce qui est déjà saisi n’est jamais écrasé, et <strong>tes prompts ne sont jamais modifiés</strong> :
+            l’IA ne fait que les lire.
+        </p>
+        <p class="hint">
+            Rien ne part sans que tu cliques : l’app n’envoie les données au modèle qu’au moment de cette action.
+        </p>
+    </section>
     </div>
 
     <div class="tab-panel" data-panel="chat" hidden>
@@ -105,9 +120,11 @@ $providers = [
         <p class="form-sub">Utilisé uniquement pour parler aux personas. Si LM Studio est éteint, l’app bascule sur DeepSeek en te prévenant.</p>
     </header>
 
-    <form class="card-form" method="post" action="/settings/chat">
+    <form class="settings-stack" method="post" action="/settings/chat" data-dirty-guard>
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 
+        <section class="settings-card">
+        <h3 class="settings-card-title">Connexion au modèle</h3>
         <div class="row2">
             <div class="field">
                 <span>Fournisseur</span>
@@ -151,6 +168,22 @@ $providers = [
             <?php endif; ?>
         </div>
 
+        <label class="field">
+            <span>Clé API (facultative)</span>
+            <input class="input" type="password" name="chat_api_key" autocomplete="off" spellcheck="false"
+                   placeholder="<?= $chatHasKey ? 'Clé enregistrée — laisser vide' : 'vide pour LM Studio' ?>">
+        </label>
+
+        <?php if ($chatHasKey): ?>
+            <label class="check">
+                <input type="checkbox" name="chat_clear_key" value="1">
+                <span>Supprimer la clé enregistrée</span>
+            </label>
+        <?php endif; ?>
+        </section>
+
+        <section class="settings-card">
+        <h3 class="settings-card-title">Réflexion et mémoire</h3>
         <div class="field">
             <span>Réflexion du modèle</span>
             <div class="sel" data-sel>
@@ -179,22 +212,16 @@ $providers = [
                 <small>Ce qui reste en clair après compression.</small>
             </label>
         </div>
+        </section>
 
-        <label class="field">
-            <span>Clé API (facultative)</span>
-            <input class="input" type="password" name="chat_api_key" autocomplete="off" spellcheck="false"
-                   placeholder="<?= $chatHasKey ? 'Clé enregistrée — laisser vide' : 'vide pour LM Studio' ?>">
-        </label>
-
-        <?php if ($chatHasKey): ?>
-            <label class="check">
-                <input type="checkbox" name="chat_clear_key" value="1">
-                <span>Supprimer la clé enregistrée</span>
-            </label>
-        <?php endif; ?>
-
-        <div class="settings-block">
-            <h3>Réponses en plusieurs bulles</h3>
+        <details class="settings-card settings-fold">
+            <summary>
+                <span class="fold-text">
+                    <span class="fold-title">Réponses en plusieurs bulles</span>
+                    <span class="fold-sum" data-fold-sum="split"></span>
+                </span>
+            </summary>
+            <div class="fold-body">
             <p class="hint">Coupe une longue réponse en deux messages, à la fin d’une phrase, avec une petite pause.</p>
 
             <label class="check">
@@ -229,10 +256,17 @@ $providers = [
                 </label>
             </div>
             <p class="hint">Pause aléatoire entre deux bulles, dans cette plage.</p>
-        </div>
+            </div>
+        </details>
 
-        <div class="settings-block">
-            <h3>Messages spontanés</h3>
+        <details class="settings-card settings-fold">
+            <summary>
+                <span class="fold-text">
+                    <span class="fold-title">Messages spontanés</span>
+                    <span class="fold-sum" data-fold-sum="followup"></span>
+                </span>
+            </summary>
+            <div class="fold-body">
             <p class="hint">Le persona peut t’écrire de lui-même après un long silence (désactivable conversation par conversation).</p>
 
             <label class="check">
@@ -248,27 +282,35 @@ $providers = [
                 </label>
                 <div class="field">
                     <span>Plage horaire</span>
-                    <div class="row2 row-tight">
-                        <label class="field">
-                            <input class="input" type="number" name="chat_followup_from" min="0" max="23" value="<?= (int) setting('chat_followup_from', '8') ?>" aria-label="De">
-                        </label>
-                        <label class="field">
-                            <input class="input" type="number" name="chat_followup_to" min="1" max="24" value="<?= (int) setting('chat_followup_to', '23') ?>" aria-label="À">
-                        </label>
+                    <div class="hours-range">
+                        <span>de</span>
+                        <input class="input" type="number" inputmode="numeric" name="chat_followup_from" min="0" max="23" value="<?= (int) setting('chat_followup_from', '8') ?>" aria-label="Heure de début">
+                        <span>h à</span>
+                        <input class="input" type="number" inputmode="numeric" name="chat_followup_to" min="1" max="24" value="<?= (int) setting('chat_followup_to', '23') ?>" aria-label="Heure de fin">
+                        <span>h</span>
                     </div>
-                    <small>De … h à … h. Rien la nuit.</small>
+                    <small>Aucune relance en dehors de cette plage.</small>
                 </div>
             </div>
-        </div>
+            </div>
+        </details>
 
-        <div class="form-actions">
-            <button class="btn btn-ghost" type="button" data-purge-lms>Purger la mémoire LM Studio</button>
+        <div class="form-actions save-bar">
+            <span class="dirty-note">Modifications non enregistrées</span>
             <button class="btn btn-primary" type="submit">Enregistrer</button>
         </div>
-        <p class="hint" data-purge-status>
-            Changer de modèle décharge automatiquement l’ancien. Le bouton force la libération de la VRAM.
-        </p>
     </form>
+
+    <section class="backup-card settings-maint">
+        <h3>Maintenance LM Studio</h3>
+        <p class="hint" data-purge-status>
+            Changer de modèle décharge déjà l’ancien automatiquement. Ce bouton force la libération
+            de la mémoire vidéo (VRAM) si LM Studio garde des modèles chargés.
+        </p>
+        <div class="form-actions">
+            <button class="btn btn-ghost" type="button" data-purge-lms>Purger la mémoire LM Studio</button>
+        </div>
+    </section>
     </div>
 
     <div class="tab-panel" data-panel="look" hidden>
@@ -277,8 +319,18 @@ $providers = [
         <p class="form-sub">S’applique à toutes les discussions. L’aperçu réagit en direct.</p>
     </header>
 
-    <form class="card-form" method="post" action="/settings/ui" data-ui-form>
+    <form class="card-form" method="post" action="/settings/ui" data-ui-form data-dirty-guard>
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+
+        <div class="ui-preview" data-ui-preview aria-label="Aperçu">
+            <div class="pv-msg pv-bot">
+                <span class="pv-av">L</span>
+                <div class="pv-bubble">Salut&nbsp;! Tu as passé une bonne journée&nbsp;?</div>
+            </div>
+            <div class="pv-msg pv-user">
+                <div class="pv-bubble">Ouais, et toi&nbsp;?</div>
+            </div>
+        </div>
 
         <div class="row2">
             <div class="field">
@@ -349,17 +401,8 @@ $providers = [
             <span>Afficher l’avatar du personnage à côté de ses messages</span>
         </label>
 
-        <div class="ui-preview" data-ui-preview>
-            <div class="pv-msg pv-bot">
-                <span class="pv-av">L</span>
-                <div class="pv-bubble">Salut&nbsp;! Tu as passé une bonne journée&nbsp;?</div>
-            </div>
-            <div class="pv-msg pv-user">
-                <div class="pv-bubble">Ouais, et toi&nbsp;?</div>
-            </div>
-        </div>
-
-        <div class="form-actions">
+        <div class="form-actions save-bar">
+            <span class="dirty-note">Modifications non enregistrées</span>
             <button class="btn btn-primary" type="submit">Enregistrer l’apparence</button>
         </div>
     </form>
@@ -371,7 +414,7 @@ $providers = [
         <p class="form-sub">Les consignes que l’app envoie au modèle pour la mémoire, les souvenirs et les relances. Vides = texte par défaut.</p>
     </header>
 
-    <form class="card-form" method="post" action="/settings/prompts" data-prompts-form>
+    <form class="card-form" method="post" action="/settings/prompts" data-prompts-form data-dirty-guard>
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 
         <?php
@@ -395,7 +438,8 @@ $providers = [
             </div>
         <?php endforeach; ?>
 
-        <div class="form-actions">
+        <div class="form-actions save-bar">
+            <span class="dirty-note">Modifications non enregistrées</span>
             <button class="btn btn-primary" type="submit">Enregistrer les prompts</button>
         </div>
     </form>
@@ -410,8 +454,10 @@ $providers = [
     <section class="backup-card">
         <h3>Exporter</h3>
         <p class="hint">
-            <?= (int) $backupStats['personas'] ?> persona(s) · <?= (int) $backupStats['photos'] ?> photo(s) ·
-            <?= (int) $backupStats['prompts'] ?> prompt(s) · <?= (int) $backupStats['conversations'] ?> conversation(s)
+            <?= e($plural((int) $backupStats['personas'], 'persona', 'personas')) ?> ·
+            <?= e($plural((int) $backupStats['photos'], 'photo', 'photos')) ?> ·
+            <?= e($plural((int) $backupStats['prompts'], 'prompt', 'prompts')) ?> ·
+            <?= e($plural((int) $backupStats['conversations'], 'conversation', 'conversations')) ?>
         </p>
 
         <label class="check">
@@ -440,28 +486,19 @@ $providers = [
 
         <form method="post" action="/backup/import" enctype="multipart/form-data" data-confirm="Importer cette sauvegarde ? Les personas seront ajoutés à la bibliothèque.">
             <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-            <input class="input" type="file" name="archive" accept=".zip,application/zip" required>
+            <label class="file-pick" data-file-pick>
+                <input type="file" name="archive" accept=".zip,application/zip" required>
+                <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="file-pick-name" data-empty="Choisir un fichier ZIP">Choisir un fichier ZIP</span>
+            </label>
             <div class="form-actions">
-                <button class="btn btn-ghost" type="submit">Importer l’archive</button>
+                <button class="btn btn-ghost" type="submit" data-file-submit disabled>Importer l’archive</button>
             </div>
         </form>
     </section>
 
     <p class="hint">Astuce : garde le ZIP hors du serveur (disque externe, cloud). Il contient tout ce qu’il faut pour repartir de zéro.</p>
     </div>
-
-    <section class="panel panel-help">
-        <h2>Comment ça marche</h2>
-        <p class="hint">
-            Sur une fiche, le bouton <strong>Compléter avec l’IA</strong> lit les prompts du persona et
-            remplit uniquement ce qui manque : accroche, description, tags et attributs.
-            Ce qui est déjà saisi n’est jamais écrasé, et <strong>tes prompts ne sont jamais modifiés</strong> :
-            l’IA ne fait que les lire.
-        </p>
-        <p class="hint">
-            Rien ne part sans que tu cliques : l’app n’envoie les données au modèle qu’au moment de cette action.
-        </p>
-    </section>
 
     <form method="post" action="/logout" class="settings-logout" data-confirm="Se déconnecter de PersonaVault ?">
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">

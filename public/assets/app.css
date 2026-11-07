@@ -2670,5 +2670,122 @@ html.kb-open .chat-room .chat-composer { padding-bottom: 10px; }
     body::after { display: none; }
     .chat-composer, .topbar { backdrop-filter: none; -webkit-backdrop-filter: none; }
     .chat-composer { background: rgba(9, 9, 16, .96); }
-    .topbar { background: rgba(7, 7, 13, .94); }
+    .topbar { background: #0a0a12; }
+}
+
+/* =================================================================
+   Réglages — lisibilité mobile (v65)
+   ================================================================= */
+
+/* onglets : libellé court sur téléphone, barre collée sous l'en-tête */
+.tab-short { display: none; }
+.settings-page .tabs {
+    position: sticky;
+    top: 64px;
+    z-index: 30;
+    background: rgba(14, 14, 24, .96);
+}
+
+/* onglet Discussion : une carte par sujet */
+.settings-stack { display: flex; flex-direction: column; gap: 14px; }
+.settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px;
+    border-radius: 22px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, .035);
+    box-shadow: var(--shadow);
+}
+.settings-card-title { font-size: 14px; font-weight: 650; }
+
+/* sections repliables (bulles, relances) */
+.settings-fold { gap: 0; }
+.settings-fold > summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
+    list-style: none;
+    cursor: pointer;
+}
+.settings-fold > summary::-webkit-details-marker { display: none; }
+.settings-fold > summary::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    margin: 0 4px 4px auto;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg);
+    transition: transform .2s;
+    flex: 0 0 auto;
+}
+.settings-fold[open] > summary::after { transform: rotate(-135deg); margin-bottom: -4px; }
+.fold-title { font-size: 14px; font-weight: 650; }
+.fold-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fold-sum { font-size: 12.5px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fold-body { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+
+/* plage horaire : « de [8] h à [23] h » */
+.hours-range { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.hours-range .input { width: 72px; text-align: center; padding-left: 8px; padding-right: 8px; }
+
+/* barre d'enregistrement : collée en bas dès qu'il y a des modifications */
+.dirty-note { display: none; margin-right: auto; align-self: center; font-size: 12.5px; color: #fcd34d; }
+form.is-dirty .dirty-note { display: inline; }
+form.is-dirty .save-bar {
+    position: sticky;
+    bottom: 12px;
+    z-index: 20;
+    padding: 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(251, 191, 36, .28);
+    background: rgba(14, 14, 24, .97);
+    box-shadow: 0 16px 40px -18px #000;
+}
+
+/* maintenance LM Studio, séparée du formulaire */
+.settings-maint { margin-top: 14px; }
+
+/* sauvegarde : sélecteur de fichier dans le thème */
+.file-pick {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px dashed var(--border);
+    background: rgba(255, 255, 255, .03);
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+}
+.file-pick:hover, .file-pick:focus-within { border-color: rgba(167, 139, 250, .55); background: rgba(167, 139, 250, .06); }
+.file-pick.has-file { border-style: solid; color: var(--text); }
+.file-pick .ico { width: 18px; height: 18px; flex: 0 0 auto; }
+.file-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-pick input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* zones de prompts : hauteur pilotée par le contenu (JS) */
+.prompt-area[data-autosize] { overflow-y: hidden; resize: none; }
+
+@media (max-width: 899px) {
+    /* en-tête compact : la barre du bas remplace le lien retour */
+    .settings-back, .settings-head .form-sub { display: none; }
+    .settings-head { margin-bottom: 12px; }
+
+    form.is-dirty .save-bar { bottom: calc(62px + var(--safe-b) + 10px); }
+}
+
+@media (max-width: 559px) {
+    .tab-long { display: none; }
+    .tab-short { display: inline; }
+    .settings-page .tab { flex: 1 1 auto; padding: 9px 6px; text-align: center; }
+    .settings-card { padding: 16px; }
 }

@@ -121,6 +121,83 @@
         setTimeout(() => (btn.textContent = old), 1200);
     });
 
+    /* ------------------------- zones de texte qui s'adaptent au contenu */
+    const autosize = (ta) => {
+        if (!ta || !ta.offsetParent) return; // onglet masqué : recalculé à l'ouverture
+        ta.style.height = "auto";
+        ta.style.height = ta.scrollHeight + 2 + "px";
+    };
+    function autosizeIn(scope) {
+        scope?.querySelectorAll("textarea[data-autosize]").forEach(autosize);
+    }
+    document.querySelectorAll(".prompt-area").forEach((ta) => {
+        ta.dataset.autosize = "1";
+        ta.addEventListener("input", () => autosize(ta));
+    });
+    window.addEventListener("resize", () => autosizeIn(document));
+    autosizeIn(document);
+
+    /* ------------------------ réglages : modifications non enregistrées */
+    const guarded = [...document.querySelectorAll("form[data-dirty-guard]")];
+    if (guarded.length) {
+        const snap = (f) => {
+            const parts = [];
+            new FormData(f).forEach((v, k) => {
+                if (k !== "_token" && typeof v === "string") parts.push(k + "=" + v);
+            });
+            return parts.join("&");
+        };
+        let submitting = false;
+        guarded.forEach((f) => {
+            f.dataset.initial = snap(f);
+            const check = () => f.classList.toggle("is-dirty", snap(f) !== f.dataset.initial);
+            f.addEventListener("input", check);
+            f.addEventListener("change", check);
+            f.addEventListener("submit", () => { submitting = true; });
+        });
+        window.addEventListener("beforeunload", (e) => {
+            if (submitting || !guarded.some((f) => f.classList.contains("is-dirty"))) return;
+            e.preventDefault();
+            e.returnValue = "";
+        });
+    }
+
+    /* ------------------- réglages : résumé des sections repliables */
+    const foldSums = document.querySelectorAll("[data-fold-sum]");
+    if (foldSums.length) {
+        const val = (n) => document.querySelector('[name="' + n + '"]');
+        const paintSums = () => {
+            foldSums.forEach((el) => {
+                if (el.dataset.foldSum === "split") {
+                    const on = val("chat_split_enabled")?.checked;
+                    const max = +(val("chat_split_max_bubbles")?.value || 1);
+                    el.textContent = !on || max <= 1 ? "Désactivé" : max + " bulles max · " + (val("chat_split_words")?.value || "") + " mots";
+                } else if (el.dataset.foldSum === "followup") {
+                    const on = val("chat_followup_enabled")?.checked;
+                    el.textContent = on
+                        ? "De " + (val("chat_followup_from")?.value || "") + " h à " + (val("chat_followup_to")?.value || "") + " h"
+                        : "Désactivées";
+                }
+            });
+        };
+        document.addEventListener("input", paintSums);
+        document.addEventListener("change", paintSums);
+        paintSums();
+    }
+
+    /* ------------------------------ sauvegarde : choix du fichier ZIP */
+    document.querySelectorAll("[data-file-pick]").forEach((pick) => {
+        const input = pick.querySelector('input[type="file"]');
+        const name = pick.querySelector(".file-pick-name");
+        const submit = pick.closest("form")?.querySelector("[data-file-submit]");
+        input?.addEventListener("change", () => {
+            const f = input.files && input.files[0];
+            name.textContent = f ? f.name : name.dataset.empty;
+            pick.classList.toggle("has-file", !!f);
+            if (submit) submit.disabled = !f;
+        });
+    });
+
     /* ------------------------------------------------- réglages : onglets */
     const tabsNav = document.querySelector("[data-tabs]");
     if (tabsNav) {
@@ -137,6 +214,9 @@
             panels.forEach((p) => {
                 p.hidden = p.dataset.panel !== id;
             });
+            try { sessionStorage.setItem("pv_settings_tab", id); } catch (e) { /* stockage indisponible */ }
+            if (location.hash.replace("#", "") !== id) history.replaceState(null, "", "#" + id);
+            autosizeIn(document.querySelector('[data-panel="' + id + '"]'));
         };
 
         // la barre d'onglets se défile horizontalement : le dégradé du bord
@@ -153,7 +233,12 @@
             if (t) activate(t.dataset.tab);
         });
         const fromHash = () => {
-            const h = (location.hash || "").replace("#", "");
+            let h = (location.hash || "").replace("#", "");
+            // après un enregistrement, le serveur renvoie sur /settings sans
+            // ancre : on rouvre l'onglet sur lequel on était
+            if (!h) {
+                try { h = sessionStorage.getItem("pv_settings_tab") || ""; } catch (e) { h = ""; }
+            }
             if (h && document.querySelector('[data-panel="' + h + '"]')) activate(h);
         };
         fromHash();
@@ -207,6 +292,7 @@
             const area = btn.closest(".prompt-block")?.querySelector(".prompt-area");
             if (!area) return;
             area.value = area.dataset.default || "";
+            area.dispatchEvent(new Event("input", { bubbles: true }));
             area.focus();
         });
     });
