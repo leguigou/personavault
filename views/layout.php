@@ -19,13 +19,18 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
       style="--chat-font: <?= e((string) $__ui['font']) ?>px">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="theme-color" content="#08080f">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="PersonaVault">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title><?= e($title ?? 'Personas') ?> · PersonaVault</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/assets/app.css?v=63">
+    <link rel="icon" href="/assets/icon-192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <link rel="manifest" href="/assets/manifest.webmanifest">
+    <link rel="stylesheet" href="/assets/app.css?v=64">
     <script>try{document.documentElement.dataset.view=localStorage.getItem("pv_view")==="list"?"list":"grid";}catch(e){}</script>
 </head>
 <body class="<?= $isAuth ? 'is-auth' : 'is-guest' ?> <?= $isChatRoom ? 'chat-room' : '' ?>">
@@ -80,7 +85,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <?= $content ?>
 </main>
 
-<?php if ($isAuth && !$isChat): ?>
+<?php if ($isAuth && !$isChatRoom): ?>
 <nav class="tabbar" aria-label="Navigation mobile">
     <a href="/" class="<?= $isLib ? 'is-active' : '' ?>">
         <svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
@@ -110,6 +115,6 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <img alt="">
 </div>
 
-<script src="/assets/app.js?v=66" defer></script>
+<script src="/assets/app.js?v=67" defer></script>
 </body>
 </html>

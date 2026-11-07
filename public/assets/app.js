@@ -2,6 +2,27 @@
 (() => {
     "use strict";
 
+    /* ------------------------------------------ clavier mobile (chat)
+       iOS ne réduit pas 100dvh quand le clavier s'ouvre : la page défile et
+       l'en-tête sort de l'écran. On cale la hauteur du chat sur la zone
+       réellement visible (visualViewport) et on garde la page en haut. */
+    if (document.body.classList.contains("chat-room") && window.visualViewport) {
+        const vv = window.visualViewport;
+        const root = document.documentElement;
+        let raf = 0;
+        const fit = () => {
+            raf = 0;
+            const h = Math.round(vv.height);
+            root.style.setProperty("--app-h", h + "px");
+            root.classList.toggle("kb-open", window.innerHeight - h > 120);
+            if (window.scrollY !== 0 || vv.offsetTop !== 0) window.scrollTo(0, 0);
+        };
+        const queue = () => { if (!raf) raf = requestAnimationFrame(fit); };
+        vv.addEventListener("resize", queue);
+        vv.addEventListener("scroll", queue);
+        fit();
+    }
+
     /* ------------------------------------------------ toasts éphémères */
     const toast = (msg, isError = false) => {
         let el = document.querySelector(".toast");
@@ -487,7 +508,8 @@
                 const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
                 if (!res.ok || !data.ok) throw new Error(data.error || "Échec du test.");
                 status.className = "llm-status is-ok";
-                status.innerHTML = `<span class="dot dot-ok"></span><span>Connecté · ${data.modele} · ${data.ms} ms</span>`;
+                status.innerHTML = `<span class="dot dot-ok"></span><span></span>`;
+                status.lastElementChild.textContent = `Connecté · ${data.modele} · ${data.ms} ms`;
             } catch (err) {
                 status.className = "llm-status is-ko";
                 status.innerHTML = `<span class="dot dot-ko"></span><span></span>`;
@@ -790,6 +812,21 @@
         };
         scrollBottom(false);
 
+        /* quand le clavier s'ouvre, garder le dernier message visible
+           (si on était déjà en bas de la discussion) */
+        if (window.visualViewport) {
+            let lastH = window.visualViewport.height;
+            let atBottom = true;
+            scroll.addEventListener("scroll", () => {
+                atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 160;
+            }, { passive: true });
+            window.visualViewport.addEventListener("resize", () => {
+                const h = window.visualViewport.height;
+                if (h < lastH && atBottom) requestAnimationFrame(() => scrollBottom(false));
+                lastH = h;
+            });
+        }
+
         const clearIntro = () => chat.querySelector(".chat-intro")?.remove();
 
         const bubble = (text, role) => {
@@ -1026,18 +1063,20 @@
             const text = statusBox.querySelector(".lms-text");
             if (!d || d.ok === false) {
                 statusBox.dataset.state = "ko";
-                text.innerHTML = "LM Studio n’est pas lancé" + (d && d.url ? " — aucune réponse sur " + d.url : "");
+                text.textContent = "LM Studio n’est pas lancé" + (d && d.url ? " — aucune réponse sur " + d.url : "");
                 return;
             }
             if (d.is_loaded) {
                 const l = (d.loaded || []).find((x) => x.key === d.wanted || x.id === d.wanted) || (d.loaded || [])[0];
                 statusBox.dataset.state = "ok";
-                text.innerHTML =
-                    "Modèle chargé : <b>" + (l ? l.key : d.wanted) + "</b>" +
-                    (l && l.ctx ? " \u00b7 " + fmt(l.ctx) + " tokens" : "");
+                const b = document.createElement("b");
+                b.textContent = String(l ? l.key : d.wanted);
+                text.replaceChildren("Modèle chargé : ", b, l && l.ctx ? " \u00b7 " + fmt(l.ctx) + " tokens" : "");
             } else {
                 statusBox.dataset.state = "idle";
-                text.innerHTML = "<b>" + d.wanted + "</b> n\u2019est pas chargé \u2014 il se charge au premier message";
+                const b = document.createElement("b");
+                b.textContent = String(d.wanted);
+                text.replaceChildren(b, " n\u2019est pas chargé \u2014 il se charge au premier message");
             }
         };
 

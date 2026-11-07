@@ -462,4 +462,9 @@ $providers = [
             Rien ne part sans que tu cliques : l’app n’envoie les données au modèle qu’au moment de cette action.
         </p>
     </section>
+
+    <form method="post" action="/logout" class="settings-logout" data-confirm="Se déconnecter de PersonaVault ?">
+        <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+        <button class="btn btn-ghost" type="submit">Se déconnecter</button>
+    </form>
 </section>

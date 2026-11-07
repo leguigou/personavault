@@ -99,7 +99,7 @@ $token    = csrf_token();
             <p class="hint">Aucune photo pour l’instant. Ajoute des visuels : portraits, variantes, références.</p>
         <?php endif; ?>
 
-        <p class="hint paste-hint">
+        <p class="hint paste-hint only-pointer">
             Astuce : <kbd>Ctrl</kbd>+<kbd>V</kbd> pour coller une image directement.
         </p>
 
