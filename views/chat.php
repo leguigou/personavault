@@ -35,7 +35,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
              data-facts-idle="<?= (int) $__facts['idle'] ?>"
              data-status="/chat/<?= (int) $conv['id'] ?>/status"
              data-token="<?= e($token) ?>"
-             data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) ?>"
+             data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) === 1 && chat_title_mode() !== 'off' ? 1 : 0 ?>"
              data-split="<?= (string) setting('chat_split_enabled', '1') === '1' ? '1' : '0' ?>"
              data-split-words="<?= (int) setting('chat_split_words', '50') ?>"
              data-split-max="<?= (int) setting('chat_split_max_bubbles', '2') ?>"

@@ -147,6 +147,10 @@ if ($path === '/settings/chat' && $method === 'POST') {
     $fm = (string) ($_POST['facts_model'] ?? 'chat');
     set_setting('facts_model', in_array($fm, ['chat', 'remote'], true) ? $fm : 'chat');
 
+    // titres automatiques des discussions
+    $tm = (string) ($_POST['chat_title_model'] ?? 'remote');
+    set_setting('chat_title_model', in_array($tm, ['remote', 'chat', 'off'], true) ? $tm : 'remote');
+
     set_setting('chat_llm_base_url', rtrim($baseUrl, '/'));
     set_setting('chat_llm_model', $model);
     if ($key !== '') {

@@ -115,6 +115,6 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <img alt="">
 </div>
 
-<script src="/assets/app.js?v=70" defer></script>
+<script src="/assets/app.js?v=71" defer></script>
 </body>
 </html>

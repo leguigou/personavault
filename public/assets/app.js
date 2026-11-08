@@ -357,6 +357,9 @@
                         : f === "explicit" ? "Sur demande" + m
                         : f === "every" ? "Tous les " + (val("facts_every")?.value || "6") + " messages" + t + m
                         : "Après chaque échange" + t + m;
+                } else if (el.dataset.foldSum === "titles") {
+                    const t = val("chat_title_model")?.value || "remote";
+                    el.textContent = t === "off" ? "Désactivés" : t === "chat" ? "Modèle local" : "Modèle distant";
                 } else if (el.dataset.foldSum === "followup") {
                     const on = val("chat_followup_enabled")?.checked;
                     el.textContent = on

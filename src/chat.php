@@ -1171,8 +1171,23 @@ function chat_model_vision(string $model): bool
 /**
  * Titre court généré à partir des premiers échanges (si le titre est encore automatique).
  */
+/**
+ * Modèle qui génère les titres automatiques : remote (modèle des fiches, distant),
+ * chat (modèle de discussion, local) ou off (pas de titre automatique).
+ */
+function chat_title_mode(): string
+{
+    $m = setting('chat_title_model', 'remote');
+    return in_array($m, ['remote', 'chat', 'off'], true) ? $m : 'remote';
+}
+
 function chat_auto_title(int $cid): ?string
 {
+    $mode = chat_title_mode();
+    if ($mode === 'off') {
+        return null;
+    }
+
     $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
     $stmt->execute([$cid]);
     $conv = $stmt->fetch();
@@ -1197,17 +1212,26 @@ function chat_auto_title(int $cid): ?string
         . "3 à 5 mots maximum, en français, sans guillemets ni ponctuation finale, sans le mot « discussion ». "
         . "Décris le sujet concret de l'échange. Réponds uniquement par le titre.";
 
+    // distant seulement s'il est configuré ; sinon le modèle local (rien ne sort)
+    $remote = $mode === 'remote' && llm_ready();
+    $opts   = $remote
+        ? ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 25]
+        : ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 60,
+           'reasoning_effort' => setting('chat_reasoning_effort', 'none')];
+
     try {
         $res = llm_request(
             [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $txt]],
-            llm_config(),
-            ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 25]
+            $remote ? llm_config() : chat_llm_config(),
+            $opts
         );
     } catch (Throwable $e) {
         return null;
     }
 
-    $title = trim(str_replace(['"', '«', '»', '“', '”'], '', (string) $res['content']));
+    // certains modèles locaux préfixent leur réponse d'un bloc de réflexion
+    $raw   = preg_replace('#<think>.*?</think>#su', '', (string) $res['content']) ?? (string) $res['content'];
+    $title = trim(str_replace(['"', '«', '»', '“', '”'], '', $raw));
     $title = trim(preg_replace('/\s+/u', ' ', $title) ?? $title);
     $title = rtrim($title, ".!?:;");
     if ($title === '' || mb_strlen($title) > 60) {

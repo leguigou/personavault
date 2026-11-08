@@ -137,11 +137,14 @@ Deux fournisseurs, réglables dans **Réglages** :
 | Usage | Fournisseur | Remarque |
 |---|---|---|
 | Discussion, résumés, souvenirs (local) | [LM Studio](https://lmstudio.ai) ou tout serveur compatible OpenAI | `http://localhost:1234/v1` par défaut |
-| Fiches, consignes de jeu, titres de discussion | DeepSeek, OpenAI, OpenRouter… | n'importe quelle API `/chat/completions` |
+| Fiches, consignes de jeu, titres (réglable) | DeepSeek, OpenAI, OpenRouter… | n'importe quelle API `/chat/completions` |
 
 Les souvenirs peuvent aussi être confiés au modèle distant (Réglages › Chat › Souvenirs durables) :
-les derniers messages lui sont alors envoyés. Les **titres automatiques** utilisent le modèle
-distant : les premiers messages de chaque discussion lui sont envoyés.
+les derniers messages lui sont alors envoyés.
+
+**Titres automatiques** (Réglages › Chat › Titres des discussions) : modèle distant (par défaut ;
+les 4 premiers messages lui sont envoyés), modèle local (rien ne sort) ou désactivés. Si le modèle
+distant n'est pas configuré, le local prend le relais.
 
 Le chat utilise le modèle local ; s'il n'est pas joignable, l'app propose de basculer sur le
 fournisseur distant — elle ne le fait jamais sans demander.

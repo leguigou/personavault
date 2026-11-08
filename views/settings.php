@@ -371,6 +371,37 @@ $facts = facts_settings();
             </div>
         </details>
 
+        <?php $titleMode = chat_title_mode(); ?>
+        <details class="settings-card settings-fold">
+            <summary>
+                <span class="fold-text">
+                    <span class="fold-title">Titres des discussions <?= $info('titles', 'titres automatiques') ?></span>
+                    <span class="fold-sum" data-fold-sum="titles"></span>
+                </span>
+            </summary>
+            <div class="fold-body">
+            <p class="hint">Après les premiers échanges, un titre court est donné à la discussion
+                (tant que tu ne l’as pas renommée toi-même).</p>
+            <div class="field">
+                <span>Modèle utilisé</span>
+                <div class="sel" data-sel>
+                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Modèle des titres automatiques">
+                        <span class="sel-value"></span>
+                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <select name="chat_title_model" class="sel-native">
+                        <?php foreach (['remote' => 'Modèle des fiches (distant)', 'chat' => 'Modèle de discussion (local)', 'off' => 'Pas de titre automatique'] as $val => $label): ?>
+                            <option value="<?= e($val) ?>" <?= $titleMode === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php if ($titleMode === 'remote' && !llm_ready()): ?>
+                    <small class="warn">Le modèle des fiches n’est pas configuré (onglet IA) : le modèle local est utilisé en attendant.</small>
+                <?php endif; ?>
+            </div>
+            </div>
+        </details>
+
         <div class="form-actions save-bar">
             <span class="dirty-note">Modifications non enregistrées</span>
             <button class="btn btn-primary" type="submit">Enregistrer</button>
@@ -636,6 +667,14 @@ $facts = facts_settings();
             <p><strong>Modèle des fiches (distant)</strong> : soulage le modèle local, mais les derniers messages de
             la conversation sont alors <strong>envoyés au service distant</strong> (DeepSeek, OpenAI…).
             À choisir en connaissance de cause.</p>'],
+        'titles' => ['Titres des discussions', '
+            <p><strong>Modèle des fiches (distant)</strong> : les 4 premiers messages de la discussion
+            (300 caractères chacun au plus) sont <strong>envoyés au service distant</strong> pour trouver un titre.
+            Rapide, et le modèle local reste libre.</p>
+            <p><strong>Modèle de discussion (local)</strong> : rien ne sort de ta machine ; le modèle local
+            est occupé une ou deux secondes après le premier échange.</p>
+            <p><strong>Pas de titre automatique</strong> : la discussion garde « Discussion avec … »
+            jusqu’à ce que tu la renommes.</p>'],
         'purge' => ['Purger la mémoire LM Studio', '
             <p>Décharge tous les modèles chargés dans LM Studio pour libérer la mémoire de la carte graphique
             (VRAM). Utile si LM Studio garde plusieurs modèles en mémoire et ralentit.</p>

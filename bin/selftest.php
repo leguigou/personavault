@@ -236,6 +236,14 @@ try {
     set_setting('facts_frequency', 'off');
     $check(facts_should_run(10, true) !== '', 'mode « jamais »');
     set_setting('facts_frequency', 'each');
+
+    echo PHP_EOL . '— titres automatiques' . PHP_EOL;
+    $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
+    set_setting('chat_title_model', 'off');
+    $check(chat_title_mode() === 'off' && chat_auto_title($cid) === null, 'désactivés : aucun appel, aucun titre');
+    set_setting('chat_title_model', 'n’importe quoi');
+    $check(chat_title_mode() === 'remote', 'valeur inconnue → modèle distant');
+    set_setting('chat_title_model', 'remote');
 } catch (Throwable $e) {
     echo '  ÉCHEC exception : ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
     $failures++;
