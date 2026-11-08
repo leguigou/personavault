@@ -434,6 +434,12 @@ function set_setting(string $key, string $value): void
 
 /* ------------------------------------------------------------------ utils */
 
+/** « 0 photo », « 1 photo », « 2 photos » : en français, le pluriel commence à 2. */
+function plural(int $n, string $one, string $many): string
+{
+    return $n . ' ' . ($n >= 2 ? $many : $one);
+}
+
 function e(?string $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

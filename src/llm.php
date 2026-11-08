@@ -232,6 +232,20 @@ function llm_request(array $messages, array $cfg, array $options = []): array
         CURLOPT_HTTPHEADER     => $headers,
         CURLOPT_POSTFIELDS     => json_encode($body, JSON_UNESCAPED_UNICODE),
     ]);
+    // option on_tick : appelée toutes les ~2 s pendant l'attente (ex. ping SSE pour
+    // qu'un reverse proxy ne coupe pas une connexion qui semble inactive)
+    if (isset($options['on_tick']) && is_callable($options['on_tick'])) {
+        $onTick = $options['on_tick'];
+        $last   = microtime(true);
+        curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+        curl_setopt($ch, CURLOPT_XFERINFOFUNCTION, static function () use ($onTick, &$last): int {
+            if (microtime(true) - $last >= 2.0) {
+                $last = microtime(true);
+                $onTick();
+            }
+            return 0;
+        });
+    }
     $raw  = curl_exec($ch);
     $err  = curl_error($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);

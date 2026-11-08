@@ -259,5 +259,5 @@ try {
     @rmdir($tmp);
 }
 
-echo PHP_EOL . ($failures === 0 ? 'Selftest OK' : $failures . ' échec(s)') . PHP_EOL;
+echo PHP_EOL . ($failures === 0 ? 'Selftest OK' : plural($failures, 'échec', 'échecs')) . PHP_EOL;
 exit($failures === 0 ? 0 : 1);

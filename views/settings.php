@@ -7,8 +7,7 @@ $providers = [
     'lmstudio'   => 'LM Studio (local)',
     'custom'     => 'Autre / compatible OpenAI',
 ];
-// « 0 photo », « 1 photo », « 2 photos » (règle française : pluriel à partir de 2)
-$plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($n >= 2 ? $many : $one);
+$plural = 'plural'; // « 0 photo », « 1 photo », « 2 photos » (src/bootstrap.php)
 // bouton « i » qui ouvre une explication en fenêtre (contenu : <template data-info-body> en bas de page)
 $info = static fn (string $key, string $label): string =>
     '<button type="button" class="info-btn" data-info="' . e($key) . '" aria-label="' . e('En savoir plus : ' . $label) . '">i</button>';

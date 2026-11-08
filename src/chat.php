@@ -316,7 +316,7 @@ function chat_compress_payload(array $toSummarize, array $conv): array
  * Compresse les anciens messages dans le résumé (jamais deux fois les mêmes).
  * @return array{ok:bool, compressed:int, reason?:string, summary?:string}
  */
-function chat_compress(int $cid, array $conv, bool $force = false): array
+function chat_compress(int $cid, array $conv, bool $force = false, ?callable $onTick = null): array
 {
     if ((int) ($conv['memory_enabled'] ?? 1) !== 1) {
         return ['ok' => true, 'compressed' => 0, 'reason' => 'mémoire désactivée'];
@@ -371,6 +371,9 @@ function chat_compress(int $cid, array $conv, bool $force = false): array
         'timeout'          => 180,
         'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
     ];
+    if ($onTick) {
+        $opts['on_tick'] = $onTick;
+    }
 
     try {
         $res = llm_request($msgs, $cfg, $opts + ['json' => true]);
@@ -449,7 +452,7 @@ function chat_ring(array $m, int $size = 40): string
     $title = 'Contexte ' . number_format((float) ($m['context_tokens'] ?? 0), 0, ',', ' ')
         . ' / ' . number_format((float) $window, 0, ',', ' ') . ' tokens (' . $pct . ' %)'
         . ' · résumé ' . number_format((float) ($m['summary_tokens'] ?? 0), 0, ',', ' ') . ' tokens'
-        . ' · ' . (int) ($m['compressions'] ?? 0) . ' compression(s)'
+        . ' · ' . plural((int) ($m['compressions'] ?? 0), 'compression', 'compressions')
         . ' · résumé auto au-delà de ' . number_format((float) chat_memory_threshold(), 0, ',', ' ') . ' tokens non résumés';
 
     $fs = $size <= 44 ? 11 : 13;
@@ -1158,15 +1161,6 @@ function chat_with_persona(array $conv, array $persona): array
     return $conv;
 }
 
-/** Le modèle sait-il voir les images ? (type « vlm » côté LM Studio) */
-function chat_model_vision(string $model): bool
-{
-    if ($model === '') {
-        return false;
-    }
-    $st = lms_status();
-    return ($st['types'][$model] ?? '') === 'vlm';
-}
 
 /**
  * Titre court généré à partir des premiers échanges (si le titre est encore automatique).

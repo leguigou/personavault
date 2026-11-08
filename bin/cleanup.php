@@ -103,7 +103,7 @@ foreach ($report as $label => $n) {
 
 if ($apply) {
     $pdo->exec('VACUUM');
-    echo "\n" . ($total > 0 ? "Nettoyé : {$total} élément(s)." : 'Rien à nettoyer.') . "\n";
+    echo "\n" . ($total > 0 ? 'Nettoyé : ' . plural($total, 'élément', 'éléments') . '.' : 'Rien à nettoyer.') . "\n";
 } else {
-    echo "\n" . ($total > 0 ? "{$total} élément(s) à supprimer — relance avec --apply." : 'Base et fichiers propres.') . "\n";
+    echo "\n" . ($total > 0 ? plural($total, 'élément', 'éléments') . ' à supprimer — relance avec --apply.' : 'Base et fichiers propres.') . "\n";
 }

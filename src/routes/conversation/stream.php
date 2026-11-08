@@ -61,7 +61,13 @@ if ($action === 'stream' && $method === 'POST') {
             $mem = chat_memory_stats($cid, $conv);
             // même critère que chat_compress : les messages pas encore résumés
             if ($mem['recent_tokens'] >= chat_memory_threshold()) {
-                $cres = chat_compress($cid, $conv);
+                // la compression peut prendre du temps : on le dit à l'interface, et des
+                // commentaires SSE réguliers gardent la connexion vivante derrière un proxy
+                $sse(['phase' => 'memory']);
+                $cres = chat_compress($cid, $conv, false, static function (): void {
+                    echo ": ping\n\n";
+                    flush();
+                });
                 if (($cres['ok'] ?? false) && ($cres['compressed'] ?? 0) > 0) {
                     $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
                     $stmt->execute([$cid]);

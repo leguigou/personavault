@@ -164,7 +164,7 @@ if ($path === '/settings/chat' && $method === 'POST') {
         $purged = lms_purge();
     }
     flash('ok', 'Réglages de discussion enregistrés.'
-        . ($purged ? ' Mémoire du serveur purgée (' . count($purged) . ' modèle(s) déchargé(s)).' : ''));
+        . ($purged ? ' Mémoire du serveur purgée (' . plural(count($purged), 'modèle déchargé', 'modèles déchargés') . ').' : ''));
     redirect('/settings');
 }
 

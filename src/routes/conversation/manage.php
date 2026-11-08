@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * Discussion : réglages, titre, suppression.
+ * Discussion : interrupteurs (mémoire, relances), titre, suppression.
  * Inclus par src/routes/conversation.php ($cid, $action, $conv, $persona, $personaPrompts).
  */
 
@@ -19,38 +19,6 @@ if ($action === 'toggles' && $method === 'POST') {
     redirect('/chat/' . $cid);
 }
 
-/* --- réglages de la conversation --- */
-if ($action === 'settings' && $method === 'POST') {
-    csrf_check();
-    $temp = (float) ($_POST['temperature'] ?? 0.85);
-    $temp = max(0.0, min(2.0, $temp));
-    $maxTok = max(64, min(4096, (int) ($_POST['max_tokens'] ?? 400)));
-    $ctx   = max(2048, min(131072, (int) ($_POST['context_window'] ?? 8192)));
-    $model = trim((string) ($_POST['model'] ?? ''));
-
-    db()->prepare('UPDATE conversations SET model = ?, temperature = ?, max_tokens = ?, context_window = ?, memory_enabled = ?, auto_followup = ?, directive = ?, updated_at = datetime("now") WHERE id = ?')
-        ->execute([
-            $model,
-            $temp,
-            $maxTok,
-            $ctx,
-            !empty($_POST['memory_enabled']) ? 1 : 0,
-            !empty($_POST['auto_followup']) ? 1 : 0,
-            trim((string) ($_POST['directive'] ?? '')),
-            $cid,
-        ]);
-    $changed = $model !== '' && $model !== (string) $conv['model'];
-    if ($model !== '') {
-        set_setting('chat_llm_model', $model);
-    }
-    $purged = $changed ? lms_purge() : [];
-    flash('ok', 'Réglages de la conversation enregistrés.'
-        . ($purged ? ' Mémoire du serveur purgée.' : ''));
-    if ($changed) {
-        db()->prepare('UPDATE conversations SET model = ? WHERE id = ?')->execute([$model, $cid]);
-    }
-    redirect('/chat/' . $cid);
-}
 
 if ($action === 'rename' && $method === 'POST') {
     csrf_check();

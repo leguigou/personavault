@@ -38,8 +38,8 @@ if ($path === '/backup/import' && $method === 'POST') {
             throw new RuntimeException(upload_error_message((int) $archive['error']));
         }
         $res = backup_import_zip((string) $archive['tmp_name']);
-        flash('ok', 'Import terminé : ' . $res['personas'] . ' persona(s), '
-            . $res['photos'] . ' photo(s), ' . $res['prompts'] . ' prompt(s).');
+        flash('ok', 'Import terminé : ' . plural((int) $res['personas'], 'persona', 'personas') . ', '
+            . plural((int) $res['photos'], 'photo', 'photos') . ', ' . plural((int) $res['prompts'], 'prompt', 'prompts') . '.');
         if (!empty($res['errors'])) {
             flash('error', implode(' · ', array_slice($res['errors'], 0, 3)));
         }

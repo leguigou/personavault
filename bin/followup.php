@@ -145,4 +145,4 @@ foreach ($convs as $conv) {
     $sent++;
 }
 
-$say($sent . ' relance(s)' . ($dry ? ' simulée(s)' : ' envoyée(s)'));
+$say(plural($sent, 'relance', 'relances') . ($dry ? ($sent >= 2 ? ' simulées' : ' simulée') : ($sent >= 2 ? ' envoyées' : ' envoyée')));

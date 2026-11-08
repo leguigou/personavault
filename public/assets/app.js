@@ -23,6 +23,9 @@
         fit();
     }
 
+    /* « 0 photo », « 1 photo », « 2 photos » : pluriel français à partir de 2 */
+    const plural = (n, one, many) => n + " " + (n >= 2 ? many : one);
+
     /* ------------------------------------------------ toasts éphémères */
     const toast = (msg, isError = false) => {
         let el = document.querySelector(".toast");
@@ -2374,6 +2377,8 @@
                                 if (!live) live = startLiveBubble();
                                 streamed += evt.delta;
                                 paintStream();
+                            } else if (evt.phase === "memory") {
+                                if (!live) loadingLabel("Mise à jour de la mémoire…");
                             } else if (evt.start) {
                                 if (evt.user && userEl) {
                                     userEl.dataset.msgId = evt.user.id;
@@ -2509,7 +2514,7 @@
                 const n = (data.unloaded || []).length;
                 if (status) {
                     status.textContent = n
-                        ? n + " modèle(s) déchargé(s) : " + data.unloaded.join(", ")
+                        ? plural(n, "modèle déchargé", "modèles déchargés") + " : " + data.unloaded.join(", ")
                         : "Aucun modèle chargé en mémoire — rien à purger.";
                 }
                 toast(n ? "Mémoire purgée (" + n + ")" : "Rien à purger");
