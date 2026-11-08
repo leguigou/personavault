@@ -45,6 +45,37 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Import : recrée les personnages sans rien écraser, avec ré-encodage des images.
 - Export optionnel des conversations.
 
+### Fiches (export / import d'un personnage)
+- **Exporter** (bouton sur la fiche) : archive PersonaVault d'une seule fiche (`.zip`, même format
+  que la sauvegarde, réimportable sans perte), ou **Character Card V2** (format ouvert `chara_card_v2`)
+  en `.json` ou en `.png` (le portrait, avec la fiche en base64 dans un bloc tEXt `chara`). Sans
+  portrait, le PNG est une image aux initiales générée.
+- **Importer** (tuile « Importer une fiche » de la bibliothèque, à côté de « Nouveau persona », ou en
+  haut du formulaire de création) : archive
+  PersonaVault (une fiche ou une sauvegarde complète), Character Card JSON (V1 sans `spec`, V2,
+  V3 `chara_card_v3`) ou PNG (bloc `ccv3` de préférence, sinon `chara`). Le type est reconnu au
+  contenu. Toujours un **nouveau** personnage (slug inédit), puis redirection vers sa fiche.
+- Contrôles : CSRF, taille (JSON ≤ 2 Mo, `card_max_json` ; PNG ≤ `max_upload` ; ZIP : limites de la
+  sauvegarde), JSON validé (types, longueurs bornées comme dans le formulaire), portrait vérifié
+  avant décodage puis ré-encodé en WebP. Le texte importé n'est jamais interprété comme du HTML.
+
+| PersonaVault | Character Card (export) | À l'import d'une carte d'une autre appli |
+|---|---|---|
+| nom | `name` | `name` (V1 : aussi `char_name`) |
+| description | `description` | `description` |
+| accroche | `creator_notes` | `creator_notes` d'une seule ligne (≤ 200 car.) ; sinon prompt « Notes du créateur » |
+| tags | `tags` | `tags` (12 max, 32 car.) |
+| attributs | `personality` (lignes « clé: valeur »), sauf s'il existe un prompt « Personnalité » | `creator`, `character_version` → attributs « Créateur », « Version de la fiche » |
+| prompts « Système » | `system_prompt` (réunis) | `system_prompt` → prompt « Système » |
+| consigne de jeu | `post_history_instructions` | `post_history_instructions` |
+| prompts « Autre » titrés Personnalité, Scénario, Premier message, Autre premier message, Exemples de dialogue, Notes du créateur (titre reconnu dans les 3 langues) | `personality`, `scenario`, `first_mes`, `alternate_greetings`, `mes_example`, `creator_notes` | ces champs → prompts « Autre » portant ces titres |
+| tout (accroche, attributs, tous les prompts, consigne, favori, archivé, modèle, température, longueur, contexte) | `extensions.personavault` | si présent, restitué tel quel (aller-retour sans perte) ; `name`, `description`, `tags` viennent toujours de la carte |
+| portrait | image du PNG | image du PNG → portrait |
+
+Non repris : photos de la galerie (seulement dans l'archive `.zip`), conversations, souvenirs ; côté
+carte, `character_book` (lorebook), les autres `extensions` et les ajouts V3 (`assets`,
+`nickname`, `group_only_greetings`…) sont ignorés.
+
 ---
 
 ## Installation
@@ -236,13 +267,16 @@ personavault/
 │   │   ├── auth.php, media.php, chat.php, library.php, settings.php, memories.php…
 │   │   ├── conversation.php    # /chat/{id} → conversation/{stream,model,memory,manage,export,messages}.php
 │   │   └── persona.php         # /p/{slug} → persona/{ai,edit,media,show}.php
+│   │   ├── conversation.php    # /chat/{id} → conversation/{stream,model,memory,manage,messages}.php
+│   │   └── persona.php         # /p/{slug} → persona/{ai,edit,media,cards,show}.php
 │   ├── bootstrap.php       # session, PDO, schéma, uploads, helpers
 │   ├── i18n.php            # traductions : t(), langue, pluriels
 │   ├── llm.php             # client OpenAI-compatible (streaming inclus)
 │   ├── chat.php            # moteur de discussion, mémoire, bulles
 │   ├── facts.php           # souvenirs + recherche FTS5
 │   ├── prompts.php         # prompts internes éditables
-│   └── backup.php          # export / import ZIP
+│   ├── backup.php          # export / import ZIP
+│   └── cards.php           # fiches : Character Card JSON / PNG, import de fiches
 ├── views/                  # gabarits PHP
 ├── bin/                    # outils CLI (aperçu de prompt, relance, nettoyage, selftest)
 ├── lang/                   # textes de l'interface : lang/fr/ (référence), lang/en/, lang/es/
@@ -295,7 +329,7 @@ return [
 Deux niveaux, lancés aussi par la CI à chaque envoi sur GitHub :
 
 ```bash
-php bin/selftest.php        # fonctions internes : migrations, images, sauvegarde, mémoire, sécurité
+php bin/selftest.php        # fonctions internes : migrations, images, sauvegarde, fiches, mémoire, sécurité
 bash tests/e2e/run.sh       # l'app réelle : toutes les routes, avec un faux modèle (Node 18+)
 ```
 

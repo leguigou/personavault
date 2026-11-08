@@ -1051,6 +1051,7 @@ require_once __DIR__ . '/prompts.php';
 require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/facts.php';
 require_once __DIR__ . '/backup.php';
+require_once __DIR__ . '/cards.php';
 
 function render(string $view, array $data = []): void
 {

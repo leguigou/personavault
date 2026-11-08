@@ -22,6 +22,19 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
         <h1><?= e($isEdit ? t('form.title_edit') : t('form.title_new')) ?></h1>
     </header>
 
+    <?php if (!$isEdit): ?>
+        <form method="post" action="/import" enctype="multipart/form-data" class="panel" data-card-import
+              style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;margin-bottom:16px">
+            <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+            <p class="hint" style="flex:1 1 220px;margin:0"><?= e(t('cards.import_hint')) ?></p>
+            <label class="btn btn-ghost btn-sm">
+                <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <?= e(t('cards.import_file')), "\n" ?>
+                <input type="file" name="card" accept=".zip,.json,.png,application/zip,application/json,image/png" hidden data-autosubmit>
+            </label>
+        </form>
+    <?php endif; ?>
+
     <form class="card-form" method="post" action="<?= e($action) ?>" enctype="multipart/form-data">
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 

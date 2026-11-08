@@ -68,6 +68,46 @@ if ($path === '/' && $method === 'GET') {
     exit;
 }
 
+/* --------------------------------------------------------------- import de fiches */
+// ZIP PersonaVault (une fiche ou une sauvegarde complète), Character Card JSON ou PNG.
+// Toujours un nouveau persona (slug inédit) : rien n'est écrasé.
+
+if ($path === '/import' && $method === 'POST') {
+    csrf_check();
+    try {
+        $file = $_FILES['card'] ?? null;
+        if (!upload_present($file)) {
+            throw new RuntimeException(t('error.upload.no_file'));
+        }
+        if ((int) $file['error'] !== UPLOAD_ERR_OK) {
+            throw new RuntimeException(upload_error_message((int) $file['error']));
+        }
+        $res = card_import_file((string) $file['tmp_name']);
+        if ((int) $res['personas'] === 0) {
+            throw new RuntimeException($res['errors'][0] ?? t('cards.error.nothing'));
+        }
+        if (!empty($res['errors'])) {
+            flash('error', implode(' · ', array_slice($res['errors'], 0, 3)));
+        }
+        if ((int) $res['personas'] === 1) {
+            $slug = (string) $res['slugs'][0];
+            $stmt = db()->prepare('SELECT name FROM personas WHERE slug = ?');
+            $stmt->execute([$slug]);
+            flash('ok', t('cards.flash.imported', ['name' => (string) $stmt->fetchColumn()]));
+            redirect('/p/' . rawurlencode($slug));
+        }
+        flash('ok', t('flash.backup.imported', [
+            'personas' => t('labels.count.personas', (int) $res['personas']),
+            'photos'   => t('labels.count.photos', (int) $res['photos']),
+            'prompts'  => t('labels.count.prompts', (int) $res['prompts']),
+        ]));
+        redirect('/');
+    } catch (Throwable $e) {
+        flash('error', t('cards.flash.import_failed', ['error' => public_error($e)]));
+    }
+    back('/');
+}
+
 /* --------------------------------------------------------------- création */
 
 if ($path === '/p/new' && $method === 'GET') {

@@ -5,6 +5,8 @@
  * Vérifie : migrations versionnées, aller-retour export → import ZIP (portrait, photos,
  * prompts), comptage des références d'images, refus des images géantes, limites du ZIP,
  * jeton CSRF vide refusé, blocage des tentatives de connexion, export de conversation.
+ * fiches (archive d’une fiche, Character Card JSON / PNG, V1 / V2 / V3, fichiers refusés),
+ * jeton CSRF vide refusé, blocage des tentatives de connexion.
  *
  * Usage : php bin/selftest.php        (code de sortie 0 = tout est bon)
  */
@@ -18,6 +20,7 @@ define('PV_TEST_CONFIG', [
     'uploads'         => $tmp . '/uploads',
     'password_hash'   => password_hash('bon-mot-de-passe', PASSWORD_DEFAULT),
     'zip_max_entries' => 50,
+    'card_max_json'   => 64 * 1024,
 ]);
 
 require __DIR__ . '/../src/bootstrap.php';
@@ -154,6 +157,130 @@ try {
     $z->close();
     $check($throws(static fn () => backup_import_zip($many), 'trop de fichiers'), 'archive avec trop d’entrées refusée');
     @unlink($zip['path']);
+
+    echo "Fiches\n";
+    $bySlug = static function (string $slug): array {
+        $st = db()->prepare('SELECT * FROM personas WHERE slug = ?');
+        $st->execute([$slug]);
+        return (array) $st->fetch();
+    };
+    $promptRows = static fn (array $p): array => array_map(
+        static fn (array $r): array => [$r['kind'], $r['title'], $r['body']],
+        fetch_prompts((int) ($p['id'] ?? 0))
+    );
+    // même persona, au slug et aux fichiers près
+    $same = static function (array $a, array $b) use ($promptRows): bool {
+        foreach (['name', 'tagline', 'description', 'directive', 'model', 'temperature', 'max_tokens', 'context_window', 'favorite'] as $k) {
+            if ((string) ($a[$k] ?? '') !== (string) ($b[$k] ?? '')) {
+                return false;
+            }
+        }
+        return json_list($a['tags'] ?? '') === json_list($b['tags'] ?? '')
+            && json_list($a['meta'] ?? '') === json_list($b['meta'] ?? '')
+            && $promptRows($a) === $promptRows($b);
+    };
+    $lisaId = (int) $bySlug('lisa')['id'];
+    db()->prepare("UPDATE personas SET description = ?, directive = ?, favorite = 1, max_tokens = 600 WHERE id = ?")
+        ->execute(["Photographe.\nVit à <b>Paris</b>.", 'Réponds court.', $lisaId]);
+    $lisa   = $bySlug('lisa');
+    $before = (int) db()->query('SELECT COUNT(*) FROM personas')->fetchColumn();
+
+    // archive PersonaVault d'une seule fiche
+    $pz = backup_create_persona_zip($lisa);
+    $za = new ZipArchive();
+    $za->open($pz['path']);
+    $check($za->locateName('personavault-lisa/manifest.json') !== false && $za->numFiles === 7,
+        'archive d’une fiche : manifest, README, persona.json, prompts.json, portrait, 2 photos');
+    $za->close();
+    $res = backup_import_zip($pz['path']);
+    @unlink($pz['path']);
+    $imp = $bySlug((string) ($res['slugs'][0] ?? ''));
+    $check($res['personas'] === 1 && $res['photos'] === 2 && ($imp['slug'] ?? '') !== 'lisa', 'archive d’une fiche réimportée sous un nouveau slug');
+    $check($imp && $same($lisa, $imp), 'archive d’une fiche : champs, attributs, consigne et prompts identiques');
+    $check($imp && $mediaExists((string) $imp['avatar']) && count(fetch_photos((int) $imp['id'])) === 2, 'archive d’une fiche : portrait et photos');
+
+    // Character Card V2 en JSON
+    $card = card_build($lisa);
+    $cd   = $card['data'];
+    $check($card['spec'] === 'chara_card_v2' && $card['spec_version'] === '2.0' && $cd['name'] === 'Lisa', 'carte V2 : spec et nom');
+    $check($cd['system_prompt'] === 'Tu es Lisa.' && $cd['post_history_instructions'] === 'Réponds court.' && $cd['creator_notes'] === 'Accroche',
+        'carte V2 : prompt système, consigne, accroche → notes du créateur');
+    $check($cd['personality'] === 'Âge: 29' && $cd['tags'] === ['brune', 'paris'] && isset($cd['extensions']['personavault']['prompts']),
+        'carte V2 : attributs → personnalité, tags, extension personavault');
+    $r   = card_import_array(card_decode_json(card_json($lisa)));
+    $imp = $bySlug($r['slug']);
+    $check($imp && $same($lisa, $imp) && $imp['avatar'] === '', 'aller-retour JSON : persona identique (sans portrait)');
+
+    // Character Card V2 en PNG
+    $png    = card_png($lisa);
+    $chunks = png_text_chunks($png);
+    $info   = getimagesizefromstring($png);
+    $check(isset($chunks['chara']) && json_decode((string) base64_decode($chunks['chara']), true) === $card, 'PNG : bloc tEXt « chara » = la carte en base64');
+    $check(is_array($info) && $info[2] === IMAGETYPE_PNG && $info[0] === 240 && $info[1] === 240 && imagecreatefromstring($png) !== false,
+        'PNG : image valide (le portrait)');
+    file_put_contents($tmp . '/lisa.card.png', $png);
+    $r   = card_import_file($tmp . '/lisa.card.png');
+    $imp = $bySlug($r['slugs'][0]);
+    $check($imp && $same($lisa, $imp) && $mediaExists((string) $imp['avatar']), 'aller-retour PNG : persona identique, portrait ré-encodé');
+    $noAvatar = card_png(['avatar' => ''] + $lisa);
+    $info     = getimagesizefromstring($noAvatar);
+    $check(is_array($info) && $info[0] === 512 && $info[1] === 768 && isset(png_text_chunks($noAvatar)['chara']), 'PNG sans portrait : image aux initiales générée');
+
+    // cartes d'autres applications : V1, V2, V3
+    $labels = card_field_labels();
+    $r  = card_import_array(['name' => 'Ancienne', 'description' => 'Desc V1', 'personality' => 'calme', 'scenario' => 'un bar',
+        'first_mes' => 'Salut !', 'mes_example' => '<START> exemple']);
+    $v1 = $bySlug($r['slug']);
+    $check($v1 && $v1['description'] === 'Desc V1' && array_column($promptRows($v1), 1) === [$labels['personality'], $labels['scenario'], $labels['first_mes'], $labels['mes_example']],
+        'carte V1 : description + personnalité, scénario, premier message, exemples → prompts « Autre »');
+    $r  = card_import_array(['char_name' => 'Tavern', 'char_persona' => 'joyeux']);
+    $check(($bySlug($r['slug'])['name'] ?? '') === 'Tavern', 'carte V1 (anciens noms char_name, char_persona)');
+
+    $v2card = ['spec' => 'chara_card_v2', 'spec_version' => '2.0', 'data' => [
+        'name' => '<script>alert(1)</script>Zoé', 'description' => 'Desc', 'personality' => 'vive', 'scenario' => '',
+        'first_mes' => 'Coucou', 'mes_example' => '', 'creator_notes' => 'Une seule ligne', 'system_prompt' => 'Tu es Zoé.',
+        'post_history_instructions' => 'Reste dans le rôle.', 'alternate_greetings' => ['Bonsoir', ['pas une chaîne']],
+        'tags' => ['a', 'b', ['x'], 'a'], 'creator' => 'Moi', 'character_version' => '1.2', 'extensions' => ['autre_app' => ['x' => 1]],
+    ]];
+    $r  = card_import_array($v2card);
+    $v2 = $bySlug($r['slug']);
+    $check($v2 && $v2['tagline'] === 'Une seule ligne' && $v2['directive'] === 'Reste dans le rôle.' && json_list($v2['tags']) === ['a', 'b'],
+        'carte V2 : notes courtes → accroche, consigne, tags (non-chaînes et doublons écartés)');
+    $check($v2 && json_list($v2['meta']) === [['k' => $labels['creator'], 'v' => 'Moi'], ['k' => $labels['character_version'], 'v' => '1.2']]
+        && $promptRows($v2)[0] === ['system', '', 'Tu es Zoé.'] && count($promptRows($v2)) === 4,
+        'carte V2 : créateur et version → attributs, prompt système, salutations');
+    $check($v2 && !str_contains(e($v2['name']), '<script>'), 'HTML de la carte stocké tel quel, échappé à l’affichage');
+    $back = card_build($v2)['data'];
+    $check($back['personality'] === 'vive' && $back['first_mes'] === 'Coucou' && $back['alternate_greetings'] === ['Bonsoir']
+        && $back['creator'] === 'Moi' && $back['character_version'] === '1.2' && $back['system_prompt'] === 'Tu es Zoé.',
+        'carte importée puis réexportée : champs de carte retrouvés');
+
+    $v3 = ['spec' => 'chara_card_v3', 'spec_version' => '3.0', 'data' => ['name' => 'Trois', 'description' => 'V3', 'nickname' => 'T', 'group_only_greetings' => []]];
+    $v3png = png_add_text(png_add_text((string) file_get_contents($pngFile(40, 60, [90, 90, 200])), 'chara', base64_encode('{"name":"Ignorée"}')),
+        'ccv3', base64_encode(json_encode($v3)));
+    file_put_contents($tmp . '/v3.png', $v3png);
+    $r = card_import_file($tmp . '/v3.png');
+    $t3 = $bySlug($r['slugs'][0]);
+    $check(($t3['name'] ?? '') === 'Trois' && $t3['description'] === 'V3' && $mediaExists((string) $t3['avatar']), 'carte V3 en PNG : bloc « ccv3 » prioritaire, portrait importé');
+
+    // fichiers refusés proprement
+    $count = (int) db()->query('SELECT COUNT(*) FROM personas')->fetchColumn();
+    file_put_contents($tmp . '/bad.txt', 'bonjour');
+    file_put_contents($tmp . '/bad.json', '{"name": "x",');
+    file_put_contents($tmp . '/big.json', '{"name":"Gros","description":"' . str_repeat('a', 70 * 1024) . '"}');
+    file_put_contents($tmp . '/plain.png', (string) file_get_contents($pngFile(10, 10, [0, 0, 0])));
+    $check($throws(static fn () => card_import_file($tmp . '/bad.txt'), 'format non reconnu'), 'fichier quelconque refusé');
+    $check($throws(static fn () => card_import_file($tmp . '/bad.json'), 'JSON valide'), 'JSON invalide refusé');
+    $check($throws(static fn () => card_import_file($tmp . '/big.json'), 'volumineuse'), 'JSON trop gros refusé (limite de test : 64 Ko)');
+    $check($throws(static fn () => card_import_file($tmp . '/plain.png'), 'ne contient pas'), 'PNG sans fiche refusé');
+    $bigPng = png_add_text((string) file_get_contents($tmp . '/plain.png'), 'chara', base64_encode(str_repeat('x', 70 * 1024)));
+    $check($throws(static fn () => card_from_png($bigPng), 'volumineuse'), 'PNG avec une fiche trop grosse refusé');
+    $check($throws(static fn () => card_import_array(['spec' => 'autre_chose', 'data' => []]), 'non pris en charge'), 'spec inconnue refusée');
+    $check($throws(static fn () => card_import_array(['name' => ['pas', 'un', 'texte']]), 'pas de nom'), 'nom non textuel refusé');
+    $check($throws(static fn () => card_import_array(['spec' => 'chara_card_v2', 'data' => 'x']), 'Character Card'), 'carte V2 sans objet data refusée');
+    $check(png_text_chunks("\x89PNG\r\n\x1a\n" . pack('N', 0x7fffffff) . 'tEXtxx') === [], 'PNG aux longueurs de bloc incohérentes : lecture bornée, sans erreur');
+    $check((int) db()->query('SELECT COUNT(*) FROM personas')->fetchColumn() === $count, 'aucun persona créé par les fichiers refusés');
+    $check($before + 7 === $count && $bySlug('lisa')['name'] === 'Lisa', 'persona d’origine jamais écrasé');
 
     echo "Sécurité\n";
     $_SESSION = [];

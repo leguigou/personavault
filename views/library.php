@@ -74,6 +74,14 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
         <p><?= e($q !== '' || $tag !== '' ? t('library.empty_found_text') : t('library.empty_text')) ?></p>
         <?php if ($q === '' && $tag === ''): ?>
             <a class="btn btn-primary" href="/p/new"><?= e(t('library.create')) ?></a>
+            <form method="post" action="/import" enctype="multipart/form-data" style="margin:0" data-card-import>
+                <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+                <label class="btn btn-ghost btn-sm" title="<?= e(t('cards.import_title')) ?>">
+                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <?= e(t('cards.import_file')), "\n" ?>
+                    <input type="file" name="card" accept=".zip,.json,.png,application/zip,application/json,image/png" hidden data-autosubmit>
+                </label>
+            </form>
         <?php endif; ?>
     </div>
 <?php else: ?>
@@ -126,6 +134,16 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
                 </div>
                 <div class="persona-caption"><strong><?= e(t('nav.new_persona')) ?></strong></div>
             </a>
+            <form class="persona-card add-tile" method="post" action="/import" enctype="multipart/form-data" data-card-import>
+                <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+                <label style="display:block;cursor:pointer" title="<?= e(t('cards.import_title')) ?>">
+                    <div class="persona-media">
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="persona-caption"><strong><?= e(t('cards.import_tile')) ?></strong></div>
+                    <input type="file" name="card" accept=".zip,.json,.png,application/zip,application/json,image/png" hidden data-autosubmit>
+                </label>
+            </form>
         <?php endif; ?>
     </div>
 <?php endif; ?>

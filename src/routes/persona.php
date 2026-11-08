@@ -22,5 +22,6 @@ if (count($parts) >= 2 && $p0 === 'p') {
     require __DIR__ . '/persona/ai.php';
     require __DIR__ . '/persona/edit.php';
     require __DIR__ . '/persona/media.php';
+    require __DIR__ . '/persona/cards.php';
     require __DIR__ . '/persona/show.php'; // affichage par défaut, en dernier
 }

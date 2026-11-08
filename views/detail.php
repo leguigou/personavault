@@ -64,6 +64,10 @@ $token    = csrf_token();
                     <?= e(t('persona.chat')), "\n" ?>
                 </button>
             </form>
+            <button class="btn btn-ghost" type="button" data-toggle="#export-panel" aria-controls="export-panel">
+                <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <?= e(t('cards.export')), "\n" ?>
+            </button>
             <form method="post" action="/p/<?= e($persona['slug']) ?>/favorite">
                 <input type="hidden" name="_token" value="<?= e($token) ?>">
                 <button class="btn btn-ghost" type="submit" title="<?= e(t('persona.favorite_toggle')) ?>">
@@ -87,6 +91,32 @@ $token    = csrf_token();
             </form>
         </div>
     </div>
+</section>
+
+<section class="panel panel-wide" id="export-panel" hidden>
+    <header class="panel-head">
+        <h2><?= e(t('cards.export_title')) ?></h2>
+        <button type="button" class="mini" data-toggle="#export-panel"><?= e(t('cards.export_close')) ?></button>
+    </header>
+    <div class="prompt-list">
+        <?php foreach ([
+            ['export.zip', t('cards.export_zip'), t('cards.export_zip_hint')],
+            ['card.json', t('cards.export_json'), t('cards.export_json_hint')],
+            ['card.png', t('cards.export_png'), $avatar ? t('cards.export_png_hint') : t('cards.export_png_hint_initials')],
+        ] as [$file, $label, $hint]): ?>
+            <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px">
+                <div style="min-width:0;flex:1 1 220px">
+                    <strong><?= e($label) ?></strong>
+                    <p class="hint"><?= e($hint) ?></p>
+                </div>
+                <a class="btn btn-ghost btn-sm" href="/p/<?= e($persona['slug']) ?>/<?= e($file) ?>" download data-export="<?= e($file) ?>">
+                    <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <?= e(t('cards.download')), "\n" ?>
+                </a>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <p class="hint" style="margin-top:12px"><?= e(t('cards.export_note')) ?></p>
 </section>
 
 <div class="detail-cols">
