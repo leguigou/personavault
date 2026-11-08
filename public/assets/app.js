@@ -1078,22 +1078,85 @@
         const token = chat.dataset.token;
         let busy = false;
 
-        const scrollBottom = (smooth = true) => {
-            scroll.scrollTo({ top: scroll.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+        /* ---------- suivi du bas de la discussion (comme Claude)
+           - en bas : la conversation suit les nouveaux messages (« collé ») ;
+           - dès qu'on remonte (molette, doigt, clavier) : plus rien ne nous
+             ramène de force, une bulle ↓ apparaît au-dessus de la saisie ;
+           - toucher la bulle, envoyer un message ou redescendre à la main :
+             on se recolle au bas. */
+        const NEAR_BOTTOM = 80;
+        let stick = true;
+        let touching = false;
+        let lastUserScroll = 0;
+        const distance = () => scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+
+        const jump = document.createElement("button");
+        jump.type = "button";
+        jump.className = "chat-jump";
+        jump.hidden = true;
+        jump.setAttribute("aria-label", "Aller au dernier message");
+        jump.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m0 0-6-6m6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        chat.appendChild(jump);
+
+        const placeJump = () => {
+            // juste au-dessus de la zone de saisie, quelle que soit sa hauteur
+            const gap = chat.getBoundingClientRect().bottom - scroll.getBoundingClientRect().bottom;
+            jump.style.bottom = Math.round(gap + 14) + "px";
         };
-        scrollBottom(false);
+        const syncJump = () => {
+            const show = !stick && distance() > NEAR_BOTTOM;
+            if (show && jump.hidden) placeJump();
+            jump.hidden = !show;
+            if (!show) jump.classList.remove("has-new");
+        };
+
+        const scrollBottom = (smooth = true, force = false) => {
+            if (force) stick = true;
+            if (!stick || (touching && !force)) {
+                // l'utilisateur lit plus haut : on signale qu'il y a du nouveau
+                if (!stick) jump.classList.add("has-new");
+                syncJump();
+                return;
+            }
+            scroll.scrollTo({ top: scroll.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+            syncJump();
+        };
+
+        // intention de l'utilisateur (le défilement automatique ne passe pas par là)
+        const userScrolled = () => { lastUserScroll = Date.now(); };
+        scroll.addEventListener("wheel", (e) => {
+            userScrolled();
+            if (e.deltaY < 0) { stick = false; syncJump(); }
+        }, { passive: true });
+        scroll.addEventListener("touchstart", () => { touching = true; userScrolled(); }, { passive: true });
+        scroll.addEventListener("touchmove", userScrolled, { passive: true });
+        scroll.addEventListener("touchend", () => { touching = false; userScrolled(); }, { passive: true });
+        scroll.addEventListener("pointerdown", userScrolled, { passive: true }); // barre de défilement
+        scroll.addEventListener("keydown", userScrolled);
+        scroll.addEventListener("scroll", () => {
+            const d = distance();
+            if (d <= NEAR_BOTTOM) stick = true;
+            else if (Date.now() - lastUserScroll < 1200) stick = false;
+            syncJump();
+        }, { passive: true });
+
+        jump.addEventListener("click", () => {
+            scrollBottom(true, true);
+            jump.hidden = true;
+        });
+        window.addEventListener("resize", () => { if (!jump.hidden) placeJump(); });
+        input?.addEventListener("input", () => { if (!jump.hidden) requestAnimationFrame(placeJump); });
+
+        scrollBottom(false, true);
 
         /* quand le clavier s'ouvre, garder le dernier message visible
-           (si on était déjà en bas de la discussion) */
+           (si on suivait déjà le bas de la discussion) */
         if (window.visualViewport) {
             let lastH = window.visualViewport.height;
-            let atBottom = true;
-            scroll.addEventListener("scroll", () => {
-                atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 160;
-            }, { passive: true });
             window.visualViewport.addEventListener("resize", () => {
                 const h = window.visualViewport.height;
-                if (h < lastH && atBottom) requestAnimationFrame(() => scrollBottom(false));
+                if (h < lastH && stick) requestAnimationFrame(() => scrollBottom(false));
+                if (!jump.hidden) placeJump();
                 lastH = h;
             });
         }
@@ -2123,7 +2186,7 @@
             if (!regen) {
                 clearIntro();
                 if (echo) userEl = bubble(text, "user");
-                scrollBottom();
+                scrollBottom(true, true);
             }
             typing();
 

@@ -30,7 +30,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <link rel="icon" href="/assets/icon-192.png" type="image/png" sizes="192x192">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
     <link rel="manifest" href="/assets/manifest.webmanifest">
-    <link rel="stylesheet" href="/assets/app.css?v=66">
+    <link rel="stylesheet" href="/assets/app.css?v=67">
     <script>try{document.documentElement.dataset.view=localStorage.getItem("pv_view")==="list"?"list":"grid";}catch(e){}</script>
 </head>
 <body class="<?= $isAuth ? 'is-auth' : 'is-guest' ?> <?= $isChatRoom ? 'chat-room' : '' ?>">
@@ -115,6 +115,6 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <img alt="">
 </div>
 
-<script src="/assets/app.js?v=69" defer></script>
+<script src="/assets/app.js?v=70" defer></script>
 </body>
 </html>
