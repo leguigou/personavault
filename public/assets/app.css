@@ -3227,3 +3227,8 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
 @media (prefers-reduced-motion: reduce) {
     .tabbar .tab-ico, html[data-tabbar="pill"] .tabbar a { transition: none; }
 }
+
+/* date et heure d'un message, affichées avec ses actions quand on le touche */
+.msg-tools { align-items: center; }
+.msg-time { font-size: 11.5px; color: var(--muted-2); white-space: nowrap; margin-right: 4px; font-variant-numeric: tabular-nums; }
+.msg-user .msg-time { margin-right: 6px; }

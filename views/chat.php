@@ -112,7 +112,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <?php elseif ($role === 'notice'): ?>
                     <div class="msg-notice" data-msg-id="<?= (int) $m['id'] ?>"><?= e((string) $m['content']) ?></div>
                 <?php else: ?>
-                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>">
+                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>">
                         <?php if ($role !== 'user'): ?>
                             <span class="msg-avatar">
                                 <?php if ($persona['avatar']): ?>

@@ -143,4 +143,6 @@ return [
         'one'   => 'Auto-summary beyond {threshold} unsummarized tokens · {n} done',
         'other' => 'Auto-summary beyond {threshold} unsummarized tokens · {n} done',
     ],
+    // date et heure affichées sous un message touché ({date} : « Aujourd’hui », « 8 nov. »…)
+    'js.chat.msg_time' => '{date} at {time}',
 ];
