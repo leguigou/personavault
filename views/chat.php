@@ -30,6 +30,9 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
              data-send="/chat/<?= (int) $conv['id'] ?>/send"
              data-compress="/chat/<?= (int) $conv['id'] ?>/compress"
              data-remember="/chat/<?= (int) $conv['id'] ?>/remember"
+             <?php $__facts = facts_settings(); ?>
+             data-facts-timing="<?= e($__facts['frequency'] === 'off' ? 'off' : $__facts['timing']) ?>"
+             data-facts-idle="<?= (int) $__facts['idle'] ?>"
              data-status="/chat/<?= (int) $conv['id'] ?>/status"
              data-token="<?= e($token) ?>"
              data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) ?>"
@@ -195,7 +198,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
             <div class="sheet-ctx-text">
                 <strong><?= (int) $memory['percent'] ?> % du contexte</strong>
                 <span><?= $fmt((float) $memory['context_tokens']) ?> / <?= $fmt((float) $memory['window']) ?> tokens</span>
-                <span>Compression auto à <?= $fmt((float) chat_memory_threshold()) ?> · <?= (int) $memory['compressions'] ?> faite<?= $memory['compressions'] > 1 ? 's' : '' ?></span>
+                <span>Résumé auto au-delà de <?= $fmt((float) chat_memory_threshold()) ?> tokens non résumés · <?= (int) $memory['compressions'] ?> fait<?= $memory['compressions'] > 1 ? 's' : '' ?></span>
             </div>
         </section>
 

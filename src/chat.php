@@ -132,38 +132,108 @@ function chat_memory_target(): int
     return max(300, (int) setting('chat_memory_target', '1600'));
 }
 
-/** Statistiques de contexte pour une conversation. */
+/** Nombre de messages déjà résumés renvoyés tout de même au modèle, pour la continuité. */
+const CHAT_SUMMARY_OVERLAP = 2;
+
+/** Le résumé de la conversation remplace-t-il les anciens messages ? */
+function chat_uses_summary(array $conv): bool
+{
+    return (int) ($conv['memory_enabled'] ?? 1) === 1
+        && (int) ($conv['last_compressed_id'] ?? 0) > 0
+        && trim((string) ($conv['summary'] ?? '')) !== '';
+}
+
+/**
+ * Messages réellement envoyés au modèle.
+ * Mémoire active : uniquement ceux qui ne sont pas encore dans le résumé, plus les
+ * CHAT_SUMMARY_OVERLAP derniers messages résumés (raccord). Sans mémoire : tout
+ * l'historique (le budget de tokens coupe ensuite les plus anciens).
+ */
+function fetch_context_messages(int $cid, array $conv): array
+{
+    if (!chat_uses_summary($conv)) {
+        return fetch_messages($cid);
+    }
+    $cursor = (int) $conv['last_compressed_id'];
+    $st = db()->prepare("SELECT id FROM messages WHERE conversation_id = ? AND id <= ?
+                         AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT " . CHAT_SUMMARY_OVERLAP);
+    $st->execute([$cid, $cursor]);
+    $ids  = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+    $from = $ids ? min($ids) : $cursor + 1;
+
+    $st = db()->prepare('SELECT * FROM messages WHERE conversation_id = ? AND id >= ? ORDER BY id ASC');
+    $st->execute([$cid, $from]);
+    return $st->fetchAll();
+}
+
+/** Tokens de la partie fixe du prompt (consignes, fiche, résumé exclu) + marge pour le contexte variable. */
+function chat_base_tokens(array $conv): int
+{
+    $st = db()->prepare('SELECT * FROM personas WHERE id = ?');
+    $st->execute([(int) ($conv['persona_id'] ?? 0)]);
+    $persona = $st->fetch();
+    if (!$persona) {
+        return 300;
+    }
+    $prompts = fetch_prompts((int) $persona['id']);
+    $system  = chat_system_prompt($persona, $prompts, ['summary' => ''] + $conv, []);
+    // heure, souvenirs pertinents, rappels : environ 250 tokens selon les cas
+    return chat_estimate_tokens($system) + 250;
+}
+
+/**
+ * Statistiques de contexte d'une conversation.
+ * - recent_tokens  : messages pas encore résumés (déclenche la compression au-delà du seuil)
+ * - context_tokens : estimation de ce qui part réellement au modèle (anneau, pied de page)
+ */
 function chat_memory_stats(int $cid, array $conv): array
 {
-    $lastCompressed = (int) ($conv['last_compressed_id'] ?? 0);
-    $total = 0;
-    $unsummarized = 0;
-    $recentTokens = 0;
+    $cursor = (int) ($conv['last_compressed_id'] ?? 0);
 
-    foreach (fetch_messages($cid) as $m) {
+    // comptages en SQL : pas besoin de charger tout l'historique
+    $st = db()->prepare("SELECT COUNT(*) AS n,
+                                SUM(CASE WHEN id > ? THEN 1 ELSE 0 END) AS un,
+                                SUM(CASE WHEN id > ? THEN LENGTH(content) ELSE 0 END) AS chars
+                           FROM messages WHERE conversation_id = ? AND role IN ('user', 'assistant')");
+    $st->execute([$cursor, $cursor, $cid]);
+    $row          = $st->fetch() ?: [];
+    $total        = (int) ($row['n'] ?? 0);
+    $unsummarized = (int) ($row['un'] ?? 0);
+    $recentTokens = (int) ceil(((int) ($row['chars'] ?? 0)) / 3.6) + $unsummarized;
+
+    $useSummary    = chat_uses_summary($conv);
+    $summaryTokens = chat_estimate_tokens((string) ($conv['summary'] ?? ''));
+    $window        = max(2048, (int) ($conv['context_window'] ?? 8192));
+    $budget        = $window - (int) ($conv['max_tokens'] ?? 400) - 512;
+    $base          = chat_base_tokens($conv) + ($useSummary ? $summaryTokens : 0);
+
+    // historique effectivement envoyé (même règle que chat_build_messages)
+    $history = 0;
+    foreach (array_reverse(fetch_context_messages($cid, $conv)) as $m) {
         if (!in_array((string) $m['role'], ['user', 'assistant'], true)) {
             continue;
         }
-        $total++;
-        if ((int) $m['id'] > $lastCompressed) {
-            $unsummarized++;
-            $recentTokens += chat_estimate_tokens((string) $m['content']);
+        $cost = chat_estimate_tokens((string) $m['content']) + 4;
+        if ($base + $history + $cost > $budget && $history > 0) {
+            break;
         }
+        $history += $cost;
     }
-
-    $summaryTokens = chat_estimate_tokens((string) ($conv['summary'] ?? ''));
-    $window = max(2048, (int) ($conv['context_window'] ?? 8192));
+    $sent = $base + $history;
 
     return [
         'messages'        => $total,
         'unsummarized'    => $unsummarized,
-        'summary_tokens'  => $summaryTokens,
+        'summary_tokens'  => $useSummary ? $summaryTokens : 0,
         'recent_tokens'   => $recentTokens,
-        'context_tokens'  => $summaryTokens + $recentTokens,
+        'base_tokens'     => $base,
+        'context_tokens'  => $sent,
         'window'          => $window,
-        'percent'         => (int) round(min(100, (($summaryTokens + $recentTokens) / $window) * 100)),
+        'percent'         => (int) round(min(100, ($sent / $window) * 100)),
+        // position du repère « compression » sur l'anneau
+        'trigger_tokens'  => $base + chat_memory_threshold(),
         'compressions'    => (int) ($conv['compressions'] ?? 0),
-        'cursor'          => $lastCompressed,
+        'cursor'          => $cursor,
     ];
 }
 
@@ -253,13 +323,10 @@ function chat_compress(int $cid, array $conv, bool $force = false): array
     }
 
     $lastCompressed = (int) ($conv['last_compressed_id'] ?? 0);
-    $pending = [];
-    foreach (fetch_messages($cid) as $m) {
-        $role = (string) $m['role'];
-        if (($role === 'user' || $role === 'assistant') && (int) $m['id'] > $lastCompressed) {
-            $pending[] = $m;
-        }
-    }
+    $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND id > ?
+                         AND role IN ('user', 'assistant') ORDER BY id ASC");
+    $st->execute([$cid, $lastCompressed]);
+    $pending = $st->fetchAll();
 
     if (count($pending) < 6) {
         return ['ok' => true, 'compressed' => 0, 'reason' => 'rien à résumer'];
@@ -362,7 +429,7 @@ function chat_ring(array $m, int $size = 40): string
     $fillLen = $c * $pct / 100;
 
     $window = max(1, (int) ($m['window'] ?? 8192));
-    $thrPct = max(0, min(100, (int) round(chat_memory_threshold() / $window * 100)));
+    $thrPct = max(0, min(100, (int) round(((int) ($m['trigger_tokens'] ?? chat_memory_threshold())) / $window * 100)));
     $angle  = -90 + 360 * $thrPct / 100;
     $rad    = deg2rad($angle);
 
@@ -383,7 +450,7 @@ function chat_ring(array $m, int $size = 40): string
         . ' / ' . number_format((float) $window, 0, ',', ' ') . ' tokens (' . $pct . ' %)'
         . ' · résumé ' . number_format((float) ($m['summary_tokens'] ?? 0), 0, ',', ' ') . ' tokens'
         . ' · ' . (int) ($m['compressions'] ?? 0) . ' compression(s)'
-        . ' · seuil à ' . number_format((float) chat_memory_threshold(), 0, ',', ' ') . ' tokens';
+        . ' · résumé auto au-delà de ' . number_format((float) chat_memory_threshold(), 0, ',', ' ') . ' tokens non résumés';
 
     $fs = $size <= 44 ? 11 : 13;
 
@@ -623,9 +690,10 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
         $parts[] = 'Consigne de jeu : ' . $directive;
     }
 
-    $summary = trim((string) ($conv['summary'] ?? ''));
+    // le résumé ne sert que si la mémoire est active (sinon l'historique complet est envoyé)
+    $summary = (int) ($conv['memory_enabled'] ?? 1) === 1 ? trim((string) ($conv['summary'] ?? '')) : '';
     if ($summary !== '') {
-        $parts[] = "Mémoire de la conversation :\n" . $summary;
+        $parts[] = "Mémoire de la conversation (résumé des échanges plus anciens) :\n" . $summary;
     }
 
     $factsText = facts_format($facts);
@@ -636,7 +704,9 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
     $parts[] = "Règles : reste strictement dans le personnage, ne dis jamais que tu es une IA ou un modèle. "
         . "Écris comme dans une messagerie : réponses courtes (2 à 4 phrases), pas de listes, pas de mise en forme markdown. "
         . "Langue : celle de l'utilisateur. N'invente pas de faits sur l'utilisateur et ne contredis jamais la fiche "
-        . "(ville, âge, métier, apparence) : si un détail manque, reste vague plutôt que d'inventer.";
+        . "(ville, âge, métier, apparence) : si un détail manque, reste vague plutôt que d'inventer. "
+        . "Le dernier message peut commencer par un bloc <contexte>…</contexte> : ce sont des informations "
+        . "pour toi seul (heure, souvenirs), invisibles pour l'utilisateur. Utilise-les sans jamais citer ce bloc.";
 
     return implode("\n\n", $parts);
 }
@@ -1080,12 +1150,21 @@ function chat_auto_title(int $cid): ?string
 
 function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null): array
 {
-    $factsOn = (int) ($conv['memory_enabled'] ?? 1) === 1 && (int) ($conv['facts_enabled'] ?? 1) === 1;
-    $facts   = $factsOn ? facts_relevant((int) $persona['id'], $userMessage, 5) : [];
-    $system = chat_system_prompt($persona, $personaPrompts, $conv, $facts);
+    // 1) Partie STABLE en tête : consignes, fiche, consigne de jeu, résumé.
+    //    Elle ne change qu'à la compression : LM Studio / llama.cpp réutilisent alors
+    //    leur cache (début du prompt identique) et ne retraitent que la fin.
+    $system = chat_system_prompt($persona, $personaPrompts, $conv, []);
 
-    // date, heure et silence écoulé (réalisme des échanges)
-    $system .= "\n\n" . chat_time_context($conv, $history);
+    // 2) Partie VARIABLE (heure, souvenirs, rappels) : jointe au DERNIER message,
+    //    pour ne pas invalider le cache de tout ce qui précède.
+    $factsOn = (int) ($conv['memory_enabled'] ?? 1) === 1 && (int) ($conv['facts_enabled'] ?? 1) === 1;
+    $context = [chat_time_context($conv, $history)];
+
+    $facts     = $factsOn ? facts_relevant((int) $persona['id'], $userMessage, 5) : [];
+    $factsText = facts_format($facts);
+    if ($factsText !== '') {
+        $context[] = "Ce que tu sais déjà de l'utilisateur (mémoire longue, à utiliser sans le réciter) :\n" . $factsText;
+    }
 
     // rappel d'échanges d'autres conversations avec le même persona
     try {
@@ -1100,14 +1179,15 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
             $lines[] = '- (' . fr_date((string) $r['created_at']) . ', autre conversation) ' . $who . ' : '
                 . mb_substr(trim((string) $r['content']), 0, 320);
         }
-        $system .= "\n\nExtraits d'autres conversations que tu as eues avec cette personne "
+        $context[] = "Extraits d'autres conversations que tu as eues avec cette personne "
             . "(sers-t'en comme de souvenirs, ne les cite pas mot pour mot, ne les mentionne pas comme "
             . "des « extraits ») :\n" . implode("\n", $lines);
     }
+    $contextBlock = "<contexte>\n" . implode("\n\n", $context) . "\n</contexte>";
 
     $limit  = max(2048, (int) ($conv['context_window'] ?? 8192));
     $budget = $limit - (int) ($conv['max_tokens'] ?? 400) - 512;
-    $used   = chat_estimate_tokens($system) + chat_estimate_tokens($userMessage);
+    $used   = chat_estimate_tokens($system) + chat_estimate_tokens($contextBlock) + chat_estimate_tokens($userMessage);
 
     $kept = [];
     $dropped = 0;
@@ -1128,14 +1208,17 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $messages = [['role' => 'system', 'content' => $system]];
     $messages = array_merge($messages, $kept);
 
+    $text = $userMessage !== '' ? $userMessage : ($imageDataUrl ? 'Regarde cette photo.' : '');
+    $text = $contextBlock . "\n\n" . $text;
+
     if ($imageDataUrl !== null && $imageDataUrl !== '') {
         // message multimodal : texte + image (modèles « vlm »)
         $messages[] = ['role' => 'user', 'content' => [
-            ['type' => 'text', 'text' => $userMessage !== '' ? $userMessage : 'Regarde cette photo.'],
+            ['type' => 'text', 'text' => $text],
             ['type' => 'image_url', 'image_url' => ['url' => $imageDataUrl]],
         ]];
     } else {
-        $messages[] = ['role' => 'user', 'content' => $userMessage];
+        $messages[] = ['role' => 'user', 'content' => $text];
     }
 
     return [

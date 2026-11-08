@@ -2789,3 +2789,61 @@ form.is-dirty .save-bar {
     .settings-page .tab { flex: 1 1 auto; padding: 9px 6px; text-align: center; }
     .settings-card { padding: 16px; }
 }
+
+/* =================================================================
+   Fenêtres modales communes et bulles d'information (v66)
+   ================================================================= */
+
+html.modal-open, html.modal-open body { overflow: hidden; }
+.pv-dialog { z-index: 120; }
+.pv-dialog .modal-card { max-width: 460px; gap: 14px; padding: 18px; }
+.pv-dialog-body { display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.6; color: var(--muted); }
+.pv-dialog-body p { margin: 0; }
+.pv-dialog-body strong { color: var(--text); font-weight: 650; }
+.pv-dialog-body code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, .07);
+    color: #ddd6fe;
+    word-break: break-all;
+}
+.pv-dialog-actions { margin-top: 4px; }
+.pv-dialog.is-danger .modal-card { border-color: rgba(248, 113, 113, .32); }
+
+/* sur téléphone : la fenêtre monte du bas, boutons pleine largeur */
+@media (max-width: 559px) {
+    .pv-dialog { place-items: end stretch; padding: 0; }
+    .pv-dialog .modal-card {
+        max-width: none;
+        border-radius: 22px 22px 0 0;
+        padding: 18px 16px calc(16px + var(--safe-b));
+        max-height: 85dvh;
+    }
+    .pv-dialog-actions { flex-direction: column-reverse; }
+    .pv-dialog-actions .btn { width: 100%; justify-content: center; min-height: 46px; }
+}
+
+/* bouton « i » : petit visuellement, grande zone de toucher */
+.info-btn {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 19px;
+    height: 19px;
+    margin-left: 4px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(196, 181, 253, .45);
+    background: rgba(167, 139, 250, .12);
+    color: #c4b5fd;
+    font: italic 700 11.5px/1 Georgia, "Times New Roman", serif;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: background .2s, border-color .2s;
+}
+.info-btn::after { content: ""; position: absolute; inset: -8px; }
+.info-btn:hover { background: rgba(167, 139, 250, .26); border-color: #c4b5fd; }
+.form-head h2 .info-btn, .settings-card-title .info-btn { width: 20px; height: 20px; }
+small.warn { color: #fcd34d; }

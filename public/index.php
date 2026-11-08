@@ -275,12 +275,14 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
         if (!$regen) {
             try {
                 $mem = chat_memory_stats($cid, $conv);
-                if ($mem['context_tokens'] > chat_memory_threshold()) {
+                // même critère que chat_compress : les messages pas encore résumés
+                if ($mem['recent_tokens'] >= chat_memory_threshold()) {
                     $cres = chat_compress($cid, $conv);
                     if (($cres['ok'] ?? false) && ($cres['compressed'] ?? 0) > 0) {
                         $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
                         $stmt->execute([$cid]);
-                        $conv = $stmt->fetch();
+                        // réappliquer les réglages du persona (modèle, fenêtre, consigne…)
+                        $conv = chat_with_persona($stmt->fetch(), $persona);
                     }
                 }
             } catch (Throwable $e) {
@@ -299,7 +301,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             }
         }
 
-        $history = fetch_messages($cid);
+        // uniquement ce qui n'est pas déjà dans le résumé (+ léger recouvrement)
+        $history = fetch_context_messages($cid, $conv);
         if ($regen) {
             // régénérer un message qui contenait une image : on la renvoie
             foreach ($history as $h) {
@@ -523,7 +526,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             $cres = chat_compress($cid, $conv, !empty($_POST['force']));
             $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
             $stmt->execute([$cid]);
-            $fresh  = $stmt->fetch();
+            $fresh  = chat_with_persona($stmt->fetch(), $persona);
             $memory = chat_memory_stats($cid, $fresh);
             echo json_encode([
                 'ok'         => $cres['ok'],
@@ -555,12 +558,10 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
         }
 
         $cursor = (int) ($conv['facts_cursor'] ?? 0);
-        $recent = [];
-        foreach (fetch_messages($cid) as $m) {
-            if (in_array((string) $m['role'], ['user', 'assistant'], true) && (int) $m['id'] > $cursor) {
-                $recent[] = $m;
-            }
-        }
+        $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND id > ?
+                             AND role IN ('user', 'assistant') ORDER BY id ASC");
+        $st->execute([$cid, $cursor]);
+        $recent = $st->fetchAll();
 
         // demande explicite : « souviens-toi », « retiens », « note que »…
         $lastUser = '';
@@ -575,13 +576,16 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             $lastUser
         );
 
-        if (count($recent) < ($explicit ? 1 : 2)) {
-            echo json_encode(['ok' => true, 'added' => [], 'skipped' => 'pas assez de nouveaux messages', 'memories' => chat_persona_memories((int) $persona['id'])], JSON_UNESCAPED_UNICODE);
+        // fréquence choisie dans les réglages (chaque échange, tous les N messages, sur demande…)
+        $why = facts_should_run(count($recent), $explicit, !empty($_POST['force']));
+        if ($why !== '') {
+            echo json_encode(['ok' => true, 'added' => [], 'skipped' => $why, 'memories' => chat_persona_memories((int) $persona['id'])], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
         try {
-            $slice = array_slice($recent, -8);
+            // jusqu'à 30 messages : en mode « tous les N », rien n'est sauté
+            $slice = array_slice($recent, -30);
             $res   = facts_extract($cid, (int) $persona['id'], $slice, $explicit);
             if (($res['ok'] ?? false) && $slice) {
                 $lastId = (int) end($slice)['id'];
@@ -1189,6 +1193,17 @@ if ($path === '/settings/chat' && $method === 'POST') {
     set_setting('chat_followup_idle_hours', (string) max(1, min(72, (int) ($_POST['chat_followup_idle_hours'] ?? 6))));
     set_setting('chat_followup_from', (string) max(0, min(23, (int) ($_POST['chat_followup_from'] ?? 8))));
     set_setting('chat_followup_to', (string) max(1, min(24, (int) ($_POST['chat_followup_to'] ?? 23))));
+
+    // souvenirs durables : quand et avec quel modèle les extraire
+    $ff = (string) ($_POST['facts_frequency'] ?? 'each');
+    set_setting('facts_frequency', in_array($ff, ['each', 'every', 'explicit', 'off'], true) ? $ff : 'each');
+    set_setting('facts_every', (string) max(2, min(30, (int) ($_POST['facts_every'] ?? 6))));
+    $ft = (string) ($_POST['facts_timing'] ?? 'now');
+    set_setting('facts_timing', in_array($ft, ['now', 'idle'], true) ? $ft : 'now');
+    set_setting('facts_idle_seconds', (string) max(10, min(600, (int) ($_POST['facts_idle_seconds'] ?? 45))));
+    $fm = (string) ($_POST['facts_model'] ?? 'chat');
+    set_setting('facts_model', in_array($fm, ['chat', 'remote'], true) ? $fm : 'chat');
+
     set_setting('chat_llm_base_url', rtrim($baseUrl, '/'));
     set_setting('chat_llm_model', $model);
     if ($key !== '') {

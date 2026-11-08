@@ -9,6 +9,10 @@ $providers = [
 ];
 // « 0 photo », « 1 photo », « 2 photos » (règle française : pluriel à partir de 2)
 $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($n >= 2 ? $many : $one);
+// bouton « i » qui ouvre une explication en fenêtre (contenu : <template data-info-body> en bas de page)
+$info = static fn (string $key, string $label): string =>
+    '<button type="button" class="info-btn" data-info="' . e($key) . '" aria-label="' . e('En savoir plus : ' . $label) . '">i</button>';
+$facts = facts_settings();
 ?>
 <a class="back settings-back" href="/">
     <svg viewBox="0 0 24 24" class="ico"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -31,7 +35,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
 
     <div class="tab-panel" data-panel="ia">
     <header class="form-head settings-sub">
-        <h2>Création de fiches</h2>
+        <h2>Création de fiches <?= $info('ia-model', 'modèle des fiches') ?></h2>
         <p class="form-sub">Modèle qui remplit les fiches persona (bouton IA).</p>
     </header>
 
@@ -66,7 +70,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
         </div>
 
         <label class="field">
-            <span>Clé API</span>
+            <span>Clé API <?= $info('api-key', 'clé API') ?></span>
             <input class="input" type="password" name="api_key" autocomplete="off" spellcheck="false"
                    placeholder="<?= $hasKey ? 'Laisser vide pour conserver la clé' : 'sk-…' ?>">
             <small>
@@ -124,7 +128,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 
         <section class="settings-card">
-        <h3 class="settings-card-title">Connexion au modèle</h3>
+        <h3 class="settings-card-title">Connexion au modèle <?= $info('chat-model', 'modèle de discussion') ?></h3>
         <div class="row2">
             <div class="field">
                 <span>Fournisseur</span>
@@ -183,9 +187,9 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
         </section>
 
         <section class="settings-card">
-        <h3 class="settings-card-title">Réflexion et mémoire</h3>
+        <h3 class="settings-card-title">Réflexion et mémoire <?= $info('compression', 'mémoire de conversation') ?></h3>
         <div class="field">
-            <span>Réflexion du modèle</span>
+            <span>Réflexion du modèle <?= $info('reasoning', 'réflexion du modèle') ?></span>
             <div class="sel" data-sel>
                 <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Réflexion du modèle">
                     <span class="sel-value"></span>
@@ -217,7 +221,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
         <details class="settings-card settings-fold">
             <summary>
                 <span class="fold-text">
-                    <span class="fold-title">Réponses en plusieurs bulles</span>
+                    <span class="fold-title">Réponses en plusieurs bulles <?= $info('split', 'bulles') ?></span>
                     <span class="fold-sum" data-fold-sum="split"></span>
                 </span>
             </summary>
@@ -262,7 +266,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
         <details class="settings-card settings-fold">
             <summary>
                 <span class="fold-text">
-                    <span class="fold-title">Messages spontanés</span>
+                    <span class="fold-title">Messages spontanés <?= $info('followup', 'messages spontanés') ?></span>
                     <span class="fold-sum" data-fold-sum="followup"></span>
                 </span>
             </summary>
@@ -295,6 +299,78 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
             </div>
         </details>
 
+        <details class="settings-card settings-fold">
+            <summary>
+                <span class="fold-text">
+                    <span class="fold-title">Souvenirs durables <?= $info('facts', 'souvenirs durables') ?></span>
+                    <span class="fold-sum" data-fold-sum="facts"></span>
+                </span>
+            </summary>
+            <div class="fold-body">
+            <p class="hint">Ce que les personas retiennent de toi d’une conversation à l’autre. Choisis quand
+                l’app les extrait et avec quel modèle.</p>
+
+            <div class="field">
+                <span>Fréquence <?= $info('facts-frequency', 'fréquence') ?></span>
+                <div class="sel" data-sel>
+                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Fréquence de l’extraction">
+                        <span class="sel-value"></span>
+                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <select name="facts_frequency" class="sel-native">
+                        <?php foreach (['each' => 'Après chaque échange', 'every' => 'Tous les N messages', 'explicit' => 'Seulement sur demande (« retiens que… »)', 'off' => 'Jamais'] as $val => $label): ?>
+                            <option value="<?= e($val) ?>" <?= $facts['frequency'] === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <label class="field range-field" data-show-if="facts_frequency=every">
+                <span>Nombre de nouveaux messages <b data-out="factsevery"><?= (int) $facts['every'] ?></b></span>
+                <input class="range" type="range" name="facts_every" min="2" max="30" step="1"
+                       value="<?= (int) $facts['every'] ?>" data-out="factsevery">
+                <small>Un échange = 2 messages (le tien et la réponse).</small>
+            </label>
+
+            <div class="field" data-show-if="facts_frequency!=off">
+                <span>Moment <?= $info('facts-timing', 'moment de l’extraction') ?></span>
+                <div class="sel" data-sel>
+                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Moment de l’extraction">
+                        <span class="sel-value"></span>
+                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <select name="facts_timing" class="sel-native">
+                        <option value="now" <?= $facts['timing'] === 'now' ? 'selected' : '' ?>>Dès la réponse</option>
+                        <option value="idle" <?= $facts['timing'] === 'idle' ? 'selected' : '' ?>>Quand la discussion est calme</option>
+                    </select>
+                </div>
+            </div>
+
+            <label class="field" data-show-if="facts_timing=idle&facts_frequency!=off">
+                <span>Calme depuis (secondes)</span>
+                <input class="input" type="number" inputmode="numeric" name="facts_idle_seconds" min="10" max="600" step="5" value="<?= (int) $facts['idle'] ?>">
+                <small>Sans nouveau message ni frappe pendant ce délai.</small>
+            </label>
+
+            <div class="field" data-show-if="facts_frequency!=off">
+                <span>Modèle utilisé <?= $info('facts-model', 'modèle des souvenirs') ?></span>
+                <div class="sel" data-sel>
+                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Modèle utilisé pour les souvenirs">
+                        <span class="sel-value"></span>
+                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <select name="facts_model" class="sel-native">
+                        <option value="chat" <?= $facts['model'] === 'chat' ? 'selected' : '' ?>>Modèle de discussion (local)</option>
+                        <option value="remote" <?= $facts['model'] === 'remote' ? 'selected' : '' ?>>Modèle des fiches (distant)</option>
+                    </select>
+                </div>
+                <?php if ($facts['model'] === 'remote' && !llm_ready()): ?>
+                    <small class="warn">Le modèle des fiches n’est pas configuré (onglet IA) : le modèle local est utilisé en attendant.</small>
+                <?php endif; ?>
+            </div>
+            </div>
+        </details>
+
         <div class="form-actions save-bar">
             <span class="dirty-note">Modifications non enregistrées</span>
             <button class="btn btn-primary" type="submit">Enregistrer</button>
@@ -302,7 +378,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
     </form>
 
     <section class="backup-card settings-maint">
-        <h3>Maintenance LM Studio</h3>
+        <h3>Maintenance LM Studio <?= $info('purge', 'purge') ?></h3>
         <p class="hint" data-purge-status>
             Changer de modèle décharge déjà l’ancien automatiquement. Ce bouton force la libération
             de la mémoire vidéo (VRAM) si LM Studio garde des modèles chargés.
@@ -315,7 +391,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
 
     <div class="tab-panel" data-panel="look" hidden>
     <header class="form-head settings-sub">
-        <h2>Apparence des conversations</h2>
+        <h2>Apparence des conversations <?= $info('look', 'apparence') ?></h2>
         <p class="form-sub">S’applique à toutes les discussions. L’aperçu réagit en direct.</p>
     </header>
 
@@ -410,7 +486,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
 
     <div class="tab-panel" data-panel="prompts" hidden>
     <header class="form-head settings-sub">
-        <h2>Prompts internes</h2>
+        <h2>Prompts internes <?= $info('prompts', 'prompts internes') ?></h2>
         <p class="form-sub">Les consignes que l’app envoie au modèle pour la mémoire, les souvenirs et les relances. Vides = texte par défaut.</p>
     </header>
 
@@ -447,7 +523,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
 
     <div class="tab-panel" data-panel="backup" hidden>
     <header class="form-head settings-sub">
-        <h2>Sauvegarde</h2>
+        <h2>Sauvegarde <?= $info('backup', 'sauvegarde') ?></h2>
         <p class="form-sub">Un ZIP par sauvegarde : un dossier par persona avec sa fiche, ses prompts et ses photos.</p>
     </header>
 
@@ -484,7 +560,7 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
         <h3>Restaurer</h3>
         <p class="hint">Importe un ZIP de sauvegarde. Les personas existants ne sont jamais écrasés : un slug unique est créé.</p>
 
-        <form method="post" action="/backup/import" enctype="multipart/form-data" data-confirm="Importer cette sauvegarde ? Les personas seront ajoutés à la bibliothèque.">
+        <form method="post" action="/backup/import" enctype="multipart/form-data" data-confirm="Importer cette sauvegarde ? Les personas seront ajoutés à la bibliothèque." data-confirm-title="Importer la sauvegarde" data-confirm-ok="Importer">
             <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
             <label class="file-pick" data-file-pick>
                 <input type="file" name="archive" accept=".zip,application/zip" required>
@@ -500,7 +576,89 @@ $plural = static fn (int $n, string $one, string $many): string => $n . ' ' . ($
     <p class="hint">Astuce : garde le ZIP hors du serveur (disque externe, cloud). Il contient tout ce qu’il faut pour repartir de zéro.</p>
     </div>
 
-    <form method="post" action="/logout" class="settings-logout" data-confirm="Se déconnecter de PersonaVault ?">
+    <?php
+    $infos = [
+        'ia-model' => ['Modèle des fiches', '
+            <p>Ce modèle sert aux tâches ponctuelles : <strong>compléter une fiche</strong> avec le bouton IA,
+            proposer une consigne de jeu, et éventuellement extraire les souvenirs si tu le choisis.</p>
+            <p>C’est en général un service distant (DeepSeek, OpenAI, OpenRouter…). Les données ne partent
+            qu’au moment où tu cliques sur une action IA.</p>'],
+        'api-key' => ['Clé API', '
+            <p>La clé est enregistrée dans la base locale de l’app et n’est <strong>jamais réaffichée</strong>
+            dans la page. Laisse le champ vide pour conserver la clé actuelle.</p>
+            <p>Le bouton « Test de connexion » n’envoie la clé enregistrée qu’à l’adresse enregistrée : si tu
+            changes d’adresse, saisis la clé à nouveau.</p>'],
+        'chat-model' => ['Modèle de discussion', '
+            <p>C’est le modèle qui fait parler les personas, en général <strong>LM Studio sur ta machine</strong>
+            (adresse <code>http://localhost:1234/v1</code> par défaut). Rien ne sort de chez toi.</p>
+            <p>Si le serveur est injoignable, l’app te demande quoi faire : elle ne bascule jamais toute seule
+            vers un service distant.</p>'],
+        'reasoning' => ['Réflexion du modèle', '
+            <p>Certains modèles (Qwen3, Gemma…) « réfléchissent » avant de répondre. C’est plus lent et ça
+            consomme le budget de tokens, parfois au point de ne jamais répondre.</p>
+            <p>Pour une conversation naturelle, laisse <strong>Désactivée</strong>.</p>'],
+        'compression' => ['Mémoire de la conversation', '
+            <p>Le modèle ne peut lire qu’un nombre limité de tokens (sa « fenêtre »). Quand les messages
+            <strong>pas encore résumés</strong> dépassent le <strong>seuil de compression</strong>, les plus anciens
+            sont résumés en quelques lignes (sujet, faits, décisions).</p>
+            <p>Ensuite, le modèle reçoit ce résumé + les messages récents (environ la valeur
+            « messages récents gardés »), et non plus tout l’historique : réponses plus rapides et
+            plus de place pour la suite.</p>
+            <p>Un token ≈ 3 à 4 caractères en français.</p>'],
+        'split' => ['Réponses en plusieurs bulles', '
+            <p>Une longue réponse est coupée à la fin d’une phrase et affichée en plusieurs messages, avec une
+            courte pause entre chaque, comme dans une vraie messagerie.</p>
+            <p>« Bulles maximum » à 1 désactive le découpage.</p>'],
+        'followup' => ['Messages spontanés', '
+            <p>Après un long silence, le persona peut t’écrire de lui-même, uniquement dans la plage horaire
+            choisie et au plus une fois par période de silence.</p>
+            <p>Ces relances sont déclenchées par une tâche planifiée sur le serveur, par exemple toutes les
+            30 minutes : <code>php bin/followup.php</code> (cron). Sans elle, rien ne part.</p>'],
+        'facts' => ['Souvenirs durables', '
+            <p>Après certains échanges, l’app demande à un modèle ce qui mérite d’être retenu sur toi
+            (prénom, goûts, projets…). Ces souvenirs sont partagés entre toutes les conversations d’un persona
+            et visibles dans la page <strong>Souvenirs</strong>.</p>
+            <p>L’extraction se fait <strong>en arrière-plan</strong> : elle ne bloque jamais l’affichage.
+            En revanche, si elle utilise le modèle local, elle l’occupe quelques secondes.</p>'],
+        'facts-frequency' => ['Fréquence de l’extraction', '
+            <p><strong>Après chaque échange</strong> : le plus réactif, mais un appel au modèle à chaque réponse.</p>
+            <p><strong>Tous les N messages</strong> : regroupe plusieurs échanges en un seul appel. Rien n’est perdu,
+            tous les messages depuis la dernière extraction sont analysés.</p>
+            <p><strong>Seulement sur demande</strong> : uniquement quand tu écris « retiens que… », « souviens-toi… ».</p>
+            <p><strong>Jamais</strong> : aucun nouveau souvenir automatique (les existants restent utilisés).</p>'],
+        'facts-timing' => ['Moment de l’extraction', '
+            <p><strong>Dès la réponse</strong> : lancée juste après chaque réponse.</p>
+            <p><strong>Quand la discussion est calme</strong> : attend que tu n’aies rien écrit pendant le délai
+            choisi. Le modèle local reste ainsi disponible pendant que vous échangez. Si tu quittes la page
+            avant, l’extraction se fera à la prochaine occasion, sans perte.</p>'],
+        'facts-model' => ['Modèle utilisé pour les souvenirs', '
+            <p><strong>Modèle de discussion (local)</strong> : tout reste sur ta machine.</p>
+            <p><strong>Modèle des fiches (distant)</strong> : soulage le modèle local, mais les derniers messages de
+            la conversation sont alors <strong>envoyés au service distant</strong> (DeepSeek, OpenAI…).
+            À choisir en connaissance de cause.</p>'],
+        'purge' => ['Purger la mémoire LM Studio', '
+            <p>Décharge tous les modèles chargés dans LM Studio pour libérer la mémoire de la carte graphique
+            (VRAM). Utile si LM Studio garde plusieurs modèles en mémoire et ralentit.</p>
+            <p>Le modèle de discussion sera rechargé automatiquement au prochain message.</p>'],
+        'look' => ['Apparence', '
+            <p>Ces réglages ne changent que l’affichage des conversations, sur tous tes appareils.
+            L’aperçu en haut du formulaire montre le rendu avant d’enregistrer.</p>'],
+        'prompts' => ['Prompts internes', '
+            <p>Ce sont les consignes que l’app envoie au modèle pour <strong>résumer</strong> une conversation,
+            <strong>extraire les souvenirs</strong> et écrire les <strong>relances</strong>.</p>
+            <p>Les deux premiers doivent faire répondre le modèle en JSON avec les champs indiqués : si tu les
+            modifies, garde ce format. « Réinitialiser » remet le texte d’origine.</p>'],
+        'backup' => ['Sauvegarde', '
+            <p>Le ZIP contient un dossier par persona : fiche, prompts, portrait et photos. Coche l’option pour
+            y ajouter les conversations et les souvenirs.</p>
+            <p>À l’import, rien n’est écrasé : un persona déjà présent est recréé sous un nouveau nom d’URL.
+            Garde tes sauvegardes hors du serveur.</p>'],
+    ];
+    foreach ($infos as $key => [$ttl, $html]): ?>
+        <template data-info-body="<?= e($key) ?>" data-title="<?= e($ttl) ?>"><?= $html ?></template>
+    <?php endforeach; ?>
+
+    <form method="post" action="/logout" class="settings-logout" data-confirm="Se déconnecter de PersonaVault ?" data-confirm-title="Déconnexion" data-confirm-ok="Se déconnecter">
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
         <button class="btn btn-ghost" type="submit">Se déconnecter</button>
     </form>

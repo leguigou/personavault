@@ -172,6 +172,47 @@ try {
     $check(attempt_login('bon-mot-de-passe') === false, 'même le bon mot de passe est refusé pendant le blocage');
     $_SERVER['REMOTE_ADDR'] = '203.0.113.8';
     $check(login_blocked_for() === 0, 'autre IP non bloquée');
+
+    echo PHP_EOL . '— mémoire de conversation' . PHP_EOL;
+    $pid = (int) db()->query('SELECT id FROM personas ORDER BY id LIMIT 1')->fetchColumn();
+    db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$pid, 'mémoire']);
+    $cid = (int) db()->lastInsertId();
+    $ids = [];
+    for ($i = 1; $i <= 10; $i++) {
+        db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
+            ->execute([$cid, $i % 2 ? 'user' : 'assistant', 'message ' . $i]);
+        $ids[$i] = (int) db()->lastInsertId();
+    }
+    $conv = db()->query('SELECT * FROM conversations WHERE id = ' . $cid)->fetch();
+    $check(count(fetch_context_messages($cid, $conv)) === 10, 'sans résumé : tout l’historique est envoyé');
+    db()->prepare('UPDATE conversations SET summary = ?, last_compressed_id = ? WHERE id = ?')
+        ->execute(['Sujet : test', $ids[6], $cid]);
+    $conv = db()->query('SELECT * FROM conversations WHERE id = ' . $cid)->fetch();
+    $sent = array_map(static fn (array $m): string => (string) $m['content'], fetch_context_messages($cid, $conv));
+    $check($sent === ['message 5', 'message 6', 'message 7', 'message 8', 'message 9', 'message 10'],
+        'avec résumé : messages non résumés + 2 de raccord seulement');
+    $conv['memory_enabled'] = 0;
+    $check(count(fetch_context_messages($cid, $conv)) === 10, 'mémoire désactivée : historique complet');
+    $stats = chat_memory_stats($cid, ['memory_enabled' => 1] + $conv);
+    $check($stats['unsummarized'] === 4 && $stats['context_tokens'] > $stats['recent_tokens'], 'statistiques : 4 non résumés, contexte estimé cohérent');
+
+    $persona = db()->query('SELECT * FROM personas WHERE id = ' . $pid)->fetch();
+    $built = chat_build_messages($persona, [], ['memory_enabled' => 1] + $conv, fetch_context_messages($cid, ['memory_enabled' => 1] + $conv), 'bonjour');
+    $first = $built['messages'][0]['content'];
+    $last  = (string) end($built['messages'])['content'];
+    $check(!str_contains($first, 'Contexte réel') && str_contains($first, 'Sujet : test'), 'prompt système stable (résumé, sans l’heure)');
+    $check(str_starts_with($last, '<contexte>') && str_ends_with($last, 'bonjour'), 'heure et souvenirs dans le dernier message');
+
+    echo PHP_EOL . '— fréquence des souvenirs' . PHP_EOL;
+    set_setting('facts_frequency', 'every');
+    set_setting('facts_every', '4');
+    $check(facts_should_run(3, false) !== '' && facts_should_run(4, false) === '', 'tous les 4 messages : attend puis lance');
+    $check(facts_should_run(1, true) === '', '« retiens que… » lance tout de suite');
+    set_setting('facts_frequency', 'explicit');
+    $check(facts_should_run(10, false) !== '' && facts_should_run(1, true) === '', 'mode « sur demande »');
+    set_setting('facts_frequency', 'off');
+    $check(facts_should_run(10, true) !== '', 'mode « jamais »');
+    set_setting('facts_frequency', 'each');
 } catch (Throwable $e) {
     echo '  ÉCHEC exception : ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
     $failures++;

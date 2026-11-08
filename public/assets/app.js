@@ -52,14 +52,148 @@
         true
     );
 
+    /* ------------------------------------------- fenêtre modale commune
+       Remplace confirm()/alert() du navigateur : même style que l'app,
+       fermeture par Échap, clic à côté ou bouton, focus gardé dans la fenêtre. */
+    const pvModal = (() => {
+        let root = null;
+        let resolver = null;
+        let lastFocus = null;
+
+        const focusables = () => [...root.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )].filter((el) => !el.disabled && el.offsetParent !== null);
+
+        const close = (value) => {
+            if (!root || root.hidden) return;
+            root.hidden = true;
+            document.documentElement.classList.remove("modal-open");
+            const r = resolver;
+            resolver = null;
+            if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
+            if (r) r(value);
+        };
+
+        const build = () => {
+            root = document.createElement("div");
+            root.className = "modal pv-dialog";
+            root.hidden = true;
+            root.innerHTML =
+                '<div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pv-dialog-title">' +
+                '<header class="modal-head"><h2 id="pv-dialog-title"></h2>' +
+                '<button type="button" class="icon-btn" data-dialog-close aria-label="Fermer">&times;</button></header>' +
+                '<div class="pv-dialog-body"></div>' +
+                '<div class="form-actions pv-dialog-actions"></div></div>';
+            document.body.appendChild(root);
+            root.addEventListener("click", (e) => {
+                if (e.target === root || e.target.closest("[data-dialog-close]")) close(false);
+            });
+            document.addEventListener("keydown", (e) => {
+                if (!root || root.hidden) return;
+                if (e.key === "Escape") {
+                    e.preventDefault();
+                    close(false);
+                } else if (e.key === "Tab") {
+                    const f = focusables();
+                    if (!f.length) return;
+                    const first = f[0];
+                    const last = f[f.length - 1];
+                    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+                }
+            });
+        };
+
+        /**
+         * @param {{title:string, text?:string, node?:Node, actions:Array<{label:string, value:any, kind?:string}>}} o
+         * @returns {Promise<any>} valeur du bouton choisi (false si fermée)
+         */
+        const open = (o) => new Promise((resolve) => {
+            if (!root) build();
+            if (resolver) close(false);
+            lastFocus = document.activeElement;
+            resolver = resolve;
+            root.querySelector("h2").textContent = o.title || "";
+            const body = root.querySelector(".pv-dialog-body");
+            body.replaceChildren();
+            if (o.node) body.appendChild(o.node);
+            if (o.text) {
+                const p = document.createElement("p");
+                p.textContent = o.text;
+                body.appendChild(p);
+            }
+            const actions = root.querySelector(".pv-dialog-actions");
+            actions.replaceChildren();
+            let main = null;
+            (o.actions || [{ label: "OK", value: true, kind: "primary" }]).forEach((a) => {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.className = "btn " + (a.kind === "danger" ? "btn-danger" : a.kind === "primary" ? "btn-primary" : "btn-ghost");
+                b.textContent = a.label;
+                b.addEventListener("click", () => close(a.value));
+                actions.appendChild(b);
+                if (a.kind === "primary" || a.kind === "danger") main = b;
+            });
+            root.classList.toggle("is-danger", (o.actions || []).some((a) => a.kind === "danger"));
+            root.hidden = false;
+            document.documentElement.classList.add("modal-open");
+            (main || actions.lastElementChild)?.focus({ preventScroll: true });
+        });
+
+        return {
+            open,
+            close,
+            confirm: (text, opts = {}) => open({
+                title: opts.title || "Confirmer",
+                text,
+                actions: [
+                    { label: opts.cancel || "Annuler", value: false },
+                    { label: opts.ok || "Confirmer", value: true, kind: opts.danger ? "danger" : "primary" },
+                ],
+            }),
+            alert: (text, title = "Information") => open({ title, text, actions: [{ label: "OK", value: true, kind: "primary" }] }),
+        };
+    })();
+    window.pvModal = pvModal;
+
     /* --------------------------------------------------- confirmations */
     document.addEventListener("submit", (e) => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement)) return;
         const msg = form.dataset.confirm;
-        if (msg && !window.confirm(msg)) {
-            e.preventDefault();
+        if (!msg) return;
+        if (form.dataset.confirmed === "1") {
+            delete form.dataset.confirmed;
+            return;
         }
+        e.preventDefault();
+        const submitter = e.submitter || null;
+        const isDelete = /\/delete$/.test(new URL(form.action, location.href).pathname);
+        pvModal.confirm(msg, {
+            title: form.dataset.confirmTitle || (isDelete ? "Supprimer ?" : "Confirmer"),
+            ok: form.dataset.confirmOk || (isDelete ? "Supprimer" : "Confirmer"),
+            danger: isDelete,
+        }).then((ok) => {
+            if (!ok) return;
+            form.dataset.confirmed = "1";
+            if (form.requestSubmit) form.requestSubmit(submitter && form.contains(submitter) ? submitter : undefined);
+            else form.submit();
+        });
+    });
+
+    /* ----------------------------------- bulles d'information (réglages) */
+    document.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-info]");
+        if (!btn) return;
+        e.preventDefault(); // dans un <summary> : ne pas replier la section
+        e.stopPropagation();
+        const tpl = document.querySelector('template[data-info-body="' + btn.dataset.info + '"]');
+        if (!tpl) return;
+        pvModal.open({
+            title: tpl.dataset.title || "",
+            node: tpl.content.cloneNode(true),
+            actions: [{ label: "Compris", value: true, kind: "primary" }],
+        });
     });
 
     /* ------------------------------ consigne de jeu proposée par l'IA */
@@ -155,11 +289,54 @@
             f.addEventListener("change", check);
             f.addEventListener("submit", () => { submitting = true; });
         });
+        const isDirty = () => guarded.some((f) => f.classList.contains("is-dirty"));
+        // liens internes : fenêtre de l'app plutôt que la boîte du navigateur
+        document.addEventListener("click", (e) => {
+            const a = e.target.closest("a[href]");
+            if (!a || submitting || !isDirty()) return;
+            if (a.target === "_blank" || e.metaKey || e.ctrlKey || e.shiftKey || a.hasAttribute("download")) return;
+            const url = new URL(a.href, location.href);
+            if (url.origin !== location.origin || (url.pathname === location.pathname && url.hash)) return;
+            e.preventDefault();
+            pvModal.open({
+                title: "Modifications non enregistrées",
+                text: "Tu as modifié des réglages sans les enregistrer. Les quitter maintenant les annule.",
+                actions: [
+                    { label: "Rester sur la page", value: false },
+                    { label: "Quitter sans enregistrer", value: true, kind: "danger" },
+                ],
+            }).then((leave) => {
+                if (!leave) return;
+                submitting = true;
+                location.href = url.href;
+            });
+        });
+        // fermeture de l'onglet / rechargement : seul le navigateur peut demander
         window.addEventListener("beforeunload", (e) => {
-            if (submitting || !guarded.some((f) => f.classList.contains("is-dirty"))) return;
+            if (submitting || !isDirty()) return;
             e.preventDefault();
             e.returnValue = "";
         });
+    }
+
+    /* -------------- réglages : champs affichés selon un autre réglage
+       data-show-if="nom=valeur" ou "nom!=valeur" */
+    const condEls = document.querySelectorAll("[data-show-if]");
+    if (condEls.length) {
+        const applyConds = () => {
+            // plusieurs conditions possibles, séparées par « & »
+            condEls.forEach((el) => {
+                el.hidden = !(el.dataset.showIf || "").split("&").every((cond) => {
+                    const m = /^([\w-]+)(!?=)(.*)$/.exec(cond.trim());
+                    if (!m) return true;
+                    const field = document.querySelector('[name="' + m[1] + '"]');
+                    const v = field ? field.value : "";
+                    return m[2] === "=" ? v === m[3] : v !== m[3];
+                });
+            });
+        };
+        document.addEventListener("change", applyConds);
+        applyConds();
     }
 
     /* ------------------- réglages : résumé des sections repliables */
@@ -172,6 +349,14 @@
                     const on = val("chat_split_enabled")?.checked;
                     const max = +(val("chat_split_max_bubbles")?.value || 1);
                     el.textContent = !on || max <= 1 ? "Désactivé" : max + " bulles max · " + (val("chat_split_words")?.value || "") + " mots";
+                } else if (el.dataset.foldSum === "facts") {
+                    const f = val("facts_frequency")?.value || "each";
+                    const t = val("facts_timing")?.value === "idle" ? " · au calme" : "";
+                    const m = val("facts_model")?.value === "remote" ? " · distant" : " · local";
+                    el.textContent = f === "off" ? "Désactivés"
+                        : f === "explicit" ? "Sur demande" + m
+                        : f === "every" ? "Tous les " + (val("facts_every")?.value || "6") + " messages" + t + m
+                        : "Après chaque échange" + t + m;
                 } else if (el.dataset.foldSum === "followup") {
                     const on = val("chat_followup_enabled")?.checked;
                     el.textContent = on
@@ -1433,6 +1618,30 @@
             }
         };
 
+        /* souvenirs durables : dès la réponse, ou une fois la discussion calme
+           (réglage « Moment de l'extraction ») pour laisser le modèle local libre
+           pendant qu'on écrit */
+        const factsTiming = chat.dataset.factsTiming || "now";
+        const factsIdleMs = Math.max(10, Number(chat.dataset.factsIdle) || 45) * 1000;
+        let factsTimer = 0;
+        const runFacts = () => { factsTimer = 0; rememberFacts(); };
+        const scheduleFacts = () => {
+            if (factsTiming === "off") return Promise.resolve();
+            if (factsTiming !== "idle") return rememberFacts();
+            clearTimeout(factsTimer);
+            factsTimer = setTimeout(runFacts, factsIdleMs);
+            return Promise.resolve();
+        };
+        if (factsTiming === "idle") {
+            // l'utilisateur écrit : on repousse l'extraction
+            const delay = () => {
+                if (!factsTimer) return;
+                clearTimeout(factsTimer);
+                factsTimer = setTimeout(runFacts, factsIdleMs);
+            };
+            document.addEventListener("input", (e) => { if (e.target.closest?.(".chat-composer")) delay(); });
+        }
+
         // titre généré à partir des premiers échanges (tant qu'il n'a pas été renommé à la main)
         const autoTitle = async () => {
             if (chat.dataset.autoTitle !== "1") return;
@@ -2173,7 +2382,7 @@
                             scrollBottom();
                         }
                     })
-                    .then(() => rememberFacts())
+                    .then(() => scheduleFacts())
                     .then(() => autoTitle());
             } catch (err) {
                 document.getElementById("chat-typing")?.remove();

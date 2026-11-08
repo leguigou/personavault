@@ -25,10 +25,14 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Chargement du modèle à la demande avec progression ; aucune bascule silencieuse vers le
   fournisseur de secours (une fenêtre demande quoi faire).
 - Contexte temporel : heure, jour, temps écoulé depuis le dernier message.
-- Mémoire glissante : les vieux échanges sont résumés automatiquement quand le contexte se remplit.
+- Mémoire glissante : quand les messages pas encore résumés dépassent le seuil, les plus anciens sont
+  résumés ; le modèle reçoit ensuite le résumé + les messages récents seulement (voir
+  [Mémoire et contexte](#mémoire-et-contexte)).
 - Souvenirs persistants par personnage (recherche FTS5), partagés entre toutes ses discussions,
-  avec une trace visible « mémoire mise à jour » sous l'échange.
-- Relance spontanée : le personnage peut écrire de lui-même après plusieurs heures de silence.
+  avec une trace visible « mémoire mise à jour » sous l'échange. Fréquence, moment et modèle
+  d'extraction réglables.
+- Relance spontanée : le personnage peut écrire de lui-même après plusieurs heures de silence
+  (nécessite une tâche planifiée, voir plus bas).
 - Photos : quand le modèle sait voir les images, un trombone apparaît pour en envoyer une.
 - Édition : modifier son message efface la suite et rejoue la réponse depuis ce point.
 - Titres de discussion générés automatiquement.
@@ -132,14 +136,51 @@ Deux fournisseurs, réglables dans **Réglages** :
 
 | Usage | Fournisseur | Remarque |
 |---|---|---|
-| Discussion (local) | [LM Studio](https://lmstudio.ai) ou tout serveur compatible OpenAI | `http://localhost:1234/v1` par défaut |
-| Fiches, résumés, titres | DeepSeek, OpenAI, OpenRouter… | n'importe quelle API `/chat/completions` |
+| Discussion, résumés, souvenirs (local) | [LM Studio](https://lmstudio.ai) ou tout serveur compatible OpenAI | `http://localhost:1234/v1` par défaut |
+| Fiches, consignes de jeu, titres de discussion | DeepSeek, OpenAI, OpenRouter… | n'importe quelle API `/chat/completions` |
+
+Les souvenirs peuvent aussi être confiés au modèle distant (Réglages › Chat › Souvenirs durables) :
+les derniers messages lui sont alors envoyés. Les **titres automatiques** utilisent le modèle
+distant : les premiers messages de chaque discussion lui sont envoyés.
 
 Le chat utilise le modèle local ; s'il n'est pas joignable, l'app propose de basculer sur le
 fournisseur distant — elle ne le fait jamais sans demander.
 
 **Images** : le bouton trombone n'apparaît que si le modèle choisi sait voir les images.
 Les photos sont converties en JPEG avant l'envoi (certains serveurs refusent le WebP).
+
+### Mémoire et contexte
+
+Ce que reçoit le modèle à chaque message, dans cet ordre :
+
+1. **Partie fixe** (message système) : prompts « système » du persona, fiche, consigne de jeu,
+   résumé de la conversation, règles. Elle ne change qu'à la compression : LM Studio / llama.cpp
+   réutilisent leur cache et ne retraitent que la fin.
+2. **Historique** : uniquement les messages **pas encore résumés**, plus les 2 derniers messages
+   résumés pour la continuité. Sans mémoire, tout l'historique dans la limite de la fenêtre.
+3. **Dernier message**, précédé d'un bloc `<contexte>` variable : date et heure, silence écoulé,
+   souvenirs pertinents, extraits d'autres conversations.
+
+La compression se déclenche quand les messages non résumés dépassent le **seuil de compression** ;
+il en reste environ « messages récents gardés » en clair. L'anneau affiche une estimation de ce qui
+est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le prompt complet.
+
+**Souvenirs durables** — Réglages › Chat :
+- fréquence : après chaque échange, tous les N messages, seulement sur demande (« retiens que… »), jamais ;
+- moment : dès la réponse, ou quand la discussion est calme depuis X secondes (le modèle local reste
+  libre pendant l'échange ; si la page est fermée avant, l'extraction se fait la fois suivante, sans perte) ;
+- modèle : local (rien ne sort) ou distant (les derniers messages sont envoyés au fournisseur).
+
+### Relances spontanées (tâche planifiée)
+
+Les messages spontanés sont envoyés par un script à lancer régulièrement, par exemple toutes les
+30 minutes :
+
+```cron
+*/30 * * * * cd /chemin/vers/personavault && php bin/followup.php
+```
+
+`php bin/followup.php --dry` montre ce qui serait envoyé sans rien enregistrer.
 
 ---
 

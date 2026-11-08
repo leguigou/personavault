@@ -170,6 +170,59 @@ function facts_format(array $rows): string
  * Extrait les faits durables des derniers messages et met la mémoire à jour.
  * @return array{ok:bool, added:array, updated:int, removed:int, error?:string}
  */
+/**
+ * Réglages globaux de l'extraction des souvenirs.
+ * - frequency : each (après chaque échange) | every (tous les N messages) | explicit (sur demande) | off
+ * - every     : N, nombre de nouveaux messages avant une extraction (mode every)
+ * - timing    : now (dès la réponse) | idle (quand la discussion est calme depuis idle s)
+ * - model     : chat (modèle de discussion, local) | remote (modèle des fiches, distant)
+ */
+function facts_settings(): array
+{
+    $freq = setting('facts_frequency', 'each');
+    $timing = setting('facts_timing', 'now');
+    $model = setting('facts_model', 'chat');
+    return [
+        'frequency' => in_array($freq, ['each', 'every', 'explicit', 'off'], true) ? $freq : 'each',
+        'every'     => max(2, min(30, (int) setting('facts_every', '6'))),
+        'timing'    => in_array($timing, ['now', 'idle'], true) ? $timing : 'now',
+        'idle'      => max(10, min(600, (int) setting('facts_idle_seconds', '45'))),
+        'model'     => in_array($model, ['chat', 'remote'], true) ? $model : 'chat',
+    ];
+}
+
+/** Configuration du modèle qui extrait les souvenirs (distant seulement s'il est configuré). */
+function facts_llm_config(): array
+{
+    if (facts_settings()['model'] === 'remote' && llm_ready()) {
+        return llm_config() + ['_remote' => true];
+    }
+    return chat_llm_config();
+}
+
+/**
+ * Faut-il lancer une extraction maintenant ?
+ * @return string '' si oui, sinon la raison du report
+ */
+function facts_should_run(int $newMessages, bool $explicit, bool $force = false): string
+{
+    $s = facts_settings();
+    if ($force) {
+        return $newMessages >= 1 ? '' : 'pas de nouveau message';
+    }
+    if ($s['frequency'] === 'off') {
+        return 'extraction automatique désactivée dans les réglages';
+    }
+    if ($explicit) {
+        return $newMessages >= 1 ? '' : 'pas de nouveau message';
+    }
+    return match ($s['frequency']) {
+        'explicit' => 'extraction seulement sur demande (« retiens que… »)',
+        'every'    => $newMessages >= $s['every'] ? '' : 'en attente (' . $newMessages . '/' . $s['every'] . ' messages)',
+        default    => $newMessages >= 2 ? '' : 'pas assez de nouveaux messages',
+    };
+}
+
 function facts_extract(int $cid, int $personaId, array $messages, bool $explicit = false): array
 {
     $transcript = '';
@@ -209,13 +262,16 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
         . "\nDernier message de l'utilisateur (le plus important) :\n" . ($lastUser !== '' ? $lastUser : '(aucun)')
         . "\nÉchange récent :\n" . $transcript;
 
-    $cfg  = chat_llm_config();
+    $cfg  = facts_llm_config();
+    $remote = !empty($cfg['_remote']);
+    unset($cfg['_remote']);
     $msgs = [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]];
     $opts = [
         'temperature'      => 0.2,
         'max_tokens'       => 700,
         'timeout'          => 120,
-        'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
+        // le réglage « réflexion » concerne le modèle local de discussion
+        'reasoning_effort' => $remote ? '' : setting('chat_reasoning_effort', 'none'),
     ];
 
     try {
