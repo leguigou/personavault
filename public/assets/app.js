@@ -44,8 +44,19 @@
     };
     window.pvTr = tr;
 
-    /* « 0 photo », « 1 photo », « 2 photos » : pluriel français à partir de 2 */
-    const plural = (n, one, many) => n + " " + (n >= 2 ? many : one);
+    /* Texte traduit contenant des éléments : withNodes(tr("clé"), { name: <b> })
+       remplace les {name} laissés par tr() par les éléments donnés ; renvoie les morceaux
+       dans l'ordre, pour append()/replaceChildren(). */
+    const withNodes = (text, nodes) => text
+        .split(/\{(\w+)\}/)
+        .map((part, i) => (i % 2 ? nodes[part] ?? "{" + part + "}" : part))
+        .filter((part) => part !== "");
+
+    /* nombres au format de la langue de la page */
+    const LOCALE = document.documentElement.lang || "fr";
+    const DECIMAL = (1.5).toLocaleString(LOCALE).replace(/\d/g, "") || ".";
+    const fmt = (n) => Number(n || 0).toLocaleString(LOCALE);
+    const fmt1 = (n) => Number(n).toFixed(1).replace(".", DECIMAL); // une décimale
 
     /* ------------------------------------------------ toasts éphémères */
     const toast = (msg, isError = false) => {
@@ -226,7 +237,7 @@
             if (btn.disabled) return;
             const original = btn.textContent;
             btn.disabled = true;
-            btn.textContent = "Génération…";
+            btn.textContent = tr("directive.generating");
             try {
                 const fd = new FormData();
                 fd.append("_token", btn.dataset.token);
@@ -235,8 +246,8 @@
                     body: fd,
                     headers: { "X-Requested-With": "XMLHttpRequest" },
                 });
-                const d = await res.json().catch(() => ({ ok: false, error: "réponse illisible" }));
-                if (!d.ok) throw new Error(d.error || "échec de la génération");
+                const d = await res.json().catch(() => ({ ok: false, error: tr("directive.unreadable") }));
+                if (!d.ok) throw new Error(d.error || tr("directive.failed"));
 
                 const area = document.querySelector("[data-directive]");
                 if (area) {
@@ -246,9 +257,9 @@
                 const temp = document.querySelector('input[name="temperature"]');
                 if (temp && d.temperature) temp.value = Number(d.temperature).toFixed(2);
 
-                toast("Consigne proposée — relis, ajuste, puis enregistre.");
+                toast(tr("directive.done"));
             } catch (e) {
-                toast("Erreur : " + e.message);
+                toast(tr("common.error", { message: e.message }));
             } finally {
                 btn.disabled = false;
                 btn.textContent = original;
@@ -274,8 +285,8 @@
             ta.remove();
         }
         const old = btn.textContent;
-        btn.textContent = "Copié";
-        toast("Prompt copié");
+        btn.textContent = tr("copy.copied");
+        toast(tr("copy.toast"));
         setTimeout(() => (btn.textContent = old), 1200);
     });
 
@@ -372,23 +383,25 @@
                 if (el.dataset.foldSum === "split") {
                     const on = val("chat_split_enabled")?.checked;
                     const max = +(val("chat_split_max_bubbles")?.value || 1);
-                    el.textContent = !on || max <= 1 ? "Désactivé" : max + " bulles max · " + (val("chat_split_words")?.value || "") + " mots";
+                    el.textContent = !on || max <= 1 ? tr("settings.sum_split_off")
+                        : tr("settings.sum_split", { max, words: val("chat_split_words")?.value || "" });
                 } else if (el.dataset.foldSum === "facts") {
                     const f = val("facts_frequency")?.value || "each";
-                    const t = val("facts_timing")?.value === "idle" ? " · au calme" : "";
-                    const m = val("facts_model")?.value === "remote" ? " · distant" : " · local";
-                    el.textContent = f === "off" ? "Désactivés"
-                        : f === "explicit" ? "Sur demande" + m
-                        : f === "every" ? "Tous les " + (val("facts_every")?.value || "6") + " messages" + t + m
-                        : "Après chaque échange" + t + m;
+                    const t = val("facts_timing")?.value === "idle" && f !== "explicit" ? [tr("settings.sum_facts_idle")] : [];
+                    const m = val("facts_model")?.value === "remote" ? tr("settings.sum_facts_remote") : tr("settings.sum_facts_local");
+                    el.textContent = f === "off" ? tr("settings.sum_facts_off")
+                        : [f === "explicit" ? tr("settings.sum_facts_explicit")
+                            : f === "every" ? tr("settings.sum_facts_every", { n: val("facts_every")?.value || "6" })
+                            : tr("settings.sum_facts_each"), ...t, m].join(" · ");
                 } else if (el.dataset.foldSum === "titles") {
                     const t = val("chat_title_model")?.value || "remote";
-                    el.textContent = t === "off" ? "Désactivés" : t === "chat" ? "Modèle local" : "Modèle distant";
+                    el.textContent = t === "off" ? tr("settings.sum_titles_off")
+                        : t === "chat" ? tr("settings.sum_titles_local") : tr("settings.sum_titles_remote");
                 } else if (el.dataset.foldSum === "followup") {
                     const on = val("chat_followup_enabled")?.checked;
                     el.textContent = on
-                        ? "De " + (val("chat_followup_from")?.value || "") + " h à " + (val("chat_followup_to")?.value || "") + " h"
-                        : "Désactivées";
+                        ? tr("settings.sum_followup", { from: val("chat_followup_from")?.value || "", to: val("chat_followup_to")?.value || "" })
+                        : tr("settings.sum_followup_off");
                 }
             });
         };
@@ -464,7 +477,7 @@
         const paint = () => {
             if (!out) return;
             const v = parseFloat(input.value);
-            out.textContent = suffix ? v.toFixed(1).replace(".", ",") + suffix : String(v);
+            out.textContent = suffix ? fmt1(v) + suffix : String(v);
         };
         input.addEventListener("input", paint);
         paint();
@@ -565,7 +578,7 @@
             const old = box.querySelector("img, .avatar-fallback");
             const img = document.createElement("img");
             img.src = url;
-            img.alt = "Aperçu";
+            img.alt = tr("persona.preview_alt");
             if (old) old.replaceWith(img);
             else box.appendChild(img);
         }
@@ -720,7 +733,7 @@
             const original = btn.innerHTML;
             btn.classList.add("is-busy");
             btn.disabled = true;
-            btn.textContent = "Analyse des prompts…";
+            btn.textContent = tr("persona.ai_fill_busy");
 
             try {
                 const fd = new FormData();
@@ -730,20 +743,20 @@
                     body: fd,
                     headers: { "X-Requested-With": "XMLHttpRequest" },
                 });
-                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
-                if (!res.ok || !data.ok) throw new Error(data.error || "Échec de la complétion.");
+                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("persona.ai_fill_failed"));
 
                 if (!data.changed || data.changed.length === 0) {
-                    toast(data.message || "Rien à compléter.");
+                    toast(data.message || tr("persona.ai_fill_nothing"));
                     btn.innerHTML = original;
                     btn.disabled = false;
                     btn.classList.remove("is-busy");
                     return;
                 }
-                toast(data.message || "Fiche complétée.");
+                toast(data.message || tr("persona.ai_fill_done"));
                 setTimeout(() => window.location.reload(), 800);
             } catch (err) {
-                toast("Erreur : " + err.message, true);
+                toast(tr("common.error", { message: err.message }), true);
                 btn.innerHTML = original;
                 btn.disabled = false;
                 btn.classList.remove("is-busy");
@@ -796,18 +809,18 @@
             const original = testBtn.textContent;
             testBtn.classList.add("is-busy");
             testBtn.disabled = true;
-            testBtn.textContent = "Test en cours…";
+            testBtn.textContent = tr("settings.test_running");
             status.className = "llm-status";
-            status.textContent = "Connexion au modèle…";
+            status.textContent = tr("settings.test_connecting");
 
             try {
                 const fd = new FormData(settingsForm);
                 const res = await fetch("/settings/test", { method: "POST", body: fd });
-                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
-                if (!res.ok || !data.ok) throw new Error(data.error || "Échec du test.");
+                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("settings.test_failed"));
                 status.className = "llm-status is-ok";
                 status.innerHTML = `<span class="dot dot-ok"></span><span></span>`;
-                status.lastElementChild.textContent = `Connecté · ${data.modele} · ${data.ms} ms`;
+                status.lastElementChild.textContent = tr("settings.test_ok", { model: data.modele, ms: data.ms });
             } catch (err) {
                 status.className = "llm-status is-ko";
                 status.innerHTML = `<span class="dot dot-ko"></span><span></span>`;
@@ -862,8 +875,11 @@
                 const free = document.createElement("button");
                 free.type = "button";
                 free.className = "sug-free";
-                free.innerHTML = '<span>Rechercher «&nbsp;<strong></strong>&nbsp;»</span>';
-                free.querySelector("strong").textContent = input.value.trim();
+                const label = document.createElement("span");
+                const typed = document.createElement("strong");
+                typed.textContent = input.value.trim();
+                label.append(...withNodes(tr("search.free"), { q: typed }));
+                free.appendChild(label);
                 free.addEventListener("click", () => {
                     hideSuggest();
                     searchForm.submit();
@@ -959,7 +975,7 @@
             const fd = new FormData();
             fd.append("_token", tokenInput ? tokenInput.value : "");
             fd.append("photos[]", file, file.name || "collage.png");
-            toast("Ajout de l’image…");
+            toast(tr("persona.photo_adding"));
 
             try {
                 const res = await fetch(photoForm.action, {
@@ -967,13 +983,13 @@
                     body: fd,
                     headers: { "X-Requested-With": "XMLHttpRequest" },
                 });
-                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
-                if (!res.ok || !data.ok) throw new Error(data.error || "Échec de l’envoi.");
-                toast("Image ajoutée.");
+                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("common.send_failed"));
+                toast(tr("persona.photo_added"));
                 setTimeout(() => window.location.reload(), 450);
                 return true;
             } catch (err) {
-                toast("Erreur : " + err.message, true);
+                toast(tr("common.error", { message: err.message }), true);
                 sending = false;
                 return false;
             }
@@ -1237,7 +1253,7 @@
             if (m.image) {
                 const img = document.createElement("img");
                 img.className = "bubble-img";
-                img.alt = "Photo envoyée";
+                img.alt = tr("chat.photo_alt");
                 img.src = "/media/" + m.image + ".thumb.webp";
                 img.dataset.full = "/media/" + m.image + ".webp";
                 wrap.appendChild(img);
@@ -1277,7 +1293,7 @@
                     headers: { "X-Requested-With": "XMLHttpRequest" },
                 });
                 const d = await r.json();
-                if (!d.ok) throw new Error("chargement impossible");
+                if (!d.ok) throw new Error(tr("chat.load_failed"));
                 if (!d.messages.length) {
                     olderBtn.remove();
                     return;
@@ -1299,7 +1315,7 @@
                 }
             } catch (e) {
                 olderBtn.disabled = false;
-                notice("Erreur : " + e.message);
+                notice(tr("common.error", { message: e.message }));
             }
         });
 
@@ -1338,7 +1354,6 @@
         };
 
         const foot = document.querySelector("[data-chat-foot]");
-        const fmt = (n) => Number(n || 0).toLocaleString("fr-FR");
         const ringSvgs = document.querySelectorAll("[data-ctx-ring] svg, [data-ctx-ring-big] svg");
         const updateRing = (m) => {
             if (!m) return;
@@ -1367,8 +1382,8 @@
             const lg = document.querySelector(".mem-legend");
             if (lg) {
                 const strongs = lg.querySelectorAll("strong");
-                if (strongs[0]) strongs[0].textContent = pct + " %";
-                if (strongs[1]) strongs[1].textContent = Math.round(memPct) + " %";
+                if (strongs[0]) strongs[0].textContent = tr("chat.percent", { n: pct });
+                if (strongs[1]) strongs[1].textContent = tr("chat.percent", { n: Math.round(memPct) });
                 const dot = lg.querySelector(".dot-ctx");
                 if (dot) dot.style.background = color;
             }
@@ -1377,9 +1392,12 @@
         const updateFoot = (m) => {
             if (!foot || !m) return;
             foot.classList.remove("is-ko");
-            foot.textContent =
-                chat.dataset.model + " · contexte " + fmt(m.context_tokens) + " / " + fmt(m.window) +
-                " · " + m.compressions + " compression" + (m.compressions > 1 ? "s" : "");
+            foot.textContent = tr("chat.foot", {
+                model: chat.dataset.model,
+                used: fmt(m.context_tokens),
+                window: fmt(m.window),
+                n: m.compressions,
+            });
         };
 
 
@@ -1408,11 +1426,11 @@
         const paintStatus = (d) => {
             lastStatus = d;
             if (!d || d.ok === false) {
-                setDot("ko", "LM Studio n’est pas lancé" + (d && d.url ? " (" + d.url + ")" : ""));
+                setDot("ko", d && d.url ? tr("lms.down_url", { url: d.url }) : tr("lms.down"));
             } else if (d.is_loaded) {
-                setDot("ok", "Modèle chargé : " + d.wanted);
+                setDot("ok", tr("lms.loaded", { model: d.wanted }));
             } else {
-                setDot("ko", d.wanted + " n’est pas chargé (se charge au premier message)");
+                setDot("ko", tr("lms.not_loaded_title", { model: d.wanted }));
             }
 
             if (attachBtn) {
@@ -1424,7 +1442,7 @@
             const text = statusBox.querySelector(".lms-text");
             if (!d || d.ok === false) {
                 statusBox.dataset.state = "ko";
-                text.textContent = "LM Studio n’est pas lancé" + (d && d.url ? " — aucune réponse sur " + d.url : "");
+                text.textContent = d && d.url ? tr("lms.down_no_answer", { url: d.url }) : tr("lms.down");
                 return;
             }
             if (d.is_loaded) {
@@ -1432,12 +1450,12 @@
                 statusBox.dataset.state = "ok";
                 const b = document.createElement("b");
                 b.textContent = String(l ? l.key : d.wanted);
-                text.replaceChildren("Modèle chargé : ", b, l && l.ctx ? " \u00b7 " + fmt(l.ctx) + " tokens" : "");
+                text.replaceChildren(...withNodes(l && l.ctx ? tr("lms.loaded_ctx", { n: fmt(l.ctx) }) : tr("lms.loaded"), { model: b }));
             } else {
                 statusBox.dataset.state = "idle";
                 const b = document.createElement("b");
                 b.textContent = String(d.wanted);
-                text.replaceChildren(b, " n\u2019est pas chargé \u2014 il se charge au premier message");
+                text.replaceChildren(...withNodes(tr("lms.not_loaded"), { model: b }));
             }
         };
 
@@ -1476,7 +1494,7 @@
             if (!list || !list.length) {
                 const li = document.createElement("li");
                 li.className = "fact-empty";
-                li.textContent = "Aucun souvenir pour l’instant.";
+                li.textContent = tr("facts.empty");
                 ul.appendChild(li);
                 return;
             }
@@ -1490,7 +1508,7 @@
                 b.type = "button";
                 b.className = "fact-del";
                 b.dataset.factDel = f.id;
-                b.setAttribute("aria-label", "Supprimer ce souvenir");
+                b.setAttribute("aria-label", tr("facts.delete"));
                 b.innerHTML = "&times;";
                 li.append(s, b);
                 ul.appendChild(li);
@@ -1511,12 +1529,12 @@
                 try {
                     const r = await fetch(factBox.dataset.add, { method: "POST", body: fd });
                     const d = await r.json();
-                    if (!d.ok) throw new Error(d.error || "ajout impossible");
+                    if (!d.ok) throw new Error(d.error || tr("facts.add_failed"));
                     input.value = "";
                     renderFacts(d.memories);
-                    notice("Souvenir ajouté — partagé avec toutes les conversations de ce persona.");
+                    notice(tr("facts.added"));
                 } catch (err) {
-                    notice("Erreur : " + err.message);
+                    notice(tr("common.error", { message: err.message }));
                 }
             });
 
@@ -1529,10 +1547,10 @@
                 try {
                     const r = await fetch(factBox.dataset.del, { method: "POST", body: fd });
                     const d = await r.json();
-                    if (!d.ok) throw new Error(d.error || "suppression impossible");
+                    if (!d.ok) throw new Error(d.error || tr("common.delete_failed"));
                     renderFacts(d.memories);
                 } catch (err) {
-                    notice("Erreur : " + err.message);
+                    notice(tr("common.error", { message: err.message }));
                 }
             });
 
@@ -1543,13 +1561,11 @@
                 try {
                     const r = await fetch(factBox.dataset.factsUrl, { method: "POST", body: fd });
                     const d = await r.json();
-                    if (!d.ok) throw new Error(d.error || "impossible");
-                    notice(d.enabled
-                        ? "Souvenirs activés pour cette conversation."
-                        : "Souvenirs désactivés — ils restent en mémoire pour les autres conversations.");
+                    if (!d.ok) throw new Error(d.error || tr("common.impossible"));
+                    notice(d.enabled ? tr("facts.enabled") : tr("facts.disabled"));
                 } catch (err) {
                     e.target.checked = !e.target.checked;
-                    notice("Erreur : " + err.message);
+                    notice(tr("common.error", { message: err.message }));
                 }
             });
         }
@@ -1582,7 +1598,7 @@
                 const save = document.createElement("button");
                 save.type = "button";
                 save.className = "msg-tool";
-                save.textContent = "Mémoriser";
+                save.textContent = tr("recall.memorize");
                 save.addEventListener("click", async () => {
                     const fd = new FormData();
                     fd.append("_token", factBox.dataset.token);
@@ -1590,11 +1606,11 @@
                     try {
                         const r = await fetch(factBox.dataset.add, { method: "POST", body: fd });
                         const d = await r.json();
-                        if (!d.ok) throw new Error(d.error || "impossible");
+                        if (!d.ok) throw new Error(d.error || tr("common.impossible"));
                         renderFacts(d.memories);
-                        notice("Ajouté aux souvenirs partagés.");
+                        notice(tr("recall.memorized"));
                     } catch (err) {
-                        notice("Erreur : " + err.message);
+                        notice(tr("common.error", { message: err.message }));
                     }
                 });
                 li.appendChild(save);
@@ -1616,20 +1632,20 @@
                 const input = e.target.querySelector("input[name=q]");
                 const q = (input.value || "").trim();
                 if (q.length < 2) return;
-                empty("Recherche…");
+                empty(tr("recall.searching"));
                 try {
                     const r = await fetch(recallBox.dataset.url + "?q=" + encodeURIComponent(q), {
                         headers: { "X-Requested-With": "XMLHttpRequest" },
                     });
                     const d = await r.json();
                     if (!d.results || !d.results.length) {
-                        empty("Rien trouvé dans les autres conversations.");
+                        empty(tr("recall.none"));
                         return;
                     }
                     recallList.innerHTML = "";
                     d.results.forEach((x) => recallList.appendChild(recallItem(x)));
                 } catch (err) {
-                    empty("Recherche impossible.");
+                    empty(tr("recall.failed"));
                 }
             });
         }
@@ -1645,16 +1661,16 @@
                 if (vals[3]) vals[3].textContent = fmt(m.context_tokens);
                 const p = box.querySelector(".mem-pct");
                 if (p) {
-                    p.textContent = (m.percent || 0) + " %";
+                    p.textContent = tr("chat.percent", { n: m.percent || 0 });
                     p.classList.toggle("is-hot", (m.percent || 0) > 80);
                 }
             }
             const ctx = document.querySelector(".sheet-ctx-text");
             if (ctx) {
                 const strong = ctx.querySelector("strong");
-                if (strong) strong.textContent = (m.percent || 0) + " % du contexte";
+                if (strong) strong.textContent = tr("chat.ctx_percent", { n: m.percent || 0 });
                 const sp = ctx.querySelectorAll("span");
-                if (sp[0]) sp[0].textContent = fmt(m.context_tokens) + " / " + fmt(m.window) + " tokens";
+                if (sp[0]) sp[0].textContent = tr("chat.ctx_tokens", { used: fmt(m.context_tokens), window: fmt(m.window) });
                 if (sp[1] && typeof m.compressions === "number") {
                     sp[1].textContent = sp[1].textContent.replace(
                         /\d+ faite(s?)/,
@@ -1700,7 +1716,7 @@
                     }));
                     scrollBottom();
                 } else if (data.ok && Array.isArray(data.added) && data.added.length) {
-                    notice("Souvenir ajouté : " + data.added[0]);
+                    notice(tr("facts.added_one", { fact: data.added[0] }));
                     scrollBottom();
                 }
             } catch (e) {
@@ -1756,13 +1772,13 @@
         compressBtn?.addEventListener("click", async () => {
             const original = compressBtn.textContent;
             compressBtn.disabled = true;
-            compressBtn.textContent = "Compression…";
+            compressBtn.textContent = tr("chat.compressing");
             const data = await compressMemory(true);
             if (data && data.compressed > 0) {
-                toast(data.compressed + " message" + (data.compressed > 1 ? "s" : "") + " résumé" + (data.compressed > 1 ? "s" : ""));
+                toast(tr("chat.compressed", data.compressed));
                 setTimeout(() => window.location.reload(), 700);
             } else {
-                toast(data ? (data.reason || "Rien à résumer") : "Compression impossible", true);
+                toast(data ? (data.reason || tr("chat.nothing_to_compress")) : tr("chat.compress_failed"), true);
                 compressBtn.disabled = false;
                 compressBtn.textContent = original;
             }
@@ -1823,7 +1839,7 @@
 
             const t0 = Date.now();
             const tick = setInterval(() => {
-                if (timerEl) timerEl.textContent = ((Date.now() - t0) / 1000).toFixed(1).replace(".", ",") + " s";
+                if (timerEl) timerEl.textContent = tr("lms.seconds", { n: fmt1((Date.now() - t0) / 1000) });
             }, 100);
 
             const label = loadBtn.querySelector("[data-load-label]") || loadBtn;
@@ -1831,7 +1847,7 @@
                 clearInterval(tick);
                 loadBtn.disabled = false;
                 label.textContent = txt;
-                setTimeout(() => (label.textContent = "Charger le modèle maintenant"), 4000);
+                setTimeout(() => (label.textContent = tr("lms.load_now")), 4000);
             };
 
             // 1. le serveur répond ?
@@ -1840,7 +1856,7 @@
             paintStatus(st);
             if (!st || st.reachable === false) {
                 setStep("server", "fail");
-                done("LM Studio injoignable");
+                done(tr("lms.unreachable"));
                 return;
             }
             setStep("server", "done");
@@ -1849,8 +1865,8 @@
                 setStep("request", "done");
                 setStep("loading", "done");
                 setStep("ready", "done");
-                if (timerEl) timerEl.textContent = "déjà chargé";
-                done("Déjà chargé");
+                if (timerEl) timerEl.textContent = tr("lms.already_loaded_timer");
+                done(tr("lms.already_loaded"));
                 return;
             }
 
@@ -1863,12 +1879,12 @@
                 const r = await fetch(loadUrl, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
                 asked = await r.json();
             } catch (e) {
-                asked = { ok: false, error: "Requête impossible." };
+                asked = { ok: false, error: tr("lms.request_failed") };
             }
             if (!asked || !asked.ok) {
                 setStep("request", "fail");
-                done("Échec du chargement");
-                notice("Chargement impossible : " + ((asked && asked.error) || "erreur inconnue"));
+                done(tr("lms.load_failed"));
+                notice(tr("lms.load_error", { message: (asked && asked.error) || tr("lms.unknown_error") }));
                 return;
             }
             setStep("request", "done");
@@ -1883,12 +1899,12 @@
                 if (st && st.is_loaded) {
                     setStep("loading", "done");
                     setStep("ready", "done");
-                    done("Modèle chargé");
+                    done(tr("lms.loaded_short"));
                     return;
                 }
                 if (Date.now() > deadline) {
                     setStep("loading", "fail");
-                    done("Chargement trop long");
+                    done(tr("lms.too_long"));
                     return;
                 }
             }
@@ -1903,15 +1919,15 @@
         const askFallback = (text, msg, kind) => {
             lastText = text;
             if (!fbModal) {
-                notice("Erreur : " + msg);
+                notice(tr("common.error", { message: msg }));
                 return;
             }
             const h = fbModal.querySelector("h2");
             if (h) {
                 h.textContent =
-                    kind === "down" ? "LM Studio n’est pas lancé"
-                    : kind === "not_loaded" ? "Le modèle n’est pas chargé"
-                    : "LM Studio n’a pas répondu";
+                    kind === "down" ? tr("lms.down")
+                    : kind === "not_loaded" ? tr("chat.fb_not_loaded")
+                    : tr("chat.fb_no_reply");
             }
             const p = fbModal.querySelector("[data-fb-msg]");
             if (p) p.textContent = msg;
@@ -1927,7 +1943,7 @@
                     syncSend();
                     input.focus();
                 }
-                notice("Message gardé dans le champ — renvoie-le quand LM Studio est prêt.");
+                notice(tr("chat.fb_kept"));
                 scrollBottom();
             })
         );
@@ -1974,10 +1990,10 @@
             const tools = document.createElement("div");
             tools.className = "msg-tools";
 
-            if (isLastBot) tools.appendChild(toolBtn("regen", ICONS.regen, "Régénérer la réponse"));
+            if (isLastBot) tools.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
             // seuls mes messages sont modifiables : ceux du personnage se régénèrent ou se suppriment
-            if (!isBot) tools.appendChild(toolBtn("edit", ICONS.edit, "Modifier ce message"));
-            tools.appendChild(toolBtn("del", ICONS.del, "Supprimer ce message"));
+            if (!isBot) tools.appendChild(toolBtn("edit", ICONS.edit, tr("chat.edit")));
+            tools.appendChild(toolBtn("del", ICONS.del, tr("chat.delete")));
             return tools;
         };
 
@@ -1988,14 +2004,14 @@
                 fd.append("mid", id);
                 const r = await fetch(deleteUrl, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
                 const d = await r.json().catch(() => ({ ok: false }));
-                if (!d.ok) throw new Error(d.error || "suppression impossible");
+                if (!d.ok) throw new Error(d.error || tr("common.delete_failed"));
                 (d.deleted || []).forEach((mid) => {
                     scroll.querySelector('[data-msg-id="' + mid + '"]')?.remove();
                 });
                 scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
                 loadStatus();
             } catch (e) {
-                notice("Effacement impossible : " + e.message);
+                notice(tr("chat.erase_error", { message: e.message }));
             }
         };
 
@@ -2019,8 +2035,8 @@
 
             const actions = document.createElement("div");
             actions.className = "msg-edit-actions";
-            const ok = toolBtn("save", ICONS.ok, "Enregistrer");
-            const no = toolBtn("cancel", ICONS.no, "Annuler");
+            const ok = toolBtn("save", ICONS.ok, tr("chat.save"));
+            const no = toolBtn("cancel", ICONS.no, tr("modal.cancel"));
             ok.classList.add("is-ok");
             actions.append(ok, no);
 
@@ -2039,7 +2055,7 @@
             if (!id || !ta) return;
             const content = ta.value.trim();
             if (content === "") {
-                notice("Le message ne peut pas être vide.");
+                notice(tr("chat.empty_message"));
                 return;
             }
             try {
@@ -2049,7 +2065,7 @@
                 fd.append("content", content);
                 const r = await fetch(editUrl, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
                 const d = await r.json().catch(() => ({ ok: false }));
-                if (!d.ok) throw new Error(d.error || "modification impossible");
+                if (!d.ok) throw new Error(d.error || tr("chat.edit_failed"));
 
                 const isUser = el.classList.contains("msg-user");
                 const fresh = renderMsg({
@@ -2070,13 +2086,13 @@
                         next = after;
                     }
                     fresh.classList.remove("is-active");
-                    notice("Message modifié, nouvelle réponse…");
+                    notice(tr("chat.edited_replay"));
                     send(null, "auto", false, true, Number(id));
                 } else {
-                    notice("Message modifié.");
+                    notice(tr("chat.edited"));
                 }
             } catch (e) {
-                notice("Modification impossible : " + e.message);
+                notice(tr("chat.edit_error", { message: e.message }));
             }
         };
 
@@ -2152,8 +2168,8 @@
         const setStreaming = (on) => {
             sendBtn.classList.toggle("is-stop", on);
             sendBtn.innerHTML = on ? STOP_SVG : SEND_SVG;
-            sendBtn.setAttribute("aria-label", on ? "Arrêter la génération" : "Envoyer");
-            sendBtn.title = on ? "Arrêter" : "Envoyer";
+            sendBtn.setAttribute("aria-label", on ? tr("chat.stop_label") : tr("chat.send"));
+            sendBtn.title = on ? tr("chat.stop") : tr("chat.send");
         };
 
         sendBtn.addEventListener("click", (e) => {
@@ -2185,7 +2201,7 @@
             const f = attachInput.files && attachInput.files[0];
             if (!f) return;
             if (!/^image\//.test(f.type)) {
-                notice("Choisis une image (jpg, png, webp).");
+                notice(tr("chat.choose_image"));
                 return;
             }
             pendingFile = f;
@@ -2220,7 +2236,7 @@
             if (mode === "auto" && lastStatus && lastStatus.reachable === false) {
                 document.getElementById("chat-typing")?.remove();
                 setStreaming(false);
-                askFallback(text, "LM Studio ne répond pas sur " + (lastStatus.url || "l’adresse configurée") + ".", "down");
+                askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down");
                 busy = false;
                 syncSend();
                 input.value = text;
@@ -2229,7 +2245,7 @@
             }
 
             if (lastStatus && lastStatus.reachable && !lastStatus.is_loaded) {
-                setDot("load", "Chargement du modèle…");
+                setDot("load", tr("lms.loading"));
             }
 
             let live = null;
@@ -2328,7 +2344,7 @@
                 if (!d || d.reachable === false) return;
                 // on n'affiche une étiquette que si le modèle doit VRAIMENT être chargé
                 // (les trois points suffisent à dire qu'il réfléchit)
-                if (!d.is_loaded) loadingLabel("Chargement du modèle…");
+                if (!d.is_loaded) loadingLabel(tr("lms.loading"));
             }, 1200);
 
             controller = new AbortController();
@@ -2355,9 +2371,9 @@
                 const isSSE = res.ok && res.body && (res.headers.get("content-type") || "").includes("text/event-stream");
 
                 if (!isSSE) {
-                    const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
+                    const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
                     document.getElementById("chat-typing")?.remove();
-                    if (!res.ok || !data.ok) throw new Error(data.error || "Échec de l’envoi.");
+                    if (!res.ok || !data.ok) throw new Error(data.error || tr("common.send_failed"));
                     scroll.appendChild(renderMsg({
                         role: "assistant",
                         content: data.reply.content,
@@ -2399,14 +2415,14 @@
                                 streamed += evt.delta;
                                 paintStream();
                             } else if (evt.phase === "memory") {
-                                if (!live) loadingLabel("Mise à jour de la mémoire…");
+                                if (!live) loadingLabel(tr("chat.memory_phase"));
                             } else if (evt.start) {
                                 if (evt.user && userEl) {
                                     userEl.dataset.msgId = evt.user.id;
                                     if (evt.user.image) {
                                         const img = document.createElement("img");
                                         img.className = "bubble-img";
-                                        img.alt = "Photo envoyée";
+                                        img.alt = tr("chat.photo_alt");
                                         img.src = "/media/" + evt.user.image + ".thumb.webp";
                                         img.dataset.full = "/media/" + evt.user.image + ".webp";
                                         userEl.insertBefore(img, userEl.querySelector(".bubble"));
@@ -2460,9 +2476,9 @@
                             syncSend();
                             return;
                         }
-                        notice("Réponse interrompue : " + failed);
+                        notice(tr("chat.interrupted", { message: failed }));
                     } else if (!live) {
-                        throw new Error("Réponse vide.");
+                        throw new Error(tr("chat.empty_reply"));
                     }
                 }
 
@@ -2470,7 +2486,7 @@
                 compressMemory()
                     .then((d) => {
                         if (d && d.compressed > 0) {
-                            notice("Mémoire mise à jour — " + d.compressed + " messages résumés.");
+                            notice(tr("chat.memory_updated", d.compressed));
                             scrollBottom();
                         }
                     })
@@ -2480,9 +2496,9 @@
                 document.getElementById("chat-typing")?.remove();
                 if (err.name === "AbortError") {
                     if (live) live.parentElement.removeAttribute("data-live");
-                    notice("Génération interrompue.");
+                    notice(tr("chat.aborted"));
                 } else {
-                    notice("Erreur : " + err.message);
+                    notice(tr("common.error", { message: err.message }));
                 }
                 scrollBottom();
             } finally {
@@ -2522,25 +2538,25 @@
             const status = document.querySelector("[data-purge-status]");
             const original = purgeBtn.textContent;
             purgeBtn.disabled = true;
-            purgeBtn.textContent = "Purge…";
+            purgeBtn.textContent = tr("settings.purging");
 
             try {
                 const tokenInput = document.querySelector('input[name="_token"]');
                 const fd = new FormData();
                 fd.append("_token", tokenInput ? tokenInput.value : "");
                 const res = await fetch("/settings/purge", { method: "POST", body: fd });
-                const data = await res.json().catch(() => ({ ok: false, error: "Réponse illisible." }));
-                if (!res.ok || !data.ok) throw new Error(data.error || "Échec de la purge.");
+                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("settings.purge_failed"));
 
                 const n = (data.unloaded || []).length;
                 if (status) {
                     status.textContent = n
-                        ? plural(n, "modèle déchargé", "modèles déchargés") + " : " + data.unloaded.join(", ")
-                        : "Aucun modèle chargé en mémoire — rien à purger.";
+                        ? tr("settings.purge_unloaded", { n, list: data.unloaded.join(", ") })
+                        : tr("settings.purge_none");
                 }
-                toast(n ? "Mémoire purgée (" + n + ")" : "Rien à purger");
+                toast(n ? tr("settings.purge_done", { n }) : tr("settings.purge_nothing"));
             } catch (err) {
-                toast("Erreur : " + err.message, true);
+                toast(tr("common.error", { message: err.message }), true);
             } finally {
                 purgeBtn.disabled = false;
                 purgeBtn.textContent = original;
