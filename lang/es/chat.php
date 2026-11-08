@@ -1,0 +1,124 @@
+<?php
+/*
+ * Español — conversaciones: lista (views/chat_list.php) y conversación (views/chat.php).
+ * Mismas claves que lang/fr/chat.php (referencia). Se tutea al usuario, como en francés.
+ */
+return [
+    // --- común a ambas pantallas
+    'chat.unread'                   => 'Mensaje nuevo',
+
+    // --- lista de conversaciones
+    'chat.list.title'               => 'Mis conversaciones',
+    'chat.list.new'                 => 'Nueva',
+    'chat.list.status_local'        => 'Chat local · {model}',
+    'chat.list.model_auto'          => 'modelo automático',
+    'chat.list.no_model'            => 'Ningún modelo de chat disponible',
+    'chat.list.empty_title'         => 'Ninguna conversación',
+    'chat.list.empty_text'          => 'Elige un persona y empieza a hablarle.',
+    'chat.list.pick_persona'        => 'Elegir un persona',
+    'chat.list.no_message'          => 'Todavía no hay mensajes',
+    'chat.list.message_count'       => ['one' => '{n} msj', 'other' => '{n} msjs'],
+    'chat.list.search_persona'      => 'Buscar un persona…',
+    'chat.list.no_persona'          => 'No hay ningún persona en la biblioteca. Crea una ficha primero.',
+
+    // --- conversación: columna lateral y cabecera
+    'chat.side.all'                 => 'Todas',
+    'chat.side.new'                 => 'Nueva conversación',
+    'chat.head.back'                => 'Todas las conversaciones',
+    'chat.head.open_persona'        => 'Abrir la ficha del personaje',
+    'chat.head.model_state'         => 'Estado del modelo',
+    'chat.head.model_default'       => 'modelo predeterminado',
+    'chat.head.context_memory'      => 'Contexto y memoria',
+    'chat.head.settings'            => 'Contexto y ajustes',
+
+    // --- conversación: mensajes y redacción
+    'chat.load_older'               => ['one' => 'Cargar {count} mensaje anterior', 'other' => 'Cargar {count} mensajes anteriores'],
+    'chat.intro.first_message'      => 'Escribe el primer mensaje.',
+    'chat.msg.photo_sent'           => 'Foto enviada',
+    'chat.composer.attach_preview'  => 'Vista previa de la foto adjunta',
+    'chat.composer.attach_remove'   => 'Quitar la foto',
+    'chat.composer.attach'          => 'Adjuntar una foto',
+    'chat.composer.placeholder'     => 'Escribe un mensaje…',
+    'chat.composer.label'           => 'Mensaje',
+    'chat.composer.send'            => 'Enviar',
+    'chat.foot.context'             => 'contexto {used} / {window}',
+    'chat.foot.compressions'        => ['one' => '{n} compresión', 'other' => '{n} compresiones'],
+    'chat.foot.no_model'            => 'Ningún modelo de chat disponible: revisa LM Studio en los ajustes.',
+
+    // --- panel «contexto y ajustes»
+    'chat.sheet.label'              => 'Contexto y ajustes de la conversación',
+    'chat.sheet.eyebrow'            => 'Conversación',
+    'chat.sheet.ctx_percent'        => '{percent} % del contexto',
+    'chat.sheet.ctx_tokens'         => '{used} / {window} tokens',
+    'chat.sheet.ctx_auto_summary'   => [
+        'one'   => 'Resumen automático a partir de {threshold} tokens sin resumir · {n} hecho',
+        'other' => 'Resumen automático a partir de {threshold} tokens sin resumir · {n} hechos',
+    ],
+    'chat.sheet.save'               => 'Guardar',
+
+    // --- estado del servidor local y carga del modelo
+    'chat.lms.checking'             => 'Comprobando el servidor…',
+    'chat.lms.refresh'              => 'Actualizar el estado',
+    'chat.lms.load_now'             => 'Cargar el modelo ahora',
+    'chat.lms.step_server'          => 'Servidor',
+    'chat.lms.step_request'         => 'Petición',
+    'chat.lms.step_loading'         => 'Carga',
+    'chat.lms.step_ready'           => 'Listo',
+    'chat.lms.timer_zero'           => '0,0 s',
+
+    // --- ajustes del personaje (resumen)
+    'chat.persona.title'            => 'Ajustes del personaje',
+    'chat.persona.edit'             => 'Modificar',
+    'chat.persona.model_global'     => 'modelo global',
+    'chat.persona.temperature'      => 'temperatura {value}',
+    'chat.persona.max_tokens'       => '{count} tokens',
+    'chat.persona.window'           => 'ventana {size}',
+    'chat.persona.directive'        => '«{text}»',
+
+    // --- opciones de la conversación
+    'chat.toggles.memory'           => 'Conservar la memoria (resumen continuo)',
+    'chat.toggles.followup'         => 'Mensajes espontáneos tras un largo silencio',
+
+    // --- memoria (resumen continuo)
+    'chat.memory.title'             => 'Memoria',
+    'chat.memory.percent'           => '{percent} %',
+    'chat.memory.stat_messages'     => 'mensajes',
+    'chat.memory.stat_unsummarized' => 'sin resumir',
+    'chat.memory.stat_compressions' => 'compresiones',
+    'chat.memory.stat_tokens'       => 'tokens',
+    'chat.memory.summary_label'     => 'Resumen actual',
+    'chat.memory.summary_placeholder' => 'Vacío por ahora: se rellena automáticamente cuando la conversación se alarga.',
+    'chat.memory.clear'             => 'Borrar',
+    'chat.memory.compress'          => 'Comprimir',
+    'chat.memory.manage'            => 'Gestionar los recuerdos duraderos',
+
+    // --- recuerdos compartidos
+    'chat.facts.title'              => 'Recuerdos compartidos',
+    'chat.facts.manage_all'         => 'Gestionar todo',
+    'chat.facts.hint'               => 'Válidos para todas las conversaciones con {name}.',
+    'chat.facts.use'                => 'Usar estos recuerdos en esta conversación',
+    'chat.facts.delete'             => 'Eliminar este recuerdo',
+    'chat.facts.empty'              => 'Todavía no hay recuerdos.',
+    'chat.facts.add_placeholder'    => 'Añadir un recuerdo…',
+    'chat.facts.add_label'          => 'Nuevo recuerdo',
+    'chat.facts.add'                => 'Añadir',
+
+    // --- búsqueda en las conversaciones del persona
+    'chat.recall.title'             => 'Buscar en sus recuerdos',
+    'chat.recall.hint'              => 'En todas las conversaciones con {name}.',
+    'chat.recall.placeholder'       => 'P. ej. Le Pradet, su trabajo…',
+    'chat.recall.label'             => 'Buscar',
+    'chat.recall.submit'            => 'Buscar',
+
+    // --- renombrar / eliminar
+    'chat.rename.label'             => 'Título de la conversación',
+    'chat.rename.submit'            => 'Renombrar',
+    'chat.delete.confirm'           => '¿Eliminar esta conversación y todos sus mensajes?',
+    'chat.delete.submit'            => 'Eliminar la conversación',
+
+    // --- ventana para pasar al modelo remoto (#fb-modal)
+    'chat.fallback.title'           => 'LM Studio no responde',
+    'chat.fallback.hint'            => 'Puedes esperar a que vuelva (el mensaje se reenviará tal cual) o hacer que DeepSeek genere la respuesta.',
+    'chat.fallback.wait'            => 'Esperar y reintentar',
+    'chat.fallback.use'             => 'Usar DeepSeek',
+];

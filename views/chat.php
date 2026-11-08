@@ -4,25 +4,26 @@ $hue   = hue_for((string) $persona['name']);
 $token = csrf_token();
 $model = (string) ($conv['model'] !== '' ? $conv['model'] : $chatModel);
 $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
+// « . "\n" » après un texte en fin de ligne : garde le saut de ligne qu’avalerait la balise PHP fermante.
 ?>
 <div class="chat-shell">
     <aside class="chat-side">
         <div class="chat-side-head">
-            <span>Discussions</span>
-            <a class="mini" href="/chat">Toutes</a>
+            <span><?= e(t('nav.chats')) ?></span>
+            <a class="mini" href="/chat"><?= e(t('chat.side.all')) ?></a>
         </div>
         <?php foreach ($convs as $c): ?>
             <a class="chat-side-row <?= (int) $c['id'] === (int) $conv['id'] ? 'is-on' : '' ?>" href="/chat/<?= (int) $c['id'] ?>">
                 <span class="chat-side-mono"><?= e(initials((string) $c['persona_name'])) ?></span>
                 <span class="chat-side-name">
-                    <?php if ((int) ($c['unread'] ?? 0) === 1): ?><span class="unread-dot" aria-label="Nouveau message"></span><?php endif; ?>
+                    <?php if ((int) ($c['unread'] ?? 0) === 1): ?><span class="unread-dot" aria-label="<?= e(t('chat.unread')) ?>"></span><?php endif; ?>
                     <?= e((string) $c['title']) ?>
                 </span>
             </a>
         <?php endforeach; ?>
         <a class="chat-side-row chat-side-new" href="/chat">
             <span class="chat-side-mono">+</span>
-            <span class="chat-side-name">Nouvelle discussion</span>
+            <span class="chat-side-name"><?= e(t('chat.side.new')) ?></span>
         </a>
     </aside>
 
@@ -46,10 +47,10 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
              style="--hue: <?= $hue ?>">
 
         <header class="chat-head">
-            <a class="icon-btn" href="/chat" aria-label="Toutes les discussions">
+            <a class="icon-btn" href="/chat" aria-label="<?= e(t('chat.head.back')) ?>">
                 <svg viewBox="0 0 24 24" class="ico"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
-            <a class="chat-id" href="/p/<?= e((string) $persona['slug']) ?>" title="Ouvrir la fiche du personnage">
+            <a class="chat-id" href="/p/<?= e((string) $persona['slug']) ?>" title="<?= e(t('chat.head.open_persona')) ?>">
                 <div class="chat-avatar">
                     <?php if ($persona['avatar']): ?>
                         <img src="<?= e(media_url((string) $persona['avatar'])) ?>" alt="">
@@ -60,17 +61,17 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
                 <div class="chat-id-text">
                     <strong><?= e((string) $persona['name']) ?></strong>
                     <span class="chat-model">
-                        <i class="model-dot" data-model-dot data-state="idle" title="État du modèle"></i>
-                        <span data-model-name><?= e($model !== '' ? $model : 'modèle par défaut') ?></span>
+                        <i class="model-dot" data-model-dot data-state="idle" title="<?= e(t('chat.head.model_state')) ?>"></i>
+                        <span data-model-name><?= e($model !== '' ? $model : t('chat.head.model_default')) ?></span>
                     </span>
                 </div>
             </a>
             <button class="ctx-ring-btn" type="button" data-open-settings aria-expanded="false"
-                    aria-controls="chat-settings" aria-label="Contexte et mémoire">
+                    aria-controls="chat-settings" aria-label="<?= e(t('chat.head.context_memory')) ?>">
                 <span data-ctx-ring><?= chat_ring($memory, 32) ?></span>
             </button>
             <button type="button" class="icon-btn" data-open-settings aria-expanded="false"
-                    aria-controls="chat-settings" title="Contexte et réglages" aria-label="Contexte et réglages">
+                    aria-controls="chat-settings" title="<?= e(t('chat.head.settings')) ?>" aria-label="<?= e(t('chat.head.settings')) ?>">
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
             </button>
         </header>
@@ -81,7 +82,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
                     <button type="button" class="btn btn-ghost btn-sm" data-load-older
                             data-before="<?= (int) $messages[0]['id'] ?>"
                             data-url="/chat/<?= (int) $conv['id'] ?>/messages">
-                        Charger <span data-older-left><?= (int) $olderLeft ?></span> message<?= $olderLeft > 1 ? 's' : '' ?> plus ancien<?= $olderLeft > 1 ? 's' : '' ?>
+                        <?= strtr(e(t('chat.load_older', ['n' => (int) $olderLeft, 'count' => '{count}'])), ['{count}' => '<span data-older-left>' . (int) $olderLeft . '</span>']) ?>
                     </button>
                 </div>
             <?php endif; ?>
@@ -97,7 +98,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
                     </div>
                     <h2><?= e((string) $persona['name']) ?></h2>
                     <?php if ($persona['tagline']): ?><p><?= e((string) $persona['tagline']) ?></p><?php endif; ?>
-                    <span class="hint">Écris le premier message.</span>
+                    <span class="hint"><?= e(t('chat.intro.first_message')) ?></span>
                 </div>
             <?php endif; ?>
 
@@ -123,7 +124,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
                         <?php endif; ?>
                         <?php if ((string) ($m['image'] ?? '') !== ''): ?>
                             <img class="bubble-img" src="<?= e(media_url((string) $m['image'], true)) ?>"
-                                 alt="Photo envoyée" data-full="<?= e(media_url((string) $m['image'])) ?>">
+                                 alt="<?= e(t('chat.msg.photo_sent')) ?>" data-full="<?= e(media_url((string) $m['image'])) ?>">
                         <?php endif; ?>
                         <?php
                         $__mc   = (string) $m['content'];
@@ -153,42 +154,42 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
         </div>
 
         <div class="attach-preview" data-attach-preview hidden>
-            <img alt="Aperçu de la photo jointe">
-            <button type="button" data-attach-remove aria-label="Retirer la photo">&times;</button>
+            <img alt="<?= e(t('chat.composer.attach_preview')) ?>">
+            <button type="button" data-attach-remove aria-label="<?= e(t('chat.composer.attach_remove')) ?>">&times;</button>
         </div>
 
         <form class="chat-composer" data-chat-form>
             <div class="chat-field">
-                <button class="chat-attach" type="button" data-attach hidden aria-label="Joindre une photo" title="Joindre une photo">
+                <button class="chat-attach" type="button" data-attach hidden aria-label="<?= e(t('chat.composer.attach')) ?>" title="<?= e(t('chat.composer.attach')) ?>">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 12.4 15 6a3.4 3.4 0 1 1 4.8 4.8l-7.6 7.6a5.4 5.4 0 0 1-7.6-7.6l7.2-7.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
                 <input type="file" accept="image/*" hidden data-attach-input>
-                <textarea class="chat-input" data-chat-input rows="1" placeholder="Écris un message…" aria-label="Message"></textarea>
+                <textarea class="chat-input" data-chat-input rows="1" placeholder="<?= e(t('chat.composer.placeholder')) ?>" aria-label="<?= e(t('chat.composer.label')) ?>"></textarea>
             </div>
-            <button class="chat-send" type="submit" aria-label="Envoyer">
+            <button class="chat-send" type="submit" aria-label="<?= e(t('chat.composer.send')) ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M12.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
         </form>
 
         <p class="chat-foot <?= $chatReady ? '' : 'is-ko' ?>" data-chat-foot>
             <?php if ($chatReady): ?>
-                <?= e($model) ?> · contexte <?= $fmt((float) $memory['context_tokens']) ?> / <?= $fmt((float) $memory['window']) ?>
-                · <?= (int) $memory['compressions'] ?> compression<?= $memory['compressions'] > 1 ? 's' : '' ?>
+                <?= e($model) ?> · <?= e(t('chat.foot.context', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?>
+                · <?= e(t('chat.foot.compressions', (int) $memory['compressions'])) ?>
             <?php else: ?>
-                Aucun modèle de discussion joignable — vérifie LM Studio dans les réglages.
+                <?= e(t('chat.foot.no_model')) . "\n" ?>
             <?php endif; ?>
         </p>
     </section>
 </div>
 
 <!-- panneau contexte + réglages (toggle depuis la roue et l'anneau) -->
-<aside class="chat-sheet" id="chat-settings" aria-hidden="true" aria-label="Contexte et réglages de la conversation">
+<aside class="chat-sheet" id="chat-settings" aria-hidden="true" aria-label="<?= e(t('chat.sheet.label')) ?>">
     <header class="sheet-head">
         <div>
-            <p class="eyebrow">Conversation</p>
+            <p class="eyebrow"><?= e(t('chat.sheet.eyebrow')) ?></p>
             <h2><?= e((string) $conv['title']) ?></h2>
         </div>
-        <button type="button" class="icon-btn" data-close-settings aria-label="Fermer">&times;</button>
+        <button type="button" class="icon-btn" data-close-settings aria-label="<?= e(t('common.close')) ?>">&times;</button>
     </header>
 
     <div class="sheet-body">
@@ -196,49 +197,49 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
         <section class="sheet-ctx">
             <span data-ctx-ring-big><?= chat_ring($memory, 62) ?></span>
             <div class="sheet-ctx-text">
-                <strong><?= (int) $memory['percent'] ?> % du contexte</strong>
-                <span><?= $fmt((float) $memory['context_tokens']) ?> / <?= $fmt((float) $memory['window']) ?> tokens</span>
-                <span>Résumé auto au-delà de <?= $fmt((float) chat_memory_threshold()) ?> tokens non résumés · <?= (int) $memory['compressions'] ?> fait<?= $memory['compressions'] > 1 ? 's' : '' ?></span>
+                <strong><?= e(t('chat.sheet.ctx_percent', ['percent' => (int) $memory['percent']])) ?></strong>
+                <span><?= e(t('chat.sheet.ctx_tokens', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?></span>
+                <span><?= e(t('chat.sheet.ctx_auto_summary', ['n' => (int) $memory['compressions'], 'threshold' => $fmt((float) chat_memory_threshold())])) ?></span>
             </div>
         </section>
 
         <section class="lms-status" data-lms-status data-state="loading">
             <span class="lms-dot"></span>
-            <span class="lms-text">Vérification du serveur…</span>
-            <button type="button" class="lms-refresh" data-lms-refresh aria-label="Actualiser l’état">&#8635;</button>
+            <span class="lms-text"><?= e(t('chat.lms.checking')) ?></span>
+            <button type="button" class="lms-refresh" data-lms-refresh aria-label="<?= e(t('chat.lms.refresh')) ?>">&#8635;</button>
         </section>
 
         <div class="lms-actions">
             <button type="button" class="btn btn-ghost btn-sm" data-load-model>
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span data-load-label>Charger le modèle maintenant</span>
+                <span data-load-label><?= e(t('chat.lms.load_now')) ?></span>
             </button>
         </div>
 
         <div class="lms-progress" data-lms-progress hidden>
             <ol class="lms-steps" data-lms-steps>
-                <li data-step="server"><span class="n">1</span><span>Serveur</span></li>
-                <li data-step="request"><span class="n">2</span><span>Requête</span></li>
-                <li data-step="loading"><span class="n">3</span><span>Chargement</span></li>
-                <li data-step="ready"><span class="n">4</span><span>Prêt</span></li>
+                <li data-step="server"><span class="n">1</span><span><?= e(t('chat.lms.step_server')) ?></span></li>
+                <li data-step="request"><span class="n">2</span><span><?= e(t('chat.lms.step_request')) ?></span></li>
+                <li data-step="loading"><span class="n">3</span><span><?= e(t('chat.lms.step_loading')) ?></span></li>
+                <li data-step="ready"><span class="n">4</span><span><?= e(t('chat.lms.step_ready')) ?></span></li>
             </ol>
-            <p class="lms-timer" data-lms-timer>0,0 s</p>
+            <p class="lms-timer" data-lms-timer><?= e(t('chat.lms.timer_zero')) ?></p>
         </div>
 
         <!-- réglages du personnage : communs à toutes ses conversations -->
         <section class="persona-summary">
             <div class="mem-head">
-                <h3>Réglages du personnage</h3>
-                <a class="mini" href="/p/<?= e((string) $persona['slug']) ?>/edit#ia">Modifier</a>
+                <h3><?= e(t('chat.persona.title')) ?></h3>
+                <a class="mini" href="/p/<?= e((string) $persona['slug']) ?>/edit#ia"><?= e(t('chat.persona.edit')) ?></a>
             </div>
             <p class="perso-line">
-                <b><?= e($model !== '' ? $model : 'modèle global') ?></b>
-                <span>température <?= e(number_format((float) $conv['temperature'], 2, ',', '')) ?></span>
-                <span><?= (int) $conv['max_tokens'] ?> tokens</span>
-                <span>fenêtre <?= number_format((int) $conv['context_window'], 0, ',', ' ') ?></span>
+                <b><?= e($model !== '' ? $model : t('chat.persona.model_global')) ?></b>
+                <span><?= e(t('chat.persona.temperature', ['value' => number_format((float) $conv['temperature'], 2, ',', '')])) ?></span>
+                <span><?= e(t('chat.persona.max_tokens', ['count' => (int) $conv['max_tokens']])) ?></span>
+                <span><?= e(t('chat.persona.window', ['size' => number_format((int) $conv['context_window'], 0, ',', ' ')])) ?></span>
             </p>
             <?php if (trim((string) $conv['directive']) !== ''): ?>
-                <p class="hint perso-directive">« <?= e(mb_substr(trim((string) $conv['directive']), 0, 160)) ?> »</p>
+                <p class="hint perso-directive"><?= e(t('chat.persona.directive', ['text' => mb_substr(trim((string) $conv['directive']), 0, 160)])) ?></p>
             <?php endif; ?>
         </section>
 
@@ -248,48 +249,48 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
 
             <label class="check">
                 <input type="checkbox" name="memory_enabled" value="1" <?= (int) $conv['memory_enabled'] ? 'checked' : '' ?>>
-                <span>Garder la mémoire (résumé glissant)</span>
+                <span><?= e(t('chat.toggles.memory')) ?></span>
             </label>
 
             <label class="check">
                 <input type="checkbox" name="auto_followup" value="1" <?= (int) ($conv['auto_followup'] ?? 1) === 1 ? 'checked' : '' ?>>
-                <span>Messages spontanés après un long silence</span>
+                <span><?= e(t('chat.toggles.followup')) ?></span>
             </label>
 
             <div class="form-actions">
-                <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>
+                <button class="btn btn-primary btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
             </div>
         </form>
 
         <!-- mémoire -->
         <section class="mem-box">
             <div class="mem-head">
-                <h3>Mémoire</h3>
-                <span class="mem-pct <?= $memory['percent'] > 80 ? 'is-hot' : '' ?>"><?= (int) $memory['percent'] ?> %</span>
+                <h3><?= e(t('chat.memory.title')) ?></h3>
+                <span class="mem-pct <?= $memory['percent'] > 80 ? 'is-hot' : '' ?>"><?= e(t('chat.memory.percent', ['percent' => (int) $memory['percent']])) ?></span>
             </div>
 
             <div class="mem-stats">
-                <div><strong><?= (int) $memory['messages'] ?></strong><span>messages</span></div>
-                <div><strong><?= (int) $memory['unsummarized'] ?></strong><span>non résumés</span></div>
-                <div><strong><?= (int) $memory['compressions'] ?></strong><span>compressions</span></div>
-                <div><strong><?= $fmt((float) $memory['context_tokens']) ?></strong><span>tokens</span></div>
+                <div><strong><?= (int) $memory['messages'] ?></strong><span><?= e(t('chat.memory.stat_messages')) ?></span></div>
+                <div><strong><?= (int) $memory['unsummarized'] ?></strong><span><?= e(t('chat.memory.stat_unsummarized')) ?></span></div>
+                <div><strong><?= (int) $memory['compressions'] ?></strong><span><?= e(t('chat.memory.stat_compressions')) ?></span></div>
+                <div><strong><?= $fmt((float) $memory['context_tokens']) ?></strong><span><?= e(t('chat.memory.stat_tokens')) ?></span></div>
             </div>
 
             <form method="post" action="/chat/<?= (int) $conv['id'] ?>/memory" class="mem-form">
                 <input type="hidden" name="_token" value="<?= e($token) ?>">
                 <label class="field">
-                    <span>Résumé courant</span>
-                    <textarea class="input" name="summary" rows="5" placeholder="Vide pour l’instant : il se remplit automatiquement quand la conversation devient longue."><?= e((string) $conv['summary']) ?></textarea>
+                    <span><?= e(t('chat.memory.summary_label')) ?></span>
+                    <textarea class="input" name="summary" rows="5" placeholder="<?= e(t('chat.memory.summary_placeholder')) ?>"><?= e((string) $conv['summary']) ?></textarea>
                 </label>
                 <div class="form-actions">
-                    <button class="btn btn-ghost btn-sm" type="submit" name="op" value="clear" formnovalidate>Effacer</button>
-                    <button class="btn btn-ghost btn-sm" type="button" data-compress-now>Compresser</button>
-                    <button class="btn btn-primary btn-sm" type="submit" name="op" value="save">Enregistrer</button>
+                    <button class="btn btn-ghost btn-sm" type="submit" name="op" value="clear" formnovalidate><?= e(t('chat.memory.clear')) ?></button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-compress-now><?= e(t('chat.memory.compress')) ?></button>
+                    <button class="btn btn-primary btn-sm" type="submit" name="op" value="save"><?= e(t('chat.sheet.save')) ?></button>
                 </div>
             </form>
 
             <a class="mem-link" href="/memories">
-                Gérer les souvenirs durables
+                <?= e(t('chat.memory.manage')) . "\n" ?>
                 <svg viewBox="0 0 24 24" class="ico"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>
         </section>
@@ -301,44 +302,44 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
                  data-facts-url="/chat/<?= (int) $conv['id'] ?>/facts-toggle"
                  data-token="<?= e($token) ?>">
             <div class="mem-head">
-                <h3>Souvenirs partagés</h3>
-                <a class="mini" href="/memories">Tout gérer</a>
+                <h3><?= e(t('chat.facts.title')) ?></h3>
+                <a class="mini" href="/memories"><?= e(t('chat.facts.manage_all')) ?></a>
             </div>
-            <p class="fact-hint">Valables pour toutes les conversations avec <?= e((string) $persona['name']) ?>.</p>
+            <p class="fact-hint"><?= e(t('chat.facts.hint', ['name' => (string) $persona['name']])) ?></p>
 
             <label class="check">
                 <input type="checkbox" data-facts-toggle value="1" <?= (int) ($conv['facts_enabled'] ?? 1) === 1 ? 'checked' : '' ?>>
-                <span>Utiliser ces souvenirs dans cette conversation</span>
+                <span><?= e(t('chat.facts.use')) ?></span>
             </label>
 
             <ul class="fact-list" data-fact-list>
                 <?php foreach (($personaMemories ?? []) as $fm): ?>
                     <li data-fid="<?= (int) $fm['id'] ?>">
                         <span class="fact-txt"><?= e((string) $fm['content']) ?></span>
-                        <button type="button" class="fact-del" data-fact-del="<?= (int) $fm['id'] ?>" aria-label="Supprimer ce souvenir">&times;</button>
+                        <button type="button" class="fact-del" data-fact-del="<?= (int) $fm['id'] ?>" aria-label="<?= e(t('chat.facts.delete')) ?>">&times;</button>
                     </li>
                 <?php endforeach; ?>
                 <?php if (empty($personaMemories)): ?>
-                    <li class="fact-empty">Aucun souvenir pour l’instant.</li>
+                    <li class="fact-empty"><?= e(t('chat.facts.empty')) ?></li>
                 <?php endif; ?>
             </ul>
 
             <form class="fact-add" data-fact-form>
-                <input class="input" type="text" name="content" maxlength="200" placeholder="Ajouter un souvenir…" aria-label="Nouveau souvenir">
-                <button class="btn btn-ghost btn-sm" type="submit">Ajouter</button>
+                <input class="input" type="text" name="content" maxlength="200" placeholder="<?= e(t('chat.facts.add_placeholder')) ?>" aria-label="<?= e(t('chat.facts.add_label')) ?>">
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.facts.add')) ?></button>
             </form>
         </section>
 
         <!-- recherche dans toutes les conversations du persona -->
         <section class="recall-box" data-recall-box data-url="/chat/<?= (int) $conv['id'] ?>/search">
             <div class="mem-head">
-                <h3>Chercher dans ses souvenirs</h3>
+                <h3><?= e(t('chat.recall.title')) ?></h3>
             </div>
-            <p class="fact-hint">Dans toutes les conversations avec <?= e((string) $persona['name']) ?>.</p>
+            <p class="fact-hint"><?= e(t('chat.recall.hint', ['name' => (string) $persona['name']])) ?></p>
 
             <form class="fact-add" data-recall-form>
-                <input class="input" type="search" name="q" placeholder="Ex. le Pradet, son travail…" aria-label="Rechercher">
-                <button class="btn btn-ghost btn-sm" type="submit">Chercher</button>
+                <input class="input" type="search" name="q" placeholder="<?= e(t('chat.recall.placeholder')) ?>" aria-label="<?= e(t('chat.recall.label')) ?>">
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.recall.submit')) ?></button>
             </form>
 
             <ul class="fact-list recall-list" data-recall-list></ul>
@@ -347,15 +348,15 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
         <!-- renommer / supprimer -->
         <form method="post" action="/chat/<?= (int) $conv['id'] ?>/rename" class="rename-row">
             <input type="hidden" name="_token" value="<?= e($token) ?>">
-            <input class="input" type="text" name="title" value="<?= e((string) $conv['title']) ?>" aria-label="Titre de la conversation">
-            <button class="btn btn-ghost btn-sm" type="submit">Renommer</button>
+            <input class="input" type="text" name="title" value="<?= e((string) $conv['title']) ?>" aria-label="<?= e(t('chat.rename.label')) ?>">
+            <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.rename.submit')) ?></button>
         </form>
 
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/delete" data-confirm="Supprimer cette conversation et tous ses messages ?" class="chat-danger">
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/delete" data-confirm="<?= e(t('chat.delete.confirm')) ?>" class="chat-danger">
             <input type="hidden" name="_token" value="<?= e($token) ?>">
             <button class="btn btn-danger-ghost btn-block" type="submit">
                 <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                Supprimer la conversation
+                <?= e(t('chat.delete.submit')) . "\n" ?>
             </button>
         </form>
     </div>
@@ -364,14 +365,14 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
 <div class="modal" id="fb-modal" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="fb-title">
         <header class="modal-head">
-            <h2 id="fb-title">LM Studio ne répond pas</h2>
-            <button type="button" class="icon-btn" data-fb-wait aria-label="Fermer">&times;</button>
+            <h2 id="fb-title"><?= e(t('chat.fallback.title')) ?></h2>
+            <button type="button" class="icon-btn" data-fb-wait aria-label="<?= e(t('common.close')) ?>">&times;</button>
         </header>
         <p class="fb-msg" data-fb-msg></p>
-        <p class="fb-hint">Tu peux attendre qu’il revienne — le message sera renvoyé tel quel — ou faire générer la réponse par DeepSeek.</p>
+        <p class="fb-hint"><?= e(t('chat.fallback.hint')) ?></p>
         <div class="form-actions">
-            <button type="button" class="btn btn-ghost" data-fb-wait>Attendre et réessayer</button>
-            <button type="button" class="btn btn-primary" data-fb-use>Utiliser DeepSeek</button>
+            <button type="button" class="btn btn-ghost" data-fb-wait><?= e(t('chat.fallback.wait')) ?></button>
+            <button type="button" class="btn btn-primary" data-fb-use><?= e(t('chat.fallback.use')) ?></button>
         </div>
     </div>
 </div>
