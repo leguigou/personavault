@@ -224,9 +224,13 @@ personavault/
 ├── config.php              # réglages par défaut
 ├── config.local.example.php
 ├── public/
-│   ├── index.php           # routeur + actions
+│   ├── index.php           # fichiers statiques, démarrage, liste des routes
 │   └── assets/             # app.css, app.js, favicon
 ├── src/
+│   ├── routes/             # une route ou un domaine par fichier, inclus par index.php
+│   │   ├── auth.php, media.php, chat.php, library.php, settings.php, memories.php…
+│   │   ├── conversation.php    # /chat/{id} → conversation/{stream,model,memory,manage,messages}.php
+│   │   └── persona.php         # /p/{slug} → persona/{ai,edit,media,show}.php
 │   ├── bootstrap.php       # session, PDO, schéma, uploads, helpers
 │   ├── llm.php             # client OpenAI-compatible (streaming inclus)
 │   ├── chat.php            # moteur de discussion, mémoire, bulles
