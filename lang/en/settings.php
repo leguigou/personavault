@@ -139,7 +139,6 @@ return [
     'settings.look.preview_bot_html'  => 'Hi! Did you have a good day?',
     'settings.look.preview_user_html' => 'Yeah, and you?',
     'settings.look.tabbar'          => 'Navigation bar (phone)',
-    'settings.look.tabbar_default'  => 'Current',
     'settings.look.tabbar_float'    => 'Floating capsule',
     'settings.look.tabbar_pill'     => 'Expanding pill',
     'settings.look.tabbar_classic'  => 'Refined classic',
