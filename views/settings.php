@@ -458,7 +458,7 @@ $facts = facts_settings();
                     <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
                 <select name="ui_tabbar" class="sel-native" data-tabbar-select>
-                    <?php foreach (['default' => t('settings.look.tabbar_default'), 'float' => t('settings.look.tabbar_float'), 'pill' => t('settings.look.tabbar_pill'), 'classic' => t('settings.look.tabbar_classic')] as $val => $label): ?>
+                    <?php foreach (['float' => t('settings.look.tabbar_float'), 'pill' => t('settings.look.tabbar_pill'), 'classic' => t('settings.look.tabbar_classic')] as $val => $label): ?>
                         <option value="<?= e($val) ?>" <?= $style['tabbar'] === $val ? 'selected' : '' ?>><?= e($label) ?></option>
                     <?php endforeach; ?>
                 </select>

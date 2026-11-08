@@ -140,7 +140,6 @@ return [
     'settings.look.preview_bot_html'  => '¡Hola! ¿Has tenido un buen día?',
     'settings.look.preview_user_html' => 'Sí, ¿y tú?',
     'settings.look.tabbar'          => 'Barra de navegación (móvil)',
-    'settings.look.tabbar_default'  => 'Actual',
     'settings.look.tabbar_float'    => 'Cápsula flotante',
     'settings.look.tabbar_pill'     => 'Píldora que se despliega',
     'settings.look.tabbar_classic'  => 'Clásica cuidada',

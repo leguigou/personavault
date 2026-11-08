@@ -142,7 +142,6 @@ return [
     'settings.look.preview_bot_html'  => 'Salut&nbsp;! Tu as passé une bonne journée&nbsp;?',
     'settings.look.preview_user_html' => 'Ouais, et toi&nbsp;?',
     'settings.look.tabbar'          => 'Barre de navigation (téléphone)',
-    'settings.look.tabbar_default'  => 'Actuelle',
     'settings.look.tabbar_float'    => 'Capsule flottante',
     'settings.look.tabbar_pill'     => 'Pilule qui se déplie',
     'settings.look.tabbar_classic'  => 'Classique soignée',

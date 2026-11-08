@@ -427,9 +427,10 @@ function ui_style(): array
         'density' => (string) setting('ui_density', 'confort'),
         'avatars' => (int) setting('ui_avatars', '1') === 1,
         'width'   => (string) setting('ui_width', 'normal'),
-        // style de la barre de navigation du bas (mobile) : default | float | pill | classic
-        'tabbar'  => in_array(setting('ui_tabbar', 'default'), ['default', 'float', 'pill', 'classic'], true)
-            ? setting('ui_tabbar', 'default') : 'default',
+        // style de la barre de navigation du bas (mobile) : float | pill | classic
+        // (capsule flottante par défaut, y compris pour l'ancienne valeur « default »)
+        'tabbar'  => in_array(setting('ui_tabbar', 'float'), ['float', 'pill', 'classic'], true)
+            ? setting('ui_tabbar', 'float') : 'float',
     ];
 }
 
