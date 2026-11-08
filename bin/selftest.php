@@ -4,7 +4,7 @@
  *
  * Vérifie : migrations versionnées, aller-retour export → import ZIP (portrait, photos,
  * prompts), comptage des références d'images, refus des images géantes, limites du ZIP,
- * jeton CSRF vide refusé, blocage des tentatives de connexion.
+ * jeton CSRF vide refusé, blocage des tentatives de connexion, export de conversation.
  *
  * Usage : php bin/selftest.php        (code de sortie 0 = tout est bon)
  */
@@ -321,6 +321,34 @@ try {
     i18n_set_locale('es');
     $check(t('nav.library') === 'Biblioteca' && t('login.blocked', 3) === 'Demasiados intentos. Vuelve a intentarlo en 3 min.', 'espagnol : texte et paramètre {n}');
     i18n_set_locale(null);
+
+    echo PHP_EOL . '— export de conversation' . PHP_EOL;
+    require_once __DIR__ . '/../src/routes/conversation/export_format.php';
+    $rows = [
+        ['role' => 'user', 'content' => "Salut <b>toi</b>\n# pas un titre", 'image' => 'abc', 'created_at' => '2026-11-08 13:05:00'],
+        ['role' => 'memory', 'content' => 'Mémoire mise à jour : aime le fado', 'image' => '', 'created_at' => '2026-11-08 13:05:10'],
+        ['role' => 'assistant', 'content' => 'Bonjour !', 'image' => '', 'split_points' => '[]', 'created_at' => '2026-11-08 13:06:00'],
+        ['role' => 'system', 'content' => 'jamais exporté', 'image' => '', 'created_at' => '2026-11-08 13:07:00'],
+    ];
+    $meta = ['title' => 'Week-end à Lisbonne', 'persona' => 'Camille', 'count' => 2, 'exported_at' => '2026-11-08 20:00:00'];
+    i18n_set_locale('fr');
+    $txt = export_render($rows, $meta, 'txt');
+    $check(str_starts_with($txt, "Week-end à Lisbonne\nConversation avec Camille\nExportée le 8 nov. 2026 à 21:00 · 2 messages\n"), 'texte : en-tête (titre, persona, date locale, nombre)');
+    $check(str_contains($txt, "[8 nov. 2026 à 14:05] Moi : [Photo] Salut <b>toi</b>\n# pas un titre\n\n"), 'texte : « [date heure] Moi : … », heure de Paris, photo signalée');
+    $check(str_contains($txt, "\n  (Mémoire mise à jour : aime le fado)\n\n[8 nov. 2026 à 14:06] Camille : Bonjour !\n"), 'texte : souvenir discret, puis réponse du persona');
+    $check(!str_contains($txt, 'jamais exporté'), 'texte : rôles inconnus exclus');
+    $md = export_render($rows, $meta, 'md');
+    $check(str_starts_with($md, "# Week-end à Lisbonne\n\n- Conversation avec Camille\n"), 'Markdown : titre et liste d’en-tête');
+    $check(str_contains($md, "**Moi** · *8 nov. 2026 à 14:05*\n\n*[Photo]*\n\nSalut &lt;b&gt;toi&lt;/b&gt;  \n\\# pas un titre\n\n"), 'Markdown : HTML neutralisé, « # » échappé, saut de ligne conservé');
+    $check(str_contains($md, "> *Mémoire mise à jour : aime le fado*"), 'Markdown : souvenir en citation discrète');
+    i18n_set_locale('en');
+    $txt = export_render($rows, $meta, 'txt');
+    $check(preg_match('/^Exported on .*2026, 9:00 PM · 2 messages$/m', $txt) === 1, 'anglais : en-tête et heure traduits');
+    $check(str_contains($txt, '2:05 PM] Me: [Photo] Salut'), 'anglais : « Me: »');
+    i18n_set_locale(null);
+    $check(export_filename('Week-end à Lisbonne !', 'md', '2026-11-08') === 'week-end-a-lisbonne-2026-11-08.md'
+        && export_filename('???', 'txt', '2026-11-08') === 'conversation-2026-11-08.txt', 'nom de fichier propre à partir du titre');
+    $check(export_bubbles(['content' => 'Un. Deux.', 'split_points' => '[4]']) === ['Un.', 'Deux.'], 'page imprimable : découpage en bulles');
 } catch (Throwable $e) {
     echo '  ÉCHEC exception : ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
     $failures++;

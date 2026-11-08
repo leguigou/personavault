@@ -36,6 +36,8 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Photos : quand le modèle sait voir les images, un trombone apparaît pour en envoyer une.
 - Édition : modifier son message efface la suite et rejoue la réponse depuis ce point.
 - Titres de discussion générés automatiquement.
+- Export d'une conversation (réglages de la discussion › Exporter) : texte brut, Markdown
+  ou page imprimable (`/chat/{id}/print`) à « Enregistrer en PDF » depuis le navigateur.
 - Réglages par personnage : modèle, température, longueur, fenêtre de contexte, consigne.
 
 ### Sauvegarde
@@ -232,7 +234,7 @@ personavault/
 ├── src/
 │   ├── routes/             # une route ou un domaine par fichier, inclus par index.php
 │   │   ├── auth.php, media.php, chat.php, library.php, settings.php, memories.php…
-│   │   ├── conversation.php    # /chat/{id} → conversation/{stream,model,memory,manage,messages}.php
+│   │   ├── conversation.php    # /chat/{id} → conversation/{stream,model,memory,manage,export,messages}.php
 │   │   └── persona.php         # /p/{slug} → persona/{ai,edit,media,show}.php
 │   ├── bootstrap.php       # session, PDO, schéma, uploads, helpers
 │   ├── i18n.php            # traductions : t(), langue, pluriels

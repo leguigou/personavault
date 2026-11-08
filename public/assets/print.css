@@ -1,0 +1,175 @@
+/*
+ * Page imprimable d'une conversation (views/chat_print.php) : « Imprimer / Enregistrer en PDF ».
+ * Indépendante de app.css. À l'écran : aperçu de la page ; à l'impression : fond blanc,
+ * barre d'outils masquée, messages jamais coupés en deux si possible.
+ */
+:root {
+    --pr-text: #1d1b26;
+    --pr-muted: #6b6879;
+    --pr-line: #e4e1ec;
+    --pr-me: #ede9fe;
+    --pr-me-line: #d9d0fb;
+    --pr-bot: #f6f5f9;
+    --pr-accent: #7c3aed;
+    --pr-paper: #ffffff;
+    --pr-desk: #ecebf1;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body.pr-body {
+    margin: 0;
+    background: var(--pr-desk);
+    color: var(--pr-text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* --- barre d'outils (écran seulement) */
+.pr-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, .94);
+    border-bottom: 1px solid var(--pr-line);
+    backdrop-filter: blur(6px);
+}
+.pr-btn {
+    appearance: none;
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 16px;
+    min-height: 42px;
+    background: var(--pr-accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+.pr-btn:focus-visible { outline: 3px solid #c4b5fd; outline-offset: 2px; }
+.pr-btn-ghost { background: transparent; color: var(--pr-text); border: 1px solid var(--pr-line); }
+.pr-tip { margin: 0; flex: 1 1 220px; color: var(--pr-muted); font-size: 13px; }
+
+/* --- feuille */
+.pr-page {
+    max-width: 760px;
+    margin: 20px auto 40px;
+    padding: 32px 36px;
+    background: var(--pr-paper);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(20, 16, 40, .08), 0 8px 30px rgba(20, 16, 40, .06);
+}
+
+.pr-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--pr-line);
+}
+.pr-head h1 { margin: 0 0 2px; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; }
+.pr-meta { margin: 0; color: var(--pr-muted); font-size: 13px; }
+.pr-head .pr-face { width: 56px; height: 56px; font-size: 18px; }
+
+.pr-face {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--pr-me);
+}
+.pr-face-txt {
+    display: inline-grid;
+    place-items: center;
+    color: var(--pr-accent);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* --- messages : moi à droite (teinté), le persona à gauche */
+.pr-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin: 0 0 14px;
+    max-width: 82%;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+.pr-me { margin-left: auto; align-items: flex-end; }
+
+.pr-msg-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--pr-muted);
+}
+.pr-msg-head strong { color: var(--pr-text); font-size: 13px; }
+
+.pr-bubble {
+    padding: 9px 13px;
+    border-radius: 14px;
+    background: var(--pr-bot);
+    border: 1px solid var(--pr-line);
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+.pr-bot .pr-bubble { border-top-left-radius: 5px; }
+.pr-me .pr-bubble { background: var(--pr-me); border-color: var(--pr-me-line); border-top-right-radius: 5px; }
+
+.pr-img {
+    display: block;
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 10px;
+    border: 1px solid var(--pr-line);
+    object-fit: cover;
+}
+
+.pr-note {
+    margin: 4px auto 14px;
+    max-width: 80%;
+    text-align: center;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--pr-muted);
+    break-inside: avoid;
+}
+.pr-empty { color: var(--pr-muted); text-align: center; }
+
+@media (max-width: 600px) {
+    .pr-page { margin: 0; padding: 20px 16px 32px; border-radius: 0; box-shadow: none; }
+    .pr-msg { max-width: 92%; }
+    .pr-head h1 { font-size: 19px; }
+}
+
+/* --- impression / PDF */
+@page { size: A4; margin: 16mm 14mm 18mm; }
+
+@media print {
+    :root { --pr-desk: #fff; }
+    html, body.pr-body { background: #fff !important; color: #000; }
+    body.pr-body { font-size: 11pt; }
+    .pr-toolbar { display: none !important; }
+    .pr-page { max-width: none; margin: 0; padding: 0; border-radius: 0; box-shadow: none; }
+    .pr-head { break-after: avoid; page-break-after: avoid; }
+    .pr-msg { max-width: 86%; }
+    .pr-msg-head { break-after: avoid; page-break-after: avoid; }
+    .pr-bubble, .pr-img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pr-bubble { orphans: 3; widows: 3; }
+    .pr-img { max-width: 45mm; max-height: 45mm; }
+    a { color: inherit; text-decoration: none; }
+}

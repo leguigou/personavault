@@ -4,9 +4,10 @@ declare(strict_types=1);
 /*
  * Une discussion : /chat/{id}[/action]. Charge la conversation et le persona,
  * puis délègue chaque action à src/routes/conversation/*.php.
+ * Actions avec extension : export.txt et export.md (voir conversation/export.php).
  */
 
-if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
+if (preg_match('#^/chat/(\d+)(?:/([\w-]+(?:\.(?:txt|md))?))?$#', $path, $m)) {
     $cid = (int) $m[1];
     $action = $m[2] ?? '';
 
@@ -37,5 +38,6 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     require __DIR__ . '/conversation/model.php';
     require __DIR__ . '/conversation/memory.php';
     require __DIR__ . '/conversation/manage.php';
+    require __DIR__ . '/conversation/export.php';
     require __DIR__ . '/conversation/messages.php';
 }

@@ -345,6 +345,20 @@ $fmt   = fn (float $n): string => fmt_number($n);
             <ul class="fact-list recall-list" data-recall-list></ul>
         </section>
 
+        <!-- exporter toute la conversation (texte, Markdown, page imprimable → PDF) -->
+        <section class="recall-box export-box">
+            <div class="mem-head">
+                <h3><?= e(t('export.sheet.title')) ?></h3>
+            </div>
+            <p class="fact-hint"><?= e(t('export.sheet.hint')) ?></p>
+            <div class="form-actions">
+                <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/export.txt" download data-export="txt"><?= e(t('export.sheet.txt')) ?></a>
+                <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/export.md" download data-export="md"><?= e(t('export.sheet.md')) ?></a>
+                <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/print?auto=1" data-export="pdf"
+                   title="<?= e(t('export.sheet.pdf_title')) ?>"><?= e(t('export.sheet.pdf')) ?></a>
+            </div>
+        </section>
+
         <!-- renommer / supprimer -->
         <form method="post" action="/chat/<?= (int) $conv['id'] ?>/rename" class="rename-row">
             <input type="hidden" name="_token" value="<?= e($token) ?>">
