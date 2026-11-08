@@ -29,6 +29,9 @@ jobs:
       - name: Selftest (base temporaire, aller-retour export/import)
         run: php bin/selftest.php
 
+      - name: Traductions (clés manquantes, paramètres, pluriels)
+        run: php bin/i18n-check.php
+
   e2e:
     runs-on: ubuntu-latest
     steps:

@@ -23,6 +23,27 @@
         fit();
     }
 
+    /* --------------------------------------------------- traductions
+       Textes « js.* » des fichiers lang/, fournis par la page (#pv-i18n).
+       tr("modal.cancel") ; tr("clé", { name: "…" }) ; tr("clé", 3) pour un pluriel {n}.
+       Clé absente : le texte de repli (3e argument) ou la clé elle-même. */
+    const I18N = (() => {
+        try {
+            return JSON.parse(document.getElementById("pv-i18n")?.textContent || "{}");
+        } catch (e) {
+            return {};
+        }
+    })();
+    const LANG = (document.documentElement.lang || "fr").slice(0, 2);
+    const pluralForm = (n) => (["fr", "pt"].includes(LANG) ? Math.abs(n) < 2 : Math.abs(n) === 1) ? "one" : "other";
+    const tr = (key, params = {}, fallback) => {
+        if (typeof params === "number") params = { n: params };
+        let text = I18N[key] ?? fallback ?? key;
+        if (text && typeof text === "object") text = text[pluralForm(Number(params.n) || 0)] ?? text.other ?? "";
+        return String(text).replace(/\{(\w+)\}/g, (m, k) => (k in params ? String(params[k]) : m));
+    };
+    window.pvTr = tr;
+
     /* « 0 photo », « 1 photo », « 2 photos » : pluriel français à partir de 2 */
     const plural = (n, one, many) => n + " " + (n >= 2 ? many : one);
 
@@ -84,7 +105,7 @@
             root.innerHTML =
                 '<div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pv-dialog-title">' +
                 '<header class="modal-head"><h2 id="pv-dialog-title"></h2>' +
-                '<button type="button" class="icon-btn" data-dialog-close aria-label="Fermer">&times;</button></header>' +
+                '<button type="button" class="icon-btn" data-dialog-close aria-label="' + tr("modal.close") + '">&times;</button></header>' +
                 '<div class="pv-dialog-body"></div>' +
                 '<div class="form-actions pv-dialog-actions"></div></div>';
             document.body.appendChild(root);
@@ -128,7 +149,7 @@
             const actions = root.querySelector(".pv-dialog-actions");
             actions.replaceChildren();
             let main = null;
-            (o.actions || [{ label: "OK", value: true, kind: "primary" }]).forEach((a) => {
+            (o.actions || [{ label: tr("modal.ok"), value: true, kind: "primary" }]).forEach((a) => {
                 const b = document.createElement("button");
                 b.type = "button";
                 b.className = "btn " + (a.kind === "danger" ? "btn-danger" : a.kind === "primary" ? "btn-primary" : "btn-ghost");
@@ -147,14 +168,14 @@
             open,
             close,
             confirm: (text, opts = {}) => open({
-                title: opts.title || "Confirmer",
+                title: opts.title || tr("modal.confirm_title"),
                 text,
                 actions: [
-                    { label: opts.cancel || "Annuler", value: false },
-                    { label: opts.ok || "Confirmer", value: true, kind: opts.danger ? "danger" : "primary" },
+                    { label: opts.cancel || tr("modal.cancel"), value: false },
+                    { label: opts.ok || tr("modal.confirm"), value: true, kind: opts.danger ? "danger" : "primary" },
                 ],
             }),
-            alert: (text, title = "Information") => open({ title, text, actions: [{ label: "OK", value: true, kind: "primary" }] }),
+            alert: (text, title = tr("modal.info")) => open({ title, text, actions: [{ label: tr("modal.ok"), value: true, kind: "primary" }] }),
         };
     })();
     window.pvModal = pvModal;
@@ -173,8 +194,8 @@
         const submitter = e.submitter || null;
         const isDelete = /\/delete$/.test(new URL(form.action, location.href).pathname);
         pvModal.confirm(msg, {
-            title: form.dataset.confirmTitle || (isDelete ? "Supprimer ?" : "Confirmer"),
-            ok: form.dataset.confirmOk || (isDelete ? "Supprimer" : "Confirmer"),
+            title: form.dataset.confirmTitle || (isDelete ? tr("modal.delete_title") : tr("modal.confirm_title")),
+            ok: form.dataset.confirmOk || (isDelete ? tr("modal.delete") : tr("modal.confirm")),
             danger: isDelete,
         }).then((ok) => {
             if (!ok) return;
@@ -195,7 +216,7 @@
         pvModal.open({
             title: tpl.dataset.title || "",
             node: tpl.content.cloneNode(true),
-            actions: [{ label: "Compris", value: true, kind: "primary" }],
+            actions: [{ label: tr("modal.got_it"), value: true, kind: "primary" }],
         });
     });
 
@@ -302,11 +323,11 @@
             if (url.origin !== location.origin || (url.pathname === location.pathname && url.hash)) return;
             e.preventDefault();
             pvModal.open({
-                title: "Modifications non enregistrées",
-                text: "Tu as modifié des réglages sans les enregistrer. Les quitter maintenant les annule.",
+                title: tr("unsaved.title"),
+                text: tr("unsaved.text"),
                 actions: [
-                    { label: "Rester sur la page", value: false },
-                    { label: "Quitter sans enregistrer", value: true, kind: "danger" },
+                    { label: tr("unsaved.stay"), value: false },
+                    { label: tr("unsaved.leave"), value: true, kind: "danger" },
                 ],
             }).then((leave) => {
                 if (!leave) return;
@@ -1100,7 +1121,7 @@
         jump.type = "button";
         jump.className = "chat-jump";
         jump.hidden = true;
-        jump.setAttribute("aria-label", "Aller au dernier message");
+        jump.setAttribute("aria-label", tr("chat.jump"));
         jump.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m0 0-6-6m6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         chat.appendChild(jump);
 

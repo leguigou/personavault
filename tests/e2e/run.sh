@@ -27,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 
 # --- copie de l'app + configuration de test (mot de passe « test »)
-cp -r "$ROOT/config.php" "$ROOT/public" "$ROOT/src" "$ROOT/views" "$ROOT/bin" "$WORK/"
+cp -r "$ROOT/config.php" "$ROOT/public" "$ROOT/src" "$ROOT/views" "$ROOT/bin" "$ROOT/lang" "$WORK/"
 HASH="$(php -r 'echo password_hash("test", PASSWORD_DEFAULT);')"
 cat > "$WORK/config.local.php" <<PHP
 <?php

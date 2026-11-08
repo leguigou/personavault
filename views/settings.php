@@ -428,6 +428,23 @@ $facts = facts_settings();
     <form class="card-form" method="post" action="/settings/ui" data-ui-form data-dirty-guard>
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 
+        <?php $uiLang = setting('ui_lang', 'auto'); ?>
+        <div class="field">
+            <span><?= e(t('settings.lang.label')) ?></span>
+            <div class="sel" data-sel>
+                <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('settings.lang.label')) ?>">
+                    <span class="sel-value"></span>
+                    <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <select name="ui_lang" class="sel-native">
+                    <option value="auto" <?= $uiLang === 'auto' ? 'selected' : '' ?>><?= e(t('settings.lang.auto')) ?></option>
+                    <?php foreach (i18n_available() as $code => $label): ?>
+                        <option value="<?= e($code) ?>" lang="<?= e($code) ?>" <?= $uiLang === $code ? 'selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+
         <div class="ui-preview" data-ui-preview aria-label="Aperçu">
             <div class="pv-msg pv-bot">
                 <span class="pv-av">L</span>
@@ -696,8 +713,8 @@ $facts = facts_settings();
         <template data-info-body="<?= e($key) ?>" data-title="<?= e($ttl) ?>"><?= $html ?></template>
     <?php endforeach; ?>
 
-    <form method="post" action="/logout" class="settings-logout" data-confirm="Se déconnecter de PersonaVault ?" data-confirm-title="Déconnexion" data-confirm-ok="Se déconnecter">
+    <form method="post" action="/logout" class="settings-logout" data-confirm="<?= e(t('logout.confirm')) ?>" data-confirm-title="<?= e(t('logout.title')) ?>" data-confirm-ok="<?= e(t('nav.logout')) ?>">
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-        <button class="btn btn-ghost" type="submit">Se déconnecter</button>
+        <button class="btn btn-ghost" type="submit"><?= e(t('nav.logout')) ?></button>
     </form>
 </section>

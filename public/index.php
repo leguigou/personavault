@@ -109,4 +109,4 @@ foreach (['chat', 'conversation', 'backup', 'memories', 'settings', 'library', '
 }
 
 http_response_code(404);
-render('notfound', ['title' => 'Introuvable']);
+render('notfound', ['title' => t('notfound.title')]);

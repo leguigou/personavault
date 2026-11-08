@@ -12,7 +12,7 @@ if (count($parts) >= 2 && $p0 === 'p') {
     $persona = $stmt->fetch();
     if (!$persona) {
         http_response_code(404);
-        render('notfound', ['title' => 'Introuvable']);
+        render('notfound', ['title' => t('notfound.title')]);
         exit;
     }
     $pid = (int) $persona['id'];

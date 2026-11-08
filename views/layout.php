@@ -11,7 +11,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
 ?>
 <!doctype html>
 <?php $__ui = ui_style(); ?>
-<html lang="fr"
+<html lang="<?= e(locale()) ?>"
       data-bubble="<?= e($__ui['bubble']) ?>"
       data-density="<?= e($__ui['density']) ?>"
       data-avatars="<?= $__ui['avatars'] ? '1' : '0' ?>"
@@ -25,7 +25,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="PersonaVault">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title><?= e($title ?? 'Personas') ?> · PersonaVault</title>
+    <title><?= e($title ?? t('app.default_title')) ?> · PersonaVault</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/assets/icon-192.png" type="image/png" sizes="192x192">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -49,24 +49,24 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
         <span class="brand-name">Persona<em>Vault</em></span>
     </a>
 
-    <nav class="topnav" aria-label="Navigation principale">
-        <a href="/" class="<?= $isLib ? 'is-active' : '' ?>">Bibliothèque</a>
-        <a href="/chat" class="<?= $isChat ? 'is-active' : '' ?>">Discussions</a>
-        <a href="/?fav=1" class="<?= $isFav ? 'is-active' : '' ?>">Favoris</a>
-        <a href="/?arch=1" class="<?= $isArch ? 'is-active' : '' ?>">Archives</a>
+    <nav class="topnav" aria-label="<?= e(t('nav.main')) ?>">
+        <a href="/" class="<?= $isLib ? 'is-active' : '' ?>"><?= e(t('nav.library')) ?></a>
+        <a href="/chat" class="<?= $isChat ? 'is-active' : '' ?>"><?= e(t('nav.chats')) ?></a>
+        <a href="/?fav=1" class="<?= $isFav ? 'is-active' : '' ?>"><?= e(t('nav.favorites')) ?></a>
+        <a href="/?arch=1" class="<?= $isArch ? 'is-active' : '' ?>"><?= e(t('nav.archives')) ?></a>
     </nav>
 
     <div class="topbar-actions">
         <a class="btn btn-primary btn-sm" href="/p/new">
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-            <span class="hide-sm">Nouveau</span>
+            <span class="hide-sm"><?= e(t('nav.new')) ?></span>
         </a>
-        <a class="icon-btn <?= $currentPath === '/settings' ? 'is-active' : '' ?>" href="/settings" title="Réglages" aria-label="Réglages">
+        <a class="icon-btn <?= $currentPath === '/settings' ? 'is-active' : '' ?>" href="/settings" title="<?= e(t('nav.settings')) ?>" aria-label="<?= e(t('nav.settings')) ?>">
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
         </a>
         <form method="post" action="/logout" class="logout-form">
             <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-            <button class="icon-btn" type="submit" title="Se déconnecter" aria-label="Se déconnecter">
+            <button class="icon-btn" type="submit" title="<?= e(t('nav.logout')) ?>" aria-label="<?= e(t('nav.logout')) ?>">
                 <svg viewBox="0 0 24 24" class="ico"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
             </button>
         </form>
@@ -78,7 +78,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <?php foreach ($flashes as $f): ?>
         <div class="flash flash-<?= e($f['type']) ?>" role="status">
             <span><?= e($f['message']) ?></span>
-            <button type="button" class="flash-close" aria-label="Fermer">&times;</button>
+            <button type="button" class="flash-close" aria-label="<?= e(t('common.close')) ?>">&times;</button>
         </div>
     <?php endforeach; ?>
 
@@ -86,35 +86,36 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
 </main>
 
 <?php if ($isAuth && !$isChatRoom): ?>
-<nav class="tabbar" aria-label="Navigation mobile">
+<nav class="tabbar" aria-label="<?= e(t('nav.mobile')) ?>">
     <a href="/" class="<?= $isLib ? 'is-active' : '' ?>">
         <svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-        <span>Bibliothèque</span>
+        <span><?= e(t('nav.library')) ?></span>
     </a>
     <a href="/chat" class="<?= $isChat ? 'is-active' : '' ?>">
         <svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-        <span>Discussions</span>
+        <span><?= e(t('nav.chats')) ?></span>
     </a>
-    <a href="/p/new" class="tab-add" aria-label="Nouveau persona">
+    <a href="/p/new" class="tab-add" aria-label="<?= e(t('nav.new_persona')) ?>">
         <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
-        <span>Nouveau</span>
+        <span><?= e(t('nav.new')) ?></span>
     </a>
     <a href="/?fav=1" class="<?= $isFav ? 'is-active' : '' ?>">
         <svg viewBox="0 0 24 24" class="ico"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>
-        <span>Favoris</span>
+        <span><?= e(t('nav.favorites')) ?></span>
     </a>
     <a href="/?arch=1" class="<?= $isArch ? 'is-active' : '' ?>">
         <svg viewBox="0 0 24 24" class="ico"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-        <span>Archives</span>
+        <span><?= e(t('nav.archives')) ?></span>
     </a>
 </nav>
 <?php endif; ?>
 
 <div class="lightbox" id="lightbox" hidden>
-    <button class="lightbox-close" type="button" aria-label="Fermer">&times;</button>
+    <button class="lightbox-close" type="button" aria-label="<?= e(t('common.close')) ?>">&times;</button>
     <img alt="">
 </div>
 
-<script src="/assets/app.js?v=72" defer></script>
+<script type="application/json" id="pv-i18n"><?= json_encode((object) i18n_js(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
+<script src="/assets/app.js?v=73" defer></script>
 </body>
 </html>

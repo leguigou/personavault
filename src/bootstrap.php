@@ -1010,6 +1010,7 @@ function fetch_prompts(int $personaId): array
 
 /* ------------------------------------------------------------------- vues */
 
+require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/llm.php';
 require_once __DIR__ . '/prompts.php';
 require_once __DIR__ . '/chat.php';

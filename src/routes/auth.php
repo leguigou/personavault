@@ -16,18 +16,18 @@ if ($path === '/login') {
         csrf_check();
         $wait = login_blocked_for();
         if ($wait > 0) {
-            $error = 'Trop de tentatives. Réessaie dans ' . ceil($wait / 60) . ' min.';
+            $error = t('login.blocked', (int) ceil($wait / 60));
         } elseif (attempt_login((string) ($_POST['password'] ?? ''))) {
             redirect('/');
         } else {
-            $error = 'Mot de passe incorrect.';
+            $error = t('login.wrong');
             $wait  = login_blocked_for();
             if ($wait > 0) {
-                $error .= ' Trop de tentatives : réessaie dans ' . ceil($wait / 60) . ' min.';
+                $error .= ' ' . t('login.now_blocked', (int) ceil($wait / 60));
             }
         }
     }
-    render('login', ['title' => 'Connexion', 'error' => $error]);
+    render('login', ['title' => t('login.title'), 'error' => $error]);
     exit;
 }
 

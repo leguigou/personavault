@@ -47,8 +47,12 @@ if ($path === '/settings/ui' && $method === 'POST') {
     set_setting('ui_density', $density);
     set_setting('ui_width', $width);
     set_setting('ui_avatars', !empty($_POST['ui_avatars']) ? '1' : '0');
+    // langue de l'interface : « auto » (navigateur) ou une langue installée dans lang/
+    $lang = (string) ($_POST['ui_lang'] ?? 'auto');
+    set_setting('ui_lang', $lang === 'auto' || isset(i18n_available()[$lang]) ? $lang : 'auto');
+    i18n_set_locale(null); // le message de confirmation part déjà dans la nouvelle langue
 
-    flash('ok', 'Apparence enregistrée.');
+    flash('ok', t('settings.look.saved'));
     redirect('/settings#look');
 }
 

@@ -235,6 +235,7 @@ personavault/
 │   │   ├── conversation.php    # /chat/{id} → conversation/{stream,model,memory,manage,messages}.php
 │   │   └── persona.php         # /p/{slug} → persona/{ai,edit,media,show}.php
 │   ├── bootstrap.php       # session, PDO, schéma, uploads, helpers
+│   ├── i18n.php            # traductions : t(), langue, pluriels
 │   ├── llm.php             # client OpenAI-compatible (streaming inclus)
 │   ├── chat.php            # moteur de discussion, mémoire, bulles
 │   ├── facts.php           # souvenirs + recherche FTS5
@@ -242,10 +243,37 @@ personavault/
 │   └── backup.php          # export / import ZIP
 ├── views/                  # gabarits PHP
 ├── bin/                    # outils CLI (aperçu de prompt, relance, nettoyage, selftest)
+├── lang/                   # textes de l'interface, un fichier par langue (fr = référence)
 ├── tests/e2e/              # parcours de toutes les routes (faux modèle, données de test)
 ├── .github/workflows/      # CI : php -l, bin/selftest.php, tests/e2e/run.sh
 └── storage/                # base + images (non versionné)
 ```
+
+---
+
+## Langues de l'interface
+
+Les textes de l'interface sont dans `lang/`, un fichier par langue (`lang/fr.php` = référence) :
+
+```php
+return [
+    '_name'          => 'Français',                       // nom affiché dans les réglages
+    'nav.library'    => 'Bibliothèque',
+    'login.blocked'  => 'Trop de tentatives. Réessaie dans {n} min.',
+    'count.photos'   => ['one' => '{n} photo', 'other' => '{n} photos'],   // pluriel
+    'js.modal.close' => 'Fermer',                         // « js.* » : aussi pour le JavaScript
+];
+```
+
+- PHP : `t('nav.library')`, `t('login.blocked', 3)`, `t('clé', ['name' => $x])` ; `t_html()` pour insérer du HTML.
+- JavaScript : `tr("modal.close")` (clés `js.*`, fournies par la page).
+- Langue : Réglages › Apparence (« Automatique » = langue du navigateur, sinon français).
+  Une clé absente dans une langue retombe sur le français.
+- **Ajouter une langue** : copier `lang/en.php` en `lang/xx.php`, traduire, puis `php bin/i18n-check.php`
+  (clés manquantes, paramètres `{…}` oubliés, pluriels, clés utilisées mais inconnues ; lancé par la CI).
+- Le dossier `lang/` doit être déployé avec le reste.
+- Migration en cours : écran de connexion, menus, page 404 et fenêtres modales sont traduits ; les autres
+  écrans le seront progressivement (le français reste affiché en attendant).
 
 ---
 

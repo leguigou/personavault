@@ -244,6 +244,24 @@ try {
     set_setting('chat_title_model', 'n’importe quoi');
     $check(chat_title_mode() === 'remote', 'valeur inconnue → modèle distant');
     set_setting('chat_title_model', 'remote');
+
+    echo PHP_EOL . '— traductions' . PHP_EOL;
+    i18n_set_locale('fr');
+    $check(t('nav.library') === 'Bibliothèque' && t('login.blocked', 3) === 'Trop de tentatives. Réessaie dans 3 min.', 'français : texte et paramètre {n}');
+    i18n_set_locale('en');
+    $check(t('nav.library') === 'Library' && t('login.blocked', 3) === 'Too many attempts. Try again in 3 min.', 'anglais : texte et paramètre {n}');
+    $unknown = 'cle' . '.inexistante'; // construite : bin/i18n-check.php ne doit pas la signaler
+    $check(t($unknown) === $unknown, 'clé inconnue : la clé elle-même (rien ne casse)');
+    $check((i18n_js()['modal.cancel'] ?? '') === 'Cancel' && !isset(i18n_js()['nav.library']), 'textes « js.* » seulement, dans la langue choisie');
+    $html = t_html('login.no_password', ['example' => '<code>a</code>', 'local' => '<code>b</code>']);
+    $check(str_contains($html, '<code>a</code>') && str_contains($html, '<code>b</code>'), 't_html : fragments HTML insérés');
+    $check(i18n_plural_form('fr', 0) === 'one' && i18n_plural_form('fr', 1) === 'one' && i18n_plural_form('fr', 2) === 'other', 'pluriel français : 0 et 1 au singulier');
+    $check(i18n_plural_form('en', 0) === 'other' && i18n_plural_form('en', 1) === 'one' && i18n_plural_form('en', 2) === 'other', 'pluriel anglais : seul 1 au singulier');
+    $langs = array_keys(i18n_available());
+    $check(i18n_from_header('en-GB,en;q=0.8,fr;q=0.5', $langs) === 'en' && i18n_from_header('fr-CA', $langs) === 'fr', 'langue du navigateur reconnue (en-GB → en, fr-CA → fr)');
+    $check(i18n_from_header('de-DE,de;q=0.9', $langs) === 'fr' && i18n_from_header('de;q=1, en;q=0.5', $langs) === 'en', 'langue absente : suivante dans la liste, sinon français');
+    $check($langs[0] === 'fr', 'français proposé en premier');
+    i18n_set_locale(null);
 } catch (Throwable $e) {
     echo '  ÉCHEC exception : ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
     $failures++;

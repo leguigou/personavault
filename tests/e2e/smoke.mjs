@@ -3,7 +3,7 @@
 // Usage : node smoke.mjs <url de l'app> <port du faux modèle> <fichier de sortie>
 // Chaque ligne : statut, type de contenu, empreinte du contenu normalisé, libellé.
 import { createHash } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const [base = 'http://127.0.0.1:18091', llmPort = '18235', out = 'smoke-result.txt'] = process.argv.slice(2);
 
@@ -29,6 +29,7 @@ const http = async (path, { method = 'GET', form, anonymous = false } = {}) => {
 
 // contenu normalisé : sans jetons, chiffres, dates ni durées (qui changent à chaque exécution)
 const norm = (t) => t
+    .replace(/<script type="application\/json" id="pv-i18n">[\s\S]*?<\/script>\n?/g, '') // textes du JS, vérifiés à part
     .replace(/p[0-9a-f]{16}/g, 'IMG') // noms d'images aléatoires
     .replace(/name="_token" value="[^"]+"/g, '')
     .replace(/data-token="[^"]+"/g, '')
@@ -46,6 +47,11 @@ const record = async (label, r) => {
     const binary = /zip|image/.test(ct);
     const body = binary ? '' : await r.text();
     const hash = createHash('md5').update(norm(body)).digest('hex').slice(0, 10);
+    // E2E_DUMP=<dossier> : enregistre chaque contenu normalisé (pour comprendre un écart)
+    if (process.env.E2E_DUMP) {
+        mkdirSync(process.env.E2E_DUMP, { recursive: true });
+        writeFileSync(`${process.env.E2E_DUMP}/${String(lines.length).padStart(2, '0')}-${label.replace(/[^\w.-]+/g, '_').slice(0, 60)}.txt`, norm(body));
+    }
     if (r.status >= 500) serverErrors++;
     lines.push(`${r.status} ${ct.padEnd(22)} ${hash}  ${label}`);
     return body;

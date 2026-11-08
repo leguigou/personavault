@@ -15,7 +15,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     $conv = $stmt->fetch();
     if (!$conv) {
         http_response_code(404);
-        render('notfound', ['title' => 'Introuvable']);
+        render('notfound', ['title' => t('notfound.title')]);
         exit;
     }
 
@@ -24,7 +24,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     $persona = $stmt->fetch();
     if (!$persona) {
         http_response_code(404);
-        render('notfound', ['title' => 'Introuvable']);
+        render('notfound', ['title' => t('notfound.title')]);
         exit;
     }
 
