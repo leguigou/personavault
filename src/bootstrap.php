@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 2);
+define('PV_SCHEMA_VERSION', 3);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -182,6 +182,9 @@ function migrate(PDO $pdo): void
         if ($version < 2) {
             migrate_v2($pdo);
         }
+        if ($version < 3) {
+            migrate_v3($pdo);
+        }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
         }
@@ -357,6 +360,38 @@ CREATE INDEX IF NOT EXISTS idx_login_ip_at ON login_attempts(ip, at);
 CREATE INDEX IF NOT EXISTS idx_login_at ON login_attempts(at);
 CREATE INDEX IF NOT EXISTS idx_conv_persona ON conversations(persona_id);
 CREATE INDEX IF NOT EXISTS idx_conv_updated ON conversations(updated_at);
+SQL);
+}
+
+/**
+ * v3 : index plein texte des messages (recherche et rappel entre conversations).
+ * Contenu externe (la table messages) tenu à jour par triggers, comme pour les souvenirs ;
+ * les messages déjà présents sont indexés par « rebuild ».
+ */
+function migrate_v3(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content,
+    content='messages',
+    content_rowid='id',
+    tokenize="unicode61 remove_diacritics 2"
+);
+
+CREATE TRIGGER IF NOT EXISTS msg_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS msg_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS msg_au AFTER UPDATE OF content ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');
 SQL);
 }
 

@@ -725,6 +725,15 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
         foreach ($rows as $r) {
             $content = trim((string) $r['content']);
             $pos   = mb_stripos($content, $q);
+            if ($pos === false) {
+                // recherche par mots : on centre l'extrait sur le premier mot présent
+                foreach (text_words($q, 2) as $w) {
+                    $pos = mb_stripos($content, $w);
+                    if ($pos !== false) {
+                        break;
+                    }
+                }
+            }
             $start = $pos !== false ? max(0, $pos - 70) : 0;
             if ($start > 0) {
                 // on recale sur un début de mot

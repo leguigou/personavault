@@ -203,6 +203,29 @@ try {
     $check(!str_contains($first, 'Contexte réel') && str_contains($first, 'Sujet : test'), 'prompt système stable (résumé, sans l’heure)');
     $check(str_starts_with($last, '<contexte>') && str_ends_with($last, 'bonjour'), 'heure et souvenirs dans le dernier message');
 
+    echo PHP_EOL . '— index plein texte des messages' . PHP_EOL;
+    db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$pid, 'ailleurs']);
+    $cid2 = (int) db()->lastInsertId();
+    $ins  = db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)');
+    $ins->execute([$cid2, 'user', 'On ira manger des pastéis à Lisbonne en été']);
+    $mLis = (int) db()->lastInsertId();
+    $ins->execute([$cid2, 'assistant', 'Le café était délicieux']);
+    $ins->execute([$cid2, 'notice', 'Lisbonne (notice technique)']);
+    $hits = static fn (string $q): array => array_column(chat_persona_search($pid, $q, 10), 'id');
+    $check($hits('lisb') === [$mLis], 'début de mot : « lisb » trouve « Lisbonne » (notices exclues)');
+    $check(count($hits('pasteis')) === 1 && count($hits('CAFE')) === 1, 'accents et majuscules ignorés');
+    $check(count($hits('lisbonne été')) === 1 && $hits('lisbonne hiver') === [], 'tous les mots doivent être présents');
+    $check(count($hits('"; DROP TABLE messages; --')) === 0 && count($hits('a* OR NEAR(')) >= 0, 'requête avec caractères spéciaux sans erreur');
+    db()->prepare('UPDATE messages SET content = ? WHERE id = ?')->execute(['On ira à Porto', $mLis]);
+    $check($hits('lisbonne') === [] && $hits('porto') === [$mLis], 'index mis à jour après modification');
+    db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$mLis]);
+    $check($hits('porto') === [], 'index mis à jour après suppression');
+    $ins->execute([$cid2, 'user', 'Tu te souviens du concert de jazz à Porto ?']);
+    $ins->execute([$cid2, 'user', 'Porto, jazz, concert, encore du jazz au concert de Porto']);
+    $rec = chat_recall_snippets($pid, 'Tu te souviens du concert de jazz ?', $cid, 2);
+    $check(count($rec) === 2 && str_contains((string) $rec[0]['content'], 'encore du jazz'), 'rappel : les extraits les plus pertinents d’abord');
+    $check((int) db()->query("SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'jazz'")->fetchColumn() === 2, 'index cohérent avec la table');
+
     echo PHP_EOL . '— fréquence des souvenirs' . PHP_EOL;
     set_setting('facts_frequency', 'every');
     set_setting('facts_every', '4');

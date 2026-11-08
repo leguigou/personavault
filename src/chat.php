@@ -722,7 +722,51 @@ function chat_like_escape(string $s): string
 }
 
 /**
+ * Requête FTS5 sûre à partir d'un texte libre : chaque mot entre guillemets (aucun
+ * opérateur interprété), en préfixe (« lisb » trouve « Lisbonne »), reliés par AND ou OR.
+ * Accents ignorés grâce au tokenizer (remove_diacritics).
+ */
+function fts_query(array $words, string $op = 'AND'): string
+{
+    $terms = [];
+    foreach ($words as $w) {
+        $w = trim(str_replace('"', '', (string) $w));
+        if ($w !== '') {
+            $terms[] = '"' . $w . '"*';
+        }
+    }
+    return implode($op === 'OR' ? ' OR ' : ' AND ', $terms);
+}
+
+/** Mots d'un texte (lettres et chiffres), en minuscules, sans doublon. */
+function text_words(string $text, int $minLen = 2, array $stop = []): array
+{
+    $out = [];
+    foreach (preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($text)) ?: [] as $w) {
+        if (mb_strlen($w) >= $minLen && !in_array($w, $stop, true) && !in_array($w, $out, true)) {
+            $out[] = $w;
+        }
+    }
+    return $out;
+}
+
+/** Normalise une ligne de résultat de recherche. */
+function chat_search_row(array $r): array
+{
+    return [
+        'id'              => (int) $r['id'],
+        'conversation_id' => (int) $r['conversation_id'],
+        'title'           => (string) $r['title'],
+        'role'            => (string) $r['role'],
+        'content'         => (string) $r['content'],
+        'created_at'      => (string) $r['created_at'],
+    ];
+}
+
+/**
  * Recherche dans TOUTES les conversations d'un persona (hors conversation courante).
+ * Index plein texte (tous les mots, en préfixe), du plus récent au plus ancien ;
+ * repli sur LIKE si l'index n'est pas disponible.
  * @return array<int, array{id:int, conversation_id:int, title:string, role:string, content:string, created_at:string}>
  */
 function chat_persona_search(int $personaId, string $query, int $limit = 8, int $excludeCid = 0): array
@@ -731,29 +775,45 @@ function chat_persona_search(int $personaId, string $query, int $limit = 8, int 
     if ($query === '') {
         return [];
     }
+    $words = array_slice(text_words($query, 1), 0, 8);
+    $limit = max(1, $limit);
+
+    if ($words) {
+        try {
+            $sql = "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, c.title
+                      FROM messages_fts f
+                      JOIN messages m ON m.id = f.rowid
+                      JOIN conversations c ON c.id = m.conversation_id
+                     WHERE messages_fts MATCH ? AND c.persona_id = ? AND m.role IN ('user', 'assistant')"
+                . ($excludeCid > 0 ? ' AND c.id <> ?' : '')
+                . ' ORDER BY m.id DESC LIMIT ' . $limit;
+            $params = [fts_query($words, 'AND'), $personaId];
+            if ($excludeCid > 0) {
+                $params[] = $excludeCid;
+            }
+            $stmt = db()->prepare($sql);
+            $stmt->execute($params);
+            return array_map('chat_search_row', $stmt->fetchAll());
+        } catch (Throwable $e) {
+            error_log('PersonaVault recherche FTS : ' . $e->getMessage());
+        }
+    }
+
+    // repli : recherche de sous-chaîne (lente sur un gros historique)
     $sql    = "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, c.title
                FROM messages m JOIN conversations c ON c.id = m.conversation_id
                WHERE c.persona_id = ? AND m.role IN ('user', 'assistant')";
     $params = [$personaId];
-
     if ($excludeCid > 0) {
         $sql .= ' AND c.id <> ?';
         $params[] = $excludeCid;
     }
-
-    $sql .= " AND m.content LIKE ? ESCAPE '\\' ORDER BY m.id DESC LIMIT " . max(1, $limit);
+    $sql .= " AND m.content LIKE ? ESCAPE '\\' ORDER BY m.id DESC LIMIT " . $limit;
     $params[] = '%' . chat_like_escape($query) . '%';
 
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
-    return array_map(static fn (array $r): array => [
-        'id'              => (int) $r['id'],
-        'conversation_id' => (int) $r['conversation_id'],
-        'title'           => (string) $r['title'],
-        'role'            => (string) $r['role'],
-        'content'         => (string) $r['content'],
-        'created_at'      => (string) $r['created_at'],
-    ], $stmt->fetchAll());
+    return array_map('chat_search_row', $stmt->fetchAll());
 }
 
 /** L'utilisateur fait-il référence à un échange passé ? */
@@ -782,29 +842,39 @@ function chat_recall_snippets(int $personaId, string $userMessage, int $excludeC
         'notre', 'nous', 'parle', 'parler', 'pour', 'pourquoi', 'quand', 'quelque', 'rappelle',
         'souviens', 'souvenir', 'toujours', 'toute', 'toutes', 'trouve', 'votre', 'vous'];
 
-    $words = preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($userMessage)) ?: [];
-    $kw    = [];
-    foreach ($words as $w) {
-        $w = trim($w);
-        if (mb_strlen($w) >= 5 && !in_array($w, $stop, true) && !in_array($w, $kw, true)) {
-            $kw[] = $w;
-        }
-    }
-    $kw = array_slice($kw, 0, 4);
+    $kw = array_slice(text_words($userMessage, 5, $stop), 0, 6);
     if (!$kw) {
         return [];
     }
+    $limit = max(1, $limit);
 
+    // index plein texte : n'importe lequel des mots-clés, les plus PERTINENTS d'abord (bm25)
+    try {
+        $stmt = db()->prepare(
+            "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, c.title
+               FROM messages_fts f
+               JOIN messages m ON m.id = f.rowid
+               JOIN conversations c ON c.id = m.conversation_id
+              WHERE messages_fts MATCH ? AND c.persona_id = ? AND m.role IN ('user', 'assistant') AND c.id <> ?
+              ORDER BY bm25(messages_fts) LIMIT " . $limit
+        );
+        $stmt->execute([fts_query($kw, 'OR'), $personaId, $excludeCid]);
+        return $stmt->fetchAll();
+    } catch (Throwable $e) {
+        error_log('PersonaVault rappel FTS : ' . $e->getMessage());
+    }
+
+    // repli : sous-chaînes, les plus récentes d'abord
     $sql    = "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, c.title
                FROM messages m JOIN conversations c ON c.id = m.conversation_id
                WHERE c.persona_id = ? AND m.role IN ('user', 'assistant') AND c.id <> ?";
     $params = [$personaId, $excludeCid];
     $like   = [];
-    foreach ($kw as $w) {
+    foreach (array_slice($kw, 0, 4) as $w) {
         $like[]   = "m.content LIKE ? ESCAPE '\\'";
         $params[] = '%' . chat_like_escape($w) . '%';
     }
-    $sql .= ' AND (' . implode(' OR ', $like) . ') ORDER BY m.id DESC LIMIT ' . max(1, $limit);
+    $sql .= ' AND (' . implode(' OR ', $like) . ') ORDER BY m.id DESC LIMIT ' . $limit;
 
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
