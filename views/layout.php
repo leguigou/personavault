@@ -87,25 +87,25 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
 
 <?php if ($isAuth && !$isChatRoom): ?>
 <nav class="tabbar" aria-label="<?= e(t('nav.mobile')) ?>">
-    <a href="/" class="<?= $isLib ? 'is-active' : '' ?>">
-        <svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-        <span><?= e(t('nav.library')) ?></span>
+    <a href="/" class="<?= $isLib ? 'is-active' : '' ?>"<?= $isLib ? ' aria-current="page"' : '' ?>>
+        <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></span>
+        <span class="tab-label"><?= e(t('nav.library')) ?></span>
     </a>
-    <a href="/chat" class="<?= $isChat ? 'is-active' : '' ?>">
-        <svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-        <span><?= e(t('nav.chats')) ?></span>
+    <a href="/chat" class="<?= $isChat ? 'is-active' : '' ?>"<?= $isChat ? ' aria-current="page"' : '' ?>>
+        <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+        <span class="tab-label"><?= e(t('nav.chats')) ?></span>
     </a>
     <a href="/p/new" class="tab-add" aria-label="<?= e(t('nav.new_persona')) ?>">
-        <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
-        <span><?= e(t('nav.new')) ?></span>
+        <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+        <span class="tab-label"><?= e(t('nav.new')) ?></span>
     </a>
-    <a href="/?fav=1" class="<?= $isFav ? 'is-active' : '' ?>">
-        <svg viewBox="0 0 24 24" class="ico"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>
-        <span><?= e(t('nav.favorites')) ?></span>
+    <a href="/?fav=1" class="<?= $isFav ? 'is-active' : '' ?>"<?= $isFav ? ' aria-current="page"' : '' ?>>
+        <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></span>
+        <span class="tab-label"><?= e(t('nav.favorites')) ?></span>
     </a>
-    <a href="/?arch=1" class="<?= $isArch ? 'is-active' : '' ?>">
-        <svg viewBox="0 0 24 24" class="ico"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-        <span><?= e(t('nav.archives')) ?></span>
+    <a href="/?arch=1" class="<?= $isArch ? 'is-active' : '' ?>"<?= $isArch ? ' aria-current="page"' : '' ?>>
+        <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+        <span class="tab-label"><?= e(t('nav.archives')) ?></span>
     </a>
 </nav>
 <?php endif; ?>

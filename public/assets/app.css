@@ -1931,7 +1931,8 @@ a.badge-tag:hover { background: rgba(167, 139, 250, .32); border-color: rgba(196
 /* ------------------------------------------------------------------ panneaux */
 
 .detail-cols { display: grid; gap: 14px; margin-top: 14px; align-items: start; }
-.detail-cols + .panel { margin-top: 14px; }
+/* toutes les cartes sous les colonnes (consigne de jeu, prompts…), pas seulement la première */
+.detail-cols ~ .panel { margin-top: 14px; }
 
 .panel {
     border-radius: 20px;
@@ -2890,4 +2891,141 @@ small.warn { color: #fcd34d; }
 @keyframes jump-in {
     from { opacity: 0; transform: translate(-50%, 6px) scale(.9); }
     to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* =================================================================
+   Barre de navigation du bas — nouveau design (v68)
+   Trois propositions, sélectionnées par html[data-tabbar] : float | pill | classic
+   ================================================================= */
+
+/* espace réservé sous le contenu, réutilisé par la barre d'enregistrement et les toasts */
+:root { --tabbar-space: calc(62px + var(--safe-b)); }
+html[data-tabbar="float"], html[data-tabbar="pill"] { --tabbar-space: calc(84px + var(--safe-b)); }
+html[data-tabbar="classic"] { --tabbar-space: calc(66px + var(--safe-b)); }
+
+.toast { bottom: calc(var(--tabbar-space) + 18px); }
+@media (max-width: 899px) {
+    form.is-dirty .save-bar { bottom: calc(var(--tabbar-space) + 10px); }
+    .page { padding-bottom: calc(var(--tabbar-space) + 40px); }
+}
+
+.tabbar .tab-ico { position: relative; display: grid; place-items: center; transition: transform .25s cubic-bezier(.2, .8, .2, 1), background .25s, box-shadow .25s; }
+.tabbar .tab-label { line-height: 1; transition: color .2s, opacity .2s; }
+.tabbar a { -webkit-tap-highlight-color: transparent; }
+.tabbar a:active .tab-ico { transform: scale(.9); }
+
+/* ------------------------------------------------ A · capsule flottante */
+html[data-tabbar="float"] .tabbar {
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + var(--safe-b));
+    height: 64px;
+    padding: 0 6px;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, .09);
+    background: rgba(16, 16, 28, .95);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .95), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+html[data-tabbar="float"] .tabbar a { gap: 4px; color: var(--muted-2); }
+html[data-tabbar="float"] .tabbar a.is-active::before { display: none; }
+html[data-tabbar="float"] .tabbar .tab-ico { width: 46px; height: 28px; border-radius: 999px; }
+html[data-tabbar="float"] .tabbar a.is-active .tab-ico {
+    background: linear-gradient(135deg, rgba(167, 139, 250, .28), rgba(236, 72, 153, .22));
+    box-shadow: 0 0 0 1px rgba(196, 181, 253, .25), 0 6px 18px -6px rgba(167, 139, 250, .7);
+}
+html[data-tabbar="float"] .tabbar a.is-active .ico { color: #f5f3ff; }
+html[data-tabbar="float"] .tabbar a.is-active .tab-label { color: #ede9fe; }
+/* « + » : bouton rond en dégradé qui dépasse de la capsule */
+html[data-tabbar="float"] .tabbar .tab-add .tab-ico {
+    width: 52px;
+    height: 52px;
+    margin-top: -26px;
+    border-radius: 50%;
+    background: var(--grad);
+    box-shadow: 0 10px 24px -6px rgba(217, 70, 239, .75), 0 0 0 5px rgba(16, 16, 28, .9);
+}
+html[data-tabbar="float"] .tabbar .tab-add .ico { width: 24px !important; height: 24px !important; color: #fff; }
+html[data-tabbar="float"] .tabbar .tab-add .tab-label { color: #d8b4fe; }
+
+/* ------------------------------------------- B · pilule qui se déplie */
+html[data-tabbar="pill"] .tabbar {
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + var(--safe-b));
+    height: 62px;
+    padding: 0 8px;
+    display: flex;
+    justify-content: space-between;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .09);
+    background: rgba(16, 16, 28, .95);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .95);
+}
+html[data-tabbar="pill"] .tabbar a {
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 7px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0 12px;
+    border-radius: 999px;
+    color: var(--muted-2);
+    transition: background .3s, color .2s, padding .3s;
+}
+html[data-tabbar="pill"] .tabbar a.is-active::before { display: none; }
+/* libellé visible seulement sur l'onglet actif (les autres le gardent pour les lecteurs d'écran) */
+html[data-tabbar="pill"] .tabbar a:not(.is-active) .tab-label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+html[data-tabbar="pill"] .tabbar a.is-active {
+    padding: 0 16px 0 13px;
+    background: var(--grad);
+    color: #fff;
+    box-shadow: 0 8px 22px -8px rgba(217, 70, 239, .8);
+}
+html[data-tabbar="pill"] .tabbar a.is-active .ico { color: #fff; }
+html[data-tabbar="pill"] .tabbar a.is-active .tab-label { font-size: 12.5px; font-weight: 700; color: #fff; }
+html[data-tabbar="pill"] .tabbar .tab-add { width: 44px; padding: 0; border: 1px solid rgba(196, 181, 253, .35); background: rgba(167, 139, 250, .14); }
+html[data-tabbar="pill"] .tabbar .tab-add .ico { color: #e9d5ff !important; }
+
+/* --------------------------------------------- C · barre classique soignée */
+html[data-tabbar="classic"] .tabbar {
+    height: calc(66px + var(--safe-b));
+    background: linear-gradient(180deg, rgba(14, 14, 24, .9), rgba(8, 8, 15, .97));
+    border-top: 1px solid rgba(255, 255, 255, .07);
+    box-shadow: 0 -12px 30px -18px rgba(0, 0, 0, .9);
+}
+html[data-tabbar="classic"] .tabbar a { gap: 5px; color: var(--muted-2); }
+html[data-tabbar="classic"] .tabbar a.is-active::before { display: none; }
+html[data-tabbar="classic"] .tabbar a.is-active .tab-label { color: #f5f3ff; }
+html[data-tabbar="classic"] .tabbar a.is-active .ico { color: #e9d5ff; filter: drop-shadow(0 0 8px rgba(196, 181, 253, .65)); }
+/* point lumineux sous l'onglet actif */
+html[data-tabbar="classic"] .tabbar a.is-active .tab-ico::after {
+    content: "";
+    position: absolute;
+    top: -9px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #f0abfc;
+    box-shadow: 0 0 8px 2px rgba(240, 171, 252, .7);
+}
+html[data-tabbar="classic"] .tabbar .tab-add .tab-ico {
+    width: 54px;
+    height: 54px;
+    margin-top: -30px;
+    border-radius: 18px;
+    background: var(--grad);
+    transform: rotate(0);
+    box-shadow: 0 12px 26px -8px rgba(217, 70, 239, .8), 0 0 0 6px rgba(10, 10, 18, 1);
+}
+html[data-tabbar="classic"] .tabbar .tab-add .ico { width: 24px !important; height: 24px !important; color: #fff; }
+html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: #d8b4fe; }
+
+@media (prefers-reduced-motion: reduce) {
+    .tabbar .tab-ico, html[data-tabbar="pill"] .tabbar a { transition: none; }
 }
