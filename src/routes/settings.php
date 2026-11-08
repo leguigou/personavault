@@ -46,6 +46,8 @@ if ($path === '/settings/ui' && $method === 'POST') {
     set_setting('ui_bubble_style', $bubble);
     set_setting('ui_density', $density);
     set_setting('ui_width', $width);
+    $tabbar = (string) ($_POST['ui_tabbar'] ?? 'default');
+    set_setting('ui_tabbar', in_array($tabbar, ['default', 'float', 'pill', 'classic'], true) ? $tabbar : 'default');
     set_setting('ui_avatars', !empty($_POST['ui_avatars']) ? '1' : '0');
     // langue de l'interface : « auto » (navigateur) ou une langue installée dans lang/
     $lang = (string) ($_POST['ui_lang'] ?? 'auto');

@@ -522,6 +522,11 @@
         });
     });
 
+    /* ------------------------ style de la barre du bas : aperçu immédiat */
+    document.querySelector("[data-tabbar-select]")?.addEventListener("change", (e) => {
+        document.documentElement.dataset.tabbar = e.target.value;
+    });
+
     /* -------------------------------------- aperçu live de l'apparence */
     const uiForm = document.querySelector("[data-ui-form]");
     const uiPreview = document.querySelector("[data-ui-preview]");

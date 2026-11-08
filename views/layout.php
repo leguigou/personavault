@@ -16,6 +16,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
       data-density="<?= e($__ui['density']) ?>"
       data-avatars="<?= $__ui['avatars'] ? '1' : '0' ?>"
       data-width="<?= e($__ui['width']) ?>"
+      data-tabbar="<?= e($__ui['tabbar']) ?>"
       style="--chat-font: <?= e((string) $__ui['font']) ?>px">
 <head>
     <meta charset="utf-8">
