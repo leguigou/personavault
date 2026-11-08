@@ -192,3 +192,13 @@ function t_html(string $key, array $htmlParams = []): string
     }
     return strtr(e(t($key, $placeholders)), $repl);
 }
+
+/**
+ * Nombre au format de la langue (séparateurs dans lang/<code>/server.php) :
+ * fmt_number(12345) → « 12 345 » (fr), « 12,345 » (en) ; fmt_number(0.7, 2) → « 0,70 » / « 0.70 ».
+ * $group = false : pas de séparateur de milliers.
+ */
+function fmt_number(float|int $n, int $decimals = 0, bool $group = true): string
+{
+    return number_format((float) $n, $decimals, t('labels.number.decimal'), $group ? t('labels.number.thousands') : '');
+}

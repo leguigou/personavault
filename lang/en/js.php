@@ -137,4 +137,10 @@ return [
     'js.recall.searching' => 'Searching…',
     'js.recall.none'      => 'Nothing found in the other conversations.',
     'js.recall.failed'    => 'Search failed.',
+    // partagés avec les vues (affichage initial côté serveur, mise à jour côté JS)
+    'js.chat.load_older'               => ['one' => 'Load {n} older message', 'other' => 'Load {n} older messages'],
+    'js.chat.ctx_auto_summary'   => [
+        'one'   => 'Auto-summary beyond {threshold} unsummarized tokens · {n} done',
+        'other' => 'Auto-summary beyond {threshold} unsummarized tokens · {n} done',
+    ],
 ];

@@ -56,9 +56,8 @@ return [
     'settings.chat.subtitle'    => 'Utilisé uniquement pour parler aux personas. Si LM Studio est éteint, l’app bascule sur DeepSeek en te prévenant.',
     'settings.chat.connection_title' => 'Connexion au modèle',
     'settings.chat.model_aria'  => 'Modèle de discussion',
-    // forme « one » volontairement identique à l'ancien texte (« 1 modèles détectés ») : à corriger à part
     'settings.chat.models_detected' => [
-        'one'   => '{n} modèles détectés · ★ = recommandés pour la discussion.',
+        'one'   => '{n} modèle détecté · ★ = recommandés pour la discussion.',
         'other' => '{n} modèles détectés · ★ = recommandés pour la discussion.',
     ],
     'settings.chat.model_manual' => 'Serveur injoignable : saisis le nom du modèle à la main.',

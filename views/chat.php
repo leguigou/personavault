@@ -3,7 +3,7 @@
 $hue   = hue_for((string) $persona['name']);
 $token = csrf_token();
 $model = (string) ($conv['model'] !== '' ? $conv['model'] : $chatModel);
-$fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
+$fmt   = fn (float $n): string => fmt_number($n);
 // « . "\n" » après un texte en fin de ligne : garde le saut de ligne qu’avalerait la balise PHP fermante.
 ?>
 <div class="chat-shell">
@@ -82,7 +82,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
                     <button type="button" class="btn btn-ghost btn-sm" data-load-older
                             data-before="<?= (int) $messages[0]['id'] ?>"
                             data-url="/chat/<?= (int) $conv['id'] ?>/messages">
-                        <?= strtr(e(t('chat.load_older', ['n' => (int) $olderLeft, 'count' => '{count}'])), ['{count}' => '<span data-older-left>' . (int) $olderLeft . '</span>']) ?>
+                        <?= e(t('js.chat.load_older', (int) $olderLeft)) ?>
                     </button>
                 </div>
             <?php endif; ?>
@@ -199,7 +199,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
             <div class="sheet-ctx-text">
                 <strong><?= e(t('chat.sheet.ctx_percent', ['percent' => (int) $memory['percent']])) ?></strong>
                 <span><?= e(t('chat.sheet.ctx_tokens', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?></span>
-                <span><?= e(t('chat.sheet.ctx_auto_summary', ['n' => (int) $memory['compressions'], 'threshold' => $fmt((float) chat_memory_threshold())])) ?></span>
+                <span data-threshold="<?= e($fmt((float) chat_memory_threshold())) ?>"><?= e(t('js.chat.ctx_auto_summary', ['n' => (int) $memory['compressions'], 'threshold' => $fmt((float) chat_memory_threshold())])) ?></span>
             </div>
         </section>
 
@@ -212,7 +212,7 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
         <div class="lms-actions">
             <button type="button" class="btn btn-ghost btn-sm" data-load-model>
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span data-load-label><?= e(t('chat.lms.load_now')) ?></span>
+                <span data-load-label><?= e(t('js.lms.load_now')) ?></span>
             </button>
         </div>
 
@@ -234,9 +234,9 @@ $fmt   = fn (float $n): string => number_format($n, 0, ',', ' ');
             </div>
             <p class="perso-line">
                 <b><?= e($model !== '' ? $model : t('chat.persona.model_global')) ?></b>
-                <span><?= e(t('chat.persona.temperature', ['value' => number_format((float) $conv['temperature'], 2, ',', '')])) ?></span>
+                <span><?= e(t('chat.persona.temperature', ['value' => fmt_number((float) $conv['temperature'], 2, false)])) ?></span>
                 <span><?= e(t('chat.persona.max_tokens', ['count' => (int) $conv['max_tokens']])) ?></span>
-                <span><?= e(t('chat.persona.window', ['size' => number_format((int) $conv['context_window'], 0, ',', ' ')])) ?></span>
+                <span><?= e(t('chat.persona.window', ['size' => fmt_number((int) $conv['context_window'])])) ?></span>
             </p>
             <?php if (trim((string) $conv['directive']) !== ''): ?>
                 <p class="hint perso-directive"><?= e(t('chat.persona.directive', ['text' => mb_substr(trim((string) $conv['directive']), 0, 160)])) ?></p>

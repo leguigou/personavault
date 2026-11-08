@@ -255,12 +255,12 @@ $facts = facts_settings();
 
             <div class="row2">
                 <label class="field range-field">
-                    <span><?= e(t('settings.split.delay_min')) ?> <b data-out="dmin"><?= e(number_format((float) setting('chat_split_delay_min', '1'), 1, ',', '')) ?> s</b></span>
+                    <span><?= e(t('settings.split.delay_min')) ?> <b data-out="dmin"><?= e(fmt_number((float) setting('chat_split_delay_min', '1'), 1, false)) ?> s</b></span>
                     <input class="range" type="range" name="chat_split_delay_min" min="0.5" max="3" step="0.1"
                            value="<?= e((string) setting('chat_split_delay_min', '1')) ?>" data-out="dmin" data-suffix=" s">
                 </label>
                 <label class="field range-field">
-                    <span><?= e(t('settings.split.delay_max')) ?> <b data-out="dmax"><?= e(number_format((float) setting('chat_split_delay_max', '2'), 1, ',', '')) ?> s</b></span>
+                    <span><?= e(t('settings.split.delay_max')) ?> <b data-out="dmax"><?= e(fmt_number((float) setting('chat_split_delay_max', '2'), 1, false)) ?> s</b></span>
                     <input class="range" type="range" name="chat_split_delay_max" min="0.5" max="4" step="0.1"
                            value="<?= e((string) setting('chat_split_delay_max', '2')) ?>" data-out="dmax" data-suffix=" s">
                 </label>
@@ -602,7 +602,7 @@ $facts = facts_settings();
         <p class="hint">
             <?php if (setting('backup_last_at', '') !== ''): ?>
                 <?= e(t('settings.backup.last', ['date' => fr_date(setting('backup_last_at'))])) ?>
-                · <?= e(t('settings.backup.size_mb', ['size' => number_format(((int) setting('backup_last_size', '0')) / 1048576, 1, ',', ' ')])) ?>
+                · <?= e(t('settings.backup.size_mb', ['size' => fmt_number(((int) setting('backup_last_size', '0')) / 1048576, 1)])) ?>
 
             <?php else: ?>
                 <?= e(t('settings.backup.none')) ?>

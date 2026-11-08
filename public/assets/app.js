@@ -1309,8 +1309,7 @@
                 if (d.left <= 0) {
                     olderBtn.remove();
                 } else {
-                    const span = olderBtn.querySelector("[data-older-left]");
-                    if (span) span.textContent = d.left;
+                    olderBtn.textContent = tr("chat.load_older", d.left);
                     olderBtn.disabled = false;
                 }
             } catch (e) {
@@ -1672,10 +1671,7 @@
                 const sp = ctx.querySelectorAll("span");
                 if (sp[0]) sp[0].textContent = tr("chat.ctx_tokens", { used: fmt(m.context_tokens), window: fmt(m.window) });
                 if (sp[1] && typeof m.compressions === "number") {
-                    sp[1].textContent = sp[1].textContent.replace(
-                        /\d+ faite(s?)/,
-                        m.compressions + " faite" + (m.compressions > 1 ? "s" : "")
-                    );
+                    sp[1].textContent = tr("chat.ctx_auto_summary", { n: m.compressions, threshold: sp[1].dataset.threshold || "" });
                 }
             }
             if (typeof summary === "string" && summary.trim() !== "") {

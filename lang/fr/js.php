@@ -137,4 +137,10 @@ return [
     'js.recall.searching' => 'Recherche…',
     'js.recall.none'      => 'Rien trouvé dans les autres conversations.',
     'js.recall.failed'    => 'Recherche impossible.',
+    // partagés avec les vues (affichage initial côté serveur, mise à jour côté JS)
+    'js.chat.load_older'               => ['one' => 'Charger {n} message plus ancien', 'other' => 'Charger {n} messages plus anciens'],
+    'js.chat.ctx_auto_summary'   => [
+        'one'   => 'Résumé auto au-delà de {threshold} tokens non résumés · {n} fait',
+        'other' => 'Résumé auto au-delà de {threshold} tokens non résumés · {n} faits',
+    ],
 ];

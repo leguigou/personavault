@@ -55,7 +55,7 @@
                 </div>
                 <div class="conv-meta">
                     <em><?= e(t('chat.list.message_count', (int) $c['n'])) ?></em>
-                    <time><?= e(date('d/m', strtotime((string) $c['updated_at'] . ' UTC'))) ?></time>
+                    <time><?= e(date(t('date.day_month_format'), strtotime((string) $c['updated_at'] . ' UTC'))) ?></time>
                 </div>
             </a>
         <?php endforeach; ?>

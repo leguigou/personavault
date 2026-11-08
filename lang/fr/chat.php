@@ -33,7 +33,6 @@ return [
 
     // --- conversation : messages et composeur
     // {count} est remplacé par un <span> (le JavaScript met le nombre à jour) ; {n} choisit la forme
-    'chat.load_older'               => ['one' => 'Charger {count} message plus ancien', 'other' => 'Charger {count} messages plus anciens'],
     'chat.intro.first_message'      => 'Écris le premier message.',
     'chat.msg.photo_sent'           => 'Photo envoyée',
     'chat.composer.attach_preview'  => 'Aperçu de la photo jointe',
@@ -51,16 +50,11 @@ return [
     'chat.sheet.eyebrow'            => 'Conversation',
     'chat.sheet.ctx_percent'        => '{percent} % du contexte',
     'chat.sheet.ctx_tokens'         => '{used} / {window} tokens',
-    'chat.sheet.ctx_auto_summary'   => [
-        'one'   => 'Résumé auto au-delà de {threshold} tokens non résumés · {n} fait',
-        'other' => 'Résumé auto au-delà de {threshold} tokens non résumés · {n} faits',
-    ],
     'chat.sheet.save'               => 'Enregistrer',
 
     // --- état du serveur local et chargement du modèle
     'chat.lms.checking'             => 'Vérification du serveur…',
     'chat.lms.refresh'              => 'Actualiser l’état',
-    'chat.lms.load_now'             => 'Charger le modèle maintenant',
     'chat.lms.step_server'          => 'Serveur',
     'chat.lms.step_request'         => 'Requête',
     'chat.lms.step_loading'         => 'Chargement',

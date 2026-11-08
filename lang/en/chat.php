@@ -32,7 +32,6 @@ return [
     'chat.head.settings'            => 'Context and settings',
 
     // --- conversation: messages and composer
-    'chat.load_older'               => ['one' => 'Load {count} older message', 'other' => 'Load {count} older messages'],
     'chat.intro.first_message'      => 'Write the first message.',
     'chat.msg.photo_sent'           => 'Photo sent',
     'chat.composer.attach_preview'  => 'Preview of the attached photo',
@@ -50,16 +49,11 @@ return [
     'chat.sheet.eyebrow'            => 'Conversation',
     'chat.sheet.ctx_percent'        => '{percent}% of context',
     'chat.sheet.ctx_tokens'         => '{used} / {window} tokens',
-    'chat.sheet.ctx_auto_summary'   => [
-        'one'   => 'Auto-summary beyond {threshold} unsummarized tokens · {n} done',
-        'other' => 'Auto-summary beyond {threshold} unsummarized tokens · {n} done',
-    ],
     'chat.sheet.save'               => 'Save',
 
     // --- local server status and model loading
     'chat.lms.checking'             => 'Checking the server…',
     'chat.lms.refresh'              => 'Refresh status',
-    'chat.lms.load_now'             => 'Load the model now',
     'chat.lms.step_server'          => 'Server',
     'chat.lms.step_request'         => 'Request',
     'chat.lms.step_loading'         => 'Loading',

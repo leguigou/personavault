@@ -277,8 +277,14 @@ return [
   (clés manquantes ou en double, paramètres `{…}` oubliés, pluriels, HTML hors des clés `_html`, clés
   utilisées mais inconnues ; lancé par la CI).
 - Le dossier `lang/` doit être déployé avec le reste.
-- Migration en cours : écran de connexion, menus, page 404 et fenêtres modales sont traduits ; les autres
-  écrans le seront progressivement (le français reste affiché en attendant).
+- Toute l'interface est traduite en **français, anglais et espagnol** (≈ 720 textes) : pages, JavaScript,
+  messages du serveur, dates (`fr_date()`), nombres (`fmt_number()` : « 12 345 » / « 12,345 »).
+- Restent en français, volontairement : les consignes envoyées aux modèles (Réglages › Prompts), et les
+  notices déjà enregistrées dans une conversation (écrites dans la langue du moment).
+- La détection de « retiens que… », « tu te souviens… » fonctionne dans les trois langues, quelle que soit
+  la langue de l'interface (« remember that… », « recuerda que… »).
+- Détail d'écriture : PHP supprime le saut de ligne qui suit `?>`. Un texte traduit seul en fin de ligne
+  s'écrit donc `<?= e(t('…')), "\n" ?>` pour garder un rendu identique.
 
 ---
 

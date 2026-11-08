@@ -32,7 +32,6 @@ return [
     'chat.head.settings'            => 'Contexto y ajustes',
 
     // --- conversación: mensajes y redacción
-    'chat.load_older'               => ['one' => 'Cargar {count} mensaje anterior', 'other' => 'Cargar {count} mensajes anteriores'],
     'chat.intro.first_message'      => 'Escribe el primer mensaje.',
     'chat.msg.photo_sent'           => 'Foto enviada',
     'chat.composer.attach_preview'  => 'Vista previa de la foto adjunta',
@@ -50,16 +49,11 @@ return [
     'chat.sheet.eyebrow'            => 'Conversación',
     'chat.sheet.ctx_percent'        => '{percent} % del contexto',
     'chat.sheet.ctx_tokens'         => '{used} / {window} tokens',
-    'chat.sheet.ctx_auto_summary'   => [
-        'one'   => 'Resumen automático a partir de {threshold} tokens sin resumir · {n} hecho',
-        'other' => 'Resumen automático a partir de {threshold} tokens sin resumir · {n} hechos',
-    ],
     'chat.sheet.save'               => 'Guardar',
 
     // --- estado del servidor local y carga del modelo
     'chat.lms.checking'             => 'Comprobando el servidor…',
     'chat.lms.refresh'              => 'Actualizar el estado',
-    'chat.lms.load_now'             => 'Cargar el modelo ahora',
     'chat.lms.step_server'          => 'Servidor',
     'chat.lms.step_request'         => 'Petición',
     'chat.lms.step_loading'         => 'Carga',

@@ -123,6 +123,7 @@ return [
     'date.month_short.10'         => 'oct.',
     'date.month_short.11'         => 'nov.',
     'date.month_short.12'         => 'déc.',
+    'date.day_month_format'       => 'd/m', // format PHP date() : jour/mois
     'date.short'                  => '{day} {month} {year}',
 
     // --- nombres et tailles

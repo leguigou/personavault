@@ -107,7 +107,8 @@ $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, Filesy
 foreach ($it as $file) {
     $path = $file->getPathname();
     $rel  = substr($path, strlen($root) + 1);
-    if (!preg_match('/\.(php|js)$/', $rel) || preg_match('#^(lang/|tests/|\.git/|storage/|bin/i18n-check\.php)#', $rel)) {
+    // dossiers cachés (.git, .claude…) ignorés
+    if (!preg_match('/\.(php|js)$/', $rel) || preg_match('#^(lang/|tests/|\.|storage/|vendor/|node_modules/|bin/i18n-check\.php)#', $rel)) {
         continue;
     }
     $code = (string) file_get_contents($path);
