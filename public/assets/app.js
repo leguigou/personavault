@@ -527,6 +527,28 @@
         document.documentElement.dataset.tabbar = e.target.value;
     });
 
+    /* ------------------- thème (couleur principale, mode) : aperçu immédiat */
+    document.querySelector("[data-accent-select]")?.addEventListener("change", (e) => {
+        document.documentElement.dataset.accent = e.target.value;
+    });
+    document.querySelector("[data-mode-select]")?.addEventListener("change", (e) => {
+        const mode = e.target.value;
+        document.documentElement.dataset.mode = mode;
+        // barre du navigateur : une balise par mode affiché (deux en « auto », avec media)
+        let colors = {};
+        try { colors = JSON.parse(e.target.dataset.themeColors || "{}"); } catch (err) {}
+        document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.remove());
+        (mode === "auto" ? ["dark", "light"] : [mode]).forEach((m) => {
+            const meta = document.createElement("meta");
+            meta.name = "theme-color";
+            meta.content = colors[m] || "";
+            if (mode === "auto") meta.media = "(prefers-color-scheme: " + m + ")";
+            document.head.appendChild(meta);
+        });
+        const scheme = document.querySelector('meta[name="color-scheme"]');
+        if (scheme) scheme.content = mode === "auto" ? "dark light" : mode;
+    });
+
     /* -------------------------------------- aperçu live de l'apparence */
     const uiForm = document.querySelector("[data-ui-form]");
     const uiPreview = document.querySelector("[data-ui-preview]");

@@ -431,8 +431,20 @@ function ui_style(): array
         // (capsule flottante par défaut, y compris pour l'ancienne valeur « default »)
         'tabbar'  => in_array(setting('ui_tabbar', 'float'), ['float', 'pill', 'classic'], true)
             ? setting('ui_tabbar', 'float') : 'float',
+        // thème : couleur principale (palettes dans app.css, html[data-accent]) et mode
+        'accent'  => in_array(setting('ui_accent', 'violet'), UI_ACCENTS, true)
+            ? setting('ui_accent', 'violet') : 'violet',
+        'mode'    => in_array(setting('ui_mode', 'dark'), UI_MODES, true)
+            ? setting('ui_mode', 'dark') : 'dark',
     ];
 }
+
+/** Couleurs principales proposées (la première est celle par défaut). */
+const UI_ACCENTS = ['violet', 'ocean', 'emerald', 'coral', 'rose', 'amber'];
+/** Modes : sombre (par défaut), clair, automatique (suit le réglage du téléphone). */
+const UI_MODES = ['dark', 'light', 'auto'];
+/** Couleur de la barre du navigateur (<meta name="theme-color">) selon le mode affiché. */
+const UI_THEME_COLORS = ['dark' => '#08080f', 'light' => '#f4f3f8'];
 
 function setting(string $key, string $default = ''): string
 {

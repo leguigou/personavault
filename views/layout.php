@@ -17,11 +17,20 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
       data-avatars="<?= $__ui['avatars'] ? '1' : '0' ?>"
       data-width="<?= e($__ui['width']) ?>"
       data-tabbar="<?= e($__ui['tabbar']) ?>"
+      data-accent="<?= e($__ui['accent']) ?>"
+      data-mode="<?= e($__ui['mode']) ?>"
       style="--chat-font: <?= e((string) $__ui['font']) ?>px">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-    <meta name="theme-color" content="#08080f">
+    <?php /* barre du navigateur : une couleur par mode ; en « auto », le navigateur choisit selon le téléphone */ ?>
+    <?php if ($__ui['mode'] === 'auto'): ?>
+    <meta name="theme-color" content="<?= e(UI_THEME_COLORS['dark']) ?>" media="(prefers-color-scheme: dark)" data-theme-color="dark">
+    <meta name="theme-color" content="<?= e(UI_THEME_COLORS['light']) ?>" media="(prefers-color-scheme: light)" data-theme-color="light">
+    <?php else: ?>
+    <meta name="theme-color" content="<?= e(UI_THEME_COLORS[$__ui['mode']]) ?>" data-theme-color="<?= e($__ui['mode']) ?>">
+    <?php endif; ?>
+    <meta name="color-scheme" content="<?= $__ui['mode'] === 'auto' ? 'dark light' : e($__ui['mode']) ?>">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="PersonaVault">

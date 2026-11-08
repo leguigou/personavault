@@ -476,6 +476,22 @@ try {
     $check(export_filename('Week-end à Lisbonne !', 'md', '2026-11-08') === 'week-end-a-lisbonne-2026-11-08.md'
         && export_filename('???', 'txt', '2026-11-08') === 'conversation-2026-11-08.txt', 'nom de fichier propre à partir du titre');
     $check(export_bubbles(['content' => 'Un. Deux.', 'split_points' => '[4]']) === ['Un.', 'Deux.'], 'page imprimable : découpage en bulles');
+    echo PHP_EOL . '— thèmes' . PHP_EOL;
+    $ui = ui_style();
+    $check($ui['accent'] === 'violet' && $ui['mode'] === 'dark', 'par défaut : Violet + Sombre (rendu historique)');
+    set_setting('ui_accent', 'ocean');
+    set_setting('ui_mode', 'auto');
+    $ui = ui_style();
+    $check($ui['accent'] === 'ocean' && $ui['mode'] === 'auto', 'couleur et mode enregistrés relus');
+    set_setting('ui_accent', 'fluo"><script>');
+    set_setting('ui_mode', 'nuit');
+    $ui = ui_style();
+    $check($ui['accent'] === 'violet' && $ui['mode'] === 'dark', 'valeur inconnue → valeur par défaut');
+    $css = (string) file_get_contents(PV_ROOT . '/public/assets/app.css');
+    $missing = array_filter(array_slice(UI_ACCENTS, 1), static fn ($a) => !str_contains($css, 'html[data-accent="' . $a . '"]'));
+    $check($missing === [], 'chaque couleur proposée a sa palette dans app.css');
+    $check(str_contains($css, 'html[data-mode="light"]') && str_contains($css, 'html[data-mode="auto"]'), 'modes clair et automatique présents dans app.css');
+    $check(isset(UI_THEME_COLORS['dark'], UI_THEME_COLORS['light']), 'couleur de barre du navigateur pour chaque mode');
 } catch (Throwable $e) {
     echo '  ÉCHEC exception : ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
     $failures++;

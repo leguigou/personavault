@@ -466,6 +466,39 @@ $facts = facts_settings();
             <small><?= e(t('settings.look.tabbar_help')) ?></small>
         </div>
 
+        <div class="row2">
+            <div class="field">
+                <span><?= e(t('theme.accent')) ?></span>
+                <div class="sel" data-sel>
+                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('theme.accent')) ?>">
+                        <span class="sel-value"></span>
+                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <select name="ui_accent" class="sel-native" data-accent-select>
+                        <?php foreach (['violet' => t('theme.accent_violet'), 'ocean' => t('theme.accent_ocean'), 'emerald' => t('theme.accent_emerald'), 'coral' => t('theme.accent_coral'), 'rose' => t('theme.accent_rose'), 'amber' => t('theme.accent_amber')] as $val => $label): ?>
+                            <option value="<?= e($val) ?>" <?= $style['accent'] === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field">
+                <span><?= e(t('theme.mode')) ?></span>
+                <div class="sel" data-sel>
+                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('theme.mode')) ?>">
+                        <span class="sel-value"></span>
+                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <select name="ui_mode" class="sel-native" data-mode-select data-theme-colors="<?= e((string) json_encode(UI_THEME_COLORS)) ?>">
+                        <?php foreach (['dark' => t('theme.mode_dark'), 'light' => t('theme.mode_light'), 'auto' => t('theme.mode_auto')] as $val => $label): ?>
+                            <option value="<?= e($val) ?>" <?= $style['mode'] === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <small><?= e(t('theme.help')) ?></small>
+            </div>
+        </div>
+
         <div class="ui-preview" data-ui-preview aria-label="<?= e(t('settings.look.preview')) ?>">
             <div class="pv-msg pv-bot">
                 <span class="pv-av">L</span>

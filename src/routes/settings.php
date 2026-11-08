@@ -48,6 +48,10 @@ if ($path === '/settings/ui' && $method === 'POST') {
     set_setting('ui_width', $width);
     $tabbar = (string) ($_POST['ui_tabbar'] ?? 'float');
     set_setting('ui_tabbar', in_array($tabbar, ['float', 'pill', 'classic'], true) ? $tabbar : 'float');
+    $accent = (string) ($_POST['ui_accent'] ?? 'violet');
+    set_setting('ui_accent', in_array($accent, UI_ACCENTS, true) ? $accent : 'violet');
+    $mode = (string) ($_POST['ui_mode'] ?? 'dark');
+    set_setting('ui_mode', in_array($mode, UI_MODES, true) ? $mode : 'dark');
     set_setting('ui_avatars', !empty($_POST['ui_avatars']) ? '1' : '0');
     // langue de l'interface : « auto » (navigateur) ou une langue installée dans lang/
     $lang = (string) ($_POST['ui_lang'] ?? 'auto');
