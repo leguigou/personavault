@@ -33,6 +33,14 @@
 404 text/html  GET /photos/1
 200 text/javascript  GET /assets/app.js
 200 image/webp  GET /media/(portrait)
+200 text/plain  GET /chat/1/export.txt
+200 text/markdown  GET /chat/1/export.md
+200 text/html  GET /chat/1/print
+404 text/html  GET /chat/999/export.txt
+200 application/zip  GET /p/camille-lefebvre/export.zip
+200 image/png  GET /p/camille-lefebvre/card.png
+200 application/json  GET /p/camille-lefebvre/card.json
+303 text/html  POST /import (carte JSON)
 303 text/html  POST /p
 303 text/html  POST /p/smoke-test/favorite
 303 text/html  POST /p/smoke-test/archive

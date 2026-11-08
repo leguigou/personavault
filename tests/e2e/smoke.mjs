@@ -93,6 +93,26 @@ for (const u of ['/', '/?fav=1', '/?arch=1', '/?q=lis', '/?tag=romance', '/p/new
 }
 await record('GET /media/(portrait)', await http(media));
 
+// --- exports (conversation, fiche) et import d'une fiche
+for (const u of ['/chat/1/export.txt', '/chat/1/export.md', '/chat/1/print', '/chat/999/export.txt', '/p/camille-lefebvre/export.zip', '/p/camille-lefebvre/card.png']) {
+    const body = await record('GET ' + u, await http(u));
+    if (u === '/chat/1/export.txt') expect(body.includes('Week-end à Lisbonne') && body.includes('Message 11'), 'export texte : titre et messages');
+    if (u === '/chat/1/export.md') expect(body.startsWith('# '), 'export Markdown : titre');
+}
+const cardRes = await http('/p/camille-lefebvre/card.json');
+const cardJson = await cardRes.clone().text();
+await record('GET /p/camille-lefebvre/card.json', cardRes);
+expect(JSON.parse(cardJson).spec === 'chara_card_v2', 'carte exportée au format chara_card_v2');
+{
+    const fd = new FormData();
+    fd.append('_token', csrf);
+    fd.append('card', new Blob([cardJson], { type: 'application/json' }), 'camille.card.json');
+    const r = await fetch(base + '/import', { method: 'POST', body: fd, redirect: 'manual', headers: { cookie: cookieHeader() } });
+    remember(r);
+    expect(r.status === 303 && /\/p\/camille-lefebvre-/.test(r.headers.get('location') || ''), 'import de la carte : nouvelle fiche créée sans écraser l’originale');
+    await record('POST /import (carte JSON)', r);
+}
+
 // --- actions (POST), dans un ordre fixe
 const post = async (u, form = {}, label = u) => record('POST ' + label, await http(u, { method: 'POST', form: { _token: csrf, ...form } }));
 await post('/p', { name: 'Smoke Test', tagline: 'essai', description: 'd', tags: 'a, b', meta: 'Âge: 30' });
