@@ -55,7 +55,7 @@ if ($path === '/' && $method === 'GET') {
     arsort($allTags);
 
     render('library', [
-        'title'    => 'Personas',
+        'title'    => t('app.default_title'),
         'personas' => $personas,
         'counts'   => $counts,
         'q'        => $q,
@@ -71,7 +71,7 @@ if ($path === '/' && $method === 'GET') {
 /* --------------------------------------------------------------- création */
 
 if ($path === '/p/new' && $method === 'GET') {
-    render('form', ['title' => 'Nouveau persona', 'persona' => null, 'photos' => [], 'prompts' => []]);
+    render('form', ['title' => t('nav.new_persona'), 'persona' => null, 'photos' => [], 'prompts' => []]);
     exit;
 }
 
@@ -79,7 +79,7 @@ if ($path === '/p' && $method === 'POST') {
     csrf_check();
     $name = trim((string) ($_POST['name'] ?? ''));
     if ($name === '') {
-        flash('error', 'Il faut au moins un nom.');
+        flash('error', t('flash.persona.name_required'));
         redirect('/p/new');
     }
     $tags = parse_tags((string) ($_POST['tags'] ?? ''));
@@ -92,7 +92,7 @@ if ($path === '/p' && $method === 'POST') {
             $avatar = store_upload($_FILES['avatar']);
         }
     } catch (Throwable $e) {
-        flash('error', 'Avatar : ' . public_error($e));
+        flash('error', t('flash.persona.avatar_error', ['error' => public_error($e)]));
     }
 
     $stmt = db()->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta) VALUES (?,?,?,?,?,?,?)');
@@ -109,6 +109,6 @@ if ($path === '/p' && $method === 'POST') {
     $stmt = db()->prepare('UPDATE personas SET updated_at = datetime("now") WHERE id = ?');
     $stmt->execute([$id]);
 
-    flash('ok', $name . ' rejoint la bibliothèque.');
+    flash('ok', t('flash.persona.created', ['name' => $name]));
     redirect('/p/' . $slug);
 }

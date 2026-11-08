@@ -25,7 +25,7 @@ if ($path === '/chat' && $method === 'GET') {
     $personas = db()->query('SELECT id, slug, name, tagline, avatar, tags FROM personas WHERE archived = 0 ORDER BY name')->fetchAll();
 
     render('chat_list', [
-        'title'       => 'Discussions',
+        'title'       => t('nav.chats'),
         'conversations' => $convStmt->fetchAll(),
         'personas'    => $personas,
         'chatReady'   => chat_llm_ready(),
@@ -41,10 +41,11 @@ if ($path === '/chat' && $method === 'POST') {
     $stmt->execute([$pid]);
     $persona = $stmt->fetch();
     if (!$persona) {
-        flash('error', 'Choisis un persona pour démarrer la discussion.');
+        flash('error', t('flash.chat.pick_persona'));
         redirect('/chat');
     }
     $stmt = db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)');
-    $stmt->execute([$pid, 'Discussion avec ' . $persona['name']]);
+    // titre par défaut enregistré en base (affiché, jamais envoyé au modèle) : langue de l'interface
+    $stmt->execute([$pid, t('labels.chat.default_title', ['name' => $persona['name']])]);
     redirect('/chat/' . (int) db()->lastInsertId());
 }

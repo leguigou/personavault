@@ -11,7 +11,7 @@ if ($path === '/backup/export.zip' && $method === 'GET') {
     try {
         $zip = backup_create_zip(((string) ($_GET['conv'] ?? '')) === '1');
     } catch (Throwable $e) {
-        flash('error', 'Sauvegarde impossible : ' . public_error($e));
+        flash('error', t('flash.backup.export_failed', ['error' => public_error($e)]));
         redirect('/settings#backup');
         exit;
     }
@@ -32,19 +32,22 @@ if ($path === '/backup/import' && $method === 'POST') {
     try {
         $archive = $_FILES['archive'] ?? null;
         if (!upload_present($archive)) {
-            throw new RuntimeException('Aucun fichier reçu.');
+            throw new RuntimeException(t('error.upload.no_file'));
         }
         if ((int) $archive['error'] !== UPLOAD_ERR_OK) {
             throw new RuntimeException(upload_error_message((int) $archive['error']));
         }
         $res = backup_import_zip((string) $archive['tmp_name']);
-        flash('ok', 'Import terminé : ' . plural((int) $res['personas'], 'persona', 'personas') . ', '
-            . plural((int) $res['photos'], 'photo', 'photos') . ', ' . plural((int) $res['prompts'], 'prompt', 'prompts') . '.');
+        flash('ok', t('flash.backup.imported', [
+            'personas' => t('labels.count.personas', (int) $res['personas']),
+            'photos'   => t('labels.count.photos', (int) $res['photos']),
+            'prompts'  => t('labels.count.prompts', (int) $res['prompts']),
+        ]));
         if (!empty($res['errors'])) {
             flash('error', implode(' · ', array_slice($res['errors'], 0, 3)));
         }
     } catch (Throwable $e) {
-        flash('error', 'Import impossible : ' . public_error($e));
+        flash('error', t('flash.backup.import_failed', ['error' => public_error($e)]));
     }
     redirect('/settings#backup');
 }

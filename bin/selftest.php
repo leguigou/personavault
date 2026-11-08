@@ -245,6 +245,63 @@ try {
     $check(chat_title_mode() === 'remote', 'valeur inconnue → modèle distant');
     set_setting('chat_title_model', 'remote');
 
+    echo PHP_EOL . '— détection multilingue (rappel, demande de mémorisation, mots vides)' . PHP_EOL;
+    $all  = static fn (callable $fn, array $list): bool => count(array_filter($list, $fn)) === count($list);
+    $none = static fn (callable $fn, array $list): bool => !array_filter($list, $fn);
+    $check($all('chat_has_recall_cue', ['Tu te souviens de notre balade ?', 'La dernière fois on parlait de Porto', 'Comme convenu, je passe demain']),
+        'rappel : français');
+    $check($all('chat_has_recall_cue', ['Do you remember our trip?', 'Last time we talked about jazz', 'As agreed, I’ll come tomorrow']),
+        'rappel : anglais');
+    $check($all('chat_has_recall_cue', ['¿Te acuerdas del concierto?', 'La última vez hablamos de Oporto', 'Como quedamos, paso mañana']),
+        'rappel : espagnol');
+    $check($none('chat_has_recall_cue', ['Salut, ça va ?', 'What are you doing tonight?', '¿Qué haces esta noche?']),
+        'rappel : pas de faux positif sur une phrase ordinaire (3 langues)');
+    $check($all('facts_explicit_request', ['Retiens que je suis végétarien', 'Souviens-toi que mon chat s’appelle Tom', 'N’oublie pas mon anniversaire']),
+        'demande de mémorisation : français');
+    $check($all('facts_explicit_request', ['Remember that I’m allergic to nuts', 'Please keep in mind that I work nights', "Don't forget my birthday is in May"]),
+        'demande de mémorisation : anglais');
+    $check($all('facts_explicit_request', ['Recuerda que soy vegetariano', 'No olvides que trabajo de noche', 'Apunta que mi gato se llama Tom']),
+        'demande de mémorisation : espagnol');
+    $check($none('facts_explicit_request', ['Tu te souviens de ce jour ?', 'Do you remember that day?', '¿Recuerdas aquel día?', 'J’aime le jazz', 'I like jazz', 'Me gusta el jazz']),
+        'demande de mémorisation : une question « tu te souviens ? » n’en est pas une (3 langues)');
+
+    // mots vides : une phrase faite uniquement d'indices de rappel ne cherche rien
+    $ins->execute([$cid2, 'user', 'I remember we talked about it yesterday']);
+    $ins->execute([$cid2, 'user', 'Hablamos de eso, ¿te acuerdas? La última vez']);
+    $check(chat_recall_snippets($pid, 'Do you remember what we talked about yesterday?', $cid, 3) === [], 'rappel : mots vides anglais ignorés');
+    $check(chat_recall_snippets($pid, '¿Te acuerdas de lo que hablamos la última vez?', $cid, 3) === [], 'rappel : mots vides espagnols ignorés');
+    $rec = chat_recall_snippets($pid, 'Do you remember the jazz concert?', $cid, 2);
+    $check(count($rec) === 2 && str_contains((string) $rec[0]['content'], 'concert'), 'rappel en anglais : les mots utiles sont cherchés');
+    $ins->execute([$cid2, 'user', 'Fuimos al concierto de jazz en Oporto']);
+    $rec = chat_recall_snippets($pid, '¿Te acuerdas del concierto en Oporto?', $cid, 2);
+    $check(count($rec) === 1 && str_contains((string) $rec[0]['content'], 'Fuimos'), 'rappel en espagnol : les mots utiles sont cherchés');
+
+    // souvenirs : lettres espagnoles (ñ, á…) gardées dans les mots-clés
+    facts_add($pid, 'Toma café cada mañana', 'preference');
+    facts_add($pid, 'Vit à Lyon', 'fait');
+    $rel = facts_relevant($pid, '¿Qué tomas por la mañana?', 1);
+    $check(count($rel) === 1 && str_contains((string) $rel[0]['content'], 'mañana'), 'souvenirs pertinents : « mañana » reste un mot entier');
+    $check(count(facts_relevant($pid, 'Remember what I like', 1)) === 1, 'souvenirs : phrase anglaise faite de mots vides → souvenirs récents');
+
+    echo PHP_EOL . '— textes serveur selon la langue (le contenu envoyé au modèle reste en français)' . PHP_EOL;
+    $memRow = [['category' => 'preference', 'content' => 'aime le jazz']];
+    i18n_set_locale('fr');
+    $check(fr_date('2026-11-08 10:00:00') === '8 nov. 2026' && human_bytes(1536 * 1024) === '1,5 Mo', 'français : date et taille inchangées');
+    $check(prompt_kinds()['negative'] === 'Négatif' && facts_categories()['decision'] === 'Décision', 'français : libellés inchangés');
+    i18n_set_locale('en');
+    $check(fr_date('2026-11-08 10:00:00') === 'Nov 8, 2026' && human_bytes(1536 * 1024) === '1.5 MB', 'anglais : date et taille');
+    $check(prompt_kinds()['negative'] === 'Negative' && facts_confidences()['hypothese'] === 'Hypothesis', 'anglais : libellés');
+    $check(facts_format($memRow) === '- [Préférence] aime le jazz', 'anglais : souvenirs envoyés au modèle toujours en français');
+    $check(chat_llm_date('2026-11-08 10:00:00') === '8 nov. 2026', 'anglais : date du contexte du modèle toujours en français');
+    $check(str_contains(chat_ring(['percent' => 10, 'window' => 8192, 'context_tokens' => 1200, 'compressions' => 1]), 'Context 1,200 / 8,192 tokens'),
+        'anglais : titre de l’anneau de contexte');
+    i18n_set_locale('es');
+    $check(fr_date('2026-11-08 10:00:00') === '8 nov. 2026' && t('flash.persona.photos_added', 1) === '1 foto añadida.', 'espagnol : date et pluriel');
+    $check($throws(static fn () => store_upload($upload($tmp . '/bomb.png')), 'demasiado grande'), 'espagnol : erreur d’upload traduite');
+    $empty = new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
+    $check((new LlmUnavailable('x', 'error', $empty))->getCode() === LLM_ERR_EMPTY, 'erreur « réponse vide » reconnue par son code, quelle que soit la langue');
+    i18n_set_locale(null);
+
     echo PHP_EOL . '— traductions' . PHP_EOL;
     i18n_set_locale('fr');
     $check(t('nav.library') === 'Bibliothèque' && t('login.blocked', 3) === 'Trop de tentatives. Réessaie dans 3 min.', 'français : texte et paramètre {n}');

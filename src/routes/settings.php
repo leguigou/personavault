@@ -19,7 +19,7 @@ if ($path === '/settings/prompts' && $method === 'POST') {
         // valeur identique au défaut → on n'enregistre rien (retour au défaut)
         set_setting('prompt_' . $key, $value === trim($defaults[$key]) ? '' : $value);
     }
-    flash('ok', 'Prompts enregistrés.');
+    flash('ok', t('flash.settings.prompts_saved'));
     redirect('/settings#prompts');
 }
 
@@ -65,11 +65,11 @@ if ($path === '/settings') {
         $apiKey   = trim((string) ($_POST['api_key'] ?? ''));
 
         if ($baseUrl !== '' && !preg_match('#^https?://#i', $baseUrl)) {
-            flash('error', 'L’URL doit commencer par http:// ou https://');
+            flash('error', t('error.settings.url_scheme'));
             redirect('/settings');
         }
         if ($model === '') {
-            flash('error', 'Il manque le nom du modèle.');
+            flash('error', t('flash.settings.model_missing'));
             redirect('/settings');
         }
 
@@ -81,7 +81,7 @@ if ($path === '/settings') {
         } elseif ($apiKey !== '') {
             set_setting('llm_api_key', $apiKey);
         }
-        flash('ok', 'Réglages enregistrés.');
+        flash('ok', t('flash.settings.saved'));
         redirect('/settings');
     }
 
@@ -89,7 +89,7 @@ if ($path === '/settings') {
     $chatModels = chat_models($chatCfg['base_url'], $chatCfg['key']); // un seul appel réseau
     $llmCfg     = llm_config();
     render('settings', [
-        'title'      => 'Réglages',
+        'title'      => t('nav.settings'),
         'llm'        => $llmCfg,
         'hasKey'     => $llmCfg['key'] !== '',
         'chat'       => $chatCfg,
@@ -115,7 +115,7 @@ if ($path === '/settings/chat' && $method === 'POST') {
     $key     = trim((string) ($_POST['chat_api_key'] ?? ''));
 
     if ($baseUrl !== '' && !preg_match('#^https?://#i', $baseUrl)) {
-        flash('error', 'L’URL doit commencer par http:// ou https://');
+        flash('error', t('error.settings.url_scheme'));
         redirect('/settings');
     }
 
@@ -167,8 +167,8 @@ if ($path === '/settings/chat' && $method === 'POST') {
         // on libère la VRAM avant de charger le nouveau modèle
         $purged = lms_purge();
     }
-    flash('ok', 'Réglages de discussion enregistrés.'
-        . ($purged ? ' Mémoire du serveur purgée (' . plural(count($purged), 'modèle déchargé', 'modèles déchargés') . ').' : ''));
+    flash('ok', t('flash.settings.chat_saved')
+        . ($purged ? ' ' . t('flash.settings.server_purged', ['models' => t('labels.count.models_unloaded', count($purged))]) : ''));
     redirect('/settings');
 }
 
@@ -208,10 +208,10 @@ if ($path === '/settings/test' && $method === 'POST') {
     ];
     try {
         if (!preg_match('#^https?://#i', $baseUrl)) {
-            throw new RuntimeException('L’URL doit commencer par http:// ou https://');
+            throw new RuntimeException(t('error.settings.url_scheme'));
         }
         if ($cfg['key'] === '' && $key === '' && !$sameUrl && $stored['key'] !== '') {
-            throw new RuntimeException('Adresse différente de celle enregistrée : saisis la clé API pour la tester.');
+            throw new RuntimeException(t('error.settings.test_other_url'));
         }
         $t0  = microtime(true);
         $out = llm_chat([

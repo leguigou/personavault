@@ -44,7 +44,7 @@ function backup_create_zip(bool $withConversations = false): array
 
     $zip = new ZipArchive();
     if ($zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-        throw new RuntimeException('Impossible de créer l’archive.');
+        throw new RuntimeException(t('error.backup.create'));
     }
 
     $stats = ['personas' => 0, 'photos' => 0, 'prompts' => 0, 'conversations' => 0, 'messages' => 0];
@@ -175,24 +175,33 @@ function backup_create_zip(bool $withConversations = false): array
     ];
 }
 
+/** README.txt de l'archive, dans la langue de l'interface. */
 function backup_readme(array $stats, bool $withConversations): string
 {
-    return "PersonaVault — sauvegarde\n"
-        . "=========================\n\n"
-        . "Exportée le " . (new DateTimeImmutable('now', new DateTimeZone((string) config('timezone', 'Europe/Paris'))))->format('d/m/Y H:i') . "\n"
-        . "Personas : {$stats['personas']} · photos : {$stats['photos']} · prompts : {$stats['prompts']}"
-        . ($withConversations ? " · conversations : {$stats['conversations']} ({$stats['messages']} messages)" : '')
-        . "\n\nStructure\n---------\n"
-        . "personas/<slug>/persona.json   fiche complète (nom, accroche, description, tags, attributs,\n"
-        . "                               réglages IA, consigne de jeu)\n"
-        . "personas/<slug>/prompts.json   prompts (type, titre, texte)\n"
-        . "personas/<slug>/photos/*.webp  galerie\n"
-        . "personas/<slug>/avatar.webp    portrait\n"
-        . ($withConversations ? "conversations/conversations.json  discussions, messages et souvenirs\n" : '')
-        . "\nRestauration\n------------\n"
-        . "Réglages → Sauvegarde → Restaurer, en choisissant ce fichier ZIP.\n"
-        . "Les personas importés reçoivent un slug unique si le leur existe déjà :\n"
-        . "rien n'est écrasé.\n";
+    $title     = t('labels.backup_readme.title');
+    $structure = t('labels.backup_readme.structure');
+    $restore   = t('labels.backup_readme.restore');
+    $exported  = (new DateTimeImmutable('now', new DateTimeZone((string) config('timezone', 'Europe/Paris'))))
+        ->format(t('labels.backup_readme.date_format'));
+
+    return $title . "\n"
+        . str_repeat('=', mb_strlen($title)) . "\n\n"
+        . t('labels.backup_readme.exported', ['date' => $exported]) . "\n"
+        . t('labels.backup_readme.counts', ['personas' => $stats['personas'], 'photos' => $stats['photos'], 'prompts' => $stats['prompts']])
+        . ($withConversations
+            ? ' · ' . t('labels.backup_readme.conversations', ['conversations' => $stats['conversations'], 'messages' => $stats['messages']])
+            : '')
+        . "\n\n" . $structure . "\n" . str_repeat('-', mb_strlen($structure)) . "\n"
+        . 'personas/<slug>/persona.json   ' . t('labels.backup_readme.persona_json') . "\n"
+        . '                               ' . t('labels.backup_readme.persona_json_2') . "\n"
+        . 'personas/<slug>/prompts.json   ' . t('labels.backup_readme.prompts_json') . "\n"
+        . 'personas/<slug>/photos/*.webp  ' . t('labels.backup_readme.photos') . "\n"
+        . 'personas/<slug>/avatar.webp    ' . t('labels.backup_readme.avatar') . "\n"
+        . ($withConversations ? 'conversations/conversations.json  ' . t('labels.backup_readme.conversations_json') . "\n" : '')
+        . "\n" . $restore . "\n" . str_repeat('-', mb_strlen($restore)) . "\n"
+        . t('labels.backup_readme.restore_how') . "\n"
+        . t('labels.backup_readme.restore_slug') . "\n"
+        . t('labels.backup_readme.restore_safe') . "\n";
 }
 
 /** Valeur scalaire d'un JSON importé, en chaîne bornée (sinon $default). */
@@ -214,14 +223,14 @@ function backup_read_entry(ZipArchive $zip, int $index): string
     $max  = (int) config('zip_max_entry_size', 40 * 1024 * 1024);
     $stat = $zip->statIndex($index);
     if (!is_array($stat) || (int) $stat['size'] > $max) {
-        throw new RuntimeException('entrée trop volumineuse (' . human_bytes((int) ($stat['size'] ?? 0)) . ')');
+        throw new RuntimeException(t('error.backup.entry_too_big_size', ['size' => human_bytes((int) ($stat['size'] ?? 0))]));
     }
     $data = $zip->getFromIndex($index, $max + 1);
     if ($data === false) {
-        throw new RuntimeException('entrée illisible');
+        throw new RuntimeException(t('error.backup.entry_unreadable'));
     }
     if (strlen($data) > $max) {
-        throw new RuntimeException('entrée trop volumineuse');
+        throw new RuntimeException(t('error.backup.entry_too_big'));
     }
     return $data;
 }
@@ -240,13 +249,13 @@ function backup_import_zip(string $zipPath): array
 {
     $zip = new ZipArchive();
     if ($zip->open($zipPath) !== true) {
-        throw new RuntimeException('Archive illisible.');
+        throw new RuntimeException(t('error.backup.unreadable'));
     }
 
     try {
         $maxEntries = (int) config('zip_max_entries', 5000);
         if ($zip->numFiles > $maxEntries) {
-            throw new RuntimeException('Archive refusée : trop de fichiers (' . $zip->numFiles . ', ' . $maxEntries . ' max).');
+            throw new RuntimeException(t('error.backup.too_many_files', ['count' => $zip->numFiles, 'max' => $maxEntries]));
         }
 
         $index = [];   // nom → index
@@ -261,10 +270,10 @@ function backup_import_zip(string $zipPath): array
         }
         $maxTotal = (int) config('zip_max_total', 2 * 1024 * 1024 * 1024);
         if ($total > $maxTotal) {
-            throw new RuntimeException('Archive refusée : ' . human_bytes($total) . ' une fois décompressée (' . human_bytes($maxTotal) . ' max).');
+            throw new RuntimeException(t('error.backup.too_large', ['size' => human_bytes($total), 'max' => human_bytes($maxTotal)]));
         }
         if (!array_filter(array_keys($index), static fn (string $n): bool => str_ends_with($n, 'manifest.json'))) {
-            throw new RuntimeException('Ce fichier n’est pas une sauvegarde PersonaVault (manifest.json manquant).');
+            throw new RuntimeException(t('error.backup.not_a_backup'));
         }
 
         $dir   = (string) config('uploads');
@@ -283,10 +292,10 @@ function backup_import_zip(string $zipPath): array
                 $stats['photos']  += $res['photos'];
                 $stats['prompts'] += $res['prompts'];
                 foreach ($res['errors'] as $err) {
-                    $stats['errors'][] = $folder . ' : ' . $err;
+                    $stats['errors'][] = t('error.backup.item', ['item' => $folder, 'error' => $err]);
                 }
             } catch (Throwable $e) {
-                $stats['errors'][] = $folder . ' : ' . public_error($e, 'erreur interne');
+                $stats['errors'][] = t('error.backup.item', ['item' => $folder, 'error' => public_error($e, t('error.internal_short'))]);
             }
         }
 
@@ -306,7 +315,7 @@ function backup_import_one(ZipArchive $zip, array $index, string $prefix, int $p
 {
     $persona = json_decode(backup_read_entry($zip, $personaIndex), true);
     if (!is_array($persona) || trim(backup_str($persona['name'] ?? '')) === '') {
-        throw new RuntimeException('fiche invalide');
+        throw new RuntimeException(t('error.backup.invalid_persona'));
     }
 
     $errors  = [];
@@ -319,7 +328,7 @@ function backup_import_one(ZipArchive $zip, array $index, string $prefix, int $p
             $avatar    = store_gd_image(decode_image_string(backup_read_entry($zip, $index[$prefix . 'avatar.webp'])));
             $written[] = $avatar;
         } catch (Throwable $e) {
-            $errors[] = 'portrait ignoré (' . public_error($e, 'erreur interne') . ')';
+            $errors[] = t('error.backup.avatar_skipped', ['error' => public_error($e, t('error.internal_short'))]);
         }
     }
 
@@ -334,7 +343,7 @@ function backup_import_one(ZipArchive $zip, array $index, string $prefix, int $p
             $photos[]  = $base;
             $written[] = $base;
         } catch (Throwable $e) {
-            $errors[] = basename($entry) . ' ignorée (' . public_error($e, 'erreur interne') . ')';
+            $errors[] = t('error.backup.photo_skipped', ['file' => basename($entry), 'error' => public_error($e, t('error.internal_short'))]);
         }
     }
 

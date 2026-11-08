@@ -40,7 +40,7 @@ if ($action === 'remember' && $method === 'POST') {
         echo json_encode([
             'ok'       => true,
             'added'    => [],
-            'skipped'  => 'souvenirs désactivés pour cette conversation',
+            'skipped'  => t('labels.facts_skip.disabled_here'),
             'memories' => chat_persona_memories((int) $persona['id']),
         ], JSON_UNESCAPED_UNICODE);
         exit;
@@ -52,7 +52,7 @@ if ($action === 'remember' && $method === 'POST') {
     $st->execute([$cid, $cursor]);
     $recent = $st->fetchAll();
 
-    // demande explicite : « souviens-toi », « retiens », « note que »…
+    // demande explicite : « souviens-toi », « remember that », « recuerda que »… (voir facts_explicit_request)
     $lastUser = '';
     foreach (array_reverse($recent) as $m) {
         if ((string) $m['role'] === 'user') {
@@ -60,10 +60,7 @@ if ($action === 'remember' && $method === 'POST') {
             break;
         }
     }
-    $explicit = (bool) preg_match(
-        "/(souviens[- ]?toi|rappelle[- ]?toi|retiens|m[ée]morise|note (bien )?que|n'oublie pas|garde en m[ée]moire)/iu",
-        $lastUser
-    );
+    $explicit = facts_explicit_request($lastUser);
 
     // fréquence choisie dans les réglages (chaque échange, tous les N messages, sur demande…)
     $why = facts_should_run(count($recent), $explicit, !empty($_POST['force']));
@@ -82,14 +79,16 @@ if ($action === 'remember' && $method === 'POST') {
         }
         $res['memories'] = chat_persona_memories((int) $persona['id']);
 
-        // trace visible dans la conversation : la mémoire a bien été mise à jour
+        // trace visible dans la conversation : la mémoire a bien été mise à jour.
+        // Enregistrée en base (rôle « memory ») dans la langue de l'interface : ce rôle n'est
+        // jamais renvoyé au modèle (seuls « user » et « assistant » le sont).
         $added = array_values(array_filter(array_map('strval', $res['added'] ?? [])));
         if ($added) {
             $label = implode(' · ', array_map(
                 static fn (string $s): string => mb_substr($s, 0, 90),
                 array_slice($added, 0, 2)
             ));
-            $label = 'Mémoire mise à jour : ' . $label . (count($added) > 2 ? ' (+' . (count($added) - 2) . ')' : '');
+            $label = t('labels.chat.memory_updated', ['facts' => $label]) . (count($added) > 2 ? ' (+' . (count($added) - 2) . ')' : '');
             $ins   = db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "memory", ?)');
             $ins->execute([$cid, $label]);
             $res['memory_msg'] = ['id' => (int) db()->lastInsertId(), 'role' => 'memory', 'content' => $label];
@@ -110,12 +109,12 @@ if ($action === 'memory' && $method === 'POST') {
     if ($op === 'clear') {
         db()->prepare('UPDATE conversations SET summary = "", last_compressed_id = 0, compressions = 0, updated_at = datetime("now") WHERE id = ?')
             ->execute([$cid]);
-        flash('ok', 'Mémoire effacée : la prochaine compression repartira de zéro.');
+        flash('ok', t('flash.chat.memory_cleared'));
     } elseif ($op === 'save') {
         $summary = trim((string) ($_POST['summary'] ?? ''));
         db()->prepare('UPDATE conversations SET summary = ?, updated_at = datetime("now") WHERE id = ?')
             ->execute([mb_substr($summary, 0, 4000), $cid]);
-        flash('ok', 'Résumé enregistré.');
+        flash('ok', t('flash.chat.summary_saved'));
     }
     redirect('/chat/' . $cid);
 }
@@ -142,7 +141,7 @@ if (($action === 'fact-add' || $action === 'fact-delete') && $method === 'POST')
         $content = trim((string) ($_POST['content'] ?? ''));
         if ($content === '') {
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => 'Souvenir vide.']);
+            echo json_encode(['ok' => false, 'error' => t('error.memory.empty')]);
             exit;
         }
         $cat = (string) ($_POST['category'] ?? 'fait');
@@ -160,12 +159,12 @@ if (($action === 'fact-add' || $action === 'fact-delete') && $method === 'POST')
     $owner = $stmt->fetchColumn();
     if ($owner === false) {
         http_response_code(404);
-        echo json_encode(['ok' => false, 'error' => 'Souvenir introuvable.']);
+        echo json_encode(['ok' => false, 'error' => t('error.memory.not_found')]);
         exit;
     }
     if ($owner !== null && (int) $owner !== $pid) {
         http_response_code(403);
-        echo json_encode(['ok' => false, 'error' => 'Ce souvenir appartient à un autre persona.']);
+        echo json_encode(['ok' => false, 'error' => t('error.memory.other_persona')]);
         exit;
     }
     facts_delete($fid);

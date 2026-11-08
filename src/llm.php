@@ -3,14 +3,23 @@ declare(strict_types=1);
 
 /* Client LLM minimal (API compatible OpenAI : DeepSeek, OpenAI, OpenRouter, LM Studio…) */
 
+/*
+ * Codes des exceptions levées ici : les messages sont traduits (langue de l'interface),
+ * on reconnaît donc les cas par leur code et non par leur texte.
+ * Erreur HTTP de l'API : code = statut HTTP (400, 404…).
+ */
+const LLM_ERR_CONNECT = 1001; // connexion impossible (serveur éteint, délai dépassé…)
+const LLM_ERR_EMPTY   = 1002; // réponse vide du modèle
+
 /** Erreur de disponibilité du modèle (permet de distinguer les cas côté client). */
 class LlmUnavailable extends RuntimeException
 {
     public string $kind;
 
-    public function __construct(string $message, string $kind = 'error')
+    /** $previous : exception d'origine, dont le code (LLM_ERR_*) est conservé. */
+    public function __construct(string $message, string $kind = 'error', ?Throwable $previous = null)
     {
-        parent::__construct($message);
+        parent::__construct($message, $previous ? (int) $previous->getCode() : 0, $previous);
         $this->kind = $kind;
     }
 }
@@ -49,7 +58,7 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
     $model = (string) ($cfg['model'] ?? '');
     $key   = (string) ($cfg['key'] ?? '');
     if ($base === '' || $model === '') {
-        throw new RuntimeException('Modèle non configuré.');
+        throw new RuntimeException(t('error.llm.no_model'));
     }
 
     $body = [
@@ -170,18 +179,18 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
         return $result; // arrêt demandé par le client : on rend ce qui a été reçu
     }
     if ($ok === false) {
-        throw new RuntimeException('Connexion impossible : ' . $err);
+        throw new RuntimeException(t('error.llm.connect', ['error' => $err]), LLM_ERR_CONNECT);
     }
     if ($code < 200 || $code >= 300) {
         $data = json_decode($rawHead, true);
         $msg  = $data['error']['message'] ?? mb_substr(trim($rawHead), 0, 180);
-        throw new RuntimeException('Erreur API (' . $code . ') : ' . $msg);
+        throw new RuntimeException(t('error.llm.api', ['code' => $code, 'message' => $msg]), $code);
     }
     if ($streamErr !== '') {
-        throw new RuntimeException('Erreur du modèle : ' . mb_substr($streamErr, 0, 300));
+        throw new RuntimeException(t('error.llm.model_error', ['message' => mb_substr($streamErr, 0, 300)]));
     }
     if (trim($content) === '') {
-        throw new RuntimeException('Réponse vide du modèle.');
+        throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
 
     return $result;
@@ -199,7 +208,7 @@ function llm_request(array $messages, array $cfg, array $options = []): array
     $key   = (string) ($cfg['key'] ?? '');
 
     if ($base === '' || $model === '') {
-        throw new RuntimeException('Modèle non configuré.');
+        throw new RuntimeException(t('error.llm.no_model'));
     }
 
     $body = [
@@ -253,18 +262,18 @@ function llm_request(array $messages, array $cfg, array $options = []): array
     $ms = (int) round((microtime(true) - $t0) * 1000);
 
     if ($raw === false) {
-        throw new RuntimeException('Connexion impossible : ' . $err);
+        throw new RuntimeException(t('error.llm.connect', ['error' => $err]), LLM_ERR_CONNECT);
     }
 
     $data = json_decode((string) $raw, true);
     if ($code < 200 || $code >= 300) {
         $msg = $data['error']['message'] ?? mb_substr(trim((string) $raw), 0, 200);
-        throw new RuntimeException('Erreur API (' . $code . ') : ' . $msg);
+        throw new RuntimeException(t('error.llm.api', ['code' => $code, 'message' => $msg]), $code);
     }
 
     $content = $data['choices'][0]['message']['content'] ?? null;
     if (!is_string($content) || trim($content) === '') {
-        throw new RuntimeException('Réponse vide du modèle.');
+        throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
 
     return [
@@ -284,7 +293,7 @@ function llm_chat(array $messages, bool $json = false, int $timeout = 90, ?array
 {
     $c = $override ? array_merge(llm_config(), $override) : llm_config();
     if ($c['key'] === '') {
-        throw new RuntimeException('Aucune clé API enregistrée.');
+        throw new RuntimeException(t('error.llm.no_key'));
     }
 
     $body = [
@@ -316,17 +325,17 @@ function llm_chat(array $messages, bool $json = false, int $timeout = 90, ?array
     curl_close($ch);
 
     if ($raw === false) {
-        throw new RuntimeException('Connexion impossible : ' . $err);
+        throw new RuntimeException(t('error.llm.connect', ['error' => $err]), LLM_ERR_CONNECT);
     }
 
     $data = json_decode((string) $raw, true);
     if ($code < 200 || $code >= 300) {
         $msg = $data['error']['message'] ?? mb_substr(trim((string) $raw), 0, 200);
-        throw new RuntimeException('Erreur API (' . $code . ') : ' . $msg);
+        throw new RuntimeException(t('error.llm.api', ['code' => $code, 'message' => $msg]), $code);
     }
     $content = $data['choices'][0]['message']['content'] ?? null;
     if (!is_string($content) || trim($content) === '') {
-        throw new RuntimeException('Réponse vide du modèle.');
+        throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
     return $content;
 }
@@ -341,11 +350,11 @@ function llm_json(?string $raw): array
     $start = strpos($raw, '{');
     $end   = strrpos($raw, '}');
     if ($start === false || $end === false || $end < $start) {
-        throw new RuntimeException('Le modèle n’a pas renvoyé de JSON exploitable.');
+        throw new RuntimeException(t('error.llm.no_json'));
     }
     $data = json_decode(substr($raw, $start, $end - $start + 1), true);
     if (!is_array($data)) {
-        throw new RuntimeException('JSON invalide renvoyé par le modèle.');
+        throw new RuntimeException(t('error.llm.bad_json'));
     }
     return $data;
 }

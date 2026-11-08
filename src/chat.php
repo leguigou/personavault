@@ -319,7 +319,7 @@ function chat_compress_payload(array $toSummarize, array $conv): array
 function chat_compress(int $cid, array $conv, bool $force = false, ?callable $onTick = null): array
 {
     if ((int) ($conv['memory_enabled'] ?? 1) !== 1) {
-        return ['ok' => true, 'compressed' => 0, 'reason' => 'mémoire désactivée'];
+        return ['ok' => true, 'compressed' => 0, 'reason' => t('labels.compress.disabled')];
     }
 
     $lastCompressed = (int) ($conv['last_compressed_id'] ?? 0);
@@ -329,7 +329,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
     $pending = $st->fetchAll();
 
     if (count($pending) < 6) {
-        return ['ok' => true, 'compressed' => 0, 'reason' => 'rien à résumer'];
+        return ['ok' => true, 'compressed' => 0, 'reason' => t('labels.compress.nothing')];
     }
 
     $pendingTokens = 0;
@@ -337,7 +337,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
         $pendingTokens += chat_estimate_tokens((string) $m['content']);
     }
     if (!$force && $pendingTokens < chat_memory_threshold()) {
-        return ['ok' => true, 'compressed' => 0, 'reason' => 'sous le seuil'];
+        return ['ok' => true, 'compressed' => 0, 'reason' => t('labels.compress.below_threshold')];
     }
 
     // on garde les messages les plus récents (au moins 4) dans la mémoire courte
@@ -355,7 +355,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
 
     $toSummarize = array_slice($pending, 0, count($pending) - count($keep));
     if (!$toSummarize) {
-        return ['ok' => true, 'compressed' => 0, 'reason' => 'rien à résumer'];
+        return ['ok' => true, 'compressed' => 0, 'reason' => t('labels.compress.nothing')];
     }
 
     $payload = chat_compress_payload($toSummarize, $conv);
@@ -392,13 +392,13 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
         return [
             'ok'         => false,
             'compressed' => 0,
-            'reason'     => 'réponse du modèle illisible (' . mb_substr(trim((string) $res['content']), 0, 120) . ')',
+            'reason'     => t('labels.compress.unreadable', ['excerpt' => mb_substr(trim((string) $res['content']), 0, 120)]),
         ];
     }
 
     $text = chat_summary_text($json);
     if ($text === '') {
-        return ['ok' => false, 'compressed' => 0, 'reason' => 'résumé vide, mémoire précédente conservée'];
+        return ['ok' => false, 'compressed' => 0, 'reason' => t('labels.compress.empty')];
     }
     if (chat_estimate_tokens($text) > 1100) {
         $text = mb_substr($text, 0, 3600);
@@ -414,7 +414,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();
-        return ['ok' => false, 'compressed' => 0, 'reason' => 'écriture impossible : ' . public_error($e)];
+        return ['ok' => false, 'compressed' => 0, 'reason' => t('labels.compress.write_failed', ['error' => public_error($e)])];
     }
 
     return ['ok' => true, 'compressed' => count($toSummarize), 'summary' => $text];
@@ -449,11 +449,17 @@ function chat_ring(array $m, int $size = 40): string
     $cIn = 2 * M_PI * $rIn;
     $memLen = $cIn * $memPct / 100;
 
-    $title = 'Contexte ' . number_format((float) ($m['context_tokens'] ?? 0), 0, ',', ' ')
-        . ' / ' . number_format((float) $window, 0, ',', ' ') . ' tokens (' . $pct . ' %)'
-        . ' · résumé ' . number_format((float) ($m['summary_tokens'] ?? 0), 0, ',', ' ') . ' tokens'
-        . ' · ' . plural((int) ($m['compressions'] ?? 0), 'compression', 'compressions')
-        . ' · résumé auto au-delà de ' . number_format((float) chat_memory_threshold(), 0, ',', ' ') . ' tokens non résumés';
+    $dec   = t('labels.number.decimal');
+    $thou  = t('labels.number.thousands');
+    $num   = static fn (float $n): string => number_format($n, 0, $dec, $thou);
+    $title = t('labels.ring.title', [
+        'used'         => $num((float) ($m['context_tokens'] ?? 0)),
+        'window'       => $num((float) $window),
+        'pct'          => $pct,
+        'summary'      => $num((float) ($m['summary_tokens'] ?? 0)),
+        'compressions' => t('labels.count.compressions', (int) ($m['compressions'] ?? 0)),
+        'threshold'    => $num((float) chat_memory_threshold()),
+    ]);
 
     $fs = $size <= 44 ? 11 : 13;
 
@@ -819,12 +825,24 @@ function chat_persona_search(int $personaId, string $query, int $limit = 8, int 
     return array_map('chat_search_row', $stmt->fetchAll());
 }
 
-/** L'utilisateur fait-il référence à un échange passé ? */
+/**
+ * L'utilisateur fait-il référence à un échange passé ?
+ * Français, anglais et espagnol, quelle que soit la langue de l'interface.
+ */
 function chat_has_recall_cue(string $message): bool
 {
     return (bool) preg_match(
+        // français
         "/(souviens|rappelle|m[ée]morise|la derni[eè]re fois|l['’]autre (jour|fois)|on avait dit|"
-        . "comme (pr[ée]vu|convenu)|dont on a parl|pr[ée]c[ée]demment|tu te rappelles|on s['’][ée]tait dit)/iu",
+        . "comme (pr[ée]vu|convenu)|dont on a parl|pr[ée]c[ée]demment|tu te rappelles|on s['’][ée]tait dit"
+        // anglais
+        . "|\\bremember\\b|\\brecall\\b|\\blast time\\b|\\bthe other (day|time|night)\\b|\\bwe (talked|spoke|chatted) about"
+        . "|\\bwe discussed\\b|\\bwe (had )?said\\b|\\byou (told|said to) me\\b|\\bas (planned|agreed)\\b|\\bpreviously\\b"
+        . "|\\bearlier you\\b|\\bwe agreed\\b"
+        // espagnol
+        . "|\\bacu[ée]rd(as|ate|es)\\b|\\bte acuerdas\\b|\\brecuerd(a|as|es)\\b|la [úu]ltima vez|el otro d[íi]a"
+        . "|\\bhablamos (de|sobre)\\b|hab[íi]amos hablado|\\bcomo (quedamos|acordamos|dijimos)\\b|lo que (dijimos|me dijiste)"
+        . "|\\bme dijiste\\b|\\banteriormente\\b)/iu",
         $message
     );
 }
@@ -839,11 +857,25 @@ function chat_recall_snippets(int $personaId, string $userMessage, int $excludeC
         return [];
     }
 
+    // mots vides (français, anglais, espagnol) : seuls les mots de 5 lettres et plus comptent
     $stop = ['alors', 'aussi', 'autre', 'avant', 'avec', 'avoir', 'beaucoup', 'bien', 'cette', 'comme',
         'comment', 'dans', 'depuis', 'derniere', 'dernière', 'elle', 'elles', 'encore', 'enfin', 'entre',
         'etait', 'était', 'faire', 'fois', 'jour', 'jours', 'juste', 'mais', 'meme', 'même', 'moins',
         'notre', 'nous', 'parle', 'parler', 'pour', 'pourquoi', 'quand', 'quelque', 'rappelle',
-        'souviens', 'souvenir', 'toujours', 'toute', 'toutes', 'trouve', 'votre', 'vous'];
+        'souviens', 'souvenir', 'toujours', 'toute', 'toutes', 'trouve', 'votre', 'vous',
+        // anglais
+        'about', 'after', 'again', 'agreed', 'always', 'another', 'because', 'before', 'being', 'could',
+        'didn', 'doesn', 'every', 'first', 'other', 'never', 'recall', 'really', 'remember', 'said',
+        'should', 'something', 'spoke', 'still', 'talked', 'their', 'there', 'these', 'thing', 'things',
+        'think', 'those', 'through', 'today', 'where', 'which', 'while', 'would', 'yesterday', 'your',
+        'yours', 'chatted', 'discussed', 'mentioned', 'previously', 'earlier', 'told',
+        // espagnol
+        'acuerdas', 'acuerdate', 'acuérdate', 'acuerdo', 'ahora', 'algo', 'antes', 'anteriormente',
+        'aquel', 'aquella', 'cuando', 'desde', 'después', 'despues', 'dijimos', 'dijiste', 'donde',
+        'entonces', 'estaba', 'estábamos', 'estabamos', 'hablamos', 'hablado', 'habíamos', 'habiamos',
+        'hacer', 'mientras', 'nosotros', 'nuestra', 'nuestro', 'nunca', 'otra', 'otro', 'porque',
+        'quedamos', 'recuerda', 'recuerdas', 'recuerdo', 'siempre', 'sobre', 'también', 'tambien',
+        'tenemos', 'todavía', 'todavia', 'ultima', 'última', 'veces'];
 
     $kw = array_slice(text_words($userMessage, 5, $stop), 0, 6);
     if (!$kw) {
@@ -882,6 +914,20 @@ function chat_recall_snippets(int $personaId, string $userMessage, int $excludeC
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
+}
+
+/**
+ * Date courte en français (« 8 nov. 2026 ») pour le contexte envoyé au modèle :
+ * indépendante de la langue de l'interface, comme le reste des consignes.
+ */
+function chat_llm_date(?string $sqlDate): string
+{
+    $ts = $sqlDate ? strtotime($sqlDate . ' UTC') : false;
+    if ($ts === false) {
+        return '';
+    }
+    $months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    return date('j', $ts) . ' ' . $months[(int) date('n', $ts) - 1] . ' ' . date('Y', $ts);
 }
 
 /** Heure locale de l'application (fuseau configurable, Europe/Paris par défaut). */
@@ -994,7 +1040,7 @@ function persona_ai_directive(array $persona, array $prompts): array
         $sys = trim((string) ($persona['description'] ?? ''));
     }
     if (trim($sys) === '') {
-        throw new RuntimeException('Aucun prompt système à analyser pour ce persona.');
+        throw new RuntimeException(t('error.ai.no_system_prompt'));
     }
 
     $fiche = ['Nom' => (string) $persona['name']];
@@ -1027,7 +1073,7 @@ function persona_ai_directive(array $persona, array $prompts): array
 
     $cfg = llm_config();
     if ($cfg['key'] === '' || $cfg['model'] === '') {
-        throw new RuntimeException('Aucun modèle configuré dans les réglages IA.');
+        throw new RuntimeException(t('error.ai.no_model'));
     }
 
     $res = llm_request(
@@ -1039,7 +1085,7 @@ function persona_ai_directive(array $persona, array $prompts): array
     $json = llm_json((string) $res['content']);
     $dir  = trim((string) ($json['directive'] ?? ''));
     if ($dir === '') {
-        throw new RuntimeException('Réponse du modèle vide.');
+        throw new RuntimeException(t('error.ai.empty_reply'));
     }
     $temp = (float) ($json['temperature'] ?? 0.85);
 
@@ -1264,7 +1310,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $lines = [];
         foreach ($recall as $r) {
             $who = (string) $r['role'] === 'user' ? 'Utilisateur' : 'Toi';
-            $lines[] = '- (' . fr_date((string) $r['created_at']) . ', autre conversation) ' . $who . ' : '
+            $lines[] = '- (' . chat_llm_date((string) $r['created_at']) . ', autre conversation) ' . $who . ' : '
                 . mb_substr(trim((string) $r['content']), 0, 320);
         }
         $context[] = "Extraits d'autres conversations que tu as eues avec cette personne "
@@ -1391,29 +1437,30 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     if ($mode === 'fallback') {
         $fb = llm_config();
         if (!$fb['key'] || $fb['model'] === '') {
-            throw new LlmUnavailable('Aucun modèle de secours configuré (réglages → IA).', 'no_fallback');
+            throw new LlmUnavailable(t('error.chat.no_fallback'), 'no_fallback');
         }
         $o = $opts;
         unset($o['reasoning_effort']);
         try {
             $res = llm_stream($messages, $fb, $o, $onDelta);
         } catch (Throwable $e) {
-            throw new LlmUnavailable($e->getMessage(), 'fallback_error');
+            throw new LlmUnavailable($e->getMessage(), 'fallback_error', $e);
         }
         $res['provider'] = 'fallback';
-        $res['notice']   = 'Réponse générée par ' . $fb['model'] . ' (' . $fb['provider'] . '), LM Studio non utilisé.';
+        // notice enregistrée en base (rôle « notice », jamais renvoyée au modèle) : langue de l'interface
+        $res['notice']   = t('labels.chat.fallback_notice', ['model' => $fb['model'], 'provider' => $fb['provider']]);
         return $res;
     }
 
     $cfg = chat_llm_config();
     if ($cfg['model'] === '') {
-        throw new LlmUnavailable('Aucun modèle de discussion sélectionné.', 'no_model');
+        throw new LlmUnavailable(t('error.chat.no_model'), 'no_model');
     }
 
     // le serveur répond-il seulement ? (LM Studio lancé ou pas)
     $st = lms_status();
     if (!$st['reachable']) {
-        throw new LlmUnavailable('LM Studio ne répond pas : le serveur n’est pas lancé ou l’adresse est fausse.', 'down');
+        throw new LlmUnavailable(t('error.chat.lms_down'), 'down');
     }
 
     $partial = false;
@@ -1431,7 +1478,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
             if ($partial) {
                 throw $first;
             }
-            if (!empty($opts['reasoning_effort']) && str_contains($first->getMessage(), '(400)')) {
+            if (!empty($opts['reasoning_effort']) && ($first->getCode() === 400 || str_contains($first->getMessage(), '(400)'))) {
                 $opts['reasoning_effort'] = '';
                 $res = llm_stream($messages, $cfg, $opts, $emit);
             } else {
@@ -1441,7 +1488,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     } catch (Throwable $e) {
         $msg  = $e->getMessage();
         $kind = 'error';
-        if (stripos($msg, 'Connexion impossible') !== false || stripos($msg, 'timed out') !== false) {
+        if ($e->getCode() === LLM_ERR_CONNECT || stripos($msg, 'timed out') !== false) {
             $kind = 'down';
         } elseif (
             (stripos($msg, 'model') !== false || stripos($msg, 'modèle') !== false)
@@ -1449,7 +1496,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         ) {
             $kind = 'not_loaded';
         }
-        throw new LlmUnavailable($msg, $kind);
+        throw new LlmUnavailable($msg, $kind, $e);
     }
 
     $res['provider'] = 'chat';

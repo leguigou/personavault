@@ -60,7 +60,7 @@ if ($action === 'photos' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
         if ($n === 0) {
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => $errors[0] ?? 'Aucune image reçue.'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'error' => $errors[0] ?? t('error.upload.no_image')], JSON_UNESCAPED_UNICODE);
             exit;
         }
         db()->prepare('UPDATE personas SET updated_at=datetime("now") WHERE id=?')->execute([$pid]);
@@ -70,9 +70,9 @@ if ($action === 'photos' && $method === 'POST') {
 
     if ($n > 0) {
         db()->prepare('UPDATE personas SET updated_at=datetime("now") WHERE id=?')->execute([$pid]);
-        flash('ok', $n . ' photo' . ($n > 1 ? 's' : '') . ' ajoutée' . ($n > 1 ? 's' : '') . '.');
+        flash('ok', t('flash.persona.photos_added', $n));
     } else {
-        flash('error', 'Aucune photo ajoutée.');
+        flash('error', t('flash.persona.no_photo'));
     }
     redirect('/p/' . $slug);
 }
@@ -81,7 +81,7 @@ if ($action === 'prompts' && $method === 'POST') {
     csrf_check();
     $body = trim((string) ($_POST['body'] ?? ''));
     if ($body === '') {
-        flash('error', 'Le prompt est vide.');
+        flash('error', t('flash.prompt.empty'));
         redirect('/p/' . $slug);
     }
     $stmt = db()->prepare('INSERT INTO prompts (persona_id, title, kind, body) VALUES (?,?,?,?)');
@@ -92,6 +92,6 @@ if ($action === 'prompts' && $method === 'POST') {
         $body,
     ]);
     db()->prepare('UPDATE personas SET updated_at=datetime("now") WHERE id=?')->execute([$pid]);
-    flash('ok', 'Prompt enregistré.');
+    flash('ok', t('flash.prompt.saved'));
     redirect('/p/' . $slug);
 }

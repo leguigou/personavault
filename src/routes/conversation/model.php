@@ -38,7 +38,7 @@ if ($action === 'load' && $method === 'POST') {
         echo json_encode([
             'ok'    => false,
             'kind'  => 'down',
-            'error' => 'LM Studio ne répond pas : le serveur n’est pas lancé (ou l’adresse est fausse).',
+            'error' => t('error.lms.down'),
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -52,7 +52,7 @@ if ($action === 'load' && $method === 'POST') {
         echo json_encode([
             'ok'    => false,
             'kind'  => 'not_found',
-            'error' => 'Ce modèle n’est pas téléchargé dans LM Studio.',
+            'error' => t('error.lms.not_downloaded'),
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -70,7 +70,7 @@ if ($action === 'load' && $method === 'POST') {
         'started' => $ok,
         'model'   => $model,
         'ctx'     => $ctx,
-        'error'   => $ok ? null : 'Impossible de lancer le chargement.',
+        'error'   => $ok ? null : t('error.lms.load_failed'),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

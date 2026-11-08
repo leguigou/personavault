@@ -12,7 +12,7 @@ if ($path === '/memories' && $method === 'GET') {
     $rows = facts_list(null, $q);
     $personas = db()->query('SELECT id, name FROM personas ORDER BY name')->fetchAll();
     render('memories', [
-        'title'    => 'Souvenirs',
+        'title'    => t('labels.title.memories'),
         'rows'     => $rows,
         'q'        => $q,
         'personas' => $personas,
@@ -28,7 +28,7 @@ if ($path === '/memories' && $method === 'POST') {
     csrf_check();
     $content = trim((string) ($_POST['content'] ?? ''));
     if ($content === '') {
-        flash('error', 'Le souvenir est vide.');
+        flash('error', t('flash.memory.empty'));
         redirect('/memories');
     }
     facts_add(
@@ -38,7 +38,7 @@ if ($path === '/memories' && $method === 'POST') {
         (string) ($_POST['confidence'] ?? 'confirme'),
         null
     );
-    flash('ok', 'Souvenir ajouté.');
+    flash('ok', t('flash.memory.added'));
     redirect('/memories');
 }
 
@@ -48,7 +48,7 @@ if (preg_match('#^/memories/(\d+)(?:/(\w+))?$#', $path, $m) && $method === 'POST
     $action = $m[2] ?? '';
     if ($action === 'delete') {
         facts_delete($mid);
-        flash('ok', 'Souvenir supprimé.');
+        flash('ok', t('flash.memory.deleted'));
     } else {
         facts_update(
             $mid,
@@ -56,7 +56,7 @@ if (preg_match('#^/memories/(\d+)(?:/(\w+))?$#', $path, $m) && $method === 'POST
             (string) ($_POST['category'] ?? 'fait'),
             (string) ($_POST['confidence'] ?? 'confirme')
         );
-        flash('ok', 'Souvenir mis à jour.');
+        flash('ok', t('flash.memory.updated'));
     }
     redirect('/memories');
 }

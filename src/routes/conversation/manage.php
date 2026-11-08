@@ -15,7 +15,7 @@ if ($action === 'toggles' && $method === 'POST') {
             !empty($_POST['auto_followup']) ? 1 : 0,
             $cid,
         ]);
-    flash('ok', 'Réglages de la conversation enregistrés.');
+    flash('ok', t('flash.chat.toggles_saved'));
     redirect('/chat/' . $cid);
 }
 
@@ -35,7 +35,7 @@ if ($action === 'delete' && $method === 'POST') {
     $images = $stmt->fetchAll(PDO::FETCH_COLUMN);
     db()->prepare('DELETE FROM conversations WHERE id = ?')->execute([$cid]);
     release_media(...array_map('strval', $images)); // photos envoyées dans le chat
-    flash('ok', 'Conversation supprimée.');
+    flash('ok', t('flash.chat.deleted'));
     redirect('/chat');
 }
 

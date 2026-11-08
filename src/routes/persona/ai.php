@@ -14,7 +14,7 @@ if ($action === 'ai-directive' && $method === 'POST') {
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
     if (!llm_ready()) {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Configure d’abord le LLM (Réglages → Intelligence).']);
+        echo json_encode(['ok' => false, 'error' => t('error.ai.configure_settings')]);
         exit;
     }
     try {
@@ -33,13 +33,13 @@ if ($action === 'ai-fill' && $method === 'POST') {
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
     if (!llm_ready()) {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Configure d’abord le LLM (roue crantée → Réglages).']);
+        echo json_encode(['ok' => false, 'error' => t('error.ai.configure_gear')]);
         exit;
     }
     try {
         $prompts = fetch_prompts($pid);
         if (!$prompts) {
-            throw new RuntimeException('Ajoute au moins un prompt : c’est la matière première de l’IA.');
+            throw new RuntimeException(t('error.ai.need_prompt'));
         }
 
         $ai = llm_complete_persona($persona, $prompts);
@@ -51,12 +51,12 @@ if ($action === 'ai-fill' && $method === 'POST') {
         $aiTagline = trim((string) ($ai['tagline'] ?? ''));
         if ($tagline === '' && $aiTagline !== '') {
             $tagline = mb_substr($aiTagline, 0, 120);
-            $changes[] = 'accroche';
+            $changes[] = t('labels.ai_field.tagline');
         }
         $aiDesc = trim((string) ($ai['description'] ?? ''));
         if ($desc === '' && $aiDesc !== '') {
             $desc = mb_substr($aiDesc, 0, 1200);
-            $changes[] = 'description';
+            $changes[] = t('labels.ai_field.description');
         }
 
         $tags = json_list($persona['tags']);
@@ -71,7 +71,7 @@ if ($action === 'ai-fill' && $method === 'POST') {
                     continue;
                 }
                 $tags[] = $t;
-                $changes[] = 'tags';
+                $changes[] = t('labels.ai_field.tags');
             }
         }
 
@@ -96,12 +96,12 @@ if ($action === 'ai-fill' && $method === 'POST') {
                 $v = is_scalar($row['v'] ?? null) ? trim((string) $row['v']) : '';
                 $meta[] = ['k' => $k, 'v' => mb_substr($v, 0, 200)];
                 $known[$lower] = true;
-                $changes[] = 'attributs';
+                $changes[] = t('labels.ai_field.meta');
             }
         }
 
         if (!$changes) {
-            echo json_encode(['ok' => true, 'changed' => [], 'message' => 'Rien à compléter : la fiche est déjà bien renseignée.']);
+            echo json_encode(['ok' => true, 'changed' => [], 'message' => t('labels.ai.nothing_to_fill')]);
             exit;
         }
 
@@ -118,7 +118,7 @@ if ($action === 'ai-fill' && $method === 'POST') {
         echo json_encode([
             'ok'      => true,
             'changed' => $changes,
-            'message' => 'Complété : ' . implode(', ', $changes) . '.',
+            'message' => t('labels.ai.filled', ['fields' => implode(t('labels.list_separator'), $changes)]),
         ], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         http_response_code(400);

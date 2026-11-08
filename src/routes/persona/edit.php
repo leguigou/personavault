@@ -11,7 +11,7 @@ if ($action === '' && $method === 'POST') {
     csrf_check();
     $name = trim((string) ($_POST['name'] ?? ''));
     if ($name === '') {
-        flash('error', 'Le nom ne peut pas être vide.');
+        flash('error', t('flash.persona.name_empty'));
         redirect('/p/' . $slug . '/edit');
     }
     $newSlug = unique_slug($name, $pid) === $slug ? $slug : unique_slug($name, $pid);
@@ -23,7 +23,7 @@ if ($action === '' && $method === 'POST') {
             $avatar = store_upload($_FILES['avatar']);
         }
     } catch (Throwable $e) {
-        flash('error', 'Avatar : ' . public_error($e));
+        flash('error', t('flash.persona.avatar_error', ['error' => public_error($e)]));
     }
     $aiModel  = trim((string) ($_POST['model'] ?? ''));
     $aiTemp   = max(0.0, min(2.0, (float) ($_POST['temperature'] ?? 0.85)));
@@ -51,7 +51,7 @@ if ($action === '' && $method === 'POST') {
         // l'ancien portrait peut encore servir dans la galerie : supprimé seulement s'il n'est plus référencé
         release_media((string) $persona['avatar']);
     }
-    flash('ok', 'Fiche mise à jour.');
+    flash('ok', t('flash.persona.updated'));
     redirect('/p/' . $newSlug);
 }
 
@@ -59,7 +59,7 @@ if ($action === 'edit' && $method === 'GET') {
     $photos  = fetch_photos($pid);
     $prompts = fetch_prompts($pid);
     render('form', [
-        'title'      => 'Modifier ' . $persona['name'],
+        'title'      => t('labels.title.edit_persona', ['name' => $persona['name']]),
         'persona'    => $persona,
         'photos'     => $photos,
         'prompts'    => $prompts,
@@ -81,7 +81,7 @@ if ($action === 'delete' && $method === 'POST') {
     $stmt = db()->prepare('DELETE FROM personas WHERE id = ?');
     $stmt->execute([$pid]);
     release_media(...$files); // après la suppression en cascade : plus aucune référence
-    flash('ok', $persona['name'] . ' a été supprimé.');
+    flash('ok', t('flash.persona.deleted', ['name' => $persona['name']]));
     redirect('/');
 }
 
@@ -96,6 +96,6 @@ if ($action === 'archive' && $method === 'POST') {
     csrf_check();
     $stmt = db()->prepare('UPDATE personas SET archived = 1 - archived WHERE id = ?');
     $stmt->execute([$pid]);
-    flash('ok', $persona['archived'] ? 'Persona restauré.' : 'Persona archivé.');
+    flash('ok', $persona['archived'] ? t('flash.persona.restored') : t('flash.persona.archived'));
     redirect($persona['archived'] ? '/p/' . $slug : '/');
 }

@@ -62,7 +62,7 @@ if ($action === 'msg-edit' && $method === 'POST') {
     $content = trim((string) ($_POST['content'] ?? ''));
     if ($content === '') {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Le message ne peut pas être vide.']);
+        echo json_encode(['ok' => false, 'error' => t('error.message.empty')]);
         exit;
     }
 
@@ -71,13 +71,13 @@ if ($action === 'msg-edit' && $method === 'POST') {
     $msg = $stmt->fetch();
     if (!$msg) {
         http_response_code(404);
-        echo json_encode(['ok' => false, 'error' => 'Message introuvable.']);
+        echo json_encode(['ok' => false, 'error' => t('error.message.not_found')]);
         exit;
     }
 
     if ((string) $msg['role'] !== 'user') {
         http_response_code(403);
-        echo json_encode(['ok' => false, 'error' => 'Seuls tes propres messages sont modifiables.'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => false, 'error' => t('error.message.not_yours')], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -121,7 +121,7 @@ if ($action === 'msg-delete' && $method === 'POST') {
     $msg = $stmt->fetch();
     if (!$msg) {
         http_response_code(404);
-        echo json_encode(['ok' => false, 'error' => 'Message introuvable.']);
+        echo json_encode(['ok' => false, 'error' => t('error.message.not_found')]);
         exit;
     }
 

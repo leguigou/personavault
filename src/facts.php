@@ -3,7 +3,20 @@ declare(strict_types=1);
 
 /* Mémoire longue : faits durables sur l'utilisateur, avec recherche FTS5. */
 
+/** Catégories de souvenirs : code => libellé dans la langue de l'interface. */
 function facts_categories(): array
+{
+    return [
+        'preference' => t('labels.fact_category.preference'),
+        'fait'       => t('labels.fact_category.fait'),
+        'projet'     => t('labels.fact_category.projet'),
+        'contrainte' => t('labels.fact_category.contrainte'),
+        'decision'   => t('labels.fact_category.decision'),
+    ];
+}
+
+/** Libellés des catégories envoyés au modèle : toujours en français, comme les consignes. */
+function facts_categories_llm(): array
 {
     return [
         'preference' => 'Préférence',
@@ -16,7 +29,31 @@ function facts_categories(): array
 
 function facts_confidences(): array
 {
-    return ['confirme' => 'Confirmé', 'hypothese' => 'Hypothèse', 'temporaire' => 'Temporaire'];
+    return [
+        'confirme'   => t('labels.fact_confidence.confirme'),
+        'hypothese'  => t('labels.fact_confidence.hypothese'),
+        'temporaire' => t('labels.fact_confidence.temporaire'),
+    ];
+}
+
+/**
+ * L'utilisateur demande-t-il explicitement de mémoriser quelque chose ?
+ * « retiens que… », « remember that… », « recuerda que… » : français, anglais et espagnol,
+ * quelle que soit la langue de l'interface.
+ */
+function facts_explicit_request(string $message): bool
+{
+    return (bool) preg_match(
+        // français
+        "/(souviens[- ]?toi|rappelle[- ]?toi|retiens|m[ée]morise|note (bien )?que|n['’]oublie pas|garde en m[ée]moire"
+        // anglais (« do you remember… » est une question, pas une demande)
+        . "|(?<!do you )\\bremember (that|this|me)\\b|\\bkeep (it )?in mind\\b|\\bdon['’]?t forget\\b|\\bdo not forget\\b"
+        . "|\\bnever forget\\b|\\bmake a note\\b|\\btake note\\b|\\bnote that\\b|\\bmemori[sz]e\\b|\\bwrite (it|this) down\\b"
+        // espagnol
+        . "|\\brecuerda (que|esto|esta|este)\\b|\\bacu[ée]rdate\\b|\\bno (te )?olvides\\b|\\bapunta (que|esto)\\b"
+        . "|\\banota (que|esto)\\b|\\bten en cuenta\\b|\\bmemoriza\\b|\\bguarda en (la |tu )?memoria\\b|\\btoma nota\\b)/iu",
+        $message
+    );
 }
 
 function facts_list(?int $personaId = null, string $q = '', int $limit = 200): array
@@ -104,13 +141,25 @@ function facts_norm(string $s): string
  */
 function facts_relevant(?int $personaId, string $query, int $limit = 5): array
 {
+    // mots vides (français, anglais, espagnol) ; les mots de moins de 4 lettres sont ignorés de toute façon
     $stop = ['avec', 'pour', 'dans', 'mais', 'tout', 'tous', 'elle', 'nous', 'vous', 'ils', 'elles',
         'suis', 'est', 'sont', 'avoir', 'fait', 'faire', 'plus', 'moins', 'bien', 'tres', 'très',
         'quoi', 'comment', 'pourquoi', 'quand', 'cette', 'cela', 'celui', 'alors', 'aussi', 'chez',
         'mon', 'ton', 'son', 'mes', 'tes', 'ses', 'les', 'des', 'une', 'que', 'qui', 'pas', 'sur',
-        'donc', 'comme', 'peut', 'veux', 'veut', 'dire', 'oui', 'non', 'salut', 'bonjour', 'coucou'];
+        'donc', 'comme', 'peut', 'veux', 'veut', 'dire', 'oui', 'non', 'salut', 'bonjour', 'coucou',
+        // anglais
+        'about', 'also', 'been', 'does', 'doing', 'from', 'have', 'hello', 'here', 'just', 'know',
+        'like', 'make', 'more', 'much', 'only', 'really', 'some', 'tell', 'than', 'that', 'thanks',
+        'their', 'them', 'then', 'there', 'they', 'thing', 'think', 'this', 'very', 'want', 'were',
+        'what', 'when', 'where', 'which', 'will', 'with', 'would', 'your', 'yours', 'could', 'should',
+        'remember', 'forget',
+        // espagnol
+        'ahora', 'algo', 'bueno', 'como', 'cómo', 'cuando', 'cuándo', 'desde', 'donde', 'dónde', 'ella',
+        'ellas', 'ellos', 'esta', 'está', 'estas', 'estás', 'este', 'esto', 'estoy', 'gracias', 'hacer',
+        'hola', 'mucho', 'muy', 'nada', 'nosotros', 'para', 'pero', 'porque', 'puedo', 'quiero', 'sobre',
+        'también', 'tambien', 'tengo', 'tiene', 'todo', 'todos', 'vale', 'recuerda', 'olvides'];
 
-    $words = preg_split('/[^a-z0-9àâäéèêëîïôöùûüç]+/u', mb_strtolower($query)) ?: [];
+    $words = preg_split('/[^a-z0-9àâäéèêëîïôöùûüçáíóúñ]+/u', mb_strtolower($query)) ?: [];
     $terms = [];
     foreach ($words as $w) {
         if (mb_strlen($w) < 4 || in_array($w, $stop, true)) {
@@ -157,7 +206,7 @@ function facts_format(array $rows): string
     if (!$rows) {
         return '';
     }
-    $cats = facts_categories();
+    $cats = facts_categories_llm(); // texte envoyé au modèle : en français
     $lines = [];
     foreach ($rows as $r) {
         $cat = $cats[(string) $r['category']] ?? 'Fait';
@@ -208,18 +257,18 @@ function facts_should_run(int $newMessages, bool $explicit, bool $force = false)
 {
     $s = facts_settings();
     if ($force) {
-        return $newMessages >= 1 ? '' : 'pas de nouveau message';
+        return $newMessages >= 1 ? '' : t('labels.facts_skip.no_new');
     }
     if ($s['frequency'] === 'off') {
-        return 'extraction automatique désactivée dans les réglages';
+        return t('labels.facts_skip.off');
     }
     if ($explicit) {
-        return $newMessages >= 1 ? '' : 'pas de nouveau message';
+        return $newMessages >= 1 ? '' : t('labels.facts_skip.no_new');
     }
     return match ($s['frequency']) {
-        'explicit' => 'extraction seulement sur demande (« retiens que… »)',
-        'every'    => $newMessages >= $s['every'] ? '' : 'en attente (' . $newMessages . '/' . $s['every'] . ' messages)',
-        default    => $newMessages >= 2 ? '' : 'pas assez de nouveaux messages',
+        'explicit' => t('labels.facts_skip.explicit_only'),
+        'every'    => $newMessages >= $s['every'] ? '' : t('labels.facts_skip.waiting', ['count' => $newMessages, 'every' => $s['every']]),
+        default    => $newMessages >= 2 ? '' : t('labels.facts_skip.not_enough'),
     };
 }
 

@@ -16,7 +16,7 @@ if ($action === 'stream' && $method === 'POST') {
     if (!$regen && $text === '' && !$hasImage) {
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'Message vide.']);
+        echo json_encode(['ok' => false, 'error' => t('error.message.empty_send')]);
         exit;
     }
 
@@ -47,7 +47,7 @@ if ($action === 'stream' && $method === 'POST') {
         }
         $lastUser = $ust->fetch();
         if (!$lastUser) {
-            $sse(['error' => 'Aucun message à régénérer.', 'kind' => 'regen']);
+            $sse(['error' => t('error.message.nothing_to_regen'), 'kind' => 'regen']);
             exit;
         }
         $text      = (string) $lastUser['content'];
@@ -86,7 +86,7 @@ if ($action === 'stream' && $method === 'POST') {
         try {
             $imageBase = store_upload($_FILES['image']);
         } catch (Throwable $e) {
-            $sse(['error' => 'Image refusée : ' . public_error($e), 'kind' => 'image']);
+            $sse(['error' => t('error.image.refused', ['error' => public_error($e)]), 'kind' => 'image']);
             exit;
         }
     }
@@ -156,7 +156,7 @@ if ($action === 'stream' && $method === 'POST') {
         } catch (Throwable $e) {
             // le tout premier appel qui suit le chargement d'un modèle de vision revient
             // parfois vide (encodeur d'images qui s'initialise) : on retente une fois
-            if ($sentAny || stripos($e->getMessage(), 'Réponse vide') === false) {
+            if ($sentAny || $e->getCode() !== LLM_ERR_EMPTY) {
                 throw $e;
             }
             $res = $runStream();

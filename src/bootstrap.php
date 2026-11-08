@@ -62,7 +62,11 @@ if (!is_cli()) {
             http_response_code(500);
             header('Content-Type: text/plain; charset=utf-8');
         }
-        echo 'Erreur interne. Le détail a été écrit dans le journal du serveur.';
+        try {
+            echo t('error.internal_logged');
+        } catch (Throwable $ignored) {
+            echo 'Erreur interne. Le détail a été écrit dans le journal du serveur.';
+        }
     });
 }
 
@@ -434,7 +438,10 @@ function set_setting(string $key, string $value): void
 
 /* ------------------------------------------------------------------ utils */
 
-/** « 0 photo », « 1 photo », « 2 photos » : en français, le pluriel commence à 2. */
+/**
+ * « 0 photo », « 1 photo », « 2 photos » : en français, le pluriel commence à 2.
+ * Réservé aux scripts bin/ (en français) : l'interface utilise les pluriels de t().
+ */
 function plural(int $n, string $one, string $many): string
 {
     return $n . ' ' . ($n >= 2 ? $many : $one);
@@ -501,11 +508,11 @@ function take_flashes(): array
  * par l'app, erreurs LLM) passent telles quelles ; les erreurs techniques (SQL, PHP)
  * sont remplacées par un message générique. Tout est journalisé côté serveur.
  */
-function public_error(Throwable $e, string $generic = 'Erreur interne (détail dans le journal du serveur).'): string
+function public_error(Throwable $e, ?string $generic = null): string
 {
     error_log('[PersonaVault] ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
     if ($e instanceof PDOException || !($e instanceof RuntimeException)) {
-        return $generic;
+        return $generic ?? t('error.internal');
     }
     return $e->getMessage();
 }
@@ -530,12 +537,13 @@ function ini_bytes(string $value): int
 function human_bytes(int $bytes): string
 {
     if ($bytes >= 1024 ** 2) {
-        return rtrim(rtrim(number_format($bytes / 1024 ** 2, 1, ',', ''), '0'), ',') . ' Mo';
+        $dec = t('labels.number.decimal');
+        return t('labels.bytes.mb', ['n' => rtrim(rtrim(number_format($bytes / 1024 ** 2, 1, $dec, ''), '0'), $dec)]);
     }
     if ($bytes >= 1024) {
-        return (int) round($bytes / 1024) . ' Ko';
+        return t('labels.bytes.kb', ['n' => (int) round($bytes / 1024)]);
     }
-    return $bytes . ' o';
+    return t('labels.bytes.b', ['n' => $bytes]);
 }
 
 /** La requête dépasse-t-elle post_max_size ? (PHP vide alors $_POST et $_FILES) */
@@ -548,22 +556,19 @@ function post_too_large(): bool
 
 function post_too_large_message(): string
 {
-    return 'Envoi trop volumineux : le serveur accepte au plus '
-        . human_bytes(ini_bytes((string) ini_get('post_max_size')))
-        . ' par envoi (réglage PHP post_max_size).';
+    return t('error.upload.post_too_large', ['size' => human_bytes(ini_bytes((string) ini_get('post_max_size')))]);
 }
 
 function upload_error_message(int $code): string
 {
     return match ($code) {
-        UPLOAD_ERR_INI_SIZE   => 'Fichier trop lourd : le serveur accepte au plus '
-            . human_bytes(ini_bytes((string) ini_get('upload_max_filesize'))) . ' par fichier (réglage PHP upload_max_filesize).',
-        UPLOAD_ERR_FORM_SIZE  => 'Fichier trop lourd pour ce formulaire.',
-        UPLOAD_ERR_PARTIAL    => 'Envoi interrompu, réessaie.',
-        UPLOAD_ERR_NO_FILE    => 'Aucun fichier reçu.',
-        UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => 'Erreur serveur : impossible d’écrire le fichier temporaire.',
-        UPLOAD_ERR_EXTENSION  => 'Envoi bloqué par une extension PHP.',
-        default               => 'Envoi impossible (code ' . $code . ').',
+        UPLOAD_ERR_INI_SIZE   => t('error.upload.ini_size', ['size' => human_bytes(ini_bytes((string) ini_get('upload_max_filesize')))]),
+        UPLOAD_ERR_FORM_SIZE  => t('error.upload.form_size'),
+        UPLOAD_ERR_PARTIAL    => t('error.upload.partial'),
+        UPLOAD_ERR_NO_FILE    => t('error.upload.no_file'),
+        UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => t('error.upload.cant_write'),
+        UPLOAD_ERR_EXTENSION  => t('error.upload.extension'),
+        default               => t('error.upload.unknown', ['code' => $code]),
     };
 }
 
@@ -596,7 +601,7 @@ function csrf_check(): void
 {
     if (!csrf_valid()) {
         http_response_code(419);
-        exit('Session expirée, merci de recharger la page.');
+        exit(t('error.csrf.expired_page'));
     }
 }
 
@@ -608,7 +613,7 @@ function csrf_check_json(array $extra = []): void
             header('Content-Type: application/json; charset=utf-8');
         }
         http_response_code(419);
-        echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.'] + $extra, JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => false, 'error' => t('error.csrf.expired')] + $extra, JSON_UNESCAPED_UNICODE);
         exit;
     }
 }
@@ -672,14 +677,15 @@ function json_list(?string $json): array
 function prompt_kinds(): array
 {
     return [
-        'image'    => 'Image',
-        'negative' => 'Négatif',
-        'video'    => 'Vidéo',
-        'system'   => 'Système',
-        'other'    => 'Autre',
+        'image'    => t('labels.prompt_kind.image'),
+        'negative' => t('labels.prompt_kind.negative'),
+        'video'    => t('labels.prompt_kind.video'),
+        'system'   => t('labels.prompt_kind.system'),
+        'other'    => t('labels.prompt_kind.other'),
     ];
 }
 
+/** Date courte dans la langue de l'interface (« 8 nov. 2026 ») ; nom historique conservé. */
 function fr_date(?string $sqlDate): string
 {
     if (!$sqlDate) {
@@ -689,8 +695,16 @@ function fr_date(?string $sqlDate): string
     if ($ts === false) {
         return '';
     }
-    $months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-    return date('j', $ts) . ' ' . $months[(int) date('n', $ts) - 1] . ' ' . date('Y', $ts);
+    $months = [
+        t('date.month_short.1'), t('date.month_short.2'), t('date.month_short.3'), t('date.month_short.4'),
+        t('date.month_short.5'), t('date.month_short.6'), t('date.month_short.7'), t('date.month_short.8'),
+        t('date.month_short.9'), t('date.month_short.10'), t('date.month_short.11'), t('date.month_short.12'),
+    ];
+    return t('date.short', [
+        'day'   => date('j', $ts),
+        'month' => $months[(int) date('n', $ts) - 1],
+        'year'  => date('Y', $ts),
+    ]);
 }
 
 function parse_tags(string $raw): array
@@ -817,18 +831,18 @@ function attempt_login(string $password): bool
 function image_check_info(array|false $info): int
 {
     if (!$info) {
-        throw new RuntimeException('Ce fichier n’est pas une image valide.');
+        throw new RuntimeException(t('error.image.invalid'));
     }
     $type = (int) $info[2];
     $allowed = [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP, IMAGETYPE_GIF];
     if (!in_array($type, $allowed, true)) {
-        throw new RuntimeException('Format accepté : JPG, PNG, WEBP ou GIF.');
+        throw new RuntimeException(t('error.image.format'));
     }
     $w = (int) $info[0];
     $h = (int) $info[1];
     $maxPixels = (int) config('max_pixels', 40_000_000);
     if ($w <= 0 || $h <= 0 || $w * $h > $maxPixels) {
-        throw new RuntimeException('Image trop grande (' . $w . '×' . $h . ' px, ' . (int) round($maxPixels / 1e6) . ' Mpx max).');
+        throw new RuntimeException(t('error.image.too_big', ['w' => $w, 'h' => $h, 'max' => (int) round($maxPixels / 1e6)]));
     }
     return $type;
 }
@@ -839,7 +853,7 @@ function decode_image_string(string $data): GdImage
     image_check_info(@getimagesizefromstring($data));
     $img = @imagecreatefromstring($data);
     if (!$img) {
-        throw new RuntimeException('Image illisible.');
+        throw new RuntimeException(t('error.image.unreadable'));
     }
     return $img;
 }
@@ -865,7 +879,7 @@ function store_upload(array $file, string $prefix = 'p'): string
     }
     $max = (int) config('max_upload');
     if (($file['size'] ?? 0) > $max) {
-        throw new RuntimeException('Image trop lourde (' . human_bytes($max) . ' max).');
+        throw new RuntimeException(t('error.image.too_heavy', ['max' => human_bytes($max)]));
     }
 
     $type = image_check_info(@getimagesize($file['tmp_name']));
@@ -877,7 +891,7 @@ function store_upload(array $file, string $prefix = 'p'): string
         IMAGETYPE_GIF  => @imagecreatefromgif($file['tmp_name']),
     };
     if (!$img) {
-        throw new RuntimeException('Image illisible.');
+        throw new RuntimeException(t('error.image.unreadable'));
     }
 
     // Orientation EXIF (photos de téléphone)
