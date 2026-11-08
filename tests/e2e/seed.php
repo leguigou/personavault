@@ -33,6 +33,14 @@ foreach ($personas as [$slug, $name, $tag, $desc, $tags, $rgb]) {
         ->execute([$slug, $name, $tag, $desc, $avatar, json_encode($tags), json_encode([['k' => 'Âge', 'v' => '32']])]);
     $ids[$slug] = (int) $pdo->lastInsertId();
 }
+// dates distinctes : l'ordre de la bibliothèque (tri par date de mise à jour) ne dépend plus
+// du hasard de la seconde à laquelle chaque fiche a été créée
+$age = 0;
+foreach (array_reverse($ids) as $id) {
+    $pdo->prepare("UPDATE personas SET created_at = datetime('now', ?), updated_at = datetime('now', ?) WHERE id = ?")
+        ->execute(['-' . (10 + $age) . ' minutes', '-' . (10 + $age) . ' minutes', $id]);
+    $age += 5;
+}
 $c = $ids['camille-lefebvre'];
 $pdo->prepare('INSERT INTO photos (persona_id, file) VALUES (?, ?)')->execute([$c, store_upload($image([90, 90, 120]))]);
 $pdo->prepare("INSERT INTO prompts (persona_id, title, kind, body) VALUES (?, 'Portrait', 'image', 'portrait 85mm, lumière douce'), (?, 'Système', 'system', 'Tu es Camille.')")
