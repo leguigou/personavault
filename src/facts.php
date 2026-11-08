@@ -238,8 +238,12 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
     $removed = 0;
 
     $seen = [];
+    // seuls les souvenirs MONTRÉS au modèle (ce persona + globaux) peuvent être modifiés
+    // ou oubliés : un ID inventé (ou injecté dans la conversation) est ignoré
+    $knownIds = [];
     foreach ($known as $k) {
         $seen[facts_norm((string) $k['content'])] = (int) $k['id'];
+        $knownIds[(int) $k['id']] = true;
     }
 
     $items = $json['memories'] ?? [];
@@ -256,8 +260,8 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
             $cat  = (string) ($it['category'] ?? 'fait');
             $conf = (string) ($it['confidence'] ?? 'confirme');
 
-            $replaces = (int) ($it['replaces'] ?? 0);
-            if ($replaces > 0) {
+            $replaces = is_scalar($it['replaces'] ?? null) ? (int) $it['replaces'] : 0;
+            if ($replaces > 0 && isset($knownIds[$replaces])) {
                 facts_update($replaces, $content, $cat, $conf);
                 $updated++;
                 continue;
@@ -276,8 +280,9 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
     $forget = $json['forget'] ?? [];
     if (is_array($forget)) {
         foreach (array_slice($forget, 0, 8) as $fid) {
-            $fid = (int) $fid;
-            if ($fid > 0) {
+            $fid = is_scalar($fid) ? (int) $fid : 0;
+            if ($fid > 0 && isset($knownIds[$fid])) {
+                unset($knownIds[$fid]);
                 facts_delete($fid);
                 $removed++;
             }

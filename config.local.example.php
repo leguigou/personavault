@@ -7,6 +7,9 @@ return [
     // hash généré avec password_hash(..., PASSWORD_DEFAULT)
     'password_hash' => '$2y$12$remplace.moi',
 
+    // derrière nginx / Caddy en HTTPS : fait confiance à X-Forwarded-Proto / -For
+    // 'trust_proxy' => true,
+
     // facultatif : autre base, autre dossier d'images
     // 'db'      => __DIR__ . '/storage/personavault.sqlite',
     // 'uploads' => __DIR__ . '/storage/uploads',

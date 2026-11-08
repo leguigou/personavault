@@ -55,12 +55,58 @@ php -r "echo password_hash('MonMotDePasse', PASSWORD_DEFAULT), PHP_EOL;"
 #   → colle le hash dans config.local.php
 
 mkdir -p storage/uploads
-php -S 0.0.0.0:8091 -t public public/index.php
+php -d upload_max_filesize=16M -d post_max_size=64M -S 0.0.0.0:8091 -t public public/index.php
 ```
 
-→ http://localhost:8091
+→ http://localhost:8091 (`0.0.0.0` = joignable depuis le réseau local, par ex. ton téléphone ;
+mets `127.0.0.1` si seul un reverse proxy local doit y accéder)
 
-En service (systemd) :
+> **Limites d'envoi.** Par défaut PHP n'accepte que **2 Mo par fichier** (`upload_max_filesize`) et
+> **8 Mo par envoi** (`post_max_size`) : une photo de téléphone ou une sauvegarde ZIP dépasse vite ces
+> valeurs. Passe-les en `-d` comme ci-dessus, ou dans le `php.ini` / la configuration PHP-FPM.
+> `post_max_size` doit couvrir l'envoi complet (plusieurs photos, ou la sauvegarde entière).
+> L'app accepte ensuite jusqu'à 15 Mo et 40 Mpx par image (`max_upload`, `max_pixels`).
+
+Vérification rapide après installation ou mise à jour (base temporaire, la vraie base n'est pas touchée) :
+
+```bash
+php bin/selftest.php
+```
+
+### Production
+
+Le serveur intégré `php -S` est un **outil de développement** : la documentation PHP déconseille de
+l'utiliser en production (un seul processus par worker, pas de TLS, `PHP_CLI_SERVER_WORKERS`
+expérimental). Pour un usage durable, préfère **nginx ou Caddy + PHP-FPM** :
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name personavault.example;
+    root /chemin/vers/personavault/public;
+    client_max_body_size 64m;
+
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+    location = /index.php {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_buffering off;          # streaming des réponses (SSE)
+        fastcgi_read_timeout 330s;      # réponses longues du modèle
+    }
+}
+```
+
+Avec Caddy : `php_fastcgi unix//run/php/php8.2-fpm.sock` et `root * /chemin/vers/personavault/public`.
+
+Derrière un reverse proxy HTTPS, active `'trust_proxy' => true` dans `config.local.php` : le cookie
+de session reçoit alors l'attribut `Secure` (d'après `X-Forwarded-Proto`) et la limitation des
+tentatives de connexion utilise la vraie IP du client (`X-Forwarded-For`). **Laisse-le à `false`**
+si PHP est joignable directement : ces en-têtes seraient falsifiables.
+
+Si tu gardes `php -S` (réseau privé uniquement), en service systemd :
 
 ```ini
 [Unit]
@@ -70,7 +116,7 @@ After=network.target
 [Service]
 User=www-data
 WorkingDirectory=/chemin/vers/personavault
-ExecStart=/usr/bin/php -S 0.0.0.0:8091 -t public public/index.php
+ExecStart=/usr/bin/php -d upload_max_filesize=16M -d post_max_size=64M -S 0.0.0.0:8091 -t public public/index.php
 Environment=PHP_CLI_SERVER_WORKERS=4
 Restart=always
 
@@ -123,6 +169,10 @@ La clé API du fournisseur distant est stockée en base, dans la table `settings
 | `prompts` | titre, type, contenu |
 | `conversations` / `messages` | discussions, bulles, images envoyées |
 | `user_memories` | souvenirs persistants (+ index FTS5) |
+| `login_attempts` | échecs de connexion récents (limitation) |
+
+Le schéma est versionné (`PRAGMA user_version`) : les migrations s'appliquent seules au premier
+accès, une seule fois, dans une transaction.
 
 ---
 
@@ -143,7 +193,8 @@ personavault/
 │   ├── prompts.php         # prompts internes éditables
 │   └── backup.php          # export / import ZIP
 ├── views/                  # gabarits PHP
-├── bin/                    # outils CLI (aperçu de prompt, relance, nettoyage)
+├── bin/                    # outils CLI (aperçu de prompt, relance, nettoyage, selftest)
+├── .github/workflows/      # CI : php -l + bin/selftest.php
 └── storage/                # base + images (non versionné)
 ```
 
@@ -151,7 +202,23 @@ personavault/
 
 ## Sécurité
 
-Accès protégé par **un seul mot de passe** (hash `PASSWORD_DEFAULT`, 5 tentatives par quart
-d'heure). L'app est pensée pour un usage personnel sur un réseau privé : si tu l'exposes sur
-Internet, place-la derrière **HTTPS** (reverse proxy) — sinon le mot de passe et le cookie de
-session circulent en clair.
+- Accès protégé par **un seul mot de passe** (hash `PASSWORD_DEFAULT`, dans `config.local.php`).
+- **Tentatives de connexion limitées** et comptées en base (table `login_attempts`) : 5 échecs par IP
+  et 30 échecs toutes IP confondues par quart d'heure (`login_max_try`, `login_global_max`,
+  `login_window`). Effacer ses cookies ne remet pas le compteur à zéro. Revers du seuil global :
+  quelqu'un qui martèle la page de connexion peut te bloquer toi aussi pendant 15 minutes.
+- Jeton CSRF sur tous les formulaires et appels AJAX (un jeton vide est toujours refusé), session
+  régénérée à la connexion, cookie `HttpOnly` + `SameSite=Lax`.
+- En-têtes `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
+- Images ré-encodées en WebP (métadonnées supprimées), 40 Mpx max, stockées hors de `public/` et
+  servies uniquement après connexion. Import ZIP : rien n'est extrait sur le disque, nombre et taille
+  des entrées bornés (`zip_max_entries`, `zip_max_entry_size`, `zip_max_total`).
+- La clé API du fournisseur distant est stockée **en clair** dans la base (`storage/`, créé en 0700,
+  base en 0600) : protège l'accès au serveur et aux sauvegardes du dossier `storage/`. Le bouton
+  « Tester » n'envoie la clé enregistrée qu'à l'adresse enregistrée.
+- Les erreurs techniques sont écrites dans le journal PHP (`error_log`) ; le navigateur ne reçoit
+  qu'un message générique.
+
+L'app est pensée pour un usage personnel. Si tu l'exposes sur Internet, place-la **obligatoirement
+derrière HTTPS** (reverse proxy, voir « Production ») — sinon le mot de passe et le cookie de session
+circulent en clair.

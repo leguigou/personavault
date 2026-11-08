@@ -20,7 +20,7 @@ function backup_tmp_dir(): string
 {
     $dir = dirname((string) config('uploads')) . '/tmp';
     if (!is_dir($dir)) {
-        mkdir($dir, 0775, true);
+        mkdir($dir, 0700, true);
     }
     return $dir;
 }
@@ -195,8 +195,45 @@ function backup_readme(array $stats, bool $withConversations): string
         . "rien n'est écrasé.\n";
 }
 
+/** Valeur scalaire d'un JSON importé, en chaîne bornée (sinon $default). */
+function backup_str(mixed $v, int $max = 0, string $default = ''): string
+{
+    if (!is_scalar($v)) {
+        return $default;
+    }
+    $s = (string) $v;
+    return $max > 0 ? mb_substr($s, 0, $max) : $s;
+}
+
+/**
+ * Lit une entrée du ZIP en bornant la taille décompressée (protection « zip bomb ») :
+ * on ne lit jamais plus de zip_max_entry_size octets, quelle que soit la taille annoncée.
+ */
+function backup_read_entry(ZipArchive $zip, int $index): string
+{
+    $max  = (int) config('zip_max_entry_size', 40 * 1024 * 1024);
+    $stat = $zip->statIndex($index);
+    if (!is_array($stat) || (int) $stat['size'] > $max) {
+        throw new RuntimeException('entrée trop volumineuse (' . human_bytes((int) ($stat['size'] ?? 0)) . ')');
+    }
+    $data = $zip->getFromIndex($index, $max + 1);
+    if ($data === false) {
+        throw new RuntimeException('entrée illisible');
+    }
+    if (strlen($data) > $max) {
+        throw new RuntimeException('entrée trop volumineuse');
+    }
+    return $data;
+}
+
 /**
  * Importe les personas d'une archive (photos ré-encodées, prompts inclus).
+ *
+ * Les entrées sont repérées par leur suffixe « personas/<dossier>/persona.json » : le
+ * dossier racine ajouté à l'export (personavault-AAAA-MM-JJ-HHMM/) est donc géré, de même
+ * qu'une archive refaite à la main sans ce dossier. Rien n'est extrait sur le disque.
+ * Chaque persona est importé dans sa propre transaction.
+ *
  * @return array{personas:int, photos:int, prompts:int, errors:array<string>}
  */
 function backup_import_zip(string $zipPath): array
@@ -206,99 +243,173 @@ function backup_import_zip(string $zipPath): array
         throw new RuntimeException('Archive illisible.');
     }
 
-    $names = [];
-    for ($i = 0; $i < $zip->numFiles; $i++) {
-        $names[] = (string) $zip->getNameIndex($i);
-    }
-    if (!array_filter($names, static fn (string $n): bool => str_ends_with($n, 'manifest.json'))) {
+    try {
+        $maxEntries = (int) config('zip_max_entries', 5000);
+        if ($zip->numFiles > $maxEntries) {
+            throw new RuntimeException('Archive refusée : trop de fichiers (' . $zip->numFiles . ', ' . $maxEntries . ' max).');
+        }
+
+        $index = [];   // nom → index
+        $total = 0;
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if (!is_array($stat)) {
+                continue;
+            }
+            $index[(string) $stat['name']] = $i;
+            $total += (int) $stat['size'];
+        }
+        $maxTotal = (int) config('zip_max_total', 2 * 1024 * 1024 * 1024);
+        if ($total > $maxTotal) {
+            throw new RuntimeException('Archive refusée : ' . human_bytes($total) . ' une fois décompressée (' . human_bytes($maxTotal) . ' max).');
+        }
+        if (!array_filter(array_keys($index), static fn (string $n): bool => str_ends_with($n, 'manifest.json'))) {
+            throw new RuntimeException('Ce fichier n’est pas une sauvegarde PersonaVault (manifest.json manquant).');
+        }
+
+        $dir   = (string) config('uploads');
+        $stats = ['personas' => 0, 'photos' => 0, 'prompts' => 0, 'errors' => []];
+
+        foreach ($index as $name => $entryIndex) {
+            if (!preg_match('#(?:^|/)personas/([^/]+)/persona\.json$#', $name, $m) || str_contains($name, '..')) {
+                continue;
+            }
+            $folder = $m[1];
+            $prefix = substr($name, 0, -strlen('persona.json')); // « …/personas/<dossier>/ »
+
+            try {
+                $res = backup_import_one($zip, $index, $prefix, $entryIndex);
+                $stats['personas']++;
+                $stats['photos']  += $res['photos'];
+                $stats['prompts'] += $res['prompts'];
+                foreach ($res['errors'] as $err) {
+                    $stats['errors'][] = $folder . ' : ' . $err;
+                }
+            } catch (Throwable $e) {
+                $stats['errors'][] = $folder . ' : ' . public_error($e, 'erreur interne');
+            }
+        }
+
+        return $stats;
+    } finally {
         $zip->close();
-        throw new RuntimeException('Ce fichier n’est pas une sauvegarde PersonaVault (manifest.json manquant).');
+    }
+}
+
+/**
+ * Importe UN persona. Les images sont décodées et écrites d'abord, puis tout est inséré
+ * en une transaction ; en cas d'échec, les fichiers déjà écrits sont supprimés.
+ *
+ * @return array{photos:int, prompts:int, errors:array<string>}
+ */
+function backup_import_one(ZipArchive $zip, array $index, string $prefix, int $personaIndex): array
+{
+    $persona = json_decode(backup_read_entry($zip, $personaIndex), true);
+    if (!is_array($persona) || trim(backup_str($persona['name'] ?? '')) === '') {
+        throw new RuntimeException('fiche invalide');
     }
 
-    $dir   = (string) config('uploads');
-    $stats = ['personas' => 0, 'photos' => 0, 'prompts' => 0, 'errors' => []];
+    $errors  = [];
+    $written = []; // fichiers créés, à supprimer si la transaction échoue
 
-    foreach ($names as $name) {
-        if (!preg_match('#personas/([^/]+)/persona\.json$#', $name, $m)) {
+    // portrait
+    $avatar = '';
+    if (isset($index[$prefix . 'avatar.webp'])) {
+        try {
+            $avatar    = store_gd_image(decode_image_string(backup_read_entry($zip, $index[$prefix . 'avatar.webp'])));
+            $written[] = $avatar;
+        } catch (Throwable $e) {
+            $errors[] = 'portrait ignoré (' . public_error($e, 'erreur interne') . ')';
+        }
+    }
+
+    // photos
+    $photos = [];
+    foreach ($index as $entry => $i) {
+        if (!str_starts_with($entry, $prefix . 'photos/') || str_ends_with($entry, '/')) {
             continue;
         }
-        if (str_contains($name, '..')) {
-            continue;
+        try {
+            $base      = store_gd_image(decode_image_string(backup_read_entry($zip, $i)));
+            $photos[]  = $base;
+            $written[] = $base;
+        } catch (Throwable $e) {
+            $errors[] = basename($entry) . ' ignorée (' . public_error($e, 'erreur interne') . ')';
         }
-        $folder   = $m[1];
-        $persona  = json_decode((string) $zip->getFromName($name), true);
-        if (!is_array($persona) || trim((string) ($persona['name'] ?? '')) === '') {
-            $stats['errors'][] = $folder . ' : fiche invalide';
-            continue;
-        }
+    }
 
-        $baseSlug = trim((string) ($persona['slug'] ?? '')) !== '' ? (string) $persona['slug'] : 'persona';
-        $slug     = unique_slug((string) $persona['name'], null);
-
-        // portrait
-        $avatar = '';
-        $avatarData = $zip->getFromName('personas/' . $folder . '/avatar.webp');
-        if ($avatarData !== false) {
-            $img = @imagecreatefromstring($avatarData);
-            if ($img) {
-                $avatar = 'p' . bin2hex(random_bytes(8));
-                save_webp($img, $dir . '/' . $avatar . '.webp', 1800, 88);
-                save_webp($img, $dir . '/' . $avatar . '.thumb.webp', 700, 84);
-            }
-        }
-
-        $stmt = db()->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta, favorite, archived, model, temperature, max_tokens, context_window, directive, created_at, updated_at)
-                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime("now"),datetime("now"))');
-        $stmt->execute([
-            $slug,
-            (string) $persona['name'],
-            (string) ($persona['tagline'] ?? ''),
-            (string) ($persona['description'] ?? ''),
-            $avatar,
-            json_encode($persona['tags'] ?? [], JSON_UNESCAPED_UNICODE),
-            json_encode($persona['meta'] ?? [], JSON_UNESCAPED_UNICODE),
-            (int) ($persona['favorite'] ?? 0),
-            (int) ($persona['archived'] ?? 0),
-            (string) ($persona['model'] ?? ''),
-            (float) ($persona['temperature'] ?? 0.85),
-            (int) ($persona['max_tokens'] ?? 400),
-            (int) ($persona['context_window'] ?? 8192),
-            (string) ($persona['directive'] ?? ''),
-        ]);
-        $pid = (int) db()->lastInsertId();
-        $stats['personas']++;
-
-        // photos
-        foreach ($names as $entry) {
-            if (!str_starts_with($entry, 'personas/' . $folder . '/photos/')) {
-                continue;
-            }
-            $data = $zip->getFromName($entry);
-            $img  = $data !== false ? @imagecreatefromstring($data) : false;
-            if (!$img) {
-                continue;
-            }
-            $base = 'p' . bin2hex(random_bytes(8));
-            save_webp($img, $dir . '/' . $base . '.webp', 1800, 88);
-            save_webp($img, $dir . '/' . $base . '.thumb.webp', 700, 84);
-            db()->prepare('INSERT INTO photos (persona_id, file, caption, sort) VALUES (?,?,?,?)')
-                ->execute([$pid, $base, '', time()]);
-            $stats['photos']++;
-        }
-
-        // prompts
-        $prompts = json_decode((string) $zip->getFromName('personas/' . $folder . '/prompts.json'), true);
-        if (is_array($prompts)) {
-            $ins = db()->prepare('INSERT INTO prompts (persona_id, kind, title, body) VALUES (?,?,?,?)');
-            foreach ($prompts as $pr) {
-                $kind = in_array((string) ($pr['kind'] ?? ''), array_keys(prompt_kinds()), true)
-                    ? (string) $pr['kind'] : 'system';
-                $ins->execute([$pid, $kind, mb_substr((string) ($pr['title'] ?? ''), 0, 120), (string) ($pr['body'] ?? '')]);
-                $stats['prompts']++;
+    // prompts
+    $prompts = [];
+    if (isset($index[$prefix . 'prompts.json'])) {
+        $list = json_decode(backup_read_entry($zip, $index[$prefix . 'prompts.json']), true);
+        if (is_array($list)) {
+            foreach ($list as $pr) {
+                if (!is_array($pr) || trim(backup_str($pr['body'] ?? '')) === '') {
+                    continue;
+                }
+                $kind = backup_str($pr['kind'] ?? '');
+                $prompts[] = [
+                    array_key_exists($kind, prompt_kinds()) ? $kind : 'other',
+                    backup_str($pr['title'] ?? '', 120),
+                    backup_str($pr['body'] ?? ''),
+                ];
             }
         }
     }
 
-    $zip->close();
-    return $stats;
+    // tags / attributs : uniquement des scalaires, bornés comme dans le formulaire
+    $tags = [];
+    foreach ((array) ($persona['tags'] ?? []) as $t) {
+        $t = trim(backup_str($t, 32));
+        if ($t !== '' && !in_array($t, $tags, true) && count($tags) < 12) {
+            $tags[] = $t;
+        }
+    }
+    $meta = [];
+    foreach ((array) ($persona['meta'] ?? []) as $row) {
+        if (is_array($row) && trim(backup_str($row['k'] ?? '')) !== '' && count($meta) < 20) {
+            $meta[] = ['k' => trim(backup_str($row['k'], 40)), 'v' => backup_str($row['v'] ?? '', 200)];
+        }
+    }
+
+    try {
+        db_tx(static function (PDO $pdo) use ($persona, $avatar, $photos, $prompts, $tags, $meta): void {
+            $name = backup_str($persona['name'], 200);
+            $stmt = $pdo->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta, favorite, archived, model, temperature, max_tokens, context_window, directive, created_at, updated_at)
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime("now"),datetime("now"))');
+            $stmt->execute([
+                unique_slug($name, null),
+                $name,
+                backup_str($persona['tagline'] ?? '', 1000),
+                backup_str($persona['description'] ?? '', 20000),
+                $avatar,
+                json_encode($tags, JSON_UNESCAPED_UNICODE),
+                json_encode($meta, JSON_UNESCAPED_UNICODE),
+                (int) !empty($persona['favorite']),
+                (int) !empty($persona['archived']),
+                backup_str($persona['model'] ?? '', 200),
+                max(0.0, min(2.0, (float) backup_str($persona['temperature'] ?? '0.85', 0, '0.85'))),
+                max(64, min(4096, (int) backup_str($persona['max_tokens'] ?? '400', 0, '400'))),
+                max(2048, min(131072, (int) backup_str($persona['context_window'] ?? '8192', 0, '8192'))),
+                backup_str($persona['directive'] ?? '', 5000),
+            ]);
+            $pid = (int) $pdo->lastInsertId();
+
+            $ph = $pdo->prepare('INSERT INTO photos (persona_id, file, caption, sort) VALUES (?,?,?,?)');
+            foreach ($photos as $n => $base) {
+                $ph->execute([$pid, $base, '', time() + $n]);
+            }
+            $ins = $pdo->prepare('INSERT INTO prompts (persona_id, kind, title, body) VALUES (?,?,?,?)');
+            foreach ($prompts as [$kind, $title, $body]) {
+                $ins->execute([$pid, $kind, $title, $body]);
+            }
+        });
+    } catch (Throwable $e) {
+        foreach ($written as $base) {
+            delete_media($base);
+        }
+        throw $e;
+    }
+
+    return ['photos' => count($photos), 'prompts' => count($prompts), 'errors' => $errors];
 }

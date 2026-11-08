@@ -35,7 +35,12 @@ function llm_ready(): bool
 
 /**
  * Appel en streaming (SSE OpenAI). $onDelta est appelé à chaque fragment de texte.
- * @return array{content:string, model:string, prompt_tokens:int, completion_tokens:int, ms:int}
+ *
+ * $options['should_abort'] (callable, facultatif) est interrogé environ chaque seconde,
+ * même quand le modèle n'émet rien : s'il renvoie true, la requête est coupée et la
+ * fonction renvoie le texte déjà reçu avec 'aborted' => true (sans exception).
+ *
+ * @return array{content:string, model:string, prompt_tokens:int, completion_tokens:int, ms:int, aborted:bool}
  * @throws RuntimeException
  */
 function llm_stream(array $messages, array $cfg, array $options, callable $onDelta): array
@@ -64,12 +69,51 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
         $headers[] = 'Authorization: Bearer ' . $key;
     }
 
-    $buffer  = '';
-    $content = '';
-    $usage   = null;
-    $used    = $model;
-    $t0      = microtime(true);
-    $rawHead = '';
+    $buffer    = '';
+    $content   = '';
+    $usage     = null;
+    $used      = $model;
+    $t0        = microtime(true);
+    $rawHead   = '';
+    $streamErr = '';
+    $aborted   = false;
+    $shouldAbort = isset($options['should_abort']) && is_callable($options['should_abort'])
+        ? $options['should_abort'] : null;
+
+    // traite une ligne SSE complète
+    $handleLine = static function (string $line) use (&$content, &$usage, &$used, &$streamErr, $onDelta): void {
+        $line = rtrim($line, "\r");
+        if (!str_starts_with($line, 'data:')) {
+            return;
+        }
+        $payload = trim(substr($line, 5));
+        if ($payload === '' || $payload === '[DONE]') {
+            return;
+        }
+        $json = json_decode($payload, true);
+        if (!is_array($json)) {
+            return;
+        }
+        // erreur signalée DANS le flux (OpenRouter, LM Studio, vLLM…)
+        if (isset($json['error'])) {
+            $err = $json['error'];
+            $streamErr = is_array($err)
+                ? (string) ($err['message'] ?? json_encode($err, JSON_UNESCAPED_UNICODE))
+                : (string) $err;
+            return;
+        }
+        if (!empty($json['model'])) {
+            $used = (string) $json['model'];
+        }
+        if (!empty($json['usage'])) {
+            $usage = $json['usage'];
+        }
+        $delta = $json['choices'][0]['delta']['content'] ?? '';
+        if (is_string($delta) && $delta !== '') {
+            $content .= $delta;
+            $onDelta($delta);
+        }
+    };
 
     $ch = curl_init($base . '/chat/completions');
     curl_setopt_array($ch, [
@@ -78,46 +122,53 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
         CURLOPT_POSTFIELDS     => json_encode($body, JSON_UNESCAPED_UNICODE),
         CURLOPT_TIMEOUT        => (int) ($options['timeout'] ?? 240),
         CURLOPT_CONNECTTIMEOUT => 8,
-        CURLOPT_WRITEFUNCTION  => function ($ch, $chunk) use (&$buffer, &$content, &$usage, &$used, &$rawHead, $onDelta) {
+        CURLOPT_WRITEFUNCTION  => static function ($ch, $chunk) use (&$buffer, &$rawHead, $handleLine) {
             if (strlen($rawHead) < 400) {
                 $rawHead .= $chunk;
             }
             $buffer .= $chunk;
             while (($pos = strpos($buffer, "\n")) !== false) {
-                $line   = rtrim(substr($buffer, 0, $pos), "\r");
+                $line   = substr($buffer, 0, $pos);
                 $buffer = substr($buffer, $pos + 1);
-                if (!str_starts_with($line, 'data:')) {
-                    continue;
-                }
-                $payload = trim(substr($line, 5));
-                if ($payload === '' || $payload === '[DONE]') {
-                    continue;
-                }
-                $json = json_decode($payload, true);
-                if (!is_array($json)) {
-                    continue;
-                }
-                if (!empty($json['model'])) {
-                    $used = (string) $json['model'];
-                }
-                if (!empty($json['usage'])) {
-                    $usage = $json['usage'];
-                }
-                $delta = $json['choices'][0]['delta']['content'] ?? '';
-                if (is_string($delta) && $delta !== '') {
-                    $content .= $delta;
-                    $onDelta($delta);
-                }
+                $handleLine($line);
             }
             return strlen($chunk);
         },
     ]);
+    if ($shouldAbort) {
+        // appelé ~1 fois/s même sans données : permet d'arrêter pendant la « réflexion »
+        curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+        curl_setopt($ch, CURLOPT_XFERINFOFUNCTION, static function () use ($shouldAbort, &$aborted): int {
+            if ($shouldAbort()) {
+                $aborted = true;
+                return 1; // non nul = interruption du transfert
+            }
+            return 0;
+        });
+    }
 
     $ok   = curl_exec($ch);
     $err  = curl_error($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    if ($buffer !== '') {
+        $handleLine($buffer); // dernière ligne sans saut de ligne final
+        $buffer = '';
+    }
+
+    $result = [
+        'content'           => $content,
+        'model'             => $used,
+        'prompt_tokens'     => (int) ($usage['prompt_tokens'] ?? 0),
+        'completion_tokens' => (int) ($usage['completion_tokens'] ?? 0),
+        'ms'                => (int) round((microtime(true) - $t0) * 1000),
+        'aborted'           => $aborted,
+    ];
+
+    if ($aborted) {
+        return $result; // arrêt demandé par le client : on rend ce qui a été reçu
+    }
     if ($ok === false) {
         throw new RuntimeException('Connexion impossible : ' . $err);
     }
@@ -126,17 +177,14 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
         $msg  = $data['error']['message'] ?? mb_substr(trim($rawHead), 0, 180);
         throw new RuntimeException('Erreur API (' . $code . ') : ' . $msg);
     }
+    if ($streamErr !== '') {
+        throw new RuntimeException('Erreur du modèle : ' . mb_substr($streamErr, 0, 300));
+    }
     if (trim($content) === '') {
         throw new RuntimeException('Réponse vide du modèle.');
     }
 
-    return [
-        'content'           => $content,
-        'model'             => $used,
-        'prompt_tokens'     => (int) ($usage['prompt_tokens'] ?? 0),
-        'completion_tokens' => (int) ($usage['completion_tokens'] ?? 0),
-        'ms'                => (int) round((microtime(true) - $t0) * 1000),
-    ];
+    return $result;
 }
 
 /**

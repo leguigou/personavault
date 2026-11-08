@@ -2,23 +2,79 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
+define('PV_SCHEMA_VERSION', 2);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
+// surcharges de test (bin/selftest.php) : base et dossiers temporaires
+if (defined('PV_TEST_CONFIG') && is_array(PV_TEST_CONFIG)) {
+    $GLOBALS['pv_config'] = array_replace_recursive($GLOBALS['pv_config'], PV_TEST_CONFIG);
+}
 
 function config(string $key, mixed $default = null): mixed
 {
     return $GLOBALS['pv_config'][$key] ?? $default;
 }
 
+function is_cli(): bool
+{
+    return PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg';
+}
+
+/** Requête arrivée en HTTPS (directement, ou via un reverse proxy de confiance). */
+function request_is_https(): bool
+{
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        return true;
+    }
+    if (config('trust_proxy', false)) {
+        $proto = strtolower(trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0]));
+        return $proto === 'https';
+    }
+    return false;
+}
+
+/** Adresse IP du client (dernier saut ajouté par le proxy si trust_proxy est activé). */
+function client_ip(): string
+{
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'cli');
+    if (config('trust_proxy', false) && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $hops = array_values(array_filter(array_map('trim', explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR']))));
+        $last = $hops ? end($hops) : '';
+        if ($last !== '' && filter_var($last, FILTER_VALIDATE_IP)) {
+            $ip = $last;
+        }
+    }
+    return $ip;
+}
+
+/* ------------------------------------------------------------ en-têtes */
+
+if (!is_cli()) {
+    header_remove('X-Powered-By');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('Referrer-Policy: same-origin');
+
+    // exception non rattrapée : message générique au client, détail dans le journal
+    set_exception_handler(static function (Throwable $e): void {
+        error_log('[PersonaVault] ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: text/plain; charset=utf-8');
+        }
+        echo 'Erreur interne. Le détail a été écrit dans le journal du serveur.';
+    });
+}
+
 /* ---------------------------------------------------------------- session */
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
+if (!is_cli() && !defined('PV_NO_SESSION') && session_status() !== PHP_SESSION_ACTIVE) {
     $lifetime = max(3600, (int) config('session_lifetime', 30 * 24 * 3600));
 
     // sessions stockées dans le projet : /tmp serait purgé par le système
     $sessionDir = PV_ROOT . '/storage/sessions';
     if (!is_dir($sessionDir)) {
-        @mkdir($sessionDir, 0770, true);
+        @mkdir($sessionDir, 0700, true);
     }
     if (is_dir($sessionDir) && is_writable($sessionDir)) {
         session_save_path($sessionDir);
@@ -33,7 +89,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
         'path'     => '/',
         'httponly' => true,
         'samesite' => 'Lax',
-        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'secure'   => request_is_https(),
     ];
     session_set_cookie_params($cookieParams);
     session_start();
@@ -45,7 +101,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
             'path'     => '/',
             'httponly' => true,
             'samesite' => 'Lax',
-            'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'secure'   => request_is_https(),
         ]);
     }
 }
@@ -62,14 +118,20 @@ function db(): PDO
     $path = (string) config('db');
     $dir  = dirname($path);
     if (!is_dir($dir)) {
-        mkdir($dir, 0775, true);
+        mkdir($dir, 0700, true);
     }
+    $isNew = !is_file($path);
 
     $pdo = new PDO('sqlite:' . $path, null, null, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
     ]);
+    if ($isNew) {
+        @chmod($path, 0600);
+    }
+    // explicite (PDO met 60 s par défaut) : plusieurs workers écrivent en parallèle
+    $pdo->exec('PRAGMA busy_timeout = 15000');
     $pdo->exec('PRAGMA journal_mode = WAL');
     $pdo->exec('PRAGMA foreign_keys = ON');
 
@@ -78,7 +140,77 @@ function db(): PDO
     return $pdo;
 }
 
+/**
+ * Exécute $fn dans une transaction BEGIN IMMEDIATE (verrou d'écriture pris d'emblée :
+ * pas d'erreur « database is locked » au moment de passer de la lecture à l'écriture).
+ */
+function db_tx(callable $fn): mixed
+{
+    $pdo = db();
+    $pdo->exec('BEGIN IMMEDIATE');
+    try {
+        $out = $fn($pdo);
+        $pdo->exec('COMMIT');
+        return $out;
+    } catch (Throwable $e) {
+        try {
+            $pdo->exec('ROLLBACK');
+        } catch (Throwable $ignored) {
+            // transaction déjà annulée par SQLite
+        }
+        throw $e;
+    }
+}
+
+/**
+ * Migrations versionnées (PRAGMA user_version). Chaque étape reste idempotente :
+ * une base existante (version 0, déjà migrée « à l'ancienne ») passe sans erreur.
+ */
 function migrate(PDO $pdo): void
+{
+    if ((int) $pdo->query('PRAGMA user_version')->fetchColumn() >= PV_SCHEMA_VERSION) {
+        return;
+    }
+
+    $pdo->exec('BEGIN IMMEDIATE');
+    try {
+        // relu sous verrou : un autre worker a pu migrer entre-temps
+        $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
+        if ($version < 1) {
+            migrate_v1($pdo);
+        }
+        if ($version < 2) {
+            migrate_v2($pdo);
+        }
+        if ($version < PV_SCHEMA_VERSION) {
+            $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
+        }
+        $pdo->exec('COMMIT');
+    } catch (Throwable $e) {
+        try {
+            $pdo->exec('ROLLBACK');
+        } catch (Throwable $ignored) {
+        }
+        throw $e;
+    }
+}
+
+/** Colonnes d'une table. */
+function table_columns(PDO $pdo, string $table): array
+{
+    return array_column($pdo->query('PRAGMA table_info(' . $table . ')')->fetchAll(), 'name');
+}
+
+/** Ajoute une colonne si elle n'existe pas encore. */
+function add_column_if_missing(PDO $pdo, string $table, string $column, string $definition): void
+{
+    if (!in_array($column, table_columns($pdo, $table), true)) {
+        $pdo->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' ' . $definition);
+    }
+}
+
+/** v1 : schéma historique complet (tables, FTS, colonnes ajoutées au fil du temps). */
+function migrate_v1(PDO $pdo): void
 {
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS personas (
@@ -191,56 +323,42 @@ CREATE INDEX IF NOT EXISTS idx_photos_persona  ON photos(persona_id);
 CREATE INDEX IF NOT EXISTS idx_prompts_persona ON prompts(persona_id);
 SQL);
 
-    // colonne ajoutée après coup : curseur d'extraction des souvenirs
-    $cols = $pdo->query('PRAGMA table_info(conversations)')->fetchAll();
-    if (!in_array('facts_cursor', array_column($cols, 'name'), true)) {
-        $pdo->exec('ALTER TABLE conversations ADD COLUMN facts_cursor INTEGER NOT NULL DEFAULT 0');
-    }
-    // souvenirs durables partagés avec toutes les conversations du même persona
-    if (!in_array('facts_enabled', array_column($cols, 'name'), true)) {
-        $pdo->exec('ALTER TABLE conversations ADD COLUMN facts_enabled INTEGER NOT NULL DEFAULT 1');
-    }
+    // curseur d'extraction des souvenirs, souvenirs partagés, titre auto, relances
+    add_column_if_missing($pdo, 'conversations', 'facts_cursor', 'INTEGER NOT NULL DEFAULT 0');
+    add_column_if_missing($pdo, 'conversations', 'facts_enabled', 'INTEGER NOT NULL DEFAULT 1');
+    add_column_if_missing($pdo, 'conversations', 'title_auto', 'INTEGER NOT NULL DEFAULT 1');
+    add_column_if_missing($pdo, 'conversations', 'auto_followup', 'INTEGER NOT NULL DEFAULT 1');
+    add_column_if_missing($pdo, 'conversations', 'last_followup_at', "TEXT NOT NULL DEFAULT ''");
+    add_column_if_missing($pdo, 'conversations', 'unread', 'INTEGER NOT NULL DEFAULT 0');
+
     // réglages IA portés par le persona (et non plus par la conversation)
-    $pcols = $pdo->query('PRAGMA table_info(personas)')->fetchAll();
-    $pnames = array_column($pcols, 'name');
-    if (!in_array('model', $pnames, true)) {
-        $pdo->exec("ALTER TABLE personas ADD COLUMN model TEXT NOT NULL DEFAULT ''");
-        $pdo->exec('ALTER TABLE personas ADD COLUMN temperature REAL NOT NULL DEFAULT 0.85');
-        $pdo->exec('ALTER TABLE personas ADD COLUMN max_tokens INTEGER NOT NULL DEFAULT 400');
-        $pdo->exec('ALTER TABLE personas ADD COLUMN context_window INTEGER NOT NULL DEFAULT 8192');
-        $pdo->exec("ALTER TABLE personas ADD COLUMN directive TEXT NOT NULL DEFAULT ''");
-    }
+    add_column_if_missing($pdo, 'personas', 'model', "TEXT NOT NULL DEFAULT ''");
+    add_column_if_missing($pdo, 'personas', 'temperature', 'REAL NOT NULL DEFAULT 0.85');
+    add_column_if_missing($pdo, 'personas', 'max_tokens', 'INTEGER NOT NULL DEFAULT 400');
+    add_column_if_missing($pdo, 'personas', 'context_window', 'INTEGER NOT NULL DEFAULT 8192');
+    add_column_if_missing($pdo, 'personas', 'directive', "TEXT NOT NULL DEFAULT ''");
 
-    // coupe d'une réponse en deux bulles
-    $mcols = $pdo->query('PRAGMA table_info(messages)')->fetchAll();
-    if (!in_array('split_at', array_column($mcols, 'name'), true)) {
-        $pdo->exec('ALTER TABLE messages ADD COLUMN split_at INTEGER NOT NULL DEFAULT 0');
-    }
-    if (!in_array('split_points', array_column($mcols, 'name'), true)) {
-        $pdo->exec("ALTER TABLE messages ADD COLUMN split_points TEXT NOT NULL DEFAULT ''");
-    }
-    // image jointe à un message (vision)
-    if (!in_array('image', array_column($mcols, 'name'), true)) {
-        $pdo->exec("ALTER TABLE messages ADD COLUMN image TEXT NOT NULL DEFAULT ''");
-    }
-    // titre de conversation généré automatiquement (remis à 0 si renommé à la main)
-    if (!in_array('title_auto', array_column($cols, 'name'), true)) {
-        $pdo->exec('ALTER TABLE conversations ADD COLUMN title_auto INTEGER NOT NULL DEFAULT 1');
-    }
-
-    // relances spontanées du persona après un long silence
-    if (!in_array('auto_followup', array_column($cols, 'name'), true)) {
-        $pdo->exec('ALTER TABLE conversations ADD COLUMN auto_followup INTEGER NOT NULL DEFAULT 1');
-    }
-    if (!in_array('last_followup_at', array_column($cols, 'name'), true)) {
-        $pdo->exec("ALTER TABLE conversations ADD COLUMN last_followup_at TEXT NOT NULL DEFAULT ''");
-    }
-    if (!in_array('unread', array_column($cols, 'name'), true)) {
-        $pdo->exec('ALTER TABLE conversations ADD COLUMN unread INTEGER NOT NULL DEFAULT 0');
-    }
+    // coupe d'une réponse en bulles, image jointe (vision)
+    add_column_if_missing($pdo, 'messages', 'split_at', 'INTEGER NOT NULL DEFAULT 0');
+    add_column_if_missing($pdo, 'messages', 'split_points', "TEXT NOT NULL DEFAULT ''");
+    add_column_if_missing($pdo, 'messages', 'image', "TEXT NOT NULL DEFAULT ''");
 }
 
-/* ------------------------------------------------------------------ utils */
+/** v2 : tentatives de connexion en base, index de tri / jointure des conversations. */
+function migrate_v2(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_login_ip_at ON login_attempts(ip, at);
+CREATE INDEX IF NOT EXISTS idx_login_at ON login_attempts(at);
+CREATE INDEX IF NOT EXISTS idx_conv_persona ON conversations(persona_id);
+CREATE INDEX IF NOT EXISTS idx_conv_updated ON conversations(updated_at);
+SQL);
+}
 
 /* --------------------------------------------------------------- réglages */
 
@@ -258,14 +376,14 @@ function ui_style(): array
 
 function setting(string $key, string $default = ''): string
 {
-    static $cache = null;
-    if ($cache === null) {
+    if (!isset($GLOBALS['pv_settings_cache'])) {
         $cache = [];
         foreach (db()->query('SELECT key, value FROM settings') as $row) {
             $cache[$row['key']] = (string) $row['value'];
         }
+        $GLOBALS['pv_settings_cache'] = $cache;
     }
-    return array_key_exists($key, $cache) ? $cache[$key] : $default;
+    return array_key_exists($key, $GLOBALS['pv_settings_cache']) ? $GLOBALS['pv_settings_cache'][$key] : $default;
 }
 
 function set_setting(string $key, string $value): void
@@ -273,7 +391,13 @@ function set_setting(string $key, string $value): void
     $stmt = db()->prepare('INSERT INTO settings (key, value) VALUES (?, ?)
                            ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     $stmt->execute([$key, $value]);
+    // le cache de la requête reste cohérent avec la base
+    if (isset($GLOBALS['pv_settings_cache'])) {
+        $GLOBALS['pv_settings_cache'][$key] = $value;
+    }
 }
+
+/* ------------------------------------------------------------------ utils */
 
 function e(?string $value): string
 {
@@ -286,13 +410,37 @@ function redirect(string $path): never
     exit;
 }
 
+/**
+ * Chemin local (même hôte) tiré du Referer, sinon $fallback.
+ * Évite toute redirection ouverte vers un autre site.
+ */
+function safe_referer_path(string $fallback = '/'): string
+{
+    $ref = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+    if ($ref === '') {
+        return $fallback;
+    }
+    $parts = parse_url($ref);
+    if (!is_array($parts)) {
+        return $fallback;
+    }
+    $host = (string) ($parts['host'] ?? '');
+    if (isset($parts['port'])) {
+        $host .= ':' . $parts['port'];
+    }
+    if ($host === '' || strcasecmp($host, (string) ($_SERVER['HTTP_HOST'] ?? '')) !== 0) {
+        return $fallback;
+    }
+    $path = (string) ($parts['path'] ?? '/');
+    if ($path === '' || $path[0] !== '/' || str_starts_with($path, '//')) {
+        return $fallback;
+    }
+    return $path . (isset($parts['query']) ? '?' . $parts['query'] : '');
+}
+
 function back(string $fallback = '/'): never
 {
-    $ref = $_SERVER['HTTP_REFERER'] ?? '';
-    if ($ref !== '' && str_starts_with($ref, 'http') && str_contains($ref, (string) ($_SERVER['HTTP_HOST'] ?? ''))) {
-        redirect($ref);
-    }
-    redirect($fallback);
+    redirect(safe_referer_path($fallback));
 }
 
 function flash(string $type, string $message): void
@@ -307,6 +455,86 @@ function take_flashes(): array
     return $f;
 }
 
+/**
+ * Message d'erreur montrable au client. Les erreurs « métier » (RuntimeException levées
+ * par l'app, erreurs LLM) passent telles quelles ; les erreurs techniques (SQL, PHP)
+ * sont remplacées par un message générique. Tout est journalisé côté serveur.
+ */
+function public_error(Throwable $e, string $generic = 'Erreur interne (détail dans le journal du serveur).'): string
+{
+    error_log('[PersonaVault] ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    if ($e instanceof PDOException || !($e instanceof RuntimeException)) {
+        return $generic;
+    }
+    return $e->getMessage();
+}
+
+/** Taille d'une directive php.ini (« 8M », « 2G »…) en octets. */
+function ini_bytes(string $value): int
+{
+    $value = trim($value);
+    if ($value === '' || $value === '-1') {
+        return 0;
+    }
+    $num  = (int) $value;
+    $unit = strtolower(substr($value, -1));
+    return match ($unit) {
+        'g'     => $num * 1024 ** 3,
+        'm'     => $num * 1024 ** 2,
+        'k'     => $num * 1024,
+        default => $num,
+    };
+}
+
+function human_bytes(int $bytes): string
+{
+    if ($bytes >= 1024 ** 2) {
+        return rtrim(rtrim(number_format($bytes / 1024 ** 2, 1, ',', ''), '0'), ',') . ' Mo';
+    }
+    if ($bytes >= 1024) {
+        return (int) round($bytes / 1024) . ' Ko';
+    }
+    return $bytes . ' o';
+}
+
+/** La requête dépasse-t-elle post_max_size ? (PHP vide alors $_POST et $_FILES) */
+function post_too_large(): bool
+{
+    $len = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+    $max = ini_bytes((string) ini_get('post_max_size'));
+    return $max > 0 && $len > $max;
+}
+
+function post_too_large_message(): string
+{
+    return 'Envoi trop volumineux : le serveur accepte au plus '
+        . human_bytes(ini_bytes((string) ini_get('post_max_size')))
+        . ' par envoi (réglage PHP post_max_size).';
+}
+
+function upload_error_message(int $code): string
+{
+    return match ($code) {
+        UPLOAD_ERR_INI_SIZE   => 'Fichier trop lourd : le serveur accepte au plus '
+            . human_bytes(ini_bytes((string) ini_get('upload_max_filesize'))) . ' par fichier (réglage PHP upload_max_filesize).',
+        UPLOAD_ERR_FORM_SIZE  => 'Fichier trop lourd pour ce formulaire.',
+        UPLOAD_ERR_PARTIAL    => 'Envoi interrompu, réessaie.',
+        UPLOAD_ERR_NO_FILE    => 'Aucun fichier reçu.',
+        UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => 'Erreur serveur : impossible d’écrire le fichier temporaire.',
+        UPLOAD_ERR_EXTENSION  => 'Envoi bloqué par une extension PHP.',
+        default               => 'Envoi impossible (code ' . $code . ').',
+    };
+}
+
+/** Un fichier a-t-il été soumis dans ce champ (même en erreur) ? */
+function upload_present(?array $file): bool
+{
+    return is_array($file) && isset($file['error']) && !is_array($file['error'])
+        && (int) $file['error'] !== UPLOAD_ERR_NO_FILE;
+}
+
+/* ------------------------------------------------------------------- csrf */
+
 function csrf_token(): string
 {
     if (empty($_SESSION['csrf'])) {
@@ -315,12 +543,32 @@ function csrf_token(): string
     return $_SESSION['csrf'];
 }
 
+/** Jeton valide ? Un jeton vide n'est jamais accepté (même si la session n'en a pas). */
+function csrf_valid(): bool
+{
+    $expected = (string) ($_SESSION['csrf'] ?? '');
+    $sent     = $_POST['_token'] ?? '';
+    return $expected !== '' && is_string($sent) && $sent !== '' && hash_equals($expected, $sent);
+}
+
 function csrf_check(): void
 {
-    $sent = $_POST['_token'] ?? '';
-    if (!is_string($sent) || !hash_equals($_SESSION['csrf'] ?? '', $sent)) {
+    if (!csrf_valid()) {
         http_response_code(419);
         exit('Session expirée, merci de recharger la page.');
+    }
+}
+
+/** Variante AJAX : réponse JSON 419. */
+function csrf_check_json(array $extra = []): void
+{
+    if (!csrf_valid()) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        http_response_code(419);
+        echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.'] + $extra, JSON_UNESCAPED_UNICODE);
+        exit;
     }
 }
 
@@ -470,69 +718,122 @@ function require_login(): void
     }
 }
 
+/**
+ * Secondes de blocage restantes. Les échecs sont comptés EN BASE (et non en session :
+ * supprimer le cookie ne remet plus le compteur à zéro), par IP et globalement.
+ */
+function login_blocked_for(): int
+{
+    $window = max(60, (int) config('login_window', 900));
+    $now    = time();
+    $since  = $now - $window;
+
+    $stmt = db()->prepare('SELECT COUNT(*), MAX(at) FROM login_attempts WHERE ip = ? AND at > ?');
+    $stmt->execute([client_ip(), $since]);
+    [$n, $last] = $stmt->fetch(PDO::FETCH_NUM);
+    $wait = 0;
+    if ((int) $n >= (int) config('login_max_try', 5)) {
+        $wait = $window - ($now - (int) $last);
+    }
+
+    $stmt = db()->prepare('SELECT COUNT(*), MAX(at) FROM login_attempts WHERE at > ?');
+    $stmt->execute([$since]);
+    [$g, $glast] = $stmt->fetch(PDO::FETCH_NUM);
+    if ((int) $g >= (int) config('login_global_max', 30)) {
+        $wait = max($wait, $window - ($now - (int) $glast));
+    }
+
+    return max(0, $wait);
+}
+
 function attempt_login(string $password): bool
 {
-    $key   = 'login_fails';
-    $fails = $_SESSION[$key] ?? ['n' => 0, 'at' => 0];
-    $now   = time();
-
-    if ($now - (int) $fails['at'] > (int) config('login_window')) {
-        $fails = ['n' => 0, 'at' => 0];
-    }
-    if ((int) $fails['n'] >= (int) config('login_max_try')) {
-        $_SESSION[$key] = $fails;
+    if (login_blocked_for() > 0) {
         return false;
     }
 
-    if (password_verify($password, (string) config('password_hash'))) {
-        unset($_SESSION[$key]);
+    $hash = (string) config('password_hash');
+    if ($hash !== '' && password_verify($password, $hash)) {
+        db()->prepare('DELETE FROM login_attempts WHERE ip = ?')->execute([client_ip()]);
         session_regenerate_id(true);
         $_SESSION['auth_at'] = time();
         return true;
     }
 
-    $fails['n'] = (int) $fails['n'] + 1;
-    $fails['at'] = $now;
-    $_SESSION[$key] = $fails;
+    $now = time();
+    db()->prepare('INSERT INTO login_attempts (ip, at) VALUES (?, ?)')->execute([client_ip(), $now]);
+    // ménage : on ne garde que la fenêtre utile
+    db()->prepare('DELETE FROM login_attempts WHERE at < ?')
+        ->execute([$now - 4 * max(60, (int) config('login_window', 900))]);
+    // ralentit le brute-force même sous le seuil
+    usleep(400000);
     return false;
-}
-
-function login_blocked_for(): int
-{
-    $fails = $_SESSION['login_fails'] ?? ['n' => 0, 'at' => 0];
-    if ((int) $fails['n'] < (int) config('login_max_try')) {
-        return 0;
-    }
-    return max(0, (int) config('login_window') - (time() - (int) $fails['at']));
 }
 
 /* ---------------------------------------------------------------- uploads */
 
-function store_upload(array $file, string $prefix = 'p'): string
+/** Vérifie type et dimensions AVANT tout décodage GD (bombes de décompression). */
+function image_check_info(array|false $info): int
 {
-    if (!isset($file['tmp_name']) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('Aucun fichier reçu.');
-    }
-    if (($file['size'] ?? 0) > (int) config('max_upload')) {
-        throw new RuntimeException('Image trop lourde (15 Mo max).');
-    }
-
-    $info = @getimagesize($file['tmp_name']);
     if (!$info) {
         throw new RuntimeException('Ce fichier n’est pas une image valide.');
     }
-
-    $type = $info[2];
+    $type = (int) $info[2];
     $allowed = [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP, IMAGETYPE_GIF];
     if (!in_array($type, $allowed, true)) {
         throw new RuntimeException('Format accepté : JPG, PNG, WEBP ou GIF.');
     }
+    $w = (int) $info[0];
+    $h = (int) $info[1];
+    $maxPixels = (int) config('max_pixels', 40_000_000);
+    if ($w <= 0 || $h <= 0 || $w * $h > $maxPixels) {
+        throw new RuntimeException('Image trop grande (' . $w . '×' . $h . ' px, ' . (int) round($maxPixels / 1e6) . ' Mpx max).');
+    }
+    return $type;
+}
+
+/** Décode une image en mémoire (import ZIP) après contrôle du type et des dimensions. */
+function decode_image_string(string $data): GdImage
+{
+    image_check_info(@getimagesizefromstring($data));
+    $img = @imagecreatefromstring($data);
+    if (!$img) {
+        throw new RuntimeException('Image illisible.');
+    }
+    return $img;
+}
+
+/** Enregistre une image GD en WebP (grand format + miniature) sous un nom aléatoire. */
+function store_gd_image(GdImage $img, string $prefix = 'p'): string
+{
+    $base = $prefix . bin2hex(random_bytes(8));
+    $dir  = (string) config('uploads');
+    if (!is_dir($dir)) {
+        mkdir($dir, 0700, true);
+    }
+    save_webp($img, $dir . '/' . $base . '.webp', 1800, 88);
+    save_webp($img, $dir . '/' . $base . '.thumb.webp', 700, 84);
+    return $base;
+}
+
+function store_upload(array $file, string $prefix = 'p'): string
+{
+    $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($err !== UPLOAD_ERR_OK || empty($file['tmp_name'])) {
+        throw new RuntimeException(upload_error_message($err === UPLOAD_ERR_OK ? UPLOAD_ERR_NO_FILE : $err));
+    }
+    $max = (int) config('max_upload');
+    if (($file['size'] ?? 0) > $max) {
+        throw new RuntimeException('Image trop lourde (' . human_bytes($max) . ' max).');
+    }
+
+    $type = image_check_info(@getimagesize($file['tmp_name']));
 
     $img = match ($type) {
-        IMAGETYPE_JPEG => imagecreatefromjpeg($file['tmp_name']),
-        IMAGETYPE_PNG  => imagecreatefrompng($file['tmp_name']),
-        IMAGETYPE_WEBP => imagecreatefromwebp($file['tmp_name']),
-        IMAGETYPE_GIF  => imagecreatefromgif($file['tmp_name']),
+        IMAGETYPE_JPEG => @imagecreatefromjpeg($file['tmp_name']),
+        IMAGETYPE_PNG  => @imagecreatefrompng($file['tmp_name']),
+        IMAGETYPE_WEBP => @imagecreatefromwebp($file['tmp_name']),
+        IMAGETYPE_GIF  => @imagecreatefromgif($file['tmp_name']),
     };
     if (!$img) {
         throw new RuntimeException('Image illisible.');
@@ -549,16 +850,7 @@ function store_upload(array $file, string $prefix = 'p'): string
         }
     }
 
-    $base  = $prefix . bin2hex(random_bytes(8));
-    $dir   = (string) config('uploads');
-    if (!is_dir($dir)) {
-        mkdir($dir, 0775, true);
-    }
-
-    save_webp($img, $dir . '/' . $base . '.webp', 1800, 88);
-    save_webp($img, $dir . '/' . $base . '.thumb.webp', 700, 84);
-
-    return $base;
+    return store_gd_image($img, $prefix);
 }
 
 /**
@@ -611,6 +903,7 @@ function save_webp(GdImage $src, string $dest, int $maxSide, int $quality): void
     imagewebp($dst, $dest, $quality);
 }
 
+/** Suppression brute des fichiers d'une image (sans vérifier les références). */
 function delete_media(string $base): void
 {
     $dir = (string) config('uploads');
@@ -618,6 +911,34 @@ function delete_media(string $base): void
         $p = $dir . '/' . $f;
         if ($base !== '' && is_file($p)) {
             @unlink($p);
+        }
+    }
+}
+
+/** Nombre de références en base vers un fichier image (galerie, portrait, chat). */
+function media_ref_count(string $base): int
+{
+    if ($base === '') {
+        return 0;
+    }
+    $stmt = db()->prepare(
+        'SELECT (SELECT COUNT(*) FROM photos WHERE file = ?)
+              + (SELECT COUNT(*) FROM personas WHERE avatar = ?)
+              + (SELECT COUNT(*) FROM messages WHERE image = ?)'
+    );
+    $stmt->execute([$base, $base, $base]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Supprime les fichiers qui ne sont plus référencés nulle part.
+ * À appeler APRÈS la mise à jour / suppression des lignes en base.
+ */
+function release_media(string ...$bases): void
+{
+    foreach (array_unique(array_filter($bases, static fn (string $b): bool => $b !== '')) as $base) {
+        if (media_ref_count($base) === 0) {
+            delete_media($base);
         }
     }
 }

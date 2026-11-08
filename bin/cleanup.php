@@ -7,7 +7,8 @@
  *   php bin/cleanup.php --apply    (supprime réellement)
  *
  * Retire : prompts / photos / souvenirs rattachés à un persona supprimé,
- * messages orphelins, fichiers média non référencés, temporaires de sauvegarde.
+ * messages orphelins, fichiers média non référencés (ni galerie, ni portrait, ni image
+ * envoyée dans une conversation), temporaires de sauvegarde.
  */
 require __DIR__ . '/../src/bootstrap.php';
 
@@ -56,13 +57,19 @@ foreach ($pdo->query("SELECT avatar FROM personas WHERE avatar <> ''") as $r) {
     $ref[] = $r['avatar'] . '.webp';
     $ref[] = $r['avatar'] . '.thumb.webp';
 }
+// photos envoyées dans les conversations (modèles de vision)
+foreach ($pdo->query("SELECT image FROM messages WHERE image <> ''") as $r) {
+    $ref[] = $r['image'] . '.webp';
+    $ref[] = $r['image'] . '.thumb.webp';
+}
+$ref = array_flip($ref);
 $files  = is_dir($dir) ? scandir($dir) : [];
 $orphan = [];
 foreach ($files as $f) {
     if ($f === '.' || $f === '..') {
         continue;
     }
-    if (!in_array($f, $ref, true) && preg_match('/^p[a-f0-9]{16}(\.thumb)?\.webp$/', $f)) {
+    if (!isset($ref[$f]) && preg_match('/^p[a-f0-9]{16}(\.thumb)?\.webp$/', $f)) {
         $orphan[] = $f;
     }
 }

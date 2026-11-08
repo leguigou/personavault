@@ -344,7 +344,7 @@ function chat_compress(int $cid, array $conv, bool $force = false): array
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();
-        return ['ok' => false, 'compressed' => 0, 'reason' => 'écriture impossible : ' . $e->getMessage()];
+        return ['ok' => false, 'compressed' => 0, 'reason' => 'écriture impossible : ' . public_error($e)];
     }
 
     return ['ok' => true, 'compressed' => count($toSummarize), 'summary' => $text];
@@ -1146,10 +1146,6 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     ];
 }
 
-/**
- * Envoie la requête au modèle de discussion, avec repli sur DeepSeek.
- * @throws RuntimeException si aucun modèle ne répond
- */
 /** État du serveur LM Studio : joignable ? quel(s) modèle(s) chargé(s) ? */
 function lms_status(): array
 {
@@ -1211,13 +1207,14 @@ function lms_status(): array
  * mode "auto"     : LM Studio uniquement — lève LlmUnavailable (kind: down|not_loaded|error) sans basculer.
  * mode "fallback" : force le fournisseur de secours (DeepSeek), aussi en streaming.
  */
-function chat_reply_stream(array $messages, array $conv, callable $onDelta, string $mode = 'auto'): array
+function chat_reply_stream(array $messages, array $conv, callable $onDelta, string $mode = 'auto', ?callable $shouldAbort = null): array
 {
     $opts = [
         'temperature'      => (float) ($conv['temperature'] ?? 0.85),
         'max_tokens'       => (int) ($conv['max_tokens'] ?? 400),
         'timeout'          => 300,
         'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
+        'should_abort'     => $shouldAbort,
     ];
 
     if ($mode === 'fallback') {
@@ -1233,7 +1230,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
             throw new LlmUnavailable($e->getMessage(), 'fallback_error');
         }
         $res['provider'] = 'fallback';
-        $res['notice']   = 'Réponse générée par ' . $fb['model'] . ' (DeepSeek), LM Studio non utilisé.';
+        $res['notice']   = 'Réponse générée par ' . $fb['model'] . ' (' . $fb['provider'] . '), LM Studio non utilisé.';
         return $res;
     }
 
@@ -1275,7 +1272,10 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         $kind = 'error';
         if (stripos($msg, 'Connexion impossible') !== false || stripos($msg, 'timed out') !== false) {
             $kind = 'down';
-        } elseif (stripos($msg, 'model') !== false || stripos($msg, 'modèle') !== false && stripos($msg, 'charg') !== false) {
+        } elseif (
+            (stripos($msg, 'model') !== false || stripos($msg, 'modèle') !== false)
+            && (stripos($msg, 'charg') !== false || stripos($msg, 'load') !== false || stripos($msg, 'not found') !== false)
+        ) {
             $kind = 'not_loaded';
         }
         throw new LlmUnavailable($msg, $kind);
@@ -1284,51 +1284,4 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     $res['provider'] = 'chat';
     $res['notice']   = '';
     return $res;
-}
-
-function chat_reply(array $messages, array $conv): array
-{
-    $cfg  = chat_llm_config();
-    $opts = [
-        'temperature'      => (float) ($conv['temperature'] ?? 0.85),
-        'max_tokens'       => (int) ($conv['max_tokens'] ?? 400),
-        'timeout'          => 240,
-        'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
-    ];
-
-    try {
-        if ($cfg['model'] === '') {
-            throw new RuntimeException('aucun modèle sélectionné');
-        }
-        try {
-            $res = llm_request($messages, $cfg, $opts);
-        } catch (Throwable $first) {
-            // certains serveurs refusent reasoning_effort : on réessaie sans
-            if (!empty($opts['reasoning_effort']) && str_contains($first->getMessage(), '(400)')) {
-                $opts['reasoning_effort'] = '';
-                $res = llm_request($messages, $cfg, $opts);
-            } else {
-                throw $first;
-            }
-        }
-        $res['provider'] = 'chat';
-        $res['notice']   = '';
-        return $res;
-    } catch (Throwable $e) {
-        $fallback = llm_config();
-        $same = rtrim($fallback['base_url'], '/') === rtrim($cfg['base_url'], '/')
-            && $fallback['model'] === $cfg['model'];
-
-        if (!$fallback['key'] || $same) {
-            throw new RuntimeException('Modèle de discussion injoignable : ' . $e->getMessage());
-        }
-
-        $fallbackOpts = $opts;
-        unset($fallbackOpts['reasoning_effort']);
-        $res = llm_request($messages, $fallback, $fallbackOpts);
-        $res['provider'] = 'fallback';
-        $res['notice']   = 'LM Studio injoignable (' . $e->getMessage() . '). Réponse générée par '
-            . $fallback['model'] . ' sur DeepSeek — pense à relancer LM Studio.';
-        return $res;
-    }
 }

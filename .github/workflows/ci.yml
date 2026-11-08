@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlite, gd, zip, mbstring, fileinfo, exif, curl
+          coverage: none
+
+      - name: Vérifie que GD sait écrire du WebP
+        run: php -r 'exit(function_exists("imagewebp") && (gd_info()["WebP Support"] ?? false) ? 0 : 1);'
+
+      - name: Syntaxe (php -l)
+        run: |
+          find . -name '*.php' -not -path './.git/*' -print0 \
+            | xargs -0 -n1 php -l > /dev/null
+
+      - name: Selftest (base temporaire, aller-retour export/import)
+        run: php bin/selftest.php

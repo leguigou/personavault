@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-require dirname(__DIR__) . '/src/bootstrap.php';
-
 $path   = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $path   = rtrim($path, '/');
 if ($path === '') {
@@ -12,10 +10,95 @@ $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $parts  = array_values(array_filter(explode('/', $path), fn ($s) => $s !== ''));
 $p0     = $parts[0] ?? '';
 
+/* ---------------------------------------------------------------- assets */
+// Servis AVANT le bootstrap : ni session, ni cookie, ni base de données.
+
+if ($p0 === 'assets') {
+    header_remove('X-Powered-By');
+    header('X-Content-Type-Options: nosniff');
+    $file = basename($parts[1] ?? '');
+    $full = __DIR__ . '/assets/' . $file;
+    if ($file === '' || $file[0] === '.' || !is_file($full)) {
+        http_response_code(404);
+        exit;
+    }
+    $ext   = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+    $types = [
+        'css'         => 'text/css; charset=utf-8',
+        'js'          => 'text/javascript; charset=utf-8',
+        'svg'         => 'image/svg+xml',
+        'png'         => 'image/png',
+        'ico'         => 'image/x-icon',
+        'webp'        => 'image/webp',
+        'json'        => 'application/json; charset=utf-8',
+        'webmanifest' => 'application/manifest+json; charset=utf-8',
+    ];
+    $type = $types[$ext] ?? 'application/octet-stream';
+
+    $mtime = (int) filemtime($full);
+    $etag  = '"' . dechex($mtime) . '-' . dechex((int) filesize($full)) . '"';
+    header('Content-Type: ' . $type);
+    // URL versionnée (?v=…) : immuable un an ; sinon une heure
+    header('Cache-Control: ' . (isset($_GET['v']) ? 'public, max-age=31536000, immutable' : 'public, max-age=3600'));
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+    header('ETag: ' . $etag);
+
+    $compressible = in_array($ext, ['css', 'js', 'svg', 'json', 'webmanifest'], true);
+    if ($compressible) {
+        header('Vary: Accept-Encoding');
+    }
+    if (trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
+        http_response_code(304);
+        exit;
+    }
+
+    $body = (string) file_get_contents($full);
+    if ($compressible && function_exists('gzencode')
+        && str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '')), 'gzip')) {
+        $gz = gzencode($body, 6);
+        if ($gz !== false) {
+            $body = $gz;
+            header('Content-Encoding: gzip');
+        }
+    }
+    header('Content-Length: ' . strlen($body));
+    if ($method !== 'HEAD') {
+        echo $body;
+    }
+    exit;
+}
+
+require dirname(__DIR__) . '/src/bootstrap.php';
+
+/* ------------------------------------------------------- envoi trop lourd */
+// Au-delà de post_max_size, PHP vide $_POST et $_FILES : sans ce contrôle, l'utilisateur
+// verrait « Session expirée » (jeton CSRF absent) au lieu de la vraie cause.
+
+if ($method === 'POST' && post_too_large()) {
+    $msg = post_too_large_message();
+    $wantsJson = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest'
+        || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'json')
+        || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'event-stream');
+    http_response_code(413);
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => $msg], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (is_logged()) {
+        flash('error', $msg);
+        header('Location: ' . safe_referer_path('/'), true, 303);
+        exit;
+    }
+    header('Content-Type: text/plain; charset=utf-8');
+    exit($msg);
+}
+
 /* ------------------------------------------------------------------ média */
 
 if ($p0 === 'media' && $method === 'GET') {
     require_login();
+    session_write_close();
     $file = rawurldecode($parts[1] ?? '');
     if (!preg_match('/^p[a-f0-9]{16}(\.thumb)?\.webp$/', $file)) {
         http_response_code(404);
@@ -26,25 +109,11 @@ if ($p0 === 'media' && $method === 'GET') {
         http_response_code(404);
         exit;
     }
+    header_remove('Pragma');
+    header_remove('Expires');
     header('Content-Type: image/webp');
     header('Cache-Control: private, max-age=31536000, immutable');
     header('Content-Length: ' . (string) filesize($full));
-    readfile($full);
-    exit;
-}
-
-/* ------------------------------------------------------------- assets dev */
-
-if ($p0 === 'assets') {
-    $file = basename($parts[1] ?? '');
-    $full = __DIR__ . '/assets/' . $file;
-    if (!is_file($full)) {
-        http_response_code(404);
-        exit;
-    }
-    $ext = strtolower(pathinfo($full, PATHINFO_EXTENSION));
-    header('Content-Type: ' . (['css' => 'text/css', 'js' => 'text/javascript', 'svg' => 'image/svg+xml'][$ext] ?? 'application/octet-stream'));
-    header('Cache-Control: public, max-age=3600');
     readfile($full);
     exit;
 }
@@ -65,6 +134,10 @@ if ($path === '/login') {
             redirect('/');
         } else {
             $error = 'Mot de passe incorrect.';
+            $wait  = login_blocked_for();
+            if ($wait > 0) {
+                $error .= ' Trop de tentatives : réessaie dans ' . ceil($wait / 60) . ' min.';
+            }
         }
     }
     render('login', ['title' => 'Connexion', 'error' => $error]);
@@ -83,6 +156,7 @@ require_login();
 /* --------------------------------------------------------------------- chat */
 
 if ($path === '/chat/models' && $method === 'GET') {
+    session_write_close();
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['models' => chat_models()], JSON_UNESCAPED_UNICODE);
     exit;
@@ -148,123 +222,13 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     $personaPrompts = fetch_prompts((int) $persona['id']);
     $conv           = chat_with_persona($conv, $persona);
 
-    /* --- envoi d'un message (AJAX) --- */
-    if ($action === 'send' && $method === 'POST') {
-        header('Content-Type: application/json; charset=utf-8');
-        $sent = (string) ($_POST['_token'] ?? '');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), $sent)) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
-
-        $text = trim((string) ($_POST['message'] ?? ''));
-        if ($text === '') {
-            http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => 'Message vide.']);
-            exit;
-        }
-
-        // compression avant la réponse si le contexte devient trop lourd
-        try {
-            $mem = chat_memory_stats($cid, $conv);
-            if ($mem['context_tokens'] > chat_memory_threshold()) {
-                $cres = chat_compress($cid, $conv);
-                if (($cres['ok'] ?? false) && ($cres['compressed'] ?? 0) > 0) {
-                    $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
-                    $stmt->execute([$cid]);
-                    $conv = $stmt->fetch();
-                }
-            }
-        } catch (Throwable $e) {
-            // la compression ne doit jamais empêcher de répondre
-        }
-
-        $history = fetch_messages($cid);
-        $built   = chat_build_messages($persona, $personaPrompts, $conv, $history, $text);
-
-        $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "user", ?)');
-        $ins->execute([$cid, $text]);
-        $userMsgId = (int) db()->lastInsertId();
-
-        try {
-            $res = chat_reply($built['messages'], $conv);
-        } catch (Throwable $e) {
-            http_response_code(502);
-            echo json_encode([
-                'ok'      => false,
-                'error'   => $e->getMessage(),
-                'user'    => ['id' => $userMsgId, 'role' => 'user', 'content' => $text],
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        $splitPoints = (string) setting('chat_split_enabled', '1') === '1'
-            ? chat_split_points(
-                (string) $res['content'],
-                (int) setting('chat_split_words', '50'),
-                (int) setting('chat_split_max_bubbles', '2')
-            )
-            : [];
-
-        $stmt = db()->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points)
-                               VALUES (?, "assistant", ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([
-            $cid,
-            $res['content'],
-            $res['model'],
-            (int) $res['prompt_tokens'],
-            (int) $res['completion_tokens'],
-            (int) $res['ms'],
-            $splitPoints ? json_encode($splitPoints) : '',
-        ]);
-        $assistantId = (int) db()->lastInsertId();
-
-        $out = [
-            'ok'      => true,
-            'user'    => ['id' => $userMsgId, 'role' => 'user', 'content' => $text],
-            'reply'   => [
-                'id'       => $assistantId,
-                'role'     => 'assistant',
-                'content'  => $res['content'],
-                'model'    => $res['model'],
-                'split_points' => $splitPoints,
-            ],
-            'meta'    => [
-                'model'    => $res['model'],
-                'ms'       => (int) $res['ms'],
-                'tokens'   => (int) ($res['prompt_tokens'] + $res['completion_tokens']),
-                'kept'     => $built['kept'],
-                'provider' => $res['provider'],
-            ],
-        ];
-
-        if (!empty($res['notice'])) {
-            $stmt = db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "notice", ?)');
-            $stmt->execute([$cid, $res['notice']]);
-            $out['notice'] = ['id' => (int) db()->lastInsertId(), 'role' => 'notice', 'content' => $res['notice']];
-        }
-
-        // ne jamais écraser le modèle choisi par un modèle de secours
-        $storedModel = $res['provider'] === 'chat' ? (string) $res['model'] : (string) $conv['model'];
-        db()->prepare('UPDATE conversations SET model = ?, provider = ?, updated_at = datetime("now") WHERE id = ?')
-            ->execute([$storedModel, $res['provider'], $cid]);
-
-        echo json_encode($out, JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
     /* --- envoi d'un message en streaming (SSE) --- */
     if ($action === 'stream' && $method === 'POST') {
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            header('Content-Type: application/json; charset=utf-8');
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // le flux peut durer plusieurs minutes : on libère la session
         $regen = ((string) ($_POST['regen'] ?? '')) === '1';
         $text  = trim((string) ($_POST['message'] ?? ''));
-        $hasImage = !empty($_FILES['image']['tmp_name']);
+        $hasImage = upload_present($_FILES['image'] ?? null);
         if (!$regen && $text === '' && !$hasImage) {
             header('Content-Type: application/json; charset=utf-8');
             http_response_code(400);
@@ -280,7 +244,6 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
         header('Cache-Control: no-cache, no-transform');
         header('X-Accel-Buffering: no');
         header('Connection: keep-alive');
-        session_write_close();
 
         $sse = static function (array $payload): void {
             echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE) . "\n\n";
@@ -331,7 +294,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             try {
                 $imageBase = store_upload($_FILES['image']);
             } catch (Throwable $e) {
-                $sse(['error' => 'Image refusée : ' . $e->getMessage(), 'kind' => 'image']);
+                $sse(['error' => 'Image refusée : ' . public_error($e), 'kind' => 'image']);
                 exit;
             }
         }
@@ -368,7 +331,20 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
         $mode    = ((string) ($_POST['fallback'] ?? '')) === '1' ? 'fallback' : 'auto';
         $sentAny = false;
 
-        $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode): array {
+        // bouton « Arrêter » : le client coupe la connexion. connection_aborted() ne le voit
+        // qu'après une écriture : on envoie un commentaire SSE (ignoré par le client) toutes
+        // les 2 s, y compris pendant que le modèle « réfléchit » sans rien émettre.
+        $lastPing    = microtime(true);
+        $shouldAbort = static function () use (&$lastPing): bool {
+            if (microtime(true) - $lastPing >= 2.0) {
+                $lastPing = microtime(true);
+                echo ": ping\n\n";
+                flush();
+            }
+            return connection_aborted() === 1;
+        };
+
+        $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort): array {
             return chat_reply_stream(
                 $built['messages'],
                 $conv,
@@ -376,7 +352,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
                     $sentAny = true;
                     $sse(['delta' => $delta]);
                 },
-                $mode
+                $mode,
+                $shouldAbort
             );
         };
 
@@ -397,7 +374,20 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
                 // rien n'a été produit : on retire le message pour permettre un nouvel essai propre
                 db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$userMsgId]);
             }
-            $sse(['error' => $e->getMessage(), 'kind' => $kind, 'partial' => $sentAny]);
+            $sse(['error' => public_error($e), 'kind' => $kind, 'partial' => $sentAny]);
+            exit;
+        }
+
+        // génération interrompue par l'utilisateur : le client garde à l'écran le texte
+        // déjà reçu, on enregistre donc ce partiel (et rien si rien n'a été produit)
+        if (!empty($res['aborted'])) {
+            $partial = trim((string) $res['content']);
+            if ($partial !== '') {
+                db()->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms)
+                               VALUES (?, "assistant", ?, ?, 0, 0, ?)')
+                    ->execute([$cid, $partial, (string) $res['model'], (int) $res['ms']]);
+                db()->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
+            }
             exit;
         }
 
@@ -457,6 +447,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
 
     /* --- état du serveur / du modèle chargé (AJAX) --- */
     if ($action === 'status' && $method === 'GET') {
+        session_write_close();
         header('Content-Type: application/json; charset=utf-8');
         $st     = lms_status();
         $wanted = (string) ($conv['model'] !== '' ? $conv['model'] : chat_llm_config()['model']);
@@ -478,11 +469,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- chargement manuel du modèle (AJAX) --- */
     if ($action === 'load' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.', 'kind' => 'auth']);
-            exit;
-        }
+        csrf_check_json(['kind' => 'auth']);
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
 
         $st = lms_status();
         if (!$st['reachable']) {
@@ -529,12 +517,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- compression mémoire (AJAX, après la réponse) --- */
     if ($action === 'compress' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        $sent = (string) ($_POST['_token'] ?? '');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), $sent)) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         try {
             $cres = chat_compress($cid, $conv, !empty($_POST['force']));
             $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
@@ -550,7 +534,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             ], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+            echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
         }
         exit;
     }
@@ -558,12 +542,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- extraction des souvenirs durables (AJAX, après la réponse) --- */
     if ($action === 'remember' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        $sent = (string) ($_POST['_token'] ?? '');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), $sent)) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         if ((int) ($conv['facts_enabled'] ?? 1) !== 1) {
             echo json_encode([
                 'ok'       => true,
@@ -625,7 +605,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             echo json_encode($res, JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+            echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
         }
         exit;
     }
@@ -703,7 +683,11 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
 
     if ($action === 'delete' && $method === 'POST') {
         csrf_check();
+        $stmt = db()->prepare("SELECT image FROM messages WHERE conversation_id = ? AND image <> ''");
+        $stmt->execute([$cid]);
+        $images = $stmt->fetchAll(PDO::FETCH_COLUMN);
         db()->prepare('DELETE FROM conversations WHERE id = ?')->execute([$cid]);
+        release_media(...array_map('strval', $images)); // photos envoyées dans le chat
         flash('ok', 'Conversation supprimée.');
         redirect('/chat');
     }
@@ -711,22 +695,20 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- titre automatique de la conversation --- */
     if ($action === 'autotitle' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         try {
             $title = chat_auto_title($cid);
             echo json_encode($title ? ['ok' => true, 'title' => $title] : ['ok' => false], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
         }
         exit;
     }
 
     /* --- recherche dans toutes les conversations du même persona --- */
     if ($action === 'search' && $method === 'GET') {
+        session_write_close();
         header('Content-Type: application/json; charset=utf-8');
         $q = trim((string) ($_GET['q'] ?? ''));
         if (mb_strlen($q) < 2) {
@@ -765,11 +747,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- activer/désactiver les souvenirs partagés sur cette conversation --- */
     if ($action === 'facts-toggle' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         $on = ((string) ($_POST['enabled'] ?? '')) === '1' ? 1 : 0;
         db()->prepare('UPDATE conversations SET facts_enabled = ? WHERE id = ?')->execute([$on, $cid]);
         echo json_encode(['ok' => true, 'enabled' => $on], JSON_UNESCAPED_UNICODE);
@@ -779,11 +758,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- souvenirs partagés : ajout / suppression depuis la conversation --- */
     if (($action === 'fact-add' || $action === 'fact-delete') && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         $pid = (int) $persona['id'];
 
         if ($action === 'fact-add') {
@@ -824,11 +800,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- modifier un message --- */
     if ($action === 'msg-edit' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         $mid     = (int) ($_POST['mid'] ?? 0);
         $content = trim((string) ($_POST['content'] ?? ''));
         if ($content === '') {
@@ -852,20 +825,24 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             exit;
         }
 
-        db()->prepare('UPDATE messages SET content = ?, split_points = "" WHERE id = ?')
-            ->execute([$content, $mid]);
-
-        // modifier SON message invalide la suite : on la supprime et on rejoue la réponse
-        $replay = false;
-        if ((string) $msg['role'] === 'user') {
-            db()->prepare('DELETE FROM messages WHERE conversation_id = ? AND id > ?')->execute([$cid, $mid]);
+        // modifier SON message invalide la suite : on la supprime et on rejoue la réponse.
+        // Tout ou rien : modification, suppression de la suite et curseurs mémoire.
+        $images = db_tx(static function (PDO $pdo) use ($cid, $mid, $content): array {
+            $pdo->prepare('UPDATE messages SET content = ?, split_points = "" WHERE id = ?')
+                ->execute([$content, $mid]);
+            $st = $pdo->prepare("SELECT image FROM messages WHERE conversation_id = ? AND id > ? AND image <> ''");
+            $st->execute([$cid, $mid]);
+            $images = $st->fetchAll(PDO::FETCH_COLUMN);
+            $pdo->prepare('DELETE FROM messages WHERE conversation_id = ? AND id > ?')->execute([$cid, $mid]);
             // les curseurs de mémoire ne peuvent plus pointer au-delà du message édité
-            db()->prepare('UPDATE conversations
+            $pdo->prepare('UPDATE conversations
                               SET last_compressed_id = MIN(last_compressed_id, ?),
                                   facts_cursor = MIN(facts_cursor, ?)
                             WHERE id = ?')->execute([$mid, $mid, $cid]);
-            $replay = true;
-        }
+            return $images;
+        });
+        release_media(...array_map('strval', $images));
+        $replay = true;
 
         echo json_encode([
             'ok'           => true,
@@ -879,11 +856,8 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
     /* --- supprimer un message (et la réponse qui le suit si c'est un message utilisateur) --- */
     if ($action === 'msg-delete' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
 
         $mid  = (int) ($_POST['mid'] ?? 0);
         $stmt = db()->prepare('SELECT * FROM messages WHERE id = ? AND conversation_id = ?');
@@ -904,16 +878,22 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
             }
         }
 
-        $in = implode(',', array_map('intval', $ids));
-        db()->exec('DELETE FROM messages WHERE conversation_id = ' . (int) $cid . ' AND id IN (' . $in . ')');
+        $in     = implode(',', array_map('intval', $ids));
+        $images = db_tx(static function (PDO $pdo) use ($cid, $ids, $in): array {
+            $images = $pdo->query("SELECT image FROM messages WHERE conversation_id = " . (int) $cid
+                . " AND id IN (" . $in . ") AND image <> ''")->fetchAll(PDO::FETCH_COLUMN);
+            $pdo->exec('DELETE FROM messages WHERE conversation_id = ' . (int) $cid . ' AND id IN (' . $in . ')');
 
-        // le curseur de mémoire ne doit pas pointer sur un message supprimé
-        $min = min($ids);
-        db()->prepare('UPDATE conversations SET last_compressed_id = COALESCE((SELECT MAX(id) FROM messages WHERE conversation_id = ? AND id < ?), 0) WHERE id = ? AND last_compressed_id >= ?')
-            ->execute([$cid, $min, $cid, $min]);
-        // même logique pour le curseur des souvenirs durables
-        db()->prepare('UPDATE conversations SET facts_cursor = COALESCE((SELECT MAX(id) FROM messages WHERE conversation_id = ? AND id < ?), 0) WHERE id = ? AND facts_cursor >= ?')
-            ->execute([$cid, $min, $cid, $min]);
+            // le curseur de mémoire ne doit pas pointer sur un message supprimé
+            $min = min($ids);
+            $pdo->prepare('UPDATE conversations SET last_compressed_id = COALESCE((SELECT MAX(id) FROM messages WHERE conversation_id = ? AND id < ?), 0) WHERE id = ? AND last_compressed_id >= ?')
+                ->execute([$cid, $min, $cid, $min]);
+            // même logique pour le curseur des souvenirs durables
+            $pdo->prepare('UPDATE conversations SET facts_cursor = COALESCE((SELECT MAX(id) FROM messages WHERE conversation_id = ? AND id < ?), 0) WHERE id = ? AND facts_cursor >= ?')
+                ->execute([$cid, $min, $cid, $min]);
+            return $images;
+        });
+        release_media(...array_map('strval', $images));
 
         echo json_encode(['ok' => true, 'deleted' => $ids], JSON_UNESCAPED_UNICODE);
         exit;
@@ -921,6 +901,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+))?$#', $path, $m)) {
 
     /* --- messages plus anciens (pagination) --- */
     if ($action === 'messages' && $method === 'GET') {
+        session_write_close();
         header('Content-Type: application/json; charset=utf-8');
         $before = max(0, (int) ($_GET['before'] ?? 0));
         $limit  = min(100, max(10, (int) ($_GET['limit'] ?? 50)));
@@ -983,7 +964,7 @@ if ($path === '/backup/export.zip' && $method === 'GET') {
     try {
         $zip = backup_create_zip(((string) ($_GET['conv'] ?? '')) === '1');
     } catch (Throwable $e) {
-        flash('error', 'Sauvegarde impossible : ' . $e->getMessage());
+        flash('error', 'Sauvegarde impossible : ' . public_error($e));
         redirect('/settings#backup');
         exit;
     }
@@ -1002,17 +983,21 @@ if ($path === '/backup/export.zip' && $method === 'GET') {
 if ($path === '/backup/import' && $method === 'POST') {
     csrf_check();
     try {
-        if (empty($_FILES['archive']['tmp_name'])) {
+        $archive = $_FILES['archive'] ?? null;
+        if (!upload_present($archive)) {
             throw new RuntimeException('Aucun fichier reçu.');
         }
-        $res = backup_import_zip((string) $_FILES['archive']['tmp_name']);
+        if ((int) $archive['error'] !== UPLOAD_ERR_OK) {
+            throw new RuntimeException(upload_error_message((int) $archive['error']));
+        }
+        $res = backup_import_zip((string) $archive['tmp_name']);
         flash('ok', 'Import terminé : ' . $res['personas'] . ' persona(s), '
             . $res['photos'] . ' photo(s), ' . $res['prompts'] . ' prompt(s).');
         if (!empty($res['errors'])) {
             flash('error', implode(' · ', array_slice($res['errors'], 0, 3)));
         }
     } catch (Throwable $e) {
-        flash('error', 'Import impossible : ' . $e->getMessage());
+        flash('error', 'Import impossible : ' . public_error($e));
     }
     redirect('/settings#backup');
 }
@@ -1149,14 +1134,16 @@ if ($path === '/settings') {
         redirect('/settings');
     }
 
-    $chatCfg = chat_llm_config_raw();
+    $chatCfg    = chat_llm_config_raw();
+    $chatModels = chat_models($chatCfg['base_url'], $chatCfg['key']); // un seul appel réseau
+    $llmCfg     = llm_config();
     render('settings', [
         'title'      => 'Réglages',
-        'llm'        => llm_config(),
-        'hasKey'     => llm_config()['key'] !== '',
+        'llm'        => $llmCfg,
+        'hasKey'     => $llmCfg['key'] !== '',
         'chat'       => $chatCfg,
-        'chatModels'     => chat_models($chatCfg['base_url'], $chatCfg['key']),
-        'chatModelList'  => chat_models_ordered(chat_models($chatCfg['base_url'], $chatCfg['key'])),
+        'chatModels'     => $chatModels,
+        'chatModelList'  => chat_models_ordered($chatModels),
         'chatHasKey' => $chatCfg['key'] !== '',
         'chatReasoning' => setting('chat_reasoning_effort', 'none'),
         'style'         => ui_style(),
@@ -1220,8 +1207,9 @@ if ($path === '/settings/chat' && $method === 'POST') {
 }
 
 if ($path === '/settings/purge' && $method === 'POST') {
+    csrf_check_json();
+    session_write_close();
     header('Content-Type: application/json; charset=utf-8');
-    csrf_check();
     try {
         $before = lms_loaded_models();
         $done   = lms_purge();
@@ -1232,22 +1220,33 @@ if ($path === '/settings/purge' && $method === 'POST') {
         ], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
     }
     exit;
 }
 
 if ($path === '/settings/test' && $method === 'POST') {
+    csrf_check_json();
+    session_write_close();
     header('Content-Type: application/json; charset=utf-8');
-    csrf_check();
-    $stored = llm_config();
-    $key    = trim((string) ($_POST['api_key'] ?? ''));
-    $cfg    = [
-        'base_url' => rtrim(trim((string) ($_POST['base_url'] ?? '')), '/'),
+    $stored  = llm_config();
+    $key     = trim((string) ($_POST['api_key'] ?? ''));
+    $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? '')), '/');
+    // la clé ENREGISTRÉE n'est envoyée qu'à l'adresse enregistrée : tester une autre
+    // adresse exige de saisir la clé (évite de l'exfiltrer vers un serveur quelconque)
+    $sameUrl = $baseUrl !== '' && strcasecmp($baseUrl, rtrim($stored['base_url'], '/')) === 0;
+    $cfg     = [
+        'base_url' => $baseUrl,
         'model'    => trim((string) ($_POST['model'] ?? '')),
-        'key'      => $key !== '' ? $key : $stored['key'],
+        'key'      => $key !== '' ? $key : ($sameUrl ? $stored['key'] : ''),
     ];
     try {
+        if (!preg_match('#^https?://#i', $baseUrl)) {
+            throw new RuntimeException('L’URL doit commencer par http:// ou https://');
+        }
+        if ($cfg['key'] === '' && $key === '' && !$sameUrl && $stored['key'] !== '') {
+            throw new RuntimeException('Adresse différente de celle enregistrée : saisis la clé API pour la tester.');
+        }
         $t0  = microtime(true);
         $out = llm_chat([
             ['role' => 'system', 'content' => 'Tu réponds uniquement par le mot OK.'],
@@ -1261,7 +1260,7 @@ if ($path === '/settings/test' && $method === 'POST') {
         ], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
     }
     exit;
 }
@@ -1349,11 +1348,11 @@ if ($path === '/p' && $method === 'POST') {
 
     $avatar = '';
     try {
-        if (!empty($_FILES['avatar']['tmp_name'])) {
+        if (upload_present($_FILES['avatar'] ?? null)) {
             $avatar = store_upload($_FILES['avatar']);
         }
     } catch (Throwable $e) {
-        flash('error', 'Avatar : ' . $e->getMessage());
+        flash('error', 'Avatar : ' . public_error($e));
     }
 
     $stmt = db()->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta) VALUES (?,?,?,?,?,?,?)');
@@ -1394,11 +1393,8 @@ if (count($parts) >= 2 && $p0 === 'p') {
     /* --- proposer une consigne de jeu à partir du prompt système --- */
     if ($action === 'ai-directive' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), (string) ($_POST['_token'] ?? ''))) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         if (!llm_ready()) {
             http_response_code(400);
             echo json_encode(['ok' => false, 'error' => 'Configure d’abord le LLM (Réglages → Intelligence).']);
@@ -1409,19 +1405,15 @@ if (count($parts) >= 2 && $p0 === 'p') {
             echo json_encode(['ok' => true] + $proposal, JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
         }
         exit;
     }
 
     if ($action === 'ai-fill' && $method === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        $sent = (string) ($_POST['_token'] ?? '');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), $sent)) {
-            http_response_code(419);
-            echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-            exit;
-        }
+        csrf_check_json();
+        session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
         if (!llm_ready()) {
             http_response_code(400);
             echo json_encode(['ok' => false, 'error' => 'Configure d’abord le LLM (roue crantée → Réglages).']);
@@ -1513,7 +1505,7 @@ if (count($parts) >= 2 && $p0 === 'p') {
             ], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
             http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
         }
         exit;
     }
@@ -1531,12 +1523,11 @@ if (count($parts) >= 2 && $p0 === 'p') {
         $meta    = parse_meta((string) ($_POST['meta'] ?? ''));
         $avatar  = $persona['avatar'];
         try {
-            if (!empty($_FILES['avatar']['tmp_name'])) {
+            if (upload_present($_FILES['avatar'] ?? null)) {
                 $avatar = store_upload($_FILES['avatar']);
-                delete_media((string) $persona['avatar']);
             }
         } catch (Throwable $e) {
-            flash('error', 'Avatar : ' . $e->getMessage());
+            flash('error', 'Avatar : ' . public_error($e));
         }
         $aiModel  = trim((string) ($_POST['model'] ?? ''));
         $aiTemp   = max(0.0, min(2.0, (float) ($_POST['temperature'] ?? 0.85)));
@@ -1560,6 +1551,10 @@ if (count($parts) >= 2 && $p0 === 'p') {
             $aiDirect,
             $pid,
         ]);
+        if ((string) $avatar !== (string) $persona['avatar']) {
+            // l'ancien portrait peut encore servir dans la galerie : supprimé seulement s'il n'est plus référencé
+            release_media((string) $persona['avatar']);
+        }
         flash('ok', 'Fiche mise à jour.');
         redirect('/p/' . $newSlug);
     }
@@ -1579,12 +1574,17 @@ if (count($parts) >= 2 && $p0 === 'p') {
 
     if ($action === 'delete' && $method === 'POST') {
         csrf_check();
-        foreach (fetch_photos($pid) as $ph) {
-            delete_media((string) $ph['file']);
+        $files = array_map(static fn (array $ph): string => (string) $ph['file'], fetch_photos($pid));
+        $files[] = (string) $persona['avatar'];
+        $stmt = db()->prepare("SELECT m.image FROM messages m JOIN conversations c ON c.id = m.conversation_id
+                               WHERE c.persona_id = ? AND m.image <> ''");
+        $stmt->execute([$pid]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $img) {
+            $files[] = (string) $img;
         }
-        delete_media((string) $persona['avatar']);
         $stmt = db()->prepare('DELETE FROM personas WHERE id = ?');
         $stmt->execute([$pid]);
+        release_media(...$files); // après la suppression en cascade : plus aucune référence
         flash('ok', $persona['name'] . ' a été supprimé.');
         redirect('/');
     }
@@ -1593,7 +1593,7 @@ if (count($parts) >= 2 && $p0 === 'p') {
         csrf_check();
         $stmt = db()->prepare('UPDATE personas SET favorite = 1 - favorite WHERE id = ?');
         $stmt->execute([$pid]);
-        redirect($_SERVER['HTTP_REFERER'] ?? '/p/' . $slug);
+        redirect(safe_referer_path('/p/' . $slug));
     }
 
     if ($action === 'archive' && $method === 'POST') {
@@ -1609,37 +1609,37 @@ if (count($parts) >= 2 && $p0 === 'p') {
         $wantsJson = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest'
             || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
 
-        $sentToken = (string) ($_POST['_token'] ?? '');
-        if (!hash_equals((string) ($_SESSION['csrf'] ?? ''), $sentToken)) {
-            if ($wantsJson) {
-                header('Content-Type: application/json; charset=utf-8');
-                http_response_code(419);
-                echo json_encode(['ok' => false, 'error' => 'Session expirée, recharge la page.']);
-                exit;
-            }
+        if ($wantsJson) {
+            csrf_check_json();
+            session_write_close(); // réponse JSON : aucun message flash à écrire en session
+        } else {
             csrf_check();
         }
 
         $files  = $_FILES['photos'] ?? null;
         $n      = 0;
         $errors = [];
-        if ($files && is_array($files['tmp_name'])) {
+        if ($files && is_array($files['tmp_name'] ?? null)) {
             foreach ($files['tmp_name'] as $i => $tmp) {
-                if (($files['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                $err = (int) ($files['error'][$i] ?? UPLOAD_ERR_NO_FILE);
+                if ($err === UPLOAD_ERR_NO_FILE) {
                     continue;
                 }
                 try {
                     $base = store_upload([
                         'tmp_name' => $tmp,
-                        'error'    => UPLOAD_ERR_OK,
-                        'size'     => $files['size'][$i],
+                        'error'    => $err,
+                        'size'     => $files['size'][$i] ?? 0,
                     ]);
                     $stmt = db()->prepare('INSERT INTO photos (persona_id, file, caption, sort) VALUES (?,?,?,?)');
                     $stmt->execute([$pid, $base, '', time()]);
                     $n++;
                 } catch (Throwable $e) {
-                    $errors[] = $e->getMessage();
-                    flash('error', $e->getMessage());
+                    $msg      = public_error($e);
+                    $errors[] = $msg;
+                    if (!$wantsJson) {
+                        flash('error', $msg);
+                    }
                 }
             }
         }
@@ -1658,7 +1658,7 @@ if (count($parts) >= 2 && $p0 === 'p') {
             header('Content-Type: application/json; charset=utf-8');
             if ($n === 0) {
                 http_response_code(400);
-                echo json_encode(['ok' => false, 'error' => $errors[0] ?? 'Aucune image reçue.']);
+                echo json_encode(['ok' => false, 'error' => $errors[0] ?? 'Aucune image reçue.'], JSON_UNESCAPED_UNICODE);
                 exit;
             }
             db()->prepare('UPDATE personas SET updated_at=datetime("now") WHERE id=?')->execute([$pid]);
@@ -1686,7 +1686,7 @@ if (count($parts) >= 2 && $p0 === 'p') {
         $stmt->execute([
             $pid,
             trim((string) ($_POST['title'] ?? '')),
-            (string) ($_POST['kind'] ?? 'image'),
+            array_key_exists((string) ($_POST['kind'] ?? ''), prompt_kinds()) ? (string) $_POST['kind'] : 'image',
             $body,
         ]);
         db()->prepare('UPDATE personas SET updated_at=datetime("now") WHERE id=?')->execute([$pid]);
@@ -1720,16 +1720,18 @@ if ($p0 === 'photos' && isset($parts[1]) && $method === 'POST') {
             $stmt->execute([(int) $photo['persona_id']]);
             $persona = $stmt->fetch();
             if ($persona) {
-                delete_media((string) $persona['avatar']);
                 db()->prepare('UPDATE personas SET avatar=?, updated_at=datetime("now") WHERE id=?')
                     ->execute([$photo['file'], $persona['id']]);
+                // l'ancien portrait peut être une photo de la galerie : on ne supprime que l'orphelin
+                release_media((string) $persona['avatar']);
             }
         } elseif (($parts[2] ?? '') === 'delete') {
-            delete_media((string) $photo['file']);
             db()->prepare('DELETE FROM photos WHERE id = ?')->execute([$id]);
+            // si la photo sert aussi de portrait, le fichier est conservé
+            release_media((string) $photo['file']);
         }
     }
-    redirect((string) ($_SERVER['HTTP_REFERER'] ?? '/'));
+    back('/');
 }
 
 if ($p0 === 'prompts' && isset($parts[1]) && $method === 'POST') {
@@ -1747,14 +1749,14 @@ if ($p0 === 'prompts' && isset($parts[1]) && $method === 'POST') {
                 db()->prepare('UPDATE prompts SET title=?, kind=?, body=? WHERE id=?')
                     ->execute([
                         trim((string) ($_POST['title'] ?? '')),
-                        (string) ($_POST['kind'] ?? 'image'),
+                        array_key_exists((string) ($_POST['kind'] ?? ''), prompt_kinds()) ? (string) $_POST['kind'] : 'image',
                         $body,
                         $id,
                     ]);
             }
         }
     }
-    redirect((string) ($_SERVER['HTTP_REFERER'] ?? '/'));
+    back('/');
 }
 
 /* ------------------------------------------------------------------ export */
