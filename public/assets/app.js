@@ -1236,6 +1236,7 @@
         const bubble = (text, role) => {
             const wrap = document.createElement("div");
             wrap.className = "msg msg-" + (role === "user" ? "user" : "bot");
+            wrap.dataset.at = new Date().toISOString(); // message qui vient d'apparaître
             if (role !== "user") {
                 const av = document.createElement("span");
                 av.className = "msg-avatar";
@@ -1271,6 +1272,7 @@
             const wrap = document.createElement("div");
             wrap.className = "msg msg-" + (m.role === "user" ? "user" : "bot");
             wrap.dataset.msgId = m.id;
+            if (m.at) wrap.dataset.at = m.at;
             if (m.role !== "user") {
                 const av = document.createElement("span");
                 av.className = "msg-avatar";
@@ -2004,6 +2006,27 @@
             return b;
         };
 
+        /* date et heure d'un message, dans la langue et le fuseau du téléphone :
+           « Aujourd'hui à 14:05 », « Hier à 21:10 », « 8 nov. à 09:30 » (année si différente) */
+        const fmtMsgTime = (iso) => {
+            const d = new Date(iso || "");
+            if (Number.isNaN(d.getTime())) return "";
+            const now = new Date();
+            const dayStart = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+            const diff = Math.round((dayStart(now) - dayStart(d)) / 864e5);
+            const time = d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+            let date;
+            if (diff === 0 || diff === 1) {
+                const rel = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" }).format(-diff, "day");
+                date = rel.charAt(0).toUpperCase() + rel.slice(1);
+            } else {
+                date = d.toLocaleDateString(LOCALE, d.getFullYear() === now.getFullYear()
+                    ? { day: "numeric", month: "short" }
+                    : { day: "numeric", month: "short", year: "numeric" });
+            }
+            return tr("chat.msg_time", { date, time });
+        };
+
         const buildTools = (el) => {
             if (!el.dataset.msgId) return null;
             const isBot = el.classList.contains("msg-bot");
@@ -2012,6 +2035,15 @@
 
             const tools = document.createElement("div");
             tools.className = "msg-tools";
+
+            const when = fmtMsgTime(el.dataset.at);
+            if (when) {
+                const t = document.createElement("time");
+                t.className = "msg-time";
+                t.dateTime = el.dataset.at;
+                t.textContent = when;
+                tools.appendChild(t);
+            }
 
             if (isLastBot) tools.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
             // seuls mes messages sont modifiables : ceux du personnage se régénèrent ou se suppriment
@@ -2487,6 +2519,7 @@
                     document.getElementById("chat-typing")?.remove();
                     if (live) {
                         if (finalId) live.parentElement.dataset.msgId = finalId;
+                        live.closest(".msg")?.setAttribute("data-at", new Date().toISOString());
                         live.parentElement.removeAttribute("data-live");
                     }
 

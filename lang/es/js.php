@@ -143,4 +143,6 @@ return [
         'one'   => 'Resumen automático a partir de {threshold} tokens sin resumir · {n} hecho',
         'other' => 'Resumen automático a partir de {threshold} tokens sin resumir · {n} hechos',
     ],
+    // date et heure affichées sous un message touché ({date} : « Aujourd’hui », « 8 nov. »…)
+    'js.chat.msg_time' => '{date}, {time}',
 ];

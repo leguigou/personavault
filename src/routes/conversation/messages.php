@@ -175,6 +175,7 @@ if ($action === 'messages' && $method === 'GET') {
             'content'  => (string) $m['content'],
             'image'    => (string) ($m['image'] ?? ''),
             'split_points' => json_list($m['split_points'] ?? '[]'),
+            'at'       => gmdate('Y-m-d\\TH:i:s\\Z', (int) strtotime((string) $m['created_at'] . ' UTC')),
         ], $rows),
         'left'     => $left,
     ], JSON_UNESCAPED_UNICODE);
