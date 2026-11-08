@@ -30,6 +30,7 @@ const http = async (path, { method = 'GET', form, anonymous = false } = {}) => {
 // contenu normalisé : sans jetons, chiffres, dates ni durées (qui changent à chaque exécution)
 const norm = (t) => t
     .replace(/<script type="application\/json" id="pv-i18n">[\s\S]*?<\/script>\n?/g, '') // textes du JS, vérifiés à part
+    .replace(/\?v=[0-9a-f]+/g, '?v=V') // version des fichiers statiques (empreinte du contenu)
     .replace(/p[0-9a-f]{16}/g, 'IMG') // noms d'images aléatoires
     .replace(/name="_token" value="[^"]+"/g, '')
     .replace(/data-token="[^"]+"/g, '')

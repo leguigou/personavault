@@ -402,6 +402,23 @@ SQL);
 /* --------------------------------------------------------------- réglages */
 
 /** Préférences d'affichage des conversations (taille, bulles, densité…). */
+/**
+ * URL d'un fichier de public/assets/ avec une version tirée de son contenu (?v=…).
+ * Les fichiers versionnés sont mis en cache un an par le navigateur : la version doit donc
+ * changer à chaque modification, sinon le navigateur garde l'ancien fichier. Calculée ici
+ * automatiquement (empreinte du fichier) plutôt qu'à la main.
+ */
+function asset_url(string $file): string
+{
+    static $cache = [];
+    if (!isset($cache[$file])) {
+        $path = PV_ROOT . '/public/assets/' . basename($file);
+        $hash = is_file($path) ? substr((string) md5_file($path), 0, 10) : '0';
+        $cache[$file] = '/assets/' . rawurlencode(basename($file)) . '?v=' . $hash;
+    }
+    return $cache[$file];
+}
+
 function ui_style(): array
 {
     return [

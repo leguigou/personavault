@@ -31,7 +31,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <link rel="icon" href="/assets/icon-192.png" type="image/png" sizes="192x192">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
     <link rel="manifest" href="/assets/manifest.webmanifest">
-    <link rel="stylesheet" href="/assets/app.css?v=67">
+    <link rel="stylesheet" href="<?= e(asset_url('app.css')) ?>">
     <script>try{document.documentElement.dataset.view=localStorage.getItem("pv_view")==="list"?"list":"grid";}catch(e){}</script>
 </head>
 <body class="<?= $isAuth ? 'is-auth' : 'is-guest' ?> <?= $isChatRoom ? 'chat-room' : '' ?>">
@@ -117,6 +117,6 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
 </div>
 
 <script type="application/json" id="pv-i18n"><?= json_encode((object) i18n_js(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
-<script src="/assets/app.js?v=73" defer></script>
+<script src="<?= e(asset_url('app.js')) ?>" defer></script>
 </body>
 </html>
