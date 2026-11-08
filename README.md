@@ -243,7 +243,7 @@ personavault/
 │   └── backup.php          # export / import ZIP
 ├── views/                  # gabarits PHP
 ├── bin/                    # outils CLI (aperçu de prompt, relance, nettoyage, selftest)
-├── lang/                   # textes de l'interface, un fichier par langue (fr = référence)
+├── lang/                   # textes de l'interface : lang/fr/ (référence), lang/en/, lang/es/
 ├── tests/e2e/              # parcours de toutes les routes (faux modèle, données de test)
 ├── .github/workflows/      # CI : php -l, bin/selftest.php, tests/e2e/run.sh
 └── storage/                # base + images (non versionné)
@@ -253,9 +253,11 @@ personavault/
 
 ## Langues de l'interface
 
-Les textes de l'interface sont dans `lang/`, un fichier par langue (`lang/fr.php` = référence) :
+Les textes de l'interface sont dans `lang/`, **un dossier par langue** (`lang/fr/` = référence,
+`lang/en/`, `lang/es/`) et un fichier par domaine (`common.php`, `chat.php`, `settings.php`…) :
 
 ```php
+// lang/fr/common.php
 return [
     '_name'          => 'Français',                       // nom affiché dans les réglages
     'nav.library'    => 'Bibliothèque',
@@ -265,12 +267,15 @@ return [
 ];
 ```
 
-- PHP : `t('nav.library')`, `t('login.blocked', 3)`, `t('clé', ['name' => $x])` ; `t_html()` pour insérer du HTML.
+- PHP : `<?= e(t('nav.library')) ?>`, `t('login.blocked', 3)`, `t('clé', ['name' => $x])` ;
+  `t_html()` pour insérer un fragment HTML ; une clé qui finit par `_html` contient du HTML de confiance
+  et s'affiche sans `e()`.
 - JavaScript : `tr("modal.close")` (clés `js.*`, fournies par la page).
 - Langue : Réglages › Apparence (« Automatique » = langue du navigateur, sinon français).
   Une clé absente dans une langue retombe sur le français.
-- **Ajouter une langue** : copier `lang/en.php` en `lang/xx.php`, traduire, puis `php bin/i18n-check.php`
-  (clés manquantes, paramètres `{…}` oubliés, pluriels, clés utilisées mais inconnues ; lancé par la CI).
+- **Ajouter une langue** : copier le dossier `lang/en/` en `lang/xx/`, traduire, puis `php bin/i18n-check.php`
+  (clés manquantes ou en double, paramètres `{…}` oubliés, pluriels, HTML hors des clés `_html`, clés
+  utilisées mais inconnues ; lancé par la CI).
 - Le dossier `lang/` doit être déployé avec le reste.
 - Migration en cours : écran de connexion, menus, page 404 et fenêtres modales sont traduits ; les autres
   écrans le seront progressivement (le français reste affiché en attendant).

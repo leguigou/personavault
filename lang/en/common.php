@@ -1,6 +1,6 @@
 <?php
 /*
- * English. Same keys as lang/fr.php (reference). Placeholders {name} must be kept.
+ * English — shared texts. Same keys as lang/fr/common.php (reference). Keep placeholders {name}.
  */
 return [
     '_name' => 'English',

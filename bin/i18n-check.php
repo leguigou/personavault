@@ -1,12 +1,14 @@
 <?php
 /**
- * Contrôle des traductions (lang/*.php), sans base ni serveur.
+ * Contrôle des traductions (lang/<code>/*.php), sans base ni serveur.
  *
  * Erreurs (code de sortie 1) :
  *   - clé utilisée dans le code (t('…'), t_html('…'), tr("…") en JS) absente de lang/fr.php ;
  *   - clé de lang/fr.php absente d'une autre langue, ou clé en trop ;
  *   - paramètres {…} différents entre le français et la traduction ;
- *   - pluriel incomplet (formes « one » et « other » attendues) ou forme incohérente.
+ *   - pluriel incomplet (formes « one » et « other » attendues) ou forme incohérente ;
+ *   - même clé définie dans deux fichiers d'une langue ;
+ *   - HTML dans une clé qui ne finit pas par « _html », ou balises différentes d'une langue à l'autre.
  * Avertissement : clé de lang/fr.php jamais utilisée dans le code.
  *
  * Usage : php bin/i18n-check.php
@@ -16,15 +18,45 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 $ref  = 'fr';
 $langs = [];
-foreach (glob($root . '/lang/*.php') ?: [] as $f) {
-    $langs[basename($f, '.php')] = (array) require $f;
-}
 $errors = [];
 $warnings = [];
+foreach (glob($root . '/lang/*', GLOB_ONLYDIR) ?: [] as $dir) {
+    $code = basename($dir);
+    $langs[$code] = [];
+    $files = glob($dir . '/*.php') ?: [];
+    sort($files);
+    foreach ($files as $f) {
+        foreach ((array) require $f as $k => $v) {
+            if (array_key_exists($k, $langs[$code])) {
+                $errors[] = "[$code] clé définie deux fois : $k (" . basename($f) . ')';
+            }
+            $langs[$code][$k] = $v;
+        }
+    }
+}
 
 if (!isset($langs[$ref])) {
-    fwrite(STDERR, "lang/$ref.php introuvable\n");
+    fwrite(STDERR, "lang/$ref/ introuvable\n");
     exit(1);
+}
+
+// HTML seulement dans les clés « *_html » (affichées sans échappement), mêmes balises partout
+$tags = static function (string|array $v): array {
+    preg_match_all('#</?([a-z]+)#i', is_array($v) ? implode(' ', $v) : $v, $m);
+    $t = array_map('strtolower', $m[1]);
+    sort($t);
+    return $t;
+};
+foreach ($langs as $code => $messages) {
+    foreach ($messages as $k => $v) {
+        $isHtml = str_ends_with((string) $k, '_html');
+        if (!$isHtml && preg_match('#<[a-z/!]#i', is_array($v) ? implode(' ', $v) : (string) $v)) {
+            $errors[] = "[$code] $k : contient du HTML, la clé doit finir par « _html »";
+        }
+        if ($isHtml && $code !== $ref && isset($langs[$ref][$k]) && $tags($v) !== $tags($langs[$ref][$k])) {
+            $errors[] = "[$code] $k : balises HTML différentes du français";
+        }
+    }
 }
 
 $params = static function (string|array $v): array {
@@ -105,7 +137,7 @@ foreach ($it as $file) {
 }
 foreach ($used as $key => $files) {
     if (!array_key_exists($key, $langs[$ref])) {
-        $errors[] = "clé utilisée mais absente de lang/$ref.php : $key (" . implode(', ', array_unique($files)) . ')';
+        $errors[] = "clé utilisée mais absente de lang/$ref/ : $key (" . implode(', ', array_unique($files)) . ')';
     }
 }
 foreach (array_keys($langs[$ref]) as $key) {

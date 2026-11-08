@@ -1,7 +1,7 @@
 <?php
 /*
- * Français — langue de référence de l'interface.
- * Toute clé ajoutée ici doit exister dans les autres langues (vérifié par bin/i18n-check.php).
+ * Français — langue de référence. Textes communs : menus, connexion, 404, modales.
+ * Toute clé ajoutée dans lang/fr/ doit exister dans les autres langues (vérifié par bin/i18n-check.php).
  * Paramètres entre accolades : {name}. Pluriels : ['one' => …, 'other' => …] avec {n}.
  * Les clés « js.* » sont aussi disponibles dans le JavaScript (fonction tr()).
  */

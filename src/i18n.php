@@ -4,10 +4,13 @@ declare(strict_types=1);
 /*
  * Traductions de l'interface.
  *
- * Un fichier par langue dans lang/ (lang/fr.php = référence) : un tableau « clé => texte ».
+ * Un dossier par langue dans lang/ (lang/fr/ = référence), un fichier par domaine
+ * (common.php, chat.php, settings.php…) : chacun renvoie un tableau « clé => texte ».
  *   - paramètres : 'persona.deleted' => '{name} a été supprimé.'   → t('persona.deleted', ['name' => $n])
  *   - pluriels   : 'count.photos' => ['one' => '{n} photo', 'other' => '{n} photos'] → t('count.photos', 3)
- *   - la clé '_name' donne le nom de la langue, affiché dans les réglages.
+ *   - la clé '_name' (dans common.php) donne le nom de la langue, affiché dans les réglages ;
+ *   - une clé qui finit par « _html » contient du HTML de confiance (écrit dans lang/) :
+ *     on l'affiche sans e(), ex. <?= t('settings.info.backup_html') ?> ; toutes les autres sont échappées.
  * Une clé absente dans la langue choisie retombe sur le français, puis sur la clé elle-même :
  * l'interface reste complète pendant que la traduction avance.
  * Les clés « js.* » sont aussi envoyées au JavaScript (voir i18n_js()).
@@ -21,8 +24,8 @@ function i18n_available(): array
     static $langs = null;
     if ($langs === null) {
         $langs = [];
-        foreach (glob(PV_ROOT . '/lang/*.php') ?: [] as $file) {
-            $code = basename($file, '.php');
+        foreach (glob(PV_ROOT . '/lang/*', GLOB_ONLYDIR) ?: [] as $dir) {
+            $code = basename($dir);
             if (preg_match('/^[a-z]{2}(-[A-Z]{2})?$/', $code)) {
                 $langs[$code] = (string) (i18n_messages($code)['_name'] ?? $code);
             }
@@ -36,17 +39,24 @@ function i18n_available(): array
     return $langs;
 }
 
-/** Textes d'une langue (fichier lu une seule fois par requête). */
+/** Textes d'une langue : tous les fichiers de lang/<code>/, lus une seule fois par requête. */
 function i18n_messages(string $lang): array
 {
     static $cache = [];
     if (!array_key_exists($lang, $cache)) {
-        $file = PV_ROOT . '/lang/' . $lang . '.php';
-        $cache[$lang] = preg_match('/^[a-z]{2}(-[A-Z]{2})?$/', $lang) && is_file($file) ? (array) require $file : [];
-        if ($lang === I18N_REFERENCE && !$cache[$lang]) {
-            // sans lang/fr.php, l'interface afficherait les clés au lieu des textes
-            error_log('PersonaVault : ' . $file . ' introuvable — le dossier lang/ a-t-il été déployé ?');
+        $messages = [];
+        if (preg_match('/^[a-z]{2}(-[A-Z]{2})?$/', $lang)) {
+            $files = glob(PV_ROOT . '/lang/' . $lang . '/*.php') ?: [];
+            sort($files);
+            foreach ($files as $file) {
+                $messages += (array) require $file; // doublons signalés par bin/i18n-check.php
+            }
         }
+        if ($lang === I18N_REFERENCE && !$messages) {
+            // sans lang/fr/, l'interface afficherait les clés au lieu des textes
+            error_log('PersonaVault : ' . PV_ROOT . '/lang/' . $lang . '/ introuvable — le dossier lang/ a-t-il été déployé ?');
+        }
+        $cache[$lang] = $messages;
     }
     return $cache[$lang];
 }

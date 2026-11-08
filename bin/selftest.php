@@ -260,7 +260,9 @@ try {
     $langs = array_keys(i18n_available());
     $check(i18n_from_header('en-GB,en;q=0.8,fr;q=0.5', $langs) === 'en' && i18n_from_header('fr-CA', $langs) === 'fr', 'langue du navigateur reconnue (en-GB → en, fr-CA → fr)');
     $check(i18n_from_header('de-DE,de;q=0.9', $langs) === 'fr' && i18n_from_header('de;q=1, en;q=0.5', $langs) === 'en', 'langue absente : suivante dans la liste, sinon français');
-    $check($langs[0] === 'fr', 'français proposé en premier');
+    $check($langs[0] === 'fr' && in_array('es', $langs, true), 'français proposé en premier, espagnol installé');
+    i18n_set_locale('es');
+    $check(t('nav.library') === 'Biblioteca' && t('login.blocked', 3) === 'Demasiados intentos. Vuelve a intentarlo en 3 min.', 'espagnol : texte et paramètre {n}');
     i18n_set_locale(null);
 } catch (Throwable $e) {
     echo '  ÉCHEC exception : ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
