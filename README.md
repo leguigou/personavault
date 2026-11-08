@@ -242,9 +242,35 @@ personavault/
 │   └── backup.php          # export / import ZIP
 ├── views/                  # gabarits PHP
 ├── bin/                    # outils CLI (aperçu de prompt, relance, nettoyage, selftest)
-├── .github/workflows/      # CI : php -l + bin/selftest.php
+├── tests/e2e/              # parcours de toutes les routes (faux modèle, données de test)
+├── .github/workflows/      # CI : php -l, bin/selftest.php, tests/e2e/run.sh
 └── storage/                # base + images (non versionné)
 ```
+
+---
+
+## Tests
+
+Deux niveaux, lancés aussi par la CI à chaque envoi sur GitHub :
+
+```bash
+php bin/selftest.php        # fonctions internes : migrations, images, sauvegarde, mémoire, sécurité
+bash tests/e2e/run.sh       # l'app réelle : toutes les routes, avec un faux modèle (Node 18+)
+```
+
+`tests/e2e/run.sh` copie l'app dans un dossier temporaire avec des données de test
+(`tests/e2e/seed.php`) et un faux modèle déterministe (`tests/e2e/fake-llm.mjs`) : la vraie base
+n'est jamais touchée. Il vérifie les statuts de ~60 requêtes (`tests/e2e/expected.txt`), quelques
+contenus clés (recherche, compression, souvenirs, flux de réponse) et l'absence d'avertissement PHP.
+
+Avant / après un refactoring, pour vérifier que **rien** ne change (contenus compris) :
+
+```bash
+bash tests/e2e/run.sh --record /tmp/avant.txt   # avant la modification
+bash tests/e2e/run.sh --compare /tmp/avant.txt  # après
+```
+
+Après un changement voulu de statut ou de route : `bash tests/e2e/run.sh --update-expected`.
 
 ---
 

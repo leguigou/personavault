@@ -1,0 +1,62 @@
+303 text/html  anonyme GET /
+200 text/html  anonyme GET /login
+303 text/html  anonyme GET /chat
+303 text/html  anonyme GET /settings
+200 text/css  anonyme GET /assets/app.css?v=1
+404 text/html  anonyme GET /assets/nope.css
+303 text/html  anonyme GET /media/p0000000000000000.webp
+200 text/html  POST /login (mauvais mot de passe)
+303 text/html  POST /login
+200 text/html  GET /
+200 text/html  GET /?fav=1
+200 text/html  GET /?arch=1
+200 text/html  GET /?q=lis
+200 text/html  GET /?tag=romance
+200 text/html  GET /p/new
+200 text/html  GET /p/camille-lefebvre
+200 text/html  GET /p/camille-lefebvre/edit
+404 text/html  GET /p/inexistant
+200 text/html  GET /chat
+200 text/html  GET /chat/1
+200 application/json  GET /chat/1/status
+200 application/json  GET /chat/1/messages?before=10
+200 application/json  GET /chat/1/search?q=lisb
+200 application/json  GET /chat/1/search?q=pasteis%20tage
+404 text/html  GET /chat/999
+200 application/json  GET /chat/models
+200 text/html  GET /memories
+200 text/html  GET /memories?q=train
+200 text/html  GET /settings
+200 application/json  GET /export.json
+200 application/zip  GET /backup/export.zip
+404 text/html  GET /nope
+404 text/html  GET /photos/1
+200 text/javascript  GET /assets/app.js
+200 image/webp  GET /media/(portrait)
+303 text/html  POST /p
+303 text/html  POST /p/smoke-test/favorite
+303 text/html  POST /p/smoke-test/archive
+303 text/html  POST /p/smoke-test/archive (2)
+303 text/html  POST /p/smoke-test/prompts
+303 text/html  POST /p/smoke-test
+303 text/html  POST /p (nom vide)
+419 text/html  POST /p/smoke-test/favorite (jeton faux)
+303 text/html  POST /chat
+303 text/html  POST /chat/1/rename
+303 text/html  POST /chat/1/toggles
+200 application/json  POST /chat/1/facts-toggle
+200 application/json  POST /chat/1/facts-toggle (2)
+200 application/json  POST /chat/1/compress
+200 application/json  POST /chat/1/remember
+200 application/json  POST /chat/1/autotitle
+303 text/html  POST /memories
+303 text/html  POST /settings/ui
+303 text/html  POST /settings/prompts
+303 text/html  POST /settings
+303 text/html  POST /settings/chat
+200 text/event-stream  POST /chat/1/stream
+200 application/json  POST /chat/1/msg-delete
+400 application/json  POST /settings/test
+303 text/html  POST /p/smoke-test/delete
+303 text/html  POST /logout
+303 text/html  GET / (après déconnexion)
