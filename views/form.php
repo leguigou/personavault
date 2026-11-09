@@ -42,7 +42,8 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
         </div>
     <?php endif; ?>
 
-    <form class="card-form" method="post" action="<?= e($action) ?>" enctype="multipart/form-data">
+    <!-- data-dirty-guard : barre « Enregistrer » collée en bas dès qu'on modifie, alerte si on quitte sans enregistrer -->
+    <form class="card-form" method="post" action="<?= e($action) ?>" enctype="multipart/form-data" data-dirty-guard>
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 
         <div class="avatar-picker">
@@ -149,7 +150,7 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
             </div>
         <?php endif; ?>
 
-        <div class="form-actions">
+        <div class="form-actions save-bar">
             <a class="btn btn-ghost" href="<?= $isEdit ? '/p/' . e($slug) : '/' ?>"><?= e(t('form.cancel')) ?></a>
             <button class="btn btn-primary" type="submit"><?= e($isEdit ? t('form.save') : t('form.create')) ?></button>
         </div>

@@ -130,6 +130,14 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <div class="lb-top">
         <span class="lb-count" data-lb-count aria-live="polite"></span>
         <div class="lb-actions">
+            <!-- photos d'une fiche seulement : portrait et suppression -->
+            <button class="lb-btn" type="button" data-lb-portrait hidden
+                    data-label-set="<?= e(t('persona.photo_set_avatar')) ?>" data-label-is="<?= e(t('persona.photo_is_avatar')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 14.6 9.6l5.6.8-4.1 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6L3.9 10.4l5.6-.8L12 4.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="lb-btn lb-danger" type="button" data-lb-delete hidden aria-label="<?= e(t('persona.photo_delete')) ?>" title="<?= e(t('persona.photo_delete')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </button>
             <a class="lb-btn" data-lb-download download href="#" aria-label="<?= e(t('lightbox.download')) ?>" title="<?= e(t('lightbox.download')) ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </a>

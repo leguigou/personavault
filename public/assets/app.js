@@ -362,7 +362,10 @@
         const snap = (f) => {
             const parts = [];
             new FormData(f).forEach((v, k) => {
-                if (k !== "_token" && typeof v === "string") parts.push(k + "=" + v);
+                if (k === "_token") return;
+                if (typeof v === "string") parts.push(k + "=" + v);
+                else if (v && v.name) parts.push(k + "=fichier:" + v.name + ":" + v.size); // portrait choisi
+
             });
             return parts.join("&");
         };
@@ -740,6 +743,10 @@
         let items = [];
         let index = 0;
         let baseName = "photo";
+        let sources = [];   // les vignettes d'origine (identifiant de photo, portrait…)
+        let actions = null; // la galerie, si ses photos ont des actions (fiche persona)
+        const btnPortrait = lb.querySelector("[data-lb-portrait]");
+        const btnDelete = lb.querySelector("[data-lb-delete]");
 
         const paint = () => {
             const n = items.length;
@@ -750,6 +757,18 @@
             const ext = (url.split("?")[0].match(/\.(\w+)$/) || [, "webp"])[1];
             dl.setAttribute("download", baseName + (n > 1 ? "-" + (index + 1) : "") + "." + ext);
             [...dots.children].forEach((d, k) => d.classList.toggle("is-on", k === index));
+            // portrait / supprimer : seulement pour une photo de fiche
+            const src = sources[index];
+            const has = !!(actions && src?.dataset.photoId);
+            btnPortrait.hidden = btnDelete.hidden = !has;
+            if (has) {
+                const isPortrait = src.dataset.portrait === "1";
+                const label = isPortrait ? btnPortrait.dataset.labelIs : btnPortrait.dataset.labelSet;
+                btnPortrait.classList.toggle("is-on", isPortrait);
+                btnPortrait.setAttribute("aria-pressed", isPortrait ? "true" : "false");
+                btnPortrait.setAttribute("aria-label", label);
+                btnPortrait.title = label;
+            }
             lb.querySelector(".lb-prev").disabled = index <= 0;
             lb.querySelector(".lb-next").disabled = index >= n - 1;
         };
@@ -762,6 +781,8 @@
             const group = img.closest("[data-gallery]");
             const imgs = group ? [...group.querySelectorAll("[data-full]")] : [img];
             items = imgs.map((x) => x.dataset.full);
+            sources = imgs;
+            actions = group?.hasAttribute("data-photo-actions") ? group : null;
             baseName = group?.dataset.galleryName || "photo";
             track.replaceChildren(...items.map((src, k) => {
                 const slide = document.createElement("div");
@@ -815,10 +836,38 @@
                 return;
             }
             if (lb.hidden) return;
+            if (document.querySelector(".pv-dialog:not([hidden])")) return; // une confirmation est ouverte
             if (e.key === "Escape") close();
             else if (e.key === "ArrowRight") goTo(index + 1);
             else if (e.key === "ArrowLeft") goTo(index - 1);
         });
+        // envoie un formulaire comme ceux de la page (jeton CSRF ; confirmation si data-confirm)
+        const postForm = (action, confirmText) => {
+            const f = document.createElement("form");
+            f.method = "post";
+            f.action = action;
+            f.hidden = true;
+            const t = document.createElement("input");
+            t.type = "hidden";
+            t.name = "_token";
+            t.value = actions.dataset.token;
+            f.appendChild(t);
+            if (confirmText) f.dataset.confirm = confirmText;
+            document.body.appendChild(f);
+            if (f.requestSubmit) f.requestSubmit();
+            else f.submit();
+        };
+        btnPortrait.addEventListener("click", () => {
+            const src = sources[index];
+            if (!actions || !src?.dataset.photoId || src.dataset.portrait === "1") return;
+            postForm("/photos/" + src.dataset.photoId + "/avatar");
+        });
+        btnDelete.addEventListener("click", () => {
+            const src = sources[index];
+            if (!actions || !src?.dataset.photoId) return;
+            postForm("/photos/" + src.dataset.photoId + "/delete", actions.dataset.deleteConfirm);
+        });
+
         lb.addEventListener("click", (e) => {
             const step = e.target.closest("[data-lb-step]");
             if (step) return goTo(index + Number(step.dataset.lbStep));
@@ -1651,6 +1700,57 @@
             }
             return wrap;
         };
+
+        /* séparateurs de jour (« Aujourd'hui », « Hier », « lun. 3 nov. ») entre les messages,
+           dans la langue et le fuseau du téléphone ; recalculés à chaque ajout de messages */
+        const dayLabel = (d) => {
+            const now = new Date();
+            const start = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+            const diff = Math.round((start(now) - start(d)) / 864e5);
+            if (diff === 0 || diff === 1) {
+                const rel = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" }).format(-diff, "day");
+                return rel.charAt(0).toUpperCase() + rel.slice(1);
+            }
+            const opts = { weekday: "short", day: "numeric", month: "short" };
+            if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+            const txt = d.toLocaleDateString(LOCALE, opts);
+            return txt.charAt(0).toUpperCase() + txt.slice(1);
+        };
+        let dayObserver = null;
+        const paintDays = () => {
+            dayObserver?.disconnect();
+            scroll.querySelectorAll(".msg-day").forEach((n) => n.remove());
+            let last = "";
+            scroll.querySelectorAll(".msg[data-at]").forEach((m) => {
+                const d = new Date(m.dataset.at);
+                if (Number.isNaN(d.getTime())) return;
+                const key = d.toDateString();
+                if (key === last) return;
+                last = key;
+                const sep = document.createElement("div");
+                sep.className = "msg-day";
+                sep.setAttribute("role", "separator");
+                sep.innerHTML = "<span></span>";
+                sep.firstChild.textContent = dayLabel(d);
+                m.before(sep);
+            });
+            dayObserver?.observe(scroll, { childList: true });
+        };
+        let dayRaf = 0;
+        dayObserver = new MutationObserver(() => {
+            cancelAnimationFrame(dayRaf);
+            dayRaf = requestAnimationFrame(() => {
+                // garder sous les yeux le même message malgré les séparateurs ajoutés au-dessus
+                const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 40;
+                const box = scroll.getBoundingClientRect();
+                const anchor = [...scroll.querySelectorAll(".msg")].find((m) => m.getBoundingClientRect().bottom > box.top);
+                const before = anchor ? anchor.getBoundingClientRect().top : 0;
+                paintDays();
+                if (atBottom) scroll.scrollTop = scroll.scrollHeight;
+                else if (anchor) scroll.scrollTop += anchor.getBoundingClientRect().top - before;
+            });
+        });
+        paintDays();
 
         const olderBtn = chat.querySelector("[data-load-older]");
         olderBtn?.addEventListener("click", async () => {

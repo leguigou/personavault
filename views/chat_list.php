@@ -10,9 +10,9 @@
             <span class="count"><?= count($conversations) ?></span>
         </h1>
     </div>
-    <button class="btn btn-primary" type="button" data-open-picker>
-        <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-        <?= e(t('chat.list.new')) . "\n" ?>
+    <button class="btn btn-primary btn-new" type="button" data-open-picker aria-label="<?= e(t('chat.list.new')) ?>" title="<?= e(t('chat.list.new')) ?>">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span class="btn-label"><?= e(t('chat.list.new')) ?></span>
     </button>
 </section>
 

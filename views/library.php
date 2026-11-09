@@ -161,16 +161,6 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
                 </div>
                 <div class="persona-caption"><strong><?= e(t('nav.new_persona')) ?></strong></div>
             </a>
-            <form class="persona-card add-tile" method="post" action="/import" enctype="multipart/form-data" data-card-import>
-                <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-                <label style="display:block;cursor:pointer" title="<?= e(t('cards.import_title')) ?>">
-                    <div class="persona-media">
-                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </div>
-                    <div class="persona-caption"><strong><?= e(t('cards.import_tile')) ?></strong></div>
-                    <input type="file" name="card" accept=".zip,.json,.png,application/zip,application/json,image/png" hidden data-autosubmit>
-                </label>
-            </form>
         <?php endif; ?>
     </div>
 <?php endif; ?>

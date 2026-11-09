@@ -18,7 +18,6 @@ return [
     'cards.export_badge_full' => 'Complete',
 
     // --- import (library, new persona)
-    'cards.import_tile'                => 'Import a card',
     'cards.import_title'               => 'Import a card: PersonaVault archive (.zip), Character Card (.json or .png)',
     'cards.import_hint'                => 'Already have a card? Import a PersonaVault archive (.zip) or a Character Card (.json, .png).',
     'cards.import_file'                => 'Import a file',

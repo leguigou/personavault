@@ -18,7 +18,6 @@ return [
     'cards.export_badge_full' => 'Completo',
 
     // --- importar (biblioteca, creación)
-    'cards.import_tile'                => 'Importar una ficha',
     'cards.import_title'               => 'Importar una ficha: archivo PersonaVault (.zip), Character Card (.json o .png)',
     'cards.import_hint'                => '¿Ya tienes una ficha? Importa un archivo PersonaVault (.zip) o una Character Card (.json, .png).',
     'cards.import_file'                => 'Importar un archivo',

@@ -157,6 +157,17 @@ await post('/p/smoke-test/duplicate');
 const copy = await record('GET /p/smoke-test-copie', await http('/p/smoke-test-copie'));
 expect(copy.includes('Smoke Test (copie)') && copy.includes('un prompt'), 'la copie reprend la fiche et ses prompts');
 await post('/p/smoke-test-copie/delete');
+// une copie a ses propres fichiers photo (rien de partagé avec l'original)
+const mediaOf = (html) => new Set(html.match(/p[0-9a-f]{16}/g) || []);
+const origHtml = await (await http('/p/camille-lefebvre')).text();
+await post('/p/camille-lefebvre/duplicate');
+const copyHtml = await record('GET /p/camille-lefebvre-copie', await http('/p/camille-lefebvre-copie'));
+const shared = [...mediaOf(copyHtml)].filter((f) => mediaOf(origHtml).has(f));
+expect(mediaOf(copyHtml).size > 0 && shared.length === 0, 'la copie a ses propres fichiers photo');
+const copyMedia = [...mediaOf(copyHtml)][0];
+await record('GET /media/(photo de la copie)', await http('/media/' + copyMedia + '.thumb.webp'));
+await post('/p/camille-lefebvre-copie/delete');
+await record('GET /media/(photo de l’original après suppression de la copie)', await http('/media/' + [...mediaOf(origHtml)][0] + '.thumb.webp'));
 await post('/p/smoke-test/delete');
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
