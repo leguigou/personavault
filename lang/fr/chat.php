@@ -117,4 +117,9 @@ return [
     'chat.fallback.hint'            => 'Tu peux attendre qu’il revienne — le message sera renvoyé tel quel — ou faire générer la réponse par DeepSeek.',
     'chat.fallback.wait'            => 'Attendre et réessayer',
     'chat.fallback.use'             => 'Utiliser DeepSeek',
+    // consigne propre à la conversation
+    'chat.directive.label'       => 'Consigne pour cette conversation',
+    'chat.directive.placeholder' => 'Ex. Nous sommes en vacances à Lisbonne, elle me fait visiter la ville.',
+    'chat.directive.help'        => 'S’ajoute à la consigne du personnage, uniquement dans cette conversation.',
+    'chat.directive.save'        => 'Enregistrer la consigne',
 ];

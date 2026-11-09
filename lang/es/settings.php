@@ -283,4 +283,6 @@ return [
             añadir las conversaciones y los recuerdos.</p>
             <p>Al importar, no se sobrescribe nada: una persona que ya existe se vuelve a crear con un nuevo nombre de URL.
             Guarda tus copias de seguridad fuera del servidor.</p>',
+    'settings.followup.gap'       => 'Tiempo entre dos mensajes (horas)',
+    'settings.followup.gap_help'  => 'En una misma conversación, no habrá otro mensaje antes de este plazo, aunque el silencio continúe.',
 ];

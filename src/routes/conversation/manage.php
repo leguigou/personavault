@@ -26,6 +26,21 @@ if ($action === 'toggles' && $method === 'POST') {
 }
 
 
+/* --- consigne propre à cette conversation (s'ajoute à celle du persona) --- */
+if ($action === 'directive' && $method === 'POST') {
+    $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+    $ajax ? csrf_check_json() : csrf_check();
+    $directive = mb_substr(trim((string) ($_POST['directive'] ?? '')), 0, 2000);
+    db()->prepare('UPDATE conversations SET directive = ?, updated_at = datetime("now") WHERE id = ?')->execute([$directive, $cid]);
+    if ($ajax) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true, 'message' => t('flash.chat.directive_saved')], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    flash('ok', t('flash.chat.directive_saved'));
+    redirect('/chat/' . $cid);
+}
+
 if ($action === 'rename' && $method === 'POST') {
     csrf_check();
     $title = trim((string) ($_POST['title'] ?? ''));

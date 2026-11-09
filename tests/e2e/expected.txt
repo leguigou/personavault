@@ -52,6 +52,7 @@
 303 text/html  POST /chat
 303 text/html  POST /chat/1/rename
 303 text/html  POST /chat/1/toggles
+303 text/html  POST /chat/1/directive
 200 application/json  POST /chat/1/facts-toggle
 200 application/json  POST /chat/1/facts-toggle (2)
 200 application/json  POST /chat/1/compress

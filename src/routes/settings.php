@@ -144,6 +144,7 @@ if ($path === '/settings/chat' && $method === 'POST') {
 
     set_setting('chat_followup_enabled', !empty($_POST['chat_followup_enabled']) ? '1' : '0');
     set_setting('chat_followup_idle_hours', (string) max(1, min(72, (int) ($_POST['chat_followup_idle_hours'] ?? 6))));
+    set_setting('chat_followup_min_gap_hours', (string) max(1, min(168, (int) ($_POST['chat_followup_min_gap_hours'] ?? 12))));
     set_setting('chat_followup_from', (string) max(0, min(23, (int) ($_POST['chat_followup_from'] ?? 8))));
     set_setting('chat_followup_to', (string) max(1, min(24, (int) ($_POST['chat_followup_to'] ?? 23))));
 

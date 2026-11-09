@@ -218,6 +218,26 @@
         });
     });
 
+    /* consigne de la conversation : enregistrée sans recharger la page */
+    document.querySelectorAll("[data-directive-form]").forEach((form) => {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const btn = form.querySelector("button[type=submit]");
+            const body = new FormData(form);
+            if (btn) btn.disabled = true;
+            try {
+                const r = await fetch(form.action, { method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!r.ok || !d.ok) throw new Error(d.error || "");
+                toast(d.message || tr("chat.toggle_saved"));
+            } catch (err) {
+                toast(tr("chat.toggle_failed"), true);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
+    });
+
     /* cases à cocher présentées en interrupteur : annoncées comme telles */
     document.querySelectorAll(".check input[type=checkbox]").forEach((c) => c.setAttribute("role", "switch"));
 

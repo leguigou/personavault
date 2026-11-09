@@ -285,4 +285,6 @@ return [
             y ajouter les conversations et les souvenirs.</p>
             <p>À l’import, rien n’est écrasé : un persona déjà présent est recréé sous un nouveau nom d’URL.
             Garde tes sauvegardes hors du serveur.</p>',
+    'settings.followup.gap'       => 'Délai entre deux relances (heures)',
+    'settings.followup.gap_help'  => 'Dans une même conversation, pas de nouvelle relance avant ce délai, même si le silence continue.',
 ];

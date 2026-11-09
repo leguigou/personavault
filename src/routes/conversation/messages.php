@@ -199,6 +199,7 @@ if ($action === '' && $method === 'GET') {
     render('chat', [
         'title'     => $conv['title'],
         'conv'      => $conv,
+        'convDirective' => $convDirective,
         'persona'   => $persona,
         'memory'    => chat_memory_stats($cid, $conv),
         'messages'  => $messages,

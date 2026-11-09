@@ -282,4 +282,6 @@ return [
             add conversations and memories.</p>
             <p>On import, nothing is overwritten: a persona that already exists is recreated under a new URL name.
             Keep your backups off the server.</p>',
+    'settings.followup.gap'       => 'Time between two follow-ups (hours)',
+    'settings.followup.gap_help'  => 'In the same conversation, no new follow-up before this delay, even if the silence goes on.',
 ];

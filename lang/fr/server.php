@@ -207,4 +207,5 @@ return [
     'labels.backup_readme.restore_how' => 'Réglages → Sauvegarde → Restaurer, en choisissant ce fichier ZIP.',
     'labels.backup_readme.restore_slug' => 'Les personas importés reçoivent un slug unique si le leur existe déjà :',
     'labels.backup_readme.restore_safe' => 'rien n\'est écrasé.',
+    'flash.chat.directive_saved' => 'Consigne de la conversation enregistrée.',
 ];

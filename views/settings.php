@@ -290,6 +290,11 @@ $facts = facts_settings();
                     <input class="input" type="number" name="chat_followup_idle_hours" min="1" max="72" step="1" value="<?= (int) setting('chat_followup_idle_hours', '6') ?>">
                     <small><?= e(t('settings.followup.idle_help')) ?></small>
                 </label>
+                <label class="field">
+                    <span><?= e(t('settings.followup.gap')) ?></span>
+                    <input class="input" type="number" inputmode="numeric" name="chat_followup_min_gap_hours" min="1" max="168" step="1" value="<?= (int) setting('chat_followup_min_gap_hours', '12') ?>">
+                    <small><?= e(t('settings.followup.gap_help')) ?></small>
+                </label>
                 <div class="field">
                     <span><?= e(t('settings.followup.hours')) ?></span>
                     <div class="hours-range">
