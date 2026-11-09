@@ -82,13 +82,6 @@ $token    = csrf_token();
                         <span class="quick-label"><?= e(t('persona.favorite')) ?></span>
                     </button>
                 </form>
-                <form method="post" action="/p/<?= e($persona['slug']) ?>/archive">
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <button class="quick-tile" type="submit">
-                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
-                        <span class="quick-label"><?= e($isArch ? t('persona.restore') : t('persona.archive')) ?></span>
-                    </button>
-                </form>
                 <form method="post" action="/p/<?= e($persona['slug']) ?>/duplicate">
                     <input type="hidden" name="_token" value="<?= e($token) ?>">
                     <button class="quick-tile" type="submit" title="<?= e(t('persona.duplicate_title')) ?>">
@@ -98,17 +91,49 @@ $token    = csrf_token();
                 </form>
             </div>
 
-            <!-- 3. l'action destructrice, à part et discrète -->
-            <form method="post" action="/p/<?= e($persona['slug']) ?>/delete" class="hero-delete" data-confirm="<?= e(t('persona.delete_confirm', ['name' => $persona['name']])) ?>">
+            <!-- 3. l'action destructrice, à part et discrète : propose d'abord d'archiver -->
+            <button class="hero-delete-btn hero-delete" type="button" data-open-modal="#remove-modal" aria-haspopup="dialog">
+                <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                <?= e(t('persona.delete_persona')), "\n" ?>
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- retirer la fiche : archiver (récupérable) ou supprimer pour de bon -->
+<div class="modal action-sheet" id="remove-modal" data-modal hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="remove-title">
+        <header class="modal-head">
+            <div>
+                <p class="eyebrow"><?= e((string) $persona['name']) ?></p>
+                <h2 id="remove-title"><?= e(t('persona.remove_title')) ?></h2>
+            </div>
+            <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
+        </header>
+        <div class="action-list">
+            <form method="post" action="/p/<?= e($persona['slug']) ?>/archive">
                 <input type="hidden" name="_token" value="<?= e($token) ?>">
-                <button class="hero-delete-btn" type="submit">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                    <?= e(t('persona.delete_persona')), "\n" ?>
+                <button type="submit" class="action-row action-row-2">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                    <span>
+                        <strong><?= e($isArch ? t('persona.restore') : t('persona.archive')) ?></strong>
+                        <small><?= e($isArch ? t('persona.remove_restore_hint') : t('persona.remove_archive_hint')) ?></small>
+                    </span>
+                </button>
+            </form>
+            <form method="post" action="/p/<?= e($persona['slug']) ?>/delete" data-confirm="<?= e(t('persona.delete_confirm', ['name' => $persona['name']])) ?>">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <button type="submit" class="action-row action-row-2 is-danger">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                    <span>
+                        <strong><?= e(t('persona.remove_delete')) ?></strong>
+                        <small><?= e(t('persona.remove_delete_hint')) ?></small>
+                    </span>
                 </button>
             </form>
         </div>
     </div>
-</section>
+</div>
 
 <!-- export de la fiche : fenêtre (feuille en bas sur mobile) -->
 <div class="modal action-sheet" id="export-modal" data-modal hidden>
@@ -154,25 +179,20 @@ $token    = csrf_token();
             <?= t('persona.paste_hint_html'), "\n" ?>
         </p>
 
-        <div class="gallery" data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>">
+        <div class="gallery" data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>"
+             data-photo-actions data-token="<?= e($token) ?>" data-delete-confirm="<?= e(t('persona.photo_delete_confirm')) ?>">
                 <?php foreach ($photos as $ph): ?>
-                    <figure class="shot">
+                    <?php $isPortrait = (string) $ph['file'] === (string) $persona['avatar']; ?>
+                    <!-- les actions (portrait, supprimer) sont dans la visionneuse, photo ouverte en grand -->
+                    <figure class="shot<?= $isPortrait ? ' is-portrait' : '' ?>">
                         <img src="<?= e(media_url($ph['file'])) ?>" alt="<?= e($ph['caption'] ?: $persona['name']) ?>" loading="lazy"
-                             data-full="<?= e(media_url($ph['file'], false)) ?>" role="button" tabindex="0">
-                        <div class="shot-tools">
-                            <form method="post" action="/photos/<?= (int) $ph['id'] ?>/avatar">
-                                <input type="hidden" name="_token" value="<?= e($token) ?>">
-                                <button type="submit" title="<?= e(t('persona.photo_set_avatar')) ?>" aria-label="<?= e(t('persona.photo_set_avatar')) ?>">
-                                    <svg viewBox="0 0 24 24"><path d="M12 4.5 14.6 9.6l5.6.8-4.1 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6L3.9 10.4l5.6-.8L12 4.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                                </button>
-                            </form>
-                            <form method="post" action="/photos/<?= (int) $ph['id'] ?>/delete" data-confirm="<?= e(t('persona.photo_delete_confirm')) ?>">
-                                <input type="hidden" name="_token" value="<?= e($token) ?>">
-                                <button type="submit" title="<?= e(t('persona.delete')) ?>" aria-label="<?= e(t('persona.delete')) ?>">
-                                    <svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                                </button>
-                            </form>
-                        </div>
+                             data-full="<?= e(media_url($ph['file'], false)) ?>" data-photo-id="<?= (int) $ph['id'] ?>"
+                             <?= $isPortrait ? 'data-portrait="1"' : '' ?> role="button" tabindex="0">
+                        <?php if ($isPortrait): ?>
+                            <span class="shot-badge" title="<?= e(t('persona.photo_is_avatar')) ?>" aria-label="<?= e(t('persona.photo_is_avatar')) ?>">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 14.6 9.6l5.6.8-4.1 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6L3.9 10.4l5.6-.8L12 4.5Z" fill="currentColor"/></svg>
+                            </span>
+                        <?php endif; ?>
                     </figure>
                 <?php endforeach; ?>
 

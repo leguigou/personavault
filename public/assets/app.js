@@ -740,6 +740,10 @@
         let items = [];
         let index = 0;
         let baseName = "photo";
+        let sources = [];   // les vignettes d'origine (identifiant de photo, portrait…)
+        let actions = null; // la galerie, si ses photos ont des actions (fiche persona)
+        const btnPortrait = lb.querySelector("[data-lb-portrait]");
+        const btnDelete = lb.querySelector("[data-lb-delete]");
 
         const paint = () => {
             const n = items.length;
@@ -750,6 +754,18 @@
             const ext = (url.split("?")[0].match(/\.(\w+)$/) || [, "webp"])[1];
             dl.setAttribute("download", baseName + (n > 1 ? "-" + (index + 1) : "") + "." + ext);
             [...dots.children].forEach((d, k) => d.classList.toggle("is-on", k === index));
+            // portrait / supprimer : seulement pour une photo de fiche
+            const src = sources[index];
+            const has = !!(actions && src?.dataset.photoId);
+            btnPortrait.hidden = btnDelete.hidden = !has;
+            if (has) {
+                const isPortrait = src.dataset.portrait === "1";
+                const label = isPortrait ? btnPortrait.dataset.labelIs : btnPortrait.dataset.labelSet;
+                btnPortrait.classList.toggle("is-on", isPortrait);
+                btnPortrait.setAttribute("aria-pressed", isPortrait ? "true" : "false");
+                btnPortrait.setAttribute("aria-label", label);
+                btnPortrait.title = label;
+            }
             lb.querySelector(".lb-prev").disabled = index <= 0;
             lb.querySelector(".lb-next").disabled = index >= n - 1;
         };
@@ -762,6 +778,8 @@
             const group = img.closest("[data-gallery]");
             const imgs = group ? [...group.querySelectorAll("[data-full]")] : [img];
             items = imgs.map((x) => x.dataset.full);
+            sources = imgs;
+            actions = group?.hasAttribute("data-photo-actions") ? group : null;
             baseName = group?.dataset.galleryName || "photo";
             track.replaceChildren(...items.map((src, k) => {
                 const slide = document.createElement("div");
@@ -815,10 +833,38 @@
                 return;
             }
             if (lb.hidden) return;
+            if (document.querySelector(".pv-dialog:not([hidden])")) return; // une confirmation est ouverte
             if (e.key === "Escape") close();
             else if (e.key === "ArrowRight") goTo(index + 1);
             else if (e.key === "ArrowLeft") goTo(index - 1);
         });
+        // envoie un formulaire comme ceux de la page (jeton CSRF ; confirmation si data-confirm)
+        const postForm = (action, confirmText) => {
+            const f = document.createElement("form");
+            f.method = "post";
+            f.action = action;
+            f.hidden = true;
+            const t = document.createElement("input");
+            t.type = "hidden";
+            t.name = "_token";
+            t.value = actions.dataset.token;
+            f.appendChild(t);
+            if (confirmText) f.dataset.confirm = confirmText;
+            document.body.appendChild(f);
+            if (f.requestSubmit) f.requestSubmit();
+            else f.submit();
+        };
+        btnPortrait.addEventListener("click", () => {
+            const src = sources[index];
+            if (!actions || !src?.dataset.photoId || src.dataset.portrait === "1") return;
+            postForm("/photos/" + src.dataset.photoId + "/avatar");
+        });
+        btnDelete.addEventListener("click", () => {
+            const src = sources[index];
+            if (!actions || !src?.dataset.photoId) return;
+            postForm("/photos/" + src.dataset.photoId + "/delete", actions.dataset.deleteConfirm);
+        });
+
         lb.addEventListener("click", (e) => {
             const step = e.target.closest("[data-lb-step]");
             if (step) return goTo(index + Number(step.dataset.lbStep));
