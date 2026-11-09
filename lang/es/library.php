@@ -35,7 +35,6 @@ return [
     'library.card_favorite'       => 'Favorito',
 
     // --- ficha del persona (views/detail.php)
-    'persona.badge_favorite'      => '★ Favorito',
     'persona.badge_archived'      => 'Archivado',
     'persona.tag_link_title'      => 'Ver todos los personas con esta etiqueta',
     'persona.count_photos'        => ['one' => '{n} foto', 'other' => '{n} fotos'],
@@ -50,8 +49,13 @@ return [
     'persona.restore'             => 'Restaurar',
     'persona.delete_confirm'      => '¿Eliminar definitivamente a {name}, con sus fotos y conversaciones?',
     'persona.delete'              => 'Eliminar',
-    'persona.delete_persona' => 'Eliminar este persona',
     'persona.duplicate' => 'Duplicar',
+    'persona.more' => 'Más',
+    'persona.more_title' => 'Otras acciones',
+    'persona.more_export_hint' => 'Archivo completo o Character Card (JSON, PNG).',
+    'persona.more_remove' => 'Archivar o eliminar',
+    'persona.more_remove_archived' => 'Restaurar o eliminar',
+    'persona.more_remove_hint' => 'El archivo se recupera cuando quieras; eliminar es definitivo.',
     'persona.duplicate_title' => 'Crear una copia de esta ficha (textos, ajustes, fotos y prompts)',
     'persona.copy_name' => '{name} (copia)',
     'persona.photos_title'        => 'Fotos',

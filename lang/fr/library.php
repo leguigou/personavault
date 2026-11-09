@@ -36,7 +36,6 @@ return [
     'library.card_favorite'       => 'Favori',
 
     // --- fiche persona (views/detail.php)
-    'persona.badge_favorite'      => '★ Favori',
     'persona.badge_archived'      => 'Archivé',
     'persona.tag_link_title'      => 'Voir tous les personas avec ce tag',
     'persona.count_photos'        => ['one' => '{n} photo', 'other' => '{n} photos'],
@@ -51,8 +50,13 @@ return [
     'persona.restore'             => 'Restaurer',
     'persona.delete_confirm'      => 'Supprimer définitivement {name}, ses photos et ses discussions ?',
     'persona.delete'              => 'Supprimer',
-    'persona.delete_persona' => 'Supprimer ce persona',
     'persona.duplicate' => 'Dupliquer',
+    'persona.more' => 'Plus',
+    'persona.more_title' => 'Autres actions',
+    'persona.more_export_hint' => 'Archive complète ou Character Card (JSON, PNG).',
+    'persona.more_remove' => 'Archiver ou supprimer',
+    'persona.more_remove_archived' => 'Restaurer ou supprimer',
+    'persona.more_remove_hint' => 'L\'archive se récupère à tout moment ; la suppression est définitive.',
     'persona.duplicate_title' => 'Créer une copie de cette fiche (textes, réglages, photos et prompts)',
     'persona.copy_name' => '{name} (copie)',
     'persona.photos_title'        => 'Photos',

@@ -35,7 +35,6 @@ return [
     'library.card_favorite'       => 'Favorite',
 
     // --- persona page (views/detail.php)
-    'persona.badge_favorite'      => '★ Favorite',
     'persona.badge_archived'      => 'Archived',
     'persona.tag_link_title'      => 'See all personas with this tag',
     'persona.count_photos'        => ['one' => '{n} photo', 'other' => '{n} photos'],
@@ -50,8 +49,13 @@ return [
     'persona.restore'             => 'Restore',
     'persona.delete_confirm'      => 'Permanently delete {name}, with its photos and chats?',
     'persona.delete'              => 'Delete',
-    'persona.delete_persona' => 'Delete this persona',
     'persona.duplicate' => 'Duplicate',
+    'persona.more' => 'More',
+    'persona.more_title' => 'More actions',
+    'persona.more_export_hint' => 'Full archive or Character Card (JSON, PNG).',
+    'persona.more_remove' => 'Archive or delete',
+    'persona.more_remove_archived' => 'Restore or delete',
+    'persona.more_remove_hint' => 'An archive can be restored at any time; deleting is permanent.',
     'persona.duplicate_title' => 'Create a copy of this card (texts, settings, photos and prompts)',
     'persona.copy_name' => '{name} (copy)',
     'persona.photos_title'        => 'Photos',

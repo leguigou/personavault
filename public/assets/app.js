@@ -995,7 +995,15 @@
             const original = btn.innerHTML;
             btn.classList.add("is-busy");
             btn.disabled = true;
-            const lbl = btn.querySelector(".quick-label"); // tuile : on ne change que le libellé
+            // bouton rond : le libellé est à côté (aria-describedby) ; on ne change que lui
+            const lbl = document.getElementById(btn.getAttribute("aria-describedby") || "");
+            const lblText = lbl ? lbl.textContent : "";
+            const restore = () => {
+                btn.innerHTML = original;
+                if (lbl) lbl.textContent = lblText;
+                btn.disabled = false;
+                btn.classList.remove("is-busy");
+            };
             (lbl || btn).textContent = tr("persona.ai_fill_busy");
 
             try {
@@ -1011,18 +1019,14 @@
 
                 if (!data.changed || data.changed.length === 0) {
                     toast(data.message || tr("persona.ai_fill_nothing"));
-                    btn.innerHTML = original;
-                    btn.disabled = false;
-                    btn.classList.remove("is-busy");
+                    restore();
                     return;
                 }
                 toast(data.message || tr("persona.ai_fill_done"));
                 setTimeout(() => window.location.reload(), 800);
             } catch (err) {
                 toast(tr("common.error", { message: err.message }), true);
-                btn.innerHTML = original;
-                btn.disabled = false;
-                btn.classList.remove("is-busy");
+                restore();
             }
         });
     });
@@ -1445,7 +1449,11 @@
     document.querySelectorAll("[data-open-modal]").forEach((b) =>
         b.addEventListener("click", () => {
             const m = document.querySelector(b.dataset.openModal);
-            if (m) modalOpen(m);
+            if (!m) return;
+            // ouvert depuis une autre fenêtre (menu « Plus ») : celle-ci se ferme d'abord
+            const from = b.closest(".modal");
+            if (from && from !== m) modalClose(from);
+            modalOpen(m);
         })
     );
     document.querySelectorAll(".modal[data-modal]").forEach((m) => {
