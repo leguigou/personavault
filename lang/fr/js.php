@@ -46,7 +46,7 @@ return [
     'js.settings.sum_titles_off'     => 'Désactivés',
     'js.settings.sum_titles_local'   => 'Modèle local',
     'js.settings.sum_titles_remote'  => 'Modèle distant',
-    'js.settings.sum_followup'       => 'De {from} h à {to} h',
+    'js.settings.sum_followup'       => 'Après {idle} h de silence · de {from} h à {to} h',
     'js.settings.sum_followup_off'   => 'Désactivées',
 
     // réglages : test du modèle, purge de LM Studio

@@ -90,7 +90,7 @@ return [
     'settings.followup.title'   => 'Mensajes espontáneos',
     'settings.followup.hint'    => 'La persona puede escribirte por iniciativa propia tras un largo silencio (se puede desactivar conversación por conversación).',
     'settings.followup.enable'  => 'Permitir mensajes espontáneos',
-    'settings.followup.idle'    => 'Seguridad: silencio mínimo',
+    'settings.followup.idle'    => 'Relanzar tras (horas de silencio)',
     'settings.followup.idle_help' => 'Horas de silencio antes de que pueda escribirte.',
     'settings.followup.hours'   => 'Franja horaria',
     'settings.followup.hours_from' => 'de',

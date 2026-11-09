@@ -71,6 +71,7 @@ return [
 
     // --- conversation options
     'chat.toggles.memory'           => 'Keep memory (rolling summary)',
+    'chat.toggles.followup_settings' => 'Set the delay and hours for follow-ups',
     'chat.toggles.followup'         => 'Spontaneous messages after a long silence',
 
     // --- memory (rolling summary)

@@ -400,7 +400,7 @@
                 } else if (el.dataset.foldSum === "followup") {
                     const on = val("chat_followup_enabled")?.checked;
                     el.textContent = on
-                        ? tr("settings.sum_followup", { from: val("chat_followup_from")?.value || "", to: val("chat_followup_to")?.value || "" })
+                        ? tr("settings.sum_followup", { idle: val("chat_followup_idle_hours")?.value || "", from: val("chat_followup_from")?.value || "", to: val("chat_followup_to")?.value || "" })
                         : tr("settings.sum_followup_off");
                 }
             });
@@ -463,6 +463,19 @@
             // ancre : on rouvre l'onglet sur lequel on était
             if (!h) {
                 try { h = sessionStorage.getItem("pv_settings_tab") || ""; } catch (e) { h = ""; }
+            }
+            // ancre d'une section repliable (ex. #followup depuis une conversation)
+            const fold = h ? document.getElementById(h) : null;
+            if (fold && fold.tagName === "DETAILS") {
+                const panel = fold.closest("[data-panel]");
+                if (panel) activate(panel.dataset.panel);
+                fold.open = true;
+                // après l'animation des onglets ; décalage = en-tête + barre d'onglets collés en haut
+                setTimeout(() => {
+                    const offset = (document.querySelector(".topbar")?.offsetHeight || 0) + (tabsNav.offsetHeight || 0) + 16;
+                    window.scrollTo({ top: fold.getBoundingClientRect().top + window.scrollY - offset, behavior: "smooth" });
+                }, 350);
+                return;
             }
             if (h && document.querySelector('[data-panel="' + h + '"]')) activate(h);
         };

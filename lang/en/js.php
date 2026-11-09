@@ -46,7 +46,7 @@ return [
     'js.settings.sum_titles_off'     => 'Off',
     'js.settings.sum_titles_local'   => 'Local model',
     'js.settings.sum_titles_remote'  => 'Remote model',
-    'js.settings.sum_followup'       => 'From {from}:00 to {to}:00',
+    'js.settings.sum_followup'       => 'After {idle} h of silence · from {from} h to {to} h',
     'js.settings.sum_followup_off'   => 'Off',
 
     // settings: model test, LM Studio purge

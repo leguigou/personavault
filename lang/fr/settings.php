@@ -92,7 +92,7 @@ return [
     'settings.followup.title'   => 'Messages spontanés',
     'settings.followup.hint'    => 'Le persona peut t’écrire de lui-même après un long silence (désactivable conversation par conversation).',
     'settings.followup.enable'  => 'Autoriser les relances spontanées',
-    'settings.followup.idle'    => 'Sécurité : silence minimum',
+    'settings.followup.idle'    => 'Relancer après (heures de silence)',
     'settings.followup.idle_help' => 'Heures de silence avant qu’il/elle puisse relancer.',
     'settings.followup.hours'   => 'Plage horaire',
     'settings.followup.hours_from' => 'de',

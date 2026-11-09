@@ -89,7 +89,7 @@ return [
     'settings.followup.title'   => 'Spontaneous messages',
     'settings.followup.hint'    => 'The persona can write to you on its own after a long silence (can be turned off chat by chat).',
     'settings.followup.enable'  => 'Allow spontaneous follow-ups',
-    'settings.followup.idle'    => 'Safety: minimum silence',
+    'settings.followup.idle'    => 'Follow up after (hours of silence)',
     'settings.followup.idle_help' => 'Hours of silence before they can follow up.',
     'settings.followup.hours'   => 'Time window',
     'settings.followup.hours_from' => 'from',

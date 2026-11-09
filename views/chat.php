@@ -258,6 +258,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <input type="checkbox" name="auto_followup" value="1" <?= (int) ($conv['auto_followup'] ?? 1) === 1 ? 'checked' : '' ?>>
                 <span><?= e(t('chat.toggles.followup')) ?></span>
             </label>
+            <a class="mini-link" href="/settings#followup"><?= e(t('chat.toggles.followup_settings')) ?></a>
 
             <div class="form-actions">
                 <button class="btn btn-primary btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>

@@ -269,7 +269,7 @@ $facts = facts_settings();
             </div>
         </details>
 
-        <details class="settings-card settings-fold">
+        <details class="settings-card settings-fold" id="followup">
             <summary>
                 <span class="fold-text">
                     <span class="fold-title"><?= e(t('settings.followup.title')) ?> <?= $info('followup', t('settings.info.followup_label')) ?></span>

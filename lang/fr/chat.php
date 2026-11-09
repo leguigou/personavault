@@ -72,6 +72,7 @@ return [
 
     // --- options de la conversation
     'chat.toggles.memory'           => 'Garder la mémoire (résumé glissant)',
+    'chat.toggles.followup_settings' => 'Régler le délai et les horaires des relances',
     'chat.toggles.followup'         => 'Messages spontanés après un long silence',
 
     // --- mémoire (résumé glissant)

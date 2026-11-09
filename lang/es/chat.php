@@ -71,6 +71,7 @@ return [
 
     // --- opciones de la conversación
     'chat.toggles.memory'           => 'Conservar la memoria (resumen continuo)',
+    'chat.toggles.followup_settings' => 'Ajustar el plazo y el horario de los mensajes',
     'chat.toggles.followup'         => 'Mensajes espontáneos tras un largo silencio',
 
     // --- memoria (resumen continuo)
