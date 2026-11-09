@@ -7,7 +7,6 @@ return [
     // --- export (persona page)
     'cards.export'                     => 'Export',
     'cards.export_title'               => 'Export this persona',
-    'cards.export_close'               => 'Close',
     'cards.export_zip'                 => 'PersonaVault archive (.zip)',
     'cards.export_zip_hint'            => 'Everything: portrait, photos, prompts, attributes and AI settings. Re-imports without loss.',
     'cards.export_json'                => 'Character Card V2 (.json)',
@@ -16,7 +15,7 @@ return [
     'cards.export_png_hint'            => 'The portrait, with the card hidden inside the image.',
     'cards.export_png_hint_initials'   => 'No portrait: an image with the initials will be generated, with the card hidden inside.',
     'cards.export_note'                => 'Gallery photos are only included in the PersonaVault archive. Conversations are never exported here.',
-    'cards.download'                   => 'Download',
+    'cards.export_badge_full' => 'Complete',
 
     // --- import (library, new persona)
     'cards.import_tile'                => 'Import a card',

@@ -876,7 +876,8 @@
             const original = btn.innerHTML;
             btn.classList.add("is-busy");
             btn.disabled = true;
-            btn.textContent = tr("persona.ai_fill_busy");
+            const lbl = btn.querySelector(".quick-label"); // tuile : on ne change que le libellé
+            (lbl || btn).textContent = tr("persona.ai_fill_busy");
 
             try {
                 const fd = new FormData();

@@ -7,7 +7,6 @@ return [
     // --- export (fiche persona)
     'cards.export'                     => 'Exporter',
     'cards.export_title'               => 'Exporter la fiche',
-    'cards.export_close'               => 'Fermer',
     'cards.export_zip'                 => 'Archive PersonaVault (.zip)',
     'cards.export_zip_hint'            => 'Tout : portrait, photos, prompts, attributs et réglages IA. Se réimporte sans perte.',
     'cards.export_json'                => 'Character Card V2 (.json)',
@@ -16,7 +15,7 @@ return [
     'cards.export_png_hint'            => 'Le portrait, avec la fiche cachée dans l’image.',
     'cards.export_png_hint_initials'   => 'Pas de portrait : une image avec les initiales sera générée, avec la fiche cachée dedans.',
     'cards.export_note'                => 'Les photos de la galerie ne sont incluses que dans l’archive PersonaVault. Les conversations ne sont jamais exportées ici.',
-    'cards.download'                   => 'Télécharger',
+    'cards.export_badge_full' => 'Complet',
 
     // --- import (bibliothèque, création)
     'cards.import_tile'                => 'Importer une fiche',

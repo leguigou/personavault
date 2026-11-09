@@ -120,7 +120,6 @@ return [
     'date.month_short.10'         => 'oct.',
     'date.month_short.11'         => 'nov.',
     'date.month_short.12'         => 'dic.',
-    'date.day_month_format'       => 'd/m', // format PHP date() : día/mes
     'date.short'                  => '{day} {month} {year}',
     'date.just_now' => 'Ahora',
     'date.just_now_long' => 'ahora mismo',
