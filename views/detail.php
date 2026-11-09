@@ -293,7 +293,6 @@ $token    = csrf_token();
             <input type="hidden" name="_token" value="<?= e($token) ?>">
             <h2 id="pe-heading" class="sr-only" data-pe-heading></h2>
             <div class="pe-top">
-                <span class="kind" data-pe-kind-badge></span>
                 <label class="sr-only" for="pe-title"><?= e(t('persona.prompt_title')) ?></label>
                 <input id="pe-title" class="pe-title" name="title" maxlength="120" placeholder="<?= e(t('persona.prompt_title_placeholder')) ?>" autocomplete="off">
                 <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>

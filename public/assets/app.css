@@ -3839,7 +3839,6 @@ html[data-mode="light"] .icon-tool.is-danger { color: #dc2626; }
     margin: 0;
 }
 .pe-top { display: flex; align-items: center; gap: 10px; }
-.pe-top .kind { flex: 0 0 auto; }
 .pe-title {
     flex: 1;
     min-width: 0;

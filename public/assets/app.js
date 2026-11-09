@@ -365,7 +365,6 @@
         const form = pe.querySelector("[data-pe-form]");
         const title = form.querySelector("[name=title]");
         const body = form.querySelector("[name=body]");
-        const badge = pe.querySelector("[data-pe-kind-badge]");
         const count = pe.querySelector("[data-pe-count]");
         const heading = pe.querySelector("[data-pe-heading]");
         const delBtn = pe.querySelector("[data-pe-delete]");
@@ -373,9 +372,6 @@
         let initial = "";
         const snapshot = () => [title.value, body.value, form.querySelector("[name=kind]:checked")?.value].join("\u0001");
         const paint = () => {
-            const k = form.querySelector("[name=kind]:checked");
-            badge.className = "kind kind-" + (k?.value || "other");
-            badge.textContent = k ? k.nextElementSibling.textContent : "";
             form.querySelectorAll(".pe-kind").forEach((l) => l.classList.toggle("is-on", l.querySelector("input").checked));
             const n = [...body.value].length;
             count.textContent = tr("prompt.chars", n) + (snapshot() !== initial ? " · " + tr("prompt.modified") : "");
