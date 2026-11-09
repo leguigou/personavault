@@ -1204,6 +1204,21 @@
     [convSheet, ...document.querySelectorAll(".modal[data-modal]")].forEach((m) => m && document.body.appendChild(m));
     if (convSheet) {
         let current = null;
+        // tant que le doigt reste posé après l'appui long, le navigateur poursuit son propre
+        // geste (sélection de texte) : on l'interdit jusqu'à ce que le doigt se lève
+        let pressing = false;
+        const clearSelection = () => window.getSelection?.()?.removeAllRanges();
+        document.addEventListener("selectstart", (e) => {
+            if (pressing) e.preventDefault();
+        });
+        const release = () => {
+            if (!pressing) return;
+            setTimeout(() => {
+                pressing = false;
+                clearSelection();
+            }, 50);
+        };
+        ["touchend", "touchcancel", "pointerup", "pointercancel"].forEach((ev) => document.addEventListener(ev, release, true));
         let openedAt = 0;
         const titleEl = convSheet.querySelector("[data-act-title]");
         const pinLabel = convSheet.querySelector("[data-act=pin] span");
@@ -1244,6 +1259,7 @@
             item.addEventListener("pointerdown", (e) => {
                 if (e.pointerType === "mouse" || e.target.closest("[data-conv-more]")) return;
                 fired = false;
+                pressing = true;
                 x0 = e.clientX;
                 y0 = e.clientY;
                 cancel();
@@ -1251,11 +1267,15 @@
                     timer = null;
                     fired = true;
                     navigator.vibrate?.(12);
+                    clearSelection();
                     openMenu(item, true);
                 }, 480);
             });
             item.addEventListener("pointermove", (e) => {
-                if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); // c'est un défilement
+                if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) {
+                    cancel(); // c'est un défilement
+                    pressing = false;
+                }
             });
             ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => item.addEventListener(ev, cancel));
             // le doigt relevé après l'appui long ne doit ni ouvrir la conversation, ni « toucher »

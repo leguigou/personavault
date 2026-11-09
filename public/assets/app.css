@@ -3472,7 +3472,13 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
 .import-modal-body .hint { margin: 0; }
 
 /* liste des discussions : compteur, punaise indicative, menu d'actions */
-.conv-card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* appui long = menu : ni sélection de texte ni bulle « copier » du système, ni sur la carte
+   ni sur le menu qui apparaît sous le doigt encore posé */
+.conv-list, .conv-group, .conv-hint, .action-sheet {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
 .conv-pinned-ico { width: 13px; height: 13px; margin-right: 5px; vertical-align: -1px; color: rgb(var(--acc)); }
 .conv-body .conv-count { flex: 0 0 auto; font-style: normal; font-size: 11px; color: var(--muted-2); font-variant-numeric: tabular-nums; }
 .conv-more {
