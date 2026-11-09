@@ -3905,3 +3905,4 @@ html[data-mode="light"] .icon-tool.is-danger { color: #dc2626; }
         animation: sheet-up .22s ease-out both;
     }
 }
+.hero-portrait img[data-full] { cursor: zoom-in; }

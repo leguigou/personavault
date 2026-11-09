@@ -20,7 +20,10 @@ $token    = csrf_token();
 
     <div class="hero-portrait">
         <?php if ($avatar): ?>
-            <img src="<?= e(media_url($avatar, false)) ?>" alt="<?= e($persona['name']) ?>">
+            <!-- couverture : s'ouvre dans la visionneuse, avec les photos de la galerie -->
+            <img src="<?= e(media_url($avatar, false)) ?>" alt="<?= e($persona['name']) ?>"
+                 data-full="<?= e(media_url($avatar, false)) ?>" data-gallery-of="#persona-gallery"
+                 role="button" tabindex="0" aria-label="<?= e(t('persona.cover_open')) ?>">
         <?php else: ?>
             <div class="avatar-fallback"><span><?= e(initials($persona['name'])) ?></span></div>
         <?php endif; ?>
@@ -197,7 +200,7 @@ $token    = csrf_token();
             <?= t('persona.paste_hint_html'), "\n" ?>
         </p>
 
-        <div class="gallery" data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>"
+        <div class="gallery" id="persona-gallery" data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>"
              data-photo-actions data-token="<?= e($token) ?>" data-delete-confirm="<?= e(t('persona.photo_delete_confirm')) ?>">
                 <?php foreach ($photos as $ph): ?>
                     <?php $isPortrait = (string) $ph['file'] === (string) $persona['avatar']; ?>
