@@ -86,6 +86,8 @@ return [
     'js.chat.lms_no_answer'       => 'LM Studio no responde en {url}.',
     'js.chat.configured_address'  => 'la dirección configurada',
     'js.chat.regen'               => 'Regenerar la respuesta',
+    'js.prompt.chars' => ['one' => '{n} carácter', 'other' => '{n} caracteres'],
+    'js.prompt.modified' => 'modificado',
     'js.chat.versions_label' => 'Versiones de la respuesta',
     'js.chat.versions_count' => '{index} / {total}',
     'js.chat.version_prev' => 'Versión anterior',

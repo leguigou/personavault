@@ -35,8 +35,8 @@ $token    = csrf_token();
     </div>
 
     <div class="hero-body">
+        <div class="hero-head">
         <div class="hero-badges">
-            <?php if ((int) $persona['favorite']): ?><span class="badge badge-gold"><?= e(t('persona.badge_favorite')) ?></span><?php endif; ?>
             <?php if ($isArch): ?><span class="badge"><?= e(t('persona.badge_archived')) ?></span><?php endif; ?>
             <?php foreach ($tags as $t): ?>
                 <a class="badge badge-tag" href="/?tag=<?= urlencode((string) $t) ?>" title="<?= e(t('persona.tag_link_title')) ?>">#<?= e((string) $t) ?></a>
@@ -45,6 +45,7 @@ $token    = csrf_token();
 
         <h1><?= e($persona['name']) ?></h1>
         <?php if ($persona['tagline']): ?><p class="hero-tagline"><?= e($persona['tagline']) ?></p><?php endif; ?>
+        </div>
         <?php if ($persona['description']): ?><p class="hero-desc"><?= nl2br(e($persona['description'])) ?></p><?php endif; ?>
 
         <div class="hero-facts">
@@ -52,53 +53,70 @@ $token    = csrf_token();
             <span><?= e(t('persona.count_prompts', count($prompts))) ?></span>
         </div>
 
+        <!-- actions : une rangée de boutons ronds avec libellé (Discuter, Modifier, Compléter, Plus) -->
         <div class="hero-actions">
-            <!-- 1. les deux actions principales -->
-            <div class="hero-main">
-                <form method="post" action="/chat">
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <input type="hidden" name="persona_id" value="<?= (int) $persona['id'] ?>">
-                    <button class="btn btn-primary" type="submit">
-                        <svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                        <?= e(t('persona.chat')), "\n" ?>
-                    </button>
-                </form>
-                <a class="btn btn-ghost" href="/p/<?= e($persona['slug']) ?>/edit">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-                    <?= e(t('persona.edit')), "\n" ?>
-                </a>
-            </div>
-
-            <!-- 2. actions rapides : petites tuiles icône + libellé -->
-            <div class="hero-quick">
-                <?php if (llm_ready()): ?>
-                    <button type="button" class="quick-tile is-ai" data-ai-fill="/p/<?= e($persona['slug']) ?>/ai-fill" data-token="<?= e($token) ?>"
-                            title="<?= e(t('persona.ai_fill_title')) ?>">
-                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 3.4l1.7 4.9 4.9 1.7-4.9 1.7L12 16.6l-1.7-4.9L5.4 10l4.9-1.7L12 3.4Z" fill="currentColor"/><path d="M18.4 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z" fill="currentColor" opacity=".65"/></svg></span>
-                        <span class="quick-label"><?= e(t('persona.ai_fill_short')) ?></span>
-                    </button>
-                <?php endif; ?>
-                <button type="button" class="quick-tile" data-open-modal="#export-modal" aria-haspopup="dialog">
-                    <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                    <span class="quick-label"><?= e(t('cards.export')) ?></span>
+            <form method="post" action="/chat" class="round-act">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <input type="hidden" name="persona_id" value="<?= (int) $persona['id'] ?>">
+                <button class="round-btn is-main" type="submit" aria-describedby="act-chat">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
                 </button>
-                <form method="post" action="/p/<?= e($persona['slug']) ?>/duplicate">
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <button class="quick-tile" type="submit" title="<?= e(t('persona.duplicate_title')) ?>">
-                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-                        <span class="quick-label"><?= e(t('persona.duplicate')) ?></span>
-                    </button>
-                </form>
+                <span class="round-label" id="act-chat"><?= e(t('persona.chat')) ?></span>
+            </form>
+            <div class="round-act">
+                <a class="round-btn" href="/p/<?= e($persona['slug']) ?>/edit" aria-describedby="act-edit">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                </a>
+                <span class="round-label" id="act-edit"><?= e(t('persona.edit')) ?></span>
             </div>
-
-            <!-- 3. l'action destructrice, à part et discrète : propose d'abord d'archiver -->
-            <button class="hero-delete-btn hero-delete" type="button" data-open-modal="#remove-modal" aria-haspopup="dialog">
-                <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                <?= e(t('persona.delete_persona')), "\n" ?>
-            </button>
+            <?php if (llm_ready()): ?>
+                <div class="round-act">
+                    <button type="button" class="round-btn" data-ai-fill="/p/<?= e($persona['slug']) ?>/ai-fill" data-token="<?= e($token) ?>"
+                            title="<?= e(t('persona.ai_fill_title')) ?>" aria-describedby="act-ai">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4l1.7 4.9 4.9 1.7-4.9 1.7L12 16.6l-1.7-4.9L5.4 10l4.9-1.7L12 3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M18.4 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z" fill="currentColor" opacity=".7"/></svg>
+                    </button>
+                    <span class="round-label" id="act-ai"><?= e(t('persona.ai_fill_short')) ?></span>
+                </div>
+            <?php endif; ?>
+            <div class="round-act">
+                <button type="button" class="round-btn" data-open-modal="#more-modal" aria-haspopup="dialog" aria-describedby="act-more">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="18" cy="12" r="1.7" fill="currentColor"/></svg>
+                </button>
+                <span class="round-label" id="act-more"><?= e(t('persona.more')) ?></span>
+            </div>
         </div>
     </div>
 </section>
+
+<!-- « Plus » : les actions moins fréquentes -->
+<div class="modal action-sheet" id="more-modal" data-modal hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="more-title">
+        <header class="modal-head">
+            <div>
+                <p class="eyebrow"><?= e((string) $persona['name']) ?></p>
+                <h2 id="more-title"><?= e(t('persona.more_title')) ?></h2>
+            </div>
+            <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
+        </header>
+        <div class="action-list">
+            <button type="button" class="action-row action-row-2" data-open-modal="#export-modal">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span><strong><?= e(t('cards.export')) ?></strong><small><?= e(t('persona.more_export_hint')) ?></small></span>
+            </button>
+            <form method="post" action="/p/<?= e($persona['slug']) ?>/duplicate">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <button type="submit" class="action-row action-row-2">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                    <span><strong><?= e(t('persona.duplicate')) ?></strong><small><?= e(t('persona.duplicate_title')) ?></small></span>
+                </button>
+            </form>
+            <button type="button" class="action-row action-row-2 is-danger" data-open-modal="#remove-modal">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                <span><strong><?= e($isArch ? t('persona.more_remove_archived') : t('persona.more_remove')) ?></strong><small><?= e(t('persona.more_remove_hint')) ?></small></span>
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- retirer la fiche : archiver (récupérable) ou supprimer pour de bon -->
 <div class="modal action-sheet" id="remove-modal" data-modal hidden>
@@ -238,7 +256,7 @@ $token    = csrf_token();
 <section class="panel panel-wide">
     <header class="panel-head">
         <h2><?= e(t('persona.prompts_title')) ?> <span class="count"><?= count($prompts) ?></span></h2>
-        <button class="btn btn-ghost btn-sm" type="button" data-toggle="#new-prompt">
+        <button class="btn btn-ghost btn-sm" type="button" data-prompt-new>
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             <?= e(t('persona.add')), "\n" ?>
         </button>
@@ -250,7 +268,7 @@ $token    = csrf_token();
 
     <div class="prompt-list">
         <?php foreach ($prompts as $pr): ?>
-            <article class="prompt">
+            <article class="prompt" data-prompt-id="<?= (int) $pr['id'] ?>" data-prompt-title="<?= e((string) $pr['title']) ?>" data-prompt-kind="<?= e((string) $pr['kind']) ?>">
                 <header class="prompt-head">
                     <?php $kindLabel = $kinds[$pr['kind']] ?? t('persona.prompt_kind_other'); ?>
                     <span class="kind kind-<?= e((string) $pr['kind']) ?>"><?= e($kindLabel) ?></span>
@@ -258,66 +276,48 @@ $token    = csrf_token();
                         <strong><?= e($pr['title']) ?></strong>
                     <?php endif; ?>
                     <div class="prompt-tools">
-                        <button type="button" class="mini" data-copy="#body-<?= (int) $pr['id'] ?>"><?= e(t('persona.prompt_copy')) ?></button>
-                        <button type="button" class="mini" data-toggle="#edit-<?= (int) $pr['id'] ?>"><?= e(t('persona.prompt_edit')) ?></button>
-                        <form method="post" action="/prompts/<?= (int) $pr['id'] ?>/delete" data-confirm="<?= e(t('persona.prompt_delete_confirm')) ?>">
-                            <input type="hidden" name="_token" value="<?= e($token) ?>">
-                            <button type="submit" class="mini mini-danger" title="<?= e(t('persona.delete')) ?>" aria-label="<?= e(t('persona.delete')) ?>">&times;</button>
-                        </form>
+                        <button type="button" class="icon-tool" data-copy="#body-<?= (int) $pr['id'] ?>" aria-label="<?= e(t('persona.prompt_copy')) ?>" title="<?= e(t('persona.prompt_copy')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+                        <button type="button" class="icon-tool" data-prompt-edit aria-label="<?= e(t('persona.prompt_edit')) ?>" title="<?= e(t('persona.prompt_edit')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
                     </div>
                 </header>
-                <pre class="prompt-body" id="body-<?= (int) $pr['id'] ?>"><?= e($pr['body']) ?></pre>
-
-                <form method="post" action="/prompts/<?= (int) $pr['id'] ?>" class="prompt-edit" id="edit-<?= (int) $pr['id'] ?>" hidden>
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <div class="row2">
-                        <label class="field"><span><?= e(t('persona.prompt_title')) ?></span><input class="input" name="title" value="<?= e($pr['title']) ?>"></label>
-<div class="field">
-                            <span><?= e(t('persona.prompt_kind')) ?></span>
-                            <div class="sel" data-sel>
-                                <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('persona.prompt_kind_label')) ?>">
-                                    <span class="sel-value"></span>
-                                    <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                </button>
-                                <select name="kind" class="sel-native">
-                                    <?php foreach ($kinds as $k => $label): ?>
-                                        <option value="<?= e($k) ?>" <?= $pr['kind'] === $k ? 'selected' : '' ?>><?= e($label) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <label class="field"><span><?= e(t('persona.prompt_content')) ?></span><textarea class="input" name="body" rows="5" required><?= e($pr['body']) ?></textarea></label>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" type="submit"><?= e(t('persona.prompt_save')) ?></button>
-                    </div>
-                </form>
+                <pre class="prompt-body" id="body-<?= (int) $pr['id'] ?>" data-prompt-edit><?= e($pr['body']) ?></pre>
             </article>
         <?php endforeach; ?>
     </div>
 
-    <form method="post" action="/p/<?= e($persona['slug']) ?>/prompts" class="prompt-new" id="new-prompt" hidden>
-        <input type="hidden" name="_token" value="<?= e($token) ?>">
-        <div class="row2">
-            <label class="field"><span><?= e(t('persona.prompt_title')) ?></span><input class="input" name="title" placeholder="<?= e(t('persona.prompt_title_placeholder')) ?>"></label>
-            <div class="field">
-                <span><?= e(t('persona.prompt_kind')) ?></span>
-                <div class="sel" data-sel>
-                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('persona.prompt_kind_label')) ?>">
-                        <span class="sel-value"></span>
-                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                    <select name="kind" class="sel-native">
-                        <?php foreach ($kinds as $k => $label): ?>
-                            <option value="<?= e($k) ?>"><?= e($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+    <!-- éditeur de prompt (piste G) : grande fenêtre, pour modifier comme pour ajouter -->
+    <div class="modal prompt-editor" id="prompt-editor" data-modal hidden
+         data-new-action="/p/<?= e($persona['slug']) ?>/prompts" data-delete-confirm="<?= e(t('persona.prompt_delete_confirm')) ?>"
+         data-label-new="<?= e(t('persona.prompt_new_title')) ?>" data-label-edit="<?= e(t('persona.prompt_edit_title')) ?>">
+        <form method="post" class="modal-card pe-card" role="dialog" aria-modal="true" aria-labelledby="pe-heading" data-pe-form>
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <h2 id="pe-heading" class="sr-only" data-pe-heading></h2>
+            <div class="pe-top">
+                <label class="sr-only" for="pe-title"><?= e(t('persona.prompt_title')) ?></label>
+                <input id="pe-title" class="pe-title" name="title" maxlength="120" placeholder="<?= e(t('persona.prompt_title_placeholder')) ?>" autocomplete="off">
+                <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
+            </div>
+            <div class="pe-kinds" role="radiogroup" aria-label="<?= e(t('persona.prompt_kind_label')) ?>">
+                <?php foreach ($kinds as $k => $label): ?>
+                    <label class="pe-kind kind-<?= e($k) ?>">
+                        <input type="radio" name="kind" value="<?= e($k) ?>" class="sr-only">
+                        <span><?= e($label) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+            <label class="sr-only" for="pe-body"><?= e(t('persona.prompt_body')) ?></label>
+            <textarea id="pe-body" class="pe-body" name="body" required placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>"></textarea>
+            <div class="pe-meta">
+                <span class="pe-count" data-pe-count aria-live="polite"></span>
+                <div class="pe-tools">
+                    <button type="button" class="icon-tool" data-pe-copy aria-label="<?= e(t('persona.prompt_copy')) ?>" title="<?= e(t('persona.prompt_copy')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+                    <button type="button" class="icon-tool is-danger" data-pe-delete aria-label="<?= e(t('persona.prompt_delete')) ?>" title="<?= e(t('persona.prompt_delete')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
                 </div>
             </div>
-        </div>
-        <label class="field"><span><?= e(t('persona.prompt_body')) ?></span><textarea class="input" name="body" rows="4" placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>" required></textarea></label>
-        <div class="form-actions">
-            <button class="btn btn-primary" type="submit"><?= e(t('persona.prompt_create')) ?></button>
-        </div>
-    </form>
+            <div class="pe-actions">
+                <button type="button" class="btn btn-ghost" data-close-modal><?= e(t('form.cancel')) ?></button>
+                <button type="submit" class="btn btn-primary"><?= e(t('persona.prompt_save')) ?></button>
+            </div>
+        </form>
+    </div>
 </section>
