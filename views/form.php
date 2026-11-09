@@ -23,16 +23,23 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
     </header>
 
     <?php if (!$isEdit): ?>
-        <form method="post" action="/import" enctype="multipart/form-data" class="panel" data-card-import
-              style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;margin-bottom:16px">
-            <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-            <p class="hint" style="flex:1 1 220px;margin:0"><?= e(t('cards.import_hint')) ?></p>
-            <label class="btn btn-ghost btn-sm">
-                <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <?= e(t('cards.import_file')), "\n" ?>
-                <input type="file" name="card" accept=".zip,.json,.png,application/zip,application/json,image/png" hidden data-autosubmit>
-            </label>
-        </form>
+        <div class="modal" id="import-modal" data-modal hidden>
+            <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="import-title">
+                <header class="modal-head">
+                    <h2 id="import-title"><?= e(t('cards.import_title_modal')) ?></h2>
+                    <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
+                </header>
+                <form method="post" action="/import" enctype="multipart/form-data" class="import-modal-body" data-card-import>
+                    <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+                    <p class="hint"><?= e(t('cards.import_hint')) ?></p>
+                    <label class="btn btn-primary">
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <?= e(t('cards.import_file')) . "\n" ?>
+                        <input type="file" name="card" accept=".zip,.json,.png,application/zip,application/json,image/png" hidden data-autosubmit>
+                    </label>
+                </form>
+            </div>
+        </div>
     <?php endif; ?>
 
     <form class="card-form" method="post" action="<?= e($action) ?>" enctype="multipart/form-data">
@@ -146,5 +153,22 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
             <a class="btn btn-ghost" href="<?= $isEdit ? '/p/' . e($slug) : '/' ?>"><?= e(t('form.cancel')) ?></a>
             <button class="btn btn-primary" type="submit"><?= e($isEdit ? t('form.save') : t('form.create')) ?></button>
         </div>
+
+        <?php if (!$isEdit): ?>
+            <!-- import : rarement utilisé, donc en pied de carte ; ouvre une fenêtre -->
+            <div class="form-import">
+                <span class="form-import-or"><?= e(t('form.or')) ?></span>
+                <button type="button" class="import-tile" data-open-modal="#import-modal">
+                    <span class="import-tile-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </span>
+                    <span class="import-tile-text">
+                        <strong><?= e(t('cards.import_title_modal')) ?></strong>
+                        <small><?= e(t('cards.import_formats')) ?></small>
+                    </span>
+                    <svg class="import-tile-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+        <?php endif; ?>
     </form>
 </section>

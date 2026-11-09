@@ -1198,6 +1198,123 @@
         });
     }
 
+    /* liste des discussions : appui long (mobile), clic droit ou « ⋯ » → menu épingler / supprimer */
+    const convSheet = document.getElementById("conv-actions");
+    // posées dans <main>, ces fenêtres passeraient sous la barre du bas : on les sort dans <body>
+    [convSheet, ...document.querySelectorAll(".modal[data-modal]")].forEach((m) => m && document.body.appendChild(m));
+    if (convSheet) {
+        let current = null;
+        let openedAt = 0;
+        const titleEl = convSheet.querySelector("[data-act-title]");
+        const pinLabel = convSheet.querySelector("[data-act=pin] span");
+        const openMenu = (item, byTouch = false) => {
+            current = item;
+            openedAt = Date.now();
+            titleEl.textContent = item.dataset.convTitle || "";
+            pinLabel.textContent = item.dataset.pinned === "1" ? pinLabel.dataset.labelUnpin : pinLabel.dataset.labelPin;
+            modalOpen(convSheet);
+            // au doigt, pas de surbrillance « sélectionné » sur la première ligne
+            if (!byTouch) convSheet.querySelector("[data-act]")?.focus({ preventScroll: true });
+        };
+        const closeMenu = () => modalClose(convSheet);
+        const post = (url, fields) => {
+            const f = document.createElement("form");
+            f.method = "post";
+            f.action = url;
+            Object.entries({ _token: convSheet.dataset.token, ...fields }).forEach(([k, v]) => {
+                const i = document.createElement("input");
+                i.type = "hidden";
+                i.name = k;
+                i.value = v;
+                f.appendChild(i);
+            });
+            document.body.appendChild(f);
+            f.submit();
+        };
+
+        document.querySelectorAll(".conv-item").forEach((item) => {
+            let timer = null;
+            let fired = false;
+            let x0 = 0;
+            let y0 = 0;
+            const cancel = () => {
+                clearTimeout(timer);
+                timer = null;
+            };
+            item.addEventListener("pointerdown", (e) => {
+                if (e.pointerType === "mouse" || e.target.closest("[data-conv-more]")) return;
+                fired = false;
+                x0 = e.clientX;
+                y0 = e.clientY;
+                cancel();
+                timer = setTimeout(() => {
+                    timer = null;
+                    fired = true;
+                    navigator.vibrate?.(12);
+                    openMenu(item, true);
+                }, 480);
+            });
+            item.addEventListener("pointermove", (e) => {
+                if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); // c'est un défilement
+            });
+            ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => item.addEventListener(ev, cancel));
+            // le doigt relevé après l'appui long ne doit ni ouvrir la conversation, ni « toucher »
+            // le menu qui vient d'apparaître sous lui : on annule le clic synthétique
+            item.addEventListener("touchend", (e) => {
+                if (fired && e.cancelable) e.preventDefault();
+            }, { passive: false });
+            item.addEventListener("click", (e) => {
+                if (!fired) return;
+                e.preventDefault();
+                fired = false;
+            }, true);
+            item.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                const touchy = timer !== null || fired;
+                cancel();
+                if (fired) return;
+                fired = touchy; // appui long natif (Android) : le clic qui suit n'ouvre pas la conversation
+                openMenu(item, touchy);
+            });
+            item.querySelector("[data-conv-more]")?.addEventListener("click", () => openMenu(item));
+        });
+
+        convSheet.addEventListener("click", async (e) => {
+            if (Date.now() - openedAt < 450) return; // clic fantôme de fin d'appui long
+            if (e.target === convSheet || e.target.closest("[data-act-close]")) return closeMenu();
+            const btn = e.target.closest("[data-act]");
+            if (!btn || !current) return;
+            const id = current.dataset.convId;
+            if (btn.dataset.act === "pin") {
+                post("/chat/" + id + "/pin", { pinned: current.dataset.pinned === "1" ? "0" : "1" });
+            } else if (btn.dataset.act === "delete") {
+                closeMenu();
+                const ok = await pvModal.confirm(
+                    btn.dataset.confirm.replace("{title}", current.dataset.convTitle || ""),
+                    { danger: true, ok: tr("modal.delete") }
+                );
+                if (ok) post("/chat/" + id + "/delete", {});
+            }
+        });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !convSheet.hidden) closeMenu();
+        });
+    }
+
+    /* fenêtres simples : [data-open-modal="#id"] ouvre, [data-close-modal] ou le fond ferme */
+    document.querySelectorAll("[data-open-modal]").forEach((b) =>
+        b.addEventListener("click", () => {
+            const m = document.querySelector(b.dataset.openModal);
+            if (m) modalOpen(m);
+        })
+    );
+    document.querySelectorAll(".modal[data-modal]").forEach((m) => {
+        m.querySelectorAll("[data-close-modal]").forEach((b) => b.addEventListener("click", () => modalClose(m)));
+        m.addEventListener("click", (e) => {
+            if (e.target === m) modalClose(m);
+        });
+    });
+
     const chatSheet = document.getElementById("chat-settings");
     /* un seul panneau, deux sujets : l'anneau ouvre « Contexte et mémoire » (memory),
        la roue « Conversation » (conversation) ; seules les sections du sujet sont visibles */
@@ -1266,6 +1383,7 @@
         if (e.key !== "Escape") return;
         if (chatSheet && chatSheet.classList.contains("is-open")) setSheet(false);
         if (picker && !picker.hidden) modalClose(picker);
+        document.querySelectorAll(".modal[data-modal]:not([hidden])").forEach(modalClose);
     });
 
     const chat = document.getElementById("chat");
@@ -1519,7 +1637,12 @@
             const c = 2 * Math.PI * 15.5;
             const cIn = 2 * Math.PI * 11.5;
             const pct = Math.max(0, Math.min(100, Number(m.percent) || 0));
-            const color = pct >= 80 ? "#f87171" : pct >= 50 ? "#fbbf24" : "#34d399";
+            // fond clair : teintes plus foncées pour rester lisibles (contraste)
+            const mode = document.documentElement.dataset.mode;
+            const light = mode === "light" || (mode === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
+            const color = light
+                ? (pct >= 80 ? "#dc2626" : pct >= 50 ? "#b45309" : "#059669")
+                : (pct >= 80 ? "#f87171" : pct >= 50 ? "#fbbf24" : "#34d399");
             const memPct = m.window ? Math.min(100, (Number(m.summary_tokens) || 0) / m.window * 100) : 0;
 
             ringSvgs.forEach((svg) => {
@@ -2183,6 +2306,78 @@
             return tools;
         };
 
+        /* idées de premier message : remplit la zone de saisie (sans envoyer) */
+        document.querySelectorAll("[data-starter]").forEach((b) => {
+            b.addEventListener("click", () => {
+                input.value = b.dataset.starter;
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+                input.focus();
+                input.setSelectionRange(input.value.length, input.value.length);
+            });
+        });
+
+        /* ‹ 1/3 › sous la dernière réponse : passer d'une version régénérée à l'autre */
+        const versionUrl = endpoint.replace(/\/send$/, "/version");
+        const paintVersions = () => {
+            scroll.querySelectorAll(".msg-versions").forEach((n) => n.remove());
+            const bots = [...scroll.querySelectorAll(".msg-bot")];
+            const last = bots[bots.length - 1];
+            const total = Number(last?.dataset.vers || 0);
+            const idx = Number(last?.dataset.ver || 0);
+            if (!last || total < 2 || !last.dataset.msgId) return;
+            const box = document.createElement("div");
+            box.className = "msg-versions";
+            box.setAttribute("role", "group");
+            box.setAttribute("aria-label", tr("chat.versions_label"));
+            const arrow = (dir, path, label, off) => {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.dataset.verDir = String(dir);
+                b.setAttribute("aria-label", label);
+                b.title = label;
+                b.disabled = off;
+                b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + path + '" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                return b;
+            };
+            const count = document.createElement("span");
+            count.textContent = tr("chat.versions_count", { index: idx, total });
+            box.append(
+                arrow(-1, "m14.5 6-6 6 6 6", tr("chat.version_prev"), idx <= 1),
+                count,
+                arrow(1, "m9.5 6 6 6-6 6", tr("chat.version_next"), idx >= total),
+            );
+            last.appendChild(box);
+        };
+
+        const switchVersion = async (el, dir) => {
+            if (busy || el.dataset.switching === "1") return;
+            el.dataset.switching = "1";
+            try {
+                const fd = new FormData();
+                fd.append("_token", token);
+                fd.append("mid", el.dataset.msgId);
+                fd.append("dir", String(dir));
+                const r = await fetch(versionUrl, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!d.ok) throw new Error(d.error || tr("chat.version_error"));
+                const fresh = renderMsg({
+                    id: el.dataset.msgId,
+                    role: "assistant",
+                    content: d.content,
+                    split_points: d.split_points || [],
+                    at: el.dataset.at,
+                });
+                fresh.dataset.ver = String(d.versions.index);
+                fresh.dataset.vers = String(d.versions.total);
+                el.replaceWith(fresh);
+                paintVersions();
+            } catch (e) {
+                delete el.dataset.switching;
+                notice(tr("chat.version_error") + " " + e.message);
+            }
+        };
+        paintVersions();
+
         const removeMsg = async (id) => {
             try {
                 const fd = new FormData();
@@ -2195,6 +2390,7 @@
                     scroll.querySelector('[data-msg-id="' + mid + '"]')?.remove();
                 });
                 scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
+                paintVersions();
                 loadStatus();
             } catch (e) {
                 notice(tr("chat.erase_error", { message: e.message }));
@@ -2289,6 +2485,7 @@
             if (last.querySelector(".bubble")?.textContent === "") return;
             last.remove();
             scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
+            paintVersions();
             send(null, "auto", false, true);
         };
 
@@ -2298,6 +2495,13 @@
                 e.stopPropagation();
                 const el = del.closest(".msg");
                 if (el) removeMsg(el.dataset.msgId);
+                return;
+            }
+            const verBtn = e.target.closest("[data-ver-dir]");
+            if (verBtn) {
+                e.stopPropagation();
+                const el = verBtn.closest(".msg");
+                if (el) switchVersion(el, Number(verBtn.dataset.verDir));
                 return;
             }
             if (e.target.closest("[data-regen]")) {
@@ -2571,6 +2775,7 @@
                     const dec = new TextDecoder();
                     let buf = "";
                     let finalId = null;
+                    let finalVersions = null;
                     let failed = "";
                     let failedKind = "error";
 
@@ -2616,6 +2821,7 @@
                                 }
                             } else if (evt.done) {
                                 finalId = (evt.reply && evt.reply.id) || null;
+                                finalVersions = (evt.reply && evt.reply.versions) || null;
 
                                 // les coupes officielles viennent du serveur (stockées en base)
                                 const pts = Array.isArray(evt.reply && evt.reply.split_points)
@@ -2650,6 +2856,12 @@
                     document.getElementById("chat-typing")?.remove();
                     if (live) {
                         if (finalId) live.parentElement.dataset.msgId = finalId;
+                        const liveMsg = live.closest(".msg");
+                        if (liveMsg && finalVersions) {
+                            liveMsg.dataset.ver = String(finalVersions.index);
+                            liveMsg.dataset.vers = String(finalVersions.total);
+                        }
+                        paintVersions();
                         live.closest(".msg")?.setAttribute("data-at", new Date().toISOString());
                         live.parentElement.removeAttribute("data-live");
                     }

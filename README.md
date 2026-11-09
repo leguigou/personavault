@@ -35,6 +35,11 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
   (nécessite une tâche planifiée, voir plus bas).
 - Photos : quand le modèle sait voir les images, un trombone apparaît pour en envoyer une.
 - Édition : modifier son message efface la suite et rejoue la réponse depuis ce point.
+- Régénérer garde les réponses précédentes : flèches ‹ 2 / 3 › sous la dernière réponse pour
+  passer de l'une à l'autre (la version affichée est celle que le modèle voit ensuite).
+- Liste des discussions façon messagerie : heure relative, « Vous : » devant son dernier message,
+  badge « Nouveau » après une relance, conversations **épinglées** en tête (punaise sur la carte
+  ou interrupteur dans les réglages de la discussion).
 - Titres de discussion générés automatiquement.
 - Export d'une conversation (réglages de la discussion › Exporter) : texte brut, Markdown
   ou page imprimable (`/chat/{id}/print`) à « Enregistrer en PDF » depuis le navigateur.
@@ -213,10 +218,15 @@ Les messages spontanés sont envoyés par un script à lancer régulièrement, p
 30 minutes :
 
 ```cron
-*/30 * * * * cd /chemin/vers/personavault && php bin/followup.php
+*/30 * * * * cd /chemin/vers/personavault && php bin/followup.php >> storage/followup.log 2>&1
 ```
 
 `php bin/followup.php --dry` montre ce qui serait envoyé sans rien enregistrer.
+
+Chaque passage laisse une trace : Réglages › Relances spontanées affiche le dernier passage et son
+résultat (ou « jamais lancée », avec la ligne à copier), et une conversation prévient quand les
+relances ne peuvent pas partir (désactivées partout, ou tâche jamais lancée). Deux passages ne se
+chevauchent pas (verrou `storage/followup.lock`).
 
 ---
 

@@ -279,6 +279,44 @@ $facts = facts_settings();
             <div class="fold-body">
             <p class="hint"><?= e(t('settings.followup.hint')) ?></p>
 
+            <?php
+            // état de la tâche planifiée bin/followup.php (battement de cœur écrit à chaque passage)
+            $fuLast   = setting('followup_last_run', '');
+            $fuRes    = json_decode(setting('followup_last_result', ''), true) ?: [];
+            $fuAge    = $fuLast !== '' ? time() - (int) strtotime($fuLast . ' UTC') : null;
+            $fuStale  = $fuAge !== null && $fuAge > 2 * 3600;
+            $fuLine   = '*/30 * * * * cd ' . PV_ROOT . ' && php bin/followup.php >> storage/followup.log 2>&1';
+            $fuReason = match ((string) ($fuRes['reason'] ?? '')) {
+                'disabled'  => t('settings.followup.cron_res_disabled'),
+                'off_hours' => t('settings.followup.cron_res_off_hours'),
+                'llm_down'  => t('settings.followup.cron_res_llm_down'),
+                'done'      => t('settings.followup.cron_res_sent', (int) ($fuRes['sent'] ?? 0)),
+                default     => '',
+            };
+            ?>
+            <div class="cron-box <?= $fuLast === '' || $fuStale ? 'is-warn' : 'is-ok' ?>">
+                <p class="cron-state">
+                    <span class="dot <?= $fuLast === '' || $fuStale ? 'dot-ko' : 'dot-ok' ?>"></span>
+                    <?php if ($fuLast === ''): ?>
+                        <?= e(t('settings.followup.cron_never')) ?>
+                    <?php else: ?>
+                        <?= e(t('settings.followup.cron_last', ['when' => rel_time_long($fuLast)])) ?><?= $fuReason !== '' ? ' — ' . e($fuReason) : '' ?>
+                    <?php endif; ?>
+                </p>
+                <?php if ($fuStale): ?>
+                    <p class="hint"><?= e(t('settings.followup.cron_stale')) ?></p>
+                <?php endif; ?>
+                <details class="cron-how" <?= $fuLast === '' ? 'open' : '' ?>>
+                    <summary><?= e(t('settings.followup.cron_how')) ?></summary>
+                    <p class="hint"><?= e(t('settings.followup.cron_help')) ?></p>
+                    <div class="cron-line">
+                        <code id="cron-line"><?= e($fuLine) ?></code>
+                        <button type="button" class="mini" data-copy="#cron-line"><?= e(t('settings.followup.cron_copy')) ?></button>
+                    </div>
+                    <p class="hint"><?= e(t('settings.followup.cron_test')) ?> <code>php bin/followup.php --dry</code></p>
+                </details>
+            </div>
+
             <label class="check">
                 <input type="checkbox" name="chat_followup_enabled" value="1" <?= setting('chat_followup_enabled', '1') === '1' ? 'checked' : '' ?>>
                 <span><?= e(t('settings.followup.enable')) ?></span>

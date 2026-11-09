@@ -17,8 +17,29 @@ $say     = static function (string $msg): void {
     echo date('H:i:s') . '  ' . $msg . PHP_EOL;
 };
 
+// un seul passage à la fois : si le précédent génère encore (LM Studio lent), on s'efface
+is_dir(PV_ROOT . '/storage') || @mkdir(PV_ROOT . '/storage', 0775, true);
+$lock = fopen(PV_ROOT . '/storage/followup.lock', 'c');
+if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+    $say('passage précédent encore en cours — rien à faire');
+    exit(0);
+}
+
+/**
+ * Battement de cœur : les Réglages affichent le dernier passage et son résultat,
+ * ce qui permet de voir que la tâche planifiée tourne bien (rien en simulation).
+ */
+$beat = static function (string $reason, int $sent = 0) use ($dry): void {
+    if ($dry) {
+        return;
+    }
+    set_setting('followup_last_run', gmdate('Y-m-d H:i:s'));
+    set_setting('followup_last_result', json_encode(['reason' => $reason, 'sent' => $sent]));
+};
+
 if (setting('chat_followup_enabled', '1') !== '1') {
     $verbose && $say('relances spontanées désactivées');
+    $beat('disabled');
     exit(0);
 }
 
@@ -28,6 +49,7 @@ $from = (int) setting('chat_followup_from', '8');
 $to   = (int) setting('chat_followup_to', '23');
 if ($hour < $from || $hour >= $to) {
     $verbose && $say("hors plage horaire ({$hour} h, autorisé {$from}–{$to} h)");
+    $beat('off_hours');
     exit(0);
 }
 
@@ -37,6 +59,7 @@ $minGap = max(1, (int) setting('chat_followup_min_gap_hours', '12'));
 $st = lms_status();
 if (!$st['reachable']) {
     $say('LM Studio injoignable — aucune relance envoyée');
+    $beat('llm_down');
     exit(0);
 }
 
@@ -145,4 +168,5 @@ foreach ($convs as $conv) {
     $sent++;
 }
 
+$beat('done', $sent);
 $say(plural($sent, 'relance', 'relances') . ($dry ? ($sent >= 2 ? ' simulées' : ' simulée') : ($sent >= 2 ? ' envoyées' : ' envoyée')));

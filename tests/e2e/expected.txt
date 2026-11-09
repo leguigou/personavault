@@ -64,6 +64,10 @@
 303 text/html  POST /settings
 303 text/html  POST /settings/chat
 200 text/event-stream  POST /chat/1/stream
+200 text/event-stream  POST /chat/1/stream (régénérer)
+200 application/json  POST /chat/1/version (précédente)
+303 text/html  POST /chat/1/pin
+303 text/html  POST /chat/1/pin (retirer)
 200 application/json  POST /chat/1/msg-delete
 400 application/json  POST /settings/test
 303 text/html  POST /p/smoke-test/delete

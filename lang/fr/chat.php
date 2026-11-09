@@ -17,7 +17,19 @@ return [
     'chat.list.empty_text'          => 'Choisis un persona et commence à lui parler.',
     'chat.list.pick_persona'        => 'Choisir un persona',
     'chat.list.no_message'          => 'Pas encore de message',
-    'chat.list.message_count'       => ['one' => '{n} msg', 'other' => '{n} msg'],
+    'chat.list.pinned' => 'Épinglées',
+    'chat.list.recent' => 'Récentes',
+    'chat.list.photo' => '📷 Photo',
+    'chat.list.you' => 'Vous :',
+    'chat.list.new_badge' => 'Nouveau',
+    'chat.list.pin' => 'Épingler en haut',
+    'chat.list.unpin' => 'Retirer des épinglées',
+    'chat.list.message_count' => ['one' => '{n} msg', 'other' => '{n} msg'],
+    'chat.list.actions' => 'Actions sur la conversation',
+    'chat.list.more' => 'Plus d\'actions',
+    'chat.list.delete' => 'Supprimer la conversation',
+    'chat.list.delete_confirm' => 'Supprimer « {title} » ? Les messages seront effacés définitivement (les souvenirs du persona sont gardés).',
+    'chat.list.long_press_hint' => 'Astuce : reste appuyé sur une conversation pour l\'épingler ou la supprimer.',
     'chat.list.search_persona'      => 'Chercher un persona…',
     'chat.list.no_persona'          => 'Aucun persona en bibliothèque. Crée une fiche d’abord.',
 
@@ -34,6 +46,10 @@ return [
     // --- conversation : messages et composeur
     // {count} est remplacé par un <span> (le JavaScript met le nombre à jour) ; {n} choisit la forme
     'chat.intro.first_message'      => 'Écris le premier message.',
+    'chat.intro.starters_label' => 'Idées pour commencer',
+    'chat.intro.starter_1' => 'Salut ! Comment vas-tu ?',
+    'chat.intro.starter_2' => 'Raconte-moi ta journée.',
+    'chat.intro.starter_3' => 'Parle-moi un peu de toi.',
     'chat.msg.photo_sent'           => 'Photo envoyée',
     'chat.composer.attach_preview'  => 'Aperçu de la photo jointe',
     'chat.composer.attach_remove'   => 'Retirer la photo',
@@ -72,7 +88,12 @@ return [
 
     // --- options de la conversation
     'chat.toggles.memory'           => 'Garder la mémoire (résumé glissant)',
+    'chat.toggles.pinned' => 'Épingler en haut de la liste',
     'chat.toggles.followup_settings' => 'Régler le délai et les horaires des relances',
+    'chat.toggles.followup_global_off' => 'Les relances spontanées sont désactivées dans les Réglages : cet interrupteur n\'a pas d\'effet pour l\'instant.',
+    'chat.toggles.followup_enable' => 'Les activer',
+    'chat.toggles.followup_no_cron' => 'Le planificateur des relances n\'a encore jamais tourné sur ce serveur : aucun message spontané ne partira.',
+    'chat.toggles.followup_how' => 'Comment l\'activer',
     'chat.toggles.followup'         => 'Messages spontanés après un long silence',
 
     // --- mémoire (résumé glissant)

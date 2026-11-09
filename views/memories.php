@@ -94,8 +94,18 @@ $token = csrf_token();
 
 <?php if (!$rows): ?>
     <div class="empty">
-        <h2><?= e(t('memories.empty_title')) ?></h2>
-        <p><?= e(t('memories.empty_text')) ?></p>
+        <div class="empty-orb" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 5a4 4 0 0 0-4 4 3 3 0 0 0 0 6 3.5 3.5 0 0 0 4 4V5Zm0 0a4 4 0 0 1 4 4 3 3 0 0 1 0 6 3.5 3.5 0 0 1-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </div>
+        <?php if ($q !== ''): ?>
+            <h2><?= e(t('library.empty_found_title')) ?></h2>
+            <p><?= e(t('memories.empty_found_text')) ?></p>
+            <a class="btn btn-ghost btn-sm" href="/memories"><?= e(t('library.empty_found_reset')) ?></a>
+        <?php else: ?>
+            <h2><?= e(t('memories.empty_title')) ?></h2>
+            <p><?= e(t('memories.empty_text')) ?></p>
+            <a class="btn btn-ghost btn-sm" href="/chat"><?= e(t('memories.empty_cta')) ?></a>
+        <?php endif; ?>
     </div>
 <?php else: ?>
     <div class="mem-list">

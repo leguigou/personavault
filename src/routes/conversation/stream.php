@@ -52,6 +52,8 @@ if ($action === 'stream' && $method === 'POST') {
         }
         $text      = (string) $lastUser['content'];
         $userMsgId = (int) $lastUser['id'];
+        // l'ancienne réponse n'est pas perdue : elle devient une version (‹ 1/2 ›)
+        reply_version_archive($cid, $userMsgId);
         db()->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ?")
             ->execute([$cid, $userMsgId]);
     }
@@ -167,6 +169,10 @@ if ($action === 'stream' && $method === 'POST') {
             // rien n'a été produit : on retire le message pour permettre un nouvel essai propre
             db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$userMsgId]);
         }
+        if ($regen) {
+            // rien d'enregistré : la réponse précédente revient (visible au rechargement)
+            reply_version_restore_last($cid, $userMsgId);
+        }
         $sse(['error' => public_error($e), 'kind' => $kind, 'partial' => $sentAny]);
         exit;
     }
@@ -179,7 +185,12 @@ if ($action === 'stream' && $method === 'POST') {
             db()->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms)
                                VALUES (?, "assistant", ?, ?, 0, 0, ?)')
                 ->execute([$cid, $partial, (string) $res['model'], (int) $res['ms']]);
+            if ($regen) {
+                reply_version_register($cid, $userMsgId, (int) db()->lastInsertId());
+            }
             db()->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
+        } elseif ($regen) {
+            reply_version_restore_last($cid, $userMsgId);
         }
         exit;
     }
@@ -204,6 +215,13 @@ if ($action === 'stream' && $method === 'POST') {
         $splitPoints ? json_encode($splitPoints) : '',
     ]);
     $assistantId = (int) db()->lastInsertId();
+    $versions    = null;
+    if ($regen) {
+        reply_version_register($cid, $userMsgId, $assistantId);
+        $stv = db()->prepare('SELECT * FROM messages WHERE id = ?');
+        $stv->execute([$assistantId]);
+        $versions = reply_versions_info($cid, (array) $stv->fetch());
+    }
 
     $out = [
         'done'  => true,
@@ -213,6 +231,7 @@ if ($action === 'stream' && $method === 'POST') {
             'content'  => $res['content'],
             'model'    => $res['model'],
             'split_points' => $splitPoints,
+            'versions' => $versions,
         ],
         'meta'  => [
             'model'    => $res['model'],
