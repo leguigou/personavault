@@ -256,7 +256,7 @@ $token    = csrf_token();
 <section class="panel panel-wide">
     <header class="panel-head">
         <h2><?= e(t('persona.prompts_title')) ?> <span class="count"><?= count($prompts) ?></span></h2>
-        <button class="btn btn-ghost btn-sm" type="button" data-toggle="#new-prompt">
+        <button class="btn btn-ghost btn-sm" type="button" data-prompt-new>
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             <?= e(t('persona.add')), "\n" ?>
         </button>
@@ -268,7 +268,7 @@ $token    = csrf_token();
 
     <div class="prompt-list">
         <?php foreach ($prompts as $pr): ?>
-            <article class="prompt">
+            <article class="prompt" data-prompt-id="<?= (int) $pr['id'] ?>" data-prompt-title="<?= e((string) $pr['title']) ?>" data-prompt-kind="<?= e((string) $pr['kind']) ?>">
                 <header class="prompt-head">
                     <?php $kindLabel = $kinds[$pr['kind']] ?? t('persona.prompt_kind_other'); ?>
                     <span class="kind kind-<?= e((string) $pr['kind']) ?>"><?= e($kindLabel) ?></span>
@@ -276,66 +276,49 @@ $token    = csrf_token();
                         <strong><?= e($pr['title']) ?></strong>
                     <?php endif; ?>
                     <div class="prompt-tools">
-                        <button type="button" class="mini" data-copy="#body-<?= (int) $pr['id'] ?>"><?= e(t('persona.prompt_copy')) ?></button>
-                        <button type="button" class="mini" data-toggle="#edit-<?= (int) $pr['id'] ?>"><?= e(t('persona.prompt_edit')) ?></button>
-                        <form method="post" action="/prompts/<?= (int) $pr['id'] ?>/delete" data-confirm="<?= e(t('persona.prompt_delete_confirm')) ?>">
-                            <input type="hidden" name="_token" value="<?= e($token) ?>">
-                            <button type="submit" class="mini mini-danger" title="<?= e(t('persona.delete')) ?>" aria-label="<?= e(t('persona.delete')) ?>">&times;</button>
-                        </form>
+                        <button type="button" class="icon-tool" data-copy="#body-<?= (int) $pr['id'] ?>" aria-label="<?= e(t('persona.prompt_copy')) ?>" title="<?= e(t('persona.prompt_copy')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+                        <button type="button" class="icon-tool" data-prompt-edit aria-label="<?= e(t('persona.prompt_edit')) ?>" title="<?= e(t('persona.prompt_edit')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
                     </div>
                 </header>
-                <pre class="prompt-body" id="body-<?= (int) $pr['id'] ?>"><?= e($pr['body']) ?></pre>
-
-                <form method="post" action="/prompts/<?= (int) $pr['id'] ?>" class="prompt-edit" id="edit-<?= (int) $pr['id'] ?>" hidden>
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <div class="row2">
-                        <label class="field"><span><?= e(t('persona.prompt_title')) ?></span><input class="input" name="title" value="<?= e($pr['title']) ?>"></label>
-<div class="field">
-                            <span><?= e(t('persona.prompt_kind')) ?></span>
-                            <div class="sel" data-sel>
-                                <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('persona.prompt_kind_label')) ?>">
-                                    <span class="sel-value"></span>
-                                    <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                </button>
-                                <select name="kind" class="sel-native">
-                                    <?php foreach ($kinds as $k => $label): ?>
-                                        <option value="<?= e($k) ?>" <?= $pr['kind'] === $k ? 'selected' : '' ?>><?= e($label) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <label class="field"><span><?= e(t('persona.prompt_content')) ?></span><textarea class="input" name="body" rows="5" required><?= e($pr['body']) ?></textarea></label>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" type="submit"><?= e(t('persona.prompt_save')) ?></button>
-                    </div>
-                </form>
+                <pre class="prompt-body" id="body-<?= (int) $pr['id'] ?>" data-prompt-edit><?= e($pr['body']) ?></pre>
             </article>
         <?php endforeach; ?>
     </div>
 
-    <form method="post" action="/p/<?= e($persona['slug']) ?>/prompts" class="prompt-new" id="new-prompt" hidden>
-        <input type="hidden" name="_token" value="<?= e($token) ?>">
-        <div class="row2">
-            <label class="field"><span><?= e(t('persona.prompt_title')) ?></span><input class="input" name="title" placeholder="<?= e(t('persona.prompt_title_placeholder')) ?>"></label>
-            <div class="field">
-                <span><?= e(t('persona.prompt_kind')) ?></span>
-                <div class="sel" data-sel>
-                    <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('persona.prompt_kind_label')) ?>">
-                        <span class="sel-value"></span>
-                        <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                    <select name="kind" class="sel-native">
-                        <?php foreach ($kinds as $k => $label): ?>
-                            <option value="<?= e($k) ?>"><?= e($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+    <!-- éditeur de prompt (piste G) : grande fenêtre, pour modifier comme pour ajouter -->
+    <div class="modal prompt-editor" id="prompt-editor" data-modal hidden
+         data-new-action="/p/<?= e($persona['slug']) ?>/prompts" data-delete-confirm="<?= e(t('persona.prompt_delete_confirm')) ?>"
+         data-label-new="<?= e(t('persona.prompt_new_title')) ?>" data-label-edit="<?= e(t('persona.prompt_edit_title')) ?>">
+        <form method="post" class="modal-card pe-card" role="dialog" aria-modal="true" aria-labelledby="pe-heading" data-pe-form>
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <h2 id="pe-heading" class="sr-only" data-pe-heading></h2>
+            <div class="pe-top">
+                <span class="kind" data-pe-kind-badge></span>
+                <label class="sr-only" for="pe-title"><?= e(t('persona.prompt_title')) ?></label>
+                <input id="pe-title" class="pe-title" name="title" maxlength="120" placeholder="<?= e(t('persona.prompt_title_placeholder')) ?>" autocomplete="off">
+                <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
+            </div>
+            <div class="pe-kinds" role="radiogroup" aria-label="<?= e(t('persona.prompt_kind_label')) ?>">
+                <?php foreach ($kinds as $k => $label): ?>
+                    <label class="pe-kind kind-<?= e($k) ?>">
+                        <input type="radio" name="kind" value="<?= e($k) ?>" class="sr-only">
+                        <span><?= e($label) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+            <label class="sr-only" for="pe-body"><?= e(t('persona.prompt_body')) ?></label>
+            <textarea id="pe-body" class="pe-body" name="body" required placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>"></textarea>
+            <div class="pe-meta">
+                <span class="pe-count" data-pe-count aria-live="polite"></span>
+                <div class="pe-tools">
+                    <button type="button" class="icon-tool" data-pe-copy aria-label="<?= e(t('persona.prompt_copy')) ?>" title="<?= e(t('persona.prompt_copy')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+                    <button type="button" class="icon-tool is-danger" data-pe-delete aria-label="<?= e(t('persona.prompt_delete')) ?>" title="<?= e(t('persona.prompt_delete')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
                 </div>
             </div>
-        </div>
-        <label class="field"><span><?= e(t('persona.prompt_body')) ?></span><textarea class="input" name="body" rows="4" placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>" required></textarea></label>
-        <div class="form-actions">
-            <button class="btn btn-primary" type="submit"><?= e(t('persona.prompt_create')) ?></button>
-        </div>
-    </form>
+            <div class="pe-actions">
+                <button type="button" class="btn btn-ghost" data-close-modal><?= e(t('form.cancel')) ?></button>
+                <button type="submit" class="btn btn-primary"><?= e(t('persona.prompt_save')) ?></button>
+            </div>
+        </form>
+    </div>
 </section>

@@ -317,28 +317,113 @@
         });
     });
 
+    /* copie dans le presse-papiers + retour visuel : un bouton icône montre ✓ un instant,
+       un bouton texte affiche « Copié » */
+    const CHECK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4.5 4.5L19 6.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const copyText = async (text, btn) => {
+        text = String(text).trim();
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+        }
+        toast(tr("copy.toast"));
+        if (!btn || btn.dataset.copying === "1") return;
+        btn.dataset.copying = "1";
+        const icon = btn.querySelector("svg");
+        const old = btn.innerHTML;
+        if (icon) {
+            btn.innerHTML = CHECK_SVG;
+            btn.classList.add("is-done");
+        } else {
+            btn.textContent = tr("copy.copied");
+        }
+        setTimeout(() => {
+            btn.innerHTML = old;
+            btn.classList.remove("is-done");
+            delete btn.dataset.copying;
+        }, 1200);
+    };
+
     /* ------------------------------------------------- copier un prompt */
     document.addEventListener("click", async (e) => {
         const btn = e.target.closest("[data-copy]");
         if (!btn) return;
         const target = document.querySelector(btn.dataset.copy);
         if (!target) return;
-        const text = target.textContent || "";
-        try {
-            await navigator.clipboard.writeText(text.trim());
-        } catch {
-            const ta = document.createElement("textarea");
-            ta.value = text.trim();
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand("copy");
-            ta.remove();
-        }
-        const old = btn.textContent;
-        btn.textContent = tr("copy.copied");
-        toast(tr("copy.toast"));
-        setTimeout(() => (btn.textContent = old), 1200);
+        copyText(target.value ?? target.textContent ?? "", btn);
     });
+
+    /* ------------------------------------- éditeur de prompt (grande fenêtre, piste G) */
+    const pe = document.getElementById("prompt-editor");
+    if (pe) {
+        const form = pe.querySelector("[data-pe-form]");
+        const title = form.querySelector("[name=title]");
+        const body = form.querySelector("[name=body]");
+        const badge = pe.querySelector("[data-pe-kind-badge]");
+        const count = pe.querySelector("[data-pe-count]");
+        const heading = pe.querySelector("[data-pe-heading]");
+        const delBtn = pe.querySelector("[data-pe-delete]");
+        let current = null; // identifiant du prompt modifié (null : nouveau)
+        let initial = "";
+        const snapshot = () => [title.value, body.value, form.querySelector("[name=kind]:checked")?.value].join("\u0001");
+        const paint = () => {
+            const k = form.querySelector("[name=kind]:checked");
+            badge.className = "kind kind-" + (k?.value || "other");
+            badge.textContent = k ? k.nextElementSibling.textContent : "";
+            form.querySelectorAll(".pe-kind").forEach((l) => l.classList.toggle("is-on", l.querySelector("input").checked));
+            const n = [...body.value].length;
+            count.textContent = tr("prompt.chars", n) + (snapshot() !== initial ? " · " + tr("prompt.modified") : "");
+        };
+        const open = (card) => {
+            current = card ? card.dataset.promptId : null;
+            form.action = current ? "/prompts/" + current : pe.dataset.newAction;
+            title.value = card ? card.dataset.promptTitle || "" : "";
+            body.value = card ? card.querySelector(".prompt-body").textContent : "";
+            const kind = card ? card.dataset.promptKind : "image";
+            form.querySelectorAll("[name=kind]").forEach((r) => (r.checked = r.value === kind));
+            heading.textContent = current ? pe.dataset.labelEdit : pe.dataset.labelNew;
+            delBtn.hidden = !current;
+            initial = snapshot();
+            paint();
+            modalOpen(pe);
+            // au doigt, le clavier ne s'ouvre pas tout seul : on lit d'abord ; à la souris, on écrit
+            if (!matchMedia("(pointer: coarse)").matches || !current) body.focus({ preventScroll: true });
+        };
+        document.addEventListener("click", (e) => {
+            const edit = e.target.closest("[data-prompt-edit]");
+            if (edit && !pe.contains(edit)) {
+                if (window.getSelection && String(getSelection()).length > 0 && edit.tagName === "PRE") return; // sélection de texte
+                open(edit.closest("[data-prompt-id]"));
+                return;
+            }
+            if (e.target.closest("[data-prompt-new]")) open(null);
+        });
+        form.addEventListener("input", paint);
+        form.addEventListener("change", paint);
+        pe.querySelector("[data-pe-copy]").addEventListener("click", (e) => copyText(body.value, e.currentTarget));
+        delBtn.addEventListener("click", () => {
+            if (!current) return;
+            const f = document.createElement("form");
+            f.method = "post";
+            f.action = "/prompts/" + current + "/delete";
+            f.hidden = true;
+            f.dataset.confirm = pe.dataset.deleteConfirm;
+            const t = document.createElement("input");
+            t.type = "hidden";
+            t.name = "_token";
+            t.value = form.querySelector("[name=_token]").value;
+            f.appendChild(t);
+            document.body.appendChild(f);
+            if (f.requestSubmit) f.requestSubmit();
+            else f.submit();
+        });
+    }
 
     /* ------------------------- zones de texte qui s'adaptent au contenu */
     const autosize = (ta) => {
