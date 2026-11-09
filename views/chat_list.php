@@ -67,7 +67,7 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="picker-title">
         <header class="modal-head">
             <h2 id="picker-title"><?= e(t('chat.list.pick_persona')) ?></h2>
-            <button type="button" class="icon-btn" data-close-picker aria-label="<?= e(t('common.close')) ?>">&times;</button>
+            <button type="button" class="icon-btn btn-close" data-close-picker aria-label="<?= e(t('common.close')) ?>">&times;</button>
         </header>
 
         <input class="input" type="search" placeholder="<?= e(t('chat.list.search_persona')) ?>" data-picker-search autocomplete="off">

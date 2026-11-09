@@ -116,7 +116,7 @@
             root.innerHTML =
                 '<div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pv-dialog-title">' +
                 '<header class="modal-head"><h2 id="pv-dialog-title"></h2>' +
-                '<button type="button" class="icon-btn" data-dialog-close aria-label="' + tr("modal.close") + '">&times;</button></header>' +
+                '<button type="button" class="icon-btn btn-close" data-dialog-close aria-label="' + tr("modal.close") + '">&times;</button></header>' +
                 '<div class="pv-dialog-body"></div>' +
                 '<div class="form-actions pv-dialog-actions"></div></div>';
             document.body.appendChild(root);
