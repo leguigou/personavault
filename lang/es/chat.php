@@ -29,7 +29,7 @@ return [
     'chat.head.model_state'         => 'Estado del modelo',
     'chat.head.model_default'       => 'modelo predeterminado',
     'chat.head.context_memory'      => 'Contexto y memoria',
-    'chat.head.settings'            => 'Contexto y ajustes',
+    'chat.head.settings'            => 'Ajustes de la conversación',
 
     // --- conversación: mensajes y redacción
     'chat.intro.first_message'      => 'Escribe el primer mensaje.',
