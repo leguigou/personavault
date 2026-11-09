@@ -24,6 +24,14 @@ $token    = csrf_token();
         <?php else: ?>
             <div class="avatar-fallback"><span><?= e(initials($persona['name'])) ?></span></div>
         <?php endif; ?>
+        <!-- favori : cœur rond posé sur le portrait -->
+        <form method="post" action="/p/<?= e($persona['slug']) ?>/favorite" class="hero-fav-form">
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <button class="hero-fav<?= (int) $persona['favorite'] ? ' is-on' : '' ?>" type="submit" aria-pressed="<?= (int) $persona['favorite'] ? 'true' : 'false' ?>"
+                    aria-label="<?= e((int) $persona['favorite'] ? t('persona.favorite_remove') : t('persona.favorite_add')) ?>" title="<?= e((int) $persona['favorite'] ? t('persona.favorite_remove') : t('persona.favorite_add')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="<?= (int) $persona['favorite'] ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>
+            </button>
+        </form>
     </div>
 
     <div class="hero-body">
@@ -74,14 +82,6 @@ $token    = csrf_token();
                     <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                     <span class="quick-label"><?= e(t('cards.export')) ?></span>
                 </button>
-                <form method="post" action="/p/<?= e($persona['slug']) ?>/favorite">
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <button class="quick-tile<?= (int) $persona['favorite'] ? ' is-on' : '' ?>" type="submit" title="<?= e(t('persona.favorite_toggle')) ?>"
-                            aria-pressed="<?= (int) $persona['favorite'] ? 'true' : 'false' ?>">
-                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="<?= (int) $persona['favorite'] ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
-                        <span class="quick-label"><?= e(t('persona.favorite')) ?></span>
-                    </button>
-                </form>
                 <form method="post" action="/p/<?= e($persona['slug']) ?>/duplicate">
                     <input type="hidden" name="_token" value="<?= e($token) ?>">
                     <button class="quick-tile" type="submit" title="<?= e(t('persona.duplicate_title')) ?>">

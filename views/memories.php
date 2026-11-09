@@ -32,6 +32,11 @@ $token = csrf_token();
     </button>
 </form>
 
+<details class="mem-add-fold"<?= !$rows && $q === '' ? ' open' : '' ?>>
+    <summary class="btn btn-ghost btn-sm">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <?= e(t('memories.add_open')) . "\n" ?>
+    </summary>
 <form class="card-form mem-add" method="post" action="/memories">
     <input type="hidden" name="_token" value="<?= e($token) ?>">
 
@@ -91,6 +96,7 @@ $token = csrf_token();
         <button class="btn btn-primary" type="submit"><?= e(t('memories.add')) ?></button>
     </div>
 </form>
+</details>
 
 <?php if (!$rows): ?>
     <div class="empty">

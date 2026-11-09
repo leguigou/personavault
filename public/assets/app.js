@@ -362,7 +362,10 @@
         const snap = (f) => {
             const parts = [];
             new FormData(f).forEach((v, k) => {
-                if (k !== "_token" && typeof v === "string") parts.push(k + "=" + v);
+                if (k === "_token") return;
+                if (typeof v === "string") parts.push(k + "=" + v);
+                else if (v && v.name) parts.push(k + "=fichier:" + v.name + ":" + v.size); // portrait choisi
+
             });
             return parts.join("&");
         };
@@ -1697,6 +1700,57 @@
             }
             return wrap;
         };
+
+        /* séparateurs de jour (« Aujourd'hui », « Hier », « lun. 3 nov. ») entre les messages,
+           dans la langue et le fuseau du téléphone ; recalculés à chaque ajout de messages */
+        const dayLabel = (d) => {
+            const now = new Date();
+            const start = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+            const diff = Math.round((start(now) - start(d)) / 864e5);
+            if (diff === 0 || diff === 1) {
+                const rel = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" }).format(-diff, "day");
+                return rel.charAt(0).toUpperCase() + rel.slice(1);
+            }
+            const opts = { weekday: "short", day: "numeric", month: "short" };
+            if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+            const txt = d.toLocaleDateString(LOCALE, opts);
+            return txt.charAt(0).toUpperCase() + txt.slice(1);
+        };
+        let dayObserver = null;
+        const paintDays = () => {
+            dayObserver?.disconnect();
+            scroll.querySelectorAll(".msg-day").forEach((n) => n.remove());
+            let last = "";
+            scroll.querySelectorAll(".msg[data-at]").forEach((m) => {
+                const d = new Date(m.dataset.at);
+                if (Number.isNaN(d.getTime())) return;
+                const key = d.toDateString();
+                if (key === last) return;
+                last = key;
+                const sep = document.createElement("div");
+                sep.className = "msg-day";
+                sep.setAttribute("role", "separator");
+                sep.innerHTML = "<span></span>";
+                sep.firstChild.textContent = dayLabel(d);
+                m.before(sep);
+            });
+            dayObserver?.observe(scroll, { childList: true });
+        };
+        let dayRaf = 0;
+        dayObserver = new MutationObserver(() => {
+            cancelAnimationFrame(dayRaf);
+            dayRaf = requestAnimationFrame(() => {
+                // garder sous les yeux le même message malgré les séparateurs ajoutés au-dessus
+                const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 40;
+                const box = scroll.getBoundingClientRect();
+                const anchor = [...scroll.querySelectorAll(".msg")].find((m) => m.getBoundingClientRect().bottom > box.top);
+                const before = anchor ? anchor.getBoundingClientRect().top : 0;
+                paintDays();
+                if (atBottom) scroll.scrollTop = scroll.scrollHeight;
+                else if (anchor) scroll.scrollTop += anchor.getBoundingClientRect().top - before;
+            });
+        });
+        paintDays();
 
         const olderBtn = chat.querySelector("[data-load-older]");
         olderBtn?.addEventListener("click", async () => {
