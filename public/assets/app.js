@@ -191,6 +191,9 @@
     })();
     window.pvModal = pvModal;
 
+    /* cases à cocher présentées en interrupteur : annoncées comme telles */
+    document.querySelectorAll(".check input[type=checkbox]").forEach((c) => c.setAttribute("role", "switch"));
+
     /* --------------------------------------------------- confirmations */
     document.addEventListener("submit", (e) => {
         const form = e.target;
