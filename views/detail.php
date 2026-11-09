@@ -202,7 +202,13 @@ $token    = csrf_token();
 
         <div class="gallery" id="persona-gallery" data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>"
              data-photo-actions data-token="<?= e($token) ?>" data-delete-confirm="<?= e(t('persona.photo_delete_confirm')) ?>">
-                <?php foreach ($photos as $ph): ?>
+                <?php
+                // la photo de portrait (étoile) passe en tête ; les autres gardent leur ordre
+                $galleryPhotos = $photos;
+                usort($galleryPhotos, static fn (array $a, array $b): int =>
+                    ((string) $b['file'] === (string) $persona['avatar']) <=> ((string) $a['file'] === (string) $persona['avatar']));
+                ?>
+                <?php foreach ($galleryPhotos as $ph): ?>
                     <?php $isPortrait = (string) $ph['file'] === (string) $persona['avatar']; ?>
                     <!-- les actions (portrait, supprimer) sont dans la visionneuse, photo ouverte en grand -->
                     <figure class="shot<?= $isPortrait ? ' is-portrait' : '' ?>">
