@@ -15,6 +15,7 @@ $config = [
     'db'            => __DIR__ . '/storage/personavault.sqlite',
     'uploads'       => __DIR__ . '/storage/uploads',
     'max_upload'    => 15 * 1024 * 1024, // 15 Mo par image
+    'media_max_bytes' => 500 * 1024,     // poids visé d'une photo enregistrée (grand format)
     'max_pixels'    => 40_000_000,       // 40 Mpx max avant décodage (anti « bombe » d'image)
     'login_max_try' => 5,                // tentatives ratées autorisées par IP…
     'login_window'  => 15 * 60,          // …par fenêtre de 15 minutes
