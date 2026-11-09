@@ -78,6 +78,7 @@ return [
 
     // --- formulario del persona (views/form.php)
     'form.cancel'                 => 'Cancelar',
+    'form.or' => 'o',
     'form.eyebrow_edit'           => 'Edición',
     'form.eyebrow_new'            => 'Nuevo',
     'form.title_edit'             => 'Editar el persona',

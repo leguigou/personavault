@@ -23,7 +23,7 @@ return [
     'cards.import_title'               => 'Importar una ficha: archivo PersonaVault (.zip), Character Card (.json o .png)',
     'cards.import_hint'                => '¿Ya tienes una ficha? Importa un archivo PersonaVault (.zip) o una Character Card (.json, .png).',
     'cards.import_file'                => 'Importar un archivo',
-    'cards.import_link' => 'Importar una ficha existente',
+    'cards.import_formats' => 'Archivo PersonaVault (.zip) o Character Card (.json, .png)',
     'cards.import_title_modal' => 'Importar una ficha',
 
     // --- nombres de los campos de la ficha sin equivalente (prompts «Otro», atributos)

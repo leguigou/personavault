@@ -79,6 +79,7 @@ return [
 
     // --- formulaire du persona (views/form.php)
     'form.cancel'                 => 'Annuler',
+    'form.or' => 'ou',
     'form.eyebrow_edit'           => 'Édition',
     'form.eyebrow_new'            => 'Nouveau',
     'form.title_edit'             => 'Modifier le persona',

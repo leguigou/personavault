@@ -78,6 +78,7 @@ return [
 
     // --- persona form (views/form.php)
     'form.cancel'                 => 'Cancel',
+    'form.or' => 'or',
     'form.eyebrow_edit'           => 'Editing',
     'form.eyebrow_new'            => 'New',
     'form.title_edit'             => 'Edit persona',
