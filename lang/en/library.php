@@ -50,6 +50,7 @@ return [
     'persona.delete_confirm'      => 'Permanently delete {name}, with its photos and chats?',
     'persona.duplicate' => 'Duplicate',
     'persona.more' => 'More',
+    'persona.cover_open' => 'Enlarge the cover photo',
     'persona.more_title' => 'More actions',
     'persona.more_export_hint' => 'Full archive or Character Card (JSON, PNG).',
     'persona.more_remove' => 'Archive or delete',

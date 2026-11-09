@@ -50,6 +50,7 @@ return [
     'persona.delete_confirm'      => '¿Eliminar definitivamente a {name}, con sus fotos y conversaciones?',
     'persona.duplicate' => 'Duplicar',
     'persona.more' => 'Más',
+    'persona.cover_open' => 'Ampliar la foto de portada',
     'persona.more_title' => 'Otras acciones',
     'persona.more_export_hint' => 'Archivo completo o Character Card (JSON, PNG).',
     'persona.more_remove' => 'Archivar o eliminar',

@@ -51,6 +51,7 @@ return [
     'persona.delete_confirm'      => 'Supprimer définitivement {name}, ses photos et ses discussions ?',
     'persona.duplicate' => 'Dupliquer',
     'persona.more' => 'Plus',
+    'persona.cover_open' => 'Agrandir la photo de couverture',
     'persona.more_title' => 'Autres actions',
     'persona.more_export_hint' => 'Archive complète ou Character Card (JSON, PNG).',
     'persona.more_remove' => 'Archiver ou supprimer',

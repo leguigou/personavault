@@ -859,8 +859,16 @@
             paint();
         };
         const open = (img) => {
-            const group = img.closest("[data-gallery]");
-            const imgs = group ? [...group.querySelectorAll("[data-full]")] : [img];
+            // une image hors galerie peut s'y rattacher (couverture de la fiche → photos de la fiche)
+            const group = img.closest("[data-gallery]") || (img.dataset.galleryOf ? document.querySelector(img.dataset.galleryOf) : null);
+            let imgs = group ? [...group.querySelectorAll("[data-full]")] : [img];
+            // l'image touchée : elle-même, ou la même photo dans la galerie ; sinon en tête de liste
+            let start = imgs.indexOf(img);
+            if (start < 0) start = imgs.findIndex((x) => x.dataset.full === img.dataset.full);
+            if (start < 0) {
+                imgs = [img, ...imgs];
+                start = 0;
+            }
             items = imgs.map((x) => x.dataset.full);
             sources = imgs;
             actions = group?.hasAttribute("data-photo-actions") ? group : null;
@@ -872,7 +880,7 @@
                 im.alt = imgs[k].alt || "";
                 im.decoding = "async";
                 // la photo touchée et ses voisines tout de suite, les autres à l'approche
-                im.loading = Math.abs(k - imgs.indexOf(img)) <= 1 ? "eager" : "lazy";
+                im.loading = Math.abs(k - start) <= 1 ? "eager" : "lazy";
                 im.src = src;
                 slide.appendChild(im);
                 return slide;
@@ -881,7 +889,7 @@
                 ? items.map(() => document.createElement("i")) : []));
             lb.hidden = false;
             document.body.style.overflow = "hidden";
-            requestAnimationFrame(() => goTo(imgs.indexOf(img), false));
+            requestAnimationFrame(() => goTo(start, false));
         };
         const close = () => {
             lb.hidden = true;
