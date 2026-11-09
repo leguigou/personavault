@@ -134,7 +134,7 @@ if ($path === '/settings/chat' && $method === 'POST') {
     set_setting('chat_split_enabled', !empty($_POST['chat_split_enabled']) ? '1' : '0');
     set_setting('chat_split_words', (string) max(15, min(120, (int) ($_POST['chat_split_words'] ?? 50))));
     set_setting('chat_split_max_bubbles', (string) max(1, min(8, (int) ($_POST['chat_split_max_bubbles'] ?? 2))));
-    $dmin = max(0.5, min(3.0, (float) ($_POST['chat_split_delay_min'] ?? 1)));
+    $dmin = max(0.5, min(4.0, (float) ($_POST['chat_split_delay_min'] ?? 1)));
     $dmax = max(0.5, min(4.0, (float) ($_POST['chat_split_delay_max'] ?? 2)));
     if ($dmax < $dmin) {
         [$dmin, $dmax] = [$dmax, $dmin];

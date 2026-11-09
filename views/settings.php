@@ -253,17 +253,17 @@ $facts = facts_settings();
                 <small><?= e(t('settings.split.bubbles_help')) ?></small>
             </label>
 
-            <div class="row2">
-                <label class="field range-field">
-                    <span><?= e(t('settings.split.delay_min')) ?> <b data-out="dmin"><?= e(fmt_number((float) setting('chat_split_delay_min', '1'), 1, false)) ?> s</b></span>
-                    <input class="range" type="range" name="chat_split_delay_min" min="0.5" max="3" step="0.1"
-                           value="<?= e((string) setting('chat_split_delay_min', '1')) ?>" data-out="dmin" data-suffix=" s">
-                </label>
-                <label class="field range-field">
-                    <span><?= e(t('settings.split.delay_max')) ?> <b data-out="dmax"><?= e(fmt_number((float) setting('chat_split_delay_max', '2'), 1, false)) ?> s</b></span>
+            <?php $dMin = (float) setting('chat_split_delay_min', '1'); $dMax = (float) setting('chat_split_delay_max', '2'); ?>
+            <div class="field range-field">
+                <span><?= e(t('settings.split.delay')) ?> <b data-pause-out><?= e(t('js.settings.pause_range', ['min' => fmt_number($dMin, 1, false), 'max' => fmt_number($dMax, 1, false)])) ?></b></span>
+                <!-- un seul curseur, deux poignées : pause minimum (gauche) et maximum (droite) -->
+                <div class="dual-range" data-dual-range>
+                    <span class="dual-range-fill" aria-hidden="true"></span>
+                    <input class="range" type="range" name="chat_split_delay_min" min="0.5" max="4" step="0.1"
+                           value="<?= e((string) $dMin) ?>" aria-label="<?= e(t('settings.split.delay_min')) ?>">
                     <input class="range" type="range" name="chat_split_delay_max" min="0.5" max="4" step="0.1"
-                           value="<?= e((string) setting('chat_split_delay_max', '2')) ?>" data-out="dmax" data-suffix=" s">
-                </label>
+                           value="<?= e((string) $dMax) ?>" aria-label="<?= e(t('settings.split.delay_max')) ?>">
+                </div>
             </div>
             <p class="hint"><?= e(t('settings.split.delay_help')) ?></p>
             </div>

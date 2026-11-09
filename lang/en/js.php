@@ -151,4 +151,6 @@ return [
     // interrupteurs de la conversation enregistrés au changement
     'js.chat.toggle_saved' => 'Saved',
     'js.chat.toggle_failed' => 'Couldn’t save, please try again.',
+    // curseur à deux poignées des pauses (aussi utilisé côté serveur)
+    'js.settings.pause_range' => '{min} s – {max} s',
 ];

@@ -84,6 +84,7 @@ return [
     'settings.split.words_help' => 'La bulle se coupe à la dernière fin de phrase avant cette limite.',
     'settings.split.bubbles'    => 'Bulles maximum',
     'settings.split.bubbles_help' => '1 = jamais de découpage.',
+    'settings.split.delay'      => 'Pause entre deux bulles',
     'settings.split.delay_min'  => 'Pause min',
     'settings.split.delay_max'  => 'Pause max',
     'settings.split.delay_help' => 'Pause aléatoire entre deux bulles, dans cette plage.',

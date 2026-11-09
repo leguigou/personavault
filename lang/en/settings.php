@@ -81,6 +81,7 @@ return [
     'settings.split.words_help' => 'The bubble is cut at the last sentence end before this limit.',
     'settings.split.bubbles'    => 'Maximum bubbles',
     'settings.split.bubbles_help' => '1 = never split.',
+    'settings.split.delay'      => 'Pause between bubbles',
     'settings.split.delay_min'  => 'Min pause',
     'settings.split.delay_max'  => 'Max pause',
     'settings.split.delay_help' => 'Random pause between two bubbles, within this range.',

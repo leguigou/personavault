@@ -3242,3 +3242,39 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
 .msg-user .msg-time { margin-right: 6px; }
 /* persona : boutons à gauche, date après eux ; utilisateur : date à gauche, boutons contre la bulle */
 .msg-bot .msg-time { order: 99; margin: 0 0 0 6px; }
+
+/* curseur à deux poignées : deux curseurs natifs superposés sur une même piste */
+.dual-range {
+    --lo: 0;
+    --hi: 1;
+    --thumb: 18px;
+    position: relative;
+    height: 26px;
+}
+.dual-range::before,
+.dual-range-fill {
+    content: "";
+    position: absolute;
+    top: 50%;
+    height: 4px;
+    margin-top: -2px;
+    border-radius: 99px;
+}
+.dual-range::before { left: 0; right: 0; background: rgba(var(--ink), .14); }
+/* le centre d'une poignée va de thumb/2 à 100 % - thumb/2 */
+.dual-range-fill {
+    left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--lo));
+    width: calc((100% - var(--thumb)) * (var(--hi) - var(--lo)));
+    background: var(--grad);
+}
+.dual-range .range {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    margin: 0;
+    pointer-events: none; /* seules les poignées captent le doigt */
+}
+.dual-range .range::-webkit-slider-runnable-track { background: transparent; }
+.dual-range .range::-moz-range-track { background: transparent; }
+.dual-range { cursor: pointer; touch-action: pan-y; } /* glisser à l'horizontale, défiler à la verticale */
+.dual-range .range:focus-visible::-webkit-slider-thumb { outline: 2px solid rgba(var(--acc), .9); outline-offset: 2px; }

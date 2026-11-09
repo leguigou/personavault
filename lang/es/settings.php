@@ -82,6 +82,7 @@ return [
     'settings.split.words_help' => 'La burbuja se corta en el último final de frase antes de este límite.',
     'settings.split.bubbles'    => 'Burbujas máximas',
     'settings.split.bubbles_help' => '1 = nunca dividir.',
+    'settings.split.delay'      => 'Pausa entre burbujas',
     'settings.split.delay_min'  => 'Pausa mín.',
     'settings.split.delay_max'  => 'Pausa máx.',
     'settings.split.delay_help' => 'Pausa aleatoria entre dos burbujas, dentro de este intervalo.',

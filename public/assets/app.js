@@ -546,22 +546,75 @@
         paint();
     });
 
-    const rangeMin = document.querySelector('[name="chat_split_delay_min"]');
-    const rangeMax = document.querySelector('[name="chat_split_delay_max"]');
-    if (rangeMin && rangeMax) {
-        rangeMin.addEventListener("input", () => {
-            if (+rangeMin.value > +rangeMax.value) {
-                rangeMax.value = rangeMin.value;
-                rangeMax.dispatchEvent(new Event("input"));
-            }
+    /* curseur à deux poignées (pause min / max entre deux bulles) :
+       chaque poignée reste de son côté, la bande entre les deux est colorée */
+    document.querySelectorAll("[data-dual-range]").forEach((box) => {
+        const [lo, hi] = box.querySelectorAll('input[type="range"]');
+        const out = box.closest(".range-field")?.querySelector("[data-pause-out]");
+        if (!lo || !hi) return;
+        const span = (+lo.max - +lo.min) || 1;
+        const paint = () => {
+            const a = (+lo.value - +lo.min) / span;
+            const b = (+hi.value - +lo.min) / span;
+            box.style.setProperty("--lo", a);
+            box.style.setProperty("--hi", b);
+            if (out) out.textContent = tr("settings.pause_range", { min: fmt1(+lo.value), max: fmt1(+hi.value) });
+        };
+        lo.addEventListener("input", () => {
+            if (+lo.value > +hi.value) lo.value = hi.value;
+            paint();
         });
-        rangeMax.addEventListener("input", () => {
-            if (+rangeMax.value < +rangeMin.value) {
-                rangeMin.value = rangeMax.value;
-                rangeMin.dispatchEvent(new Event("input"));
-            }
+        hi.addEventListener("input", () => {
+            if (+hi.value < +lo.value) hi.value = lo.value;
+            paint();
         });
-    }
+
+        // souris et doigt gérés ici (le clavier reste sur les curseurs natifs) :
+        // la poignée la plus proche suit ; si les deux sont au même endroit,
+        // le premier mouvement décide (gauche = minimum, droite = maximum)
+        const step = +lo.step || 0.1;
+        const valueAt = (clientX) => {
+            const r = box.getBoundingClientRect();
+            const half = 9; // demi-poignée
+            const f = Math.min(1, Math.max(0, (clientX - r.left - half) / (r.width - 2 * half)));
+            return Math.round((+lo.min + f * span) / step) * step;
+        };
+        const move = (input, v) => {
+            input.value = v.toFixed(1);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        let active = null;
+        let startX = 0;
+        box.addEventListener("pointerdown", (e) => {
+            const v = valueAt(e.clientX);
+            const dLo = Math.abs(v - +lo.value);
+            const dHi = Math.abs(v - +hi.value);
+            active = dLo < dHi ? lo : dHi < dLo ? hi : v < +lo.value ? lo : v > +hi.value ? hi : null;
+            startX = e.clientX;
+            box.setPointerCapture(e.pointerId);
+            if (active) {
+                active.focus({ preventScroll: true });
+                move(active, v);
+            }
+            e.preventDefault();
+        });
+        box.addEventListener("pointermove", (e) => {
+            if (!box.hasPointerCapture(e.pointerId)) return;
+            if (!active) {
+                if (Math.abs(e.clientX - startX) < 3) return;
+                active = e.clientX < startX ? lo : hi;
+                active.focus({ preventScroll: true });
+            }
+            move(active, valueAt(e.clientX));
+        });
+        const stop = (e) => {
+            if (box.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId);
+            active = null;
+        };
+        box.addEventListener("pointerup", stop);
+        box.addEventListener("pointercancel", stop);
+        paint();
+    });
 
     /* ------------------------------------------ sauvegarde : option conv */
     const backupLink = document.querySelector("[data-backup-link]");
