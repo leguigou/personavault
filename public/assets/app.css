@@ -2128,7 +2128,7 @@ a.badge-tag:hover { background: rgba(var(--acc), .32); border-color: rgba(var(--
 .hero-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .hero-main > form { display: flex; }
 .hero-main .btn { width: 100%; justify-content: center; }
-.hero-quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 8px; }
+.hero-quick { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
 .hero-quick > form { display: flex; }
 .quick-tile {
     flex: 1;
@@ -2158,7 +2158,14 @@ a.badge-tag:hover { background: rgba(var(--acc), .32); border-color: rgba(var(--
     color: rgb(var(--acc-soft));
 }
 .quick-ico .ico { width: 19px; height: 19px; }
-.quick-label { font-size: 12px; font-weight: 600; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
+.quick-label { max-width: 100%; font-size: 11.5px; font-weight: 600; line-height: 1.2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 5 tuiles sur un petit écran : on resserre pour que chaque libellé tienne sur une ligne */
+@media (max-width: 420px) {
+    .hero-quick { gap: 5px; }
+    .quick-tile { padding: 9px 1px 8px; border-radius: 14px; }
+    .quick-label { font-size: 10.5px; letter-spacing: -.01em; }
+}
+@media (max-width: 374px) { .quick-label { font-size: 10px; letter-spacing: -.02em; } }
 .quick-tile.is-ai .quick-ico { background: var(--grad); color: var(--on-grad, #fff); }
 .quick-tile.is-on .quick-ico { background: rgba(244, 114, 182, .18); color: #f472b6; }
 .quick-tile.is-on { border-color: rgba(244, 114, 182, .35); }
@@ -2591,21 +2598,106 @@ textarea.input::-webkit-scrollbar-track { background: transparent; }
     backdrop-filter: blur(14px);
     animation: fade .2s both;
 }
-.lightbox img { max-width: 94vw; max-height: 86dvh; border-radius: 14px; box-shadow: 0 30px 80px -20px #000; }
-.lightbox-close {
+.lightbox { padding: 0; display: block; }
+/* une photo par « page », défilement aimanté : le doigt fait défiler, comme une galerie de téléphone */
+.lb-track {
     position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 1px solid var(--border);
-    background: rgba(var(--ink), .08);
-    color: #fff;
-    font-size: 22px;
-    line-height: 1;
-    cursor: pointer;
+    inset: 0;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
 }
+.lb-track::-webkit-scrollbar { display: none; }
+.lb-slide {
+    flex: 0 0 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    padding: 64px 14px calc(44px + env(safe-area-inset-bottom));
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+}
+.lb-slide img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 14px;
+    box-shadow: 0 30px 80px -20px #000;
+    -webkit-user-drag: none;
+    user-select: none;
+}
+.lb-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
+    pointer-events: none;
+}
+.lb-top > * { pointer-events: auto; }
+.lb-count {
+    min-width: 1px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    backdrop-filter: blur(8px);
+}
+.lb-count:empty { visibility: hidden; }
+.lb-actions { display: flex; gap: 10px; }
+.lb-btn, .lb-nav {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, .22);
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: background .18s, transform .18s;
+}
+.lb-btn svg, .lb-nav svg { width: 20px; height: 20px; }
+.lb-btn:hover, .lb-nav:hover:not(:disabled) { background: rgba(255, 255, 255, .22); }
+.lb-btn:active, .lb-nav:active:not(:disabled) { transform: scale(.92); }
+/* ancienne croix : remplacée par .lb-btn */
+.lightbox .lightbox-close { position: static; font-size: inherit; }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); }
+.lb-nav:active:not(:disabled) { transform: translateY(-50%) scale(.92); }
+.lb-prev { left: 16px; }
+.lb-next { right: 16px; }
+.lb-nav:disabled { opacity: 0; pointer-events: none; }
+.lightbox.is-single .lb-nav { display: none; }
+/* au doigt, on glisse : pas de flèches qui cachent la photo */
+@media (hover: none) and (pointer: coarse) { .lb-nav { display: none; } }
+.lb-dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    pointer-events: none;
+}
+.lb-dots i {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .35);
+    transition: width .2s, background .2s;
+}
+.lb-dots i.is-on { width: 18px; background: #fff; }
 
 /* --------------------------------------------------------------------- tabbar */
 

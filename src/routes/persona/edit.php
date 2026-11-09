@@ -92,6 +92,33 @@ if ($action === 'favorite' && $method === 'POST') {
     redirect(safe_referer_path('/p/' . $slug));
 }
 
+/*
+ * Dupliquer : nouvelle fiche « X (copie) » avec les mêmes textes, réglages IA, photos et prompts.
+ * Les fichiers photo ne sont pas recopiés : ils sont comptés par référence (media_ref_count),
+ * donc partagés tant qu'une des deux fiches les utilise. Ni conversations ni souvenirs :
+ * la copie repart de zéro.
+ */
+if ($action === 'duplicate' && $method === 'POST') {
+    csrf_check();
+    $name    = mb_substr(t('persona.copy_name', ['name' => (string) $persona['name']]), 0, 120);
+    $newSlug = unique_slug($name);
+    $newId   = db_tx(static function (PDO $pdo) use ($persona, $pid, $name, $newSlug): int {
+        // toutes les colonnes de la fiche (y compris celles ajoutées par les migrations)
+        $cols = array_values(array_diff(table_columns($pdo, 'personas'), ['id', 'slug', 'name', 'favorite', 'archived', 'created_at', 'updated_at']));
+        $vals = array_map(static fn (string $c) => $persona[$c], $cols);
+        $pdo->prepare('INSERT INTO personas (slug, name, ' . implode(', ', $cols) . ') VALUES (?, ?' . str_repeat(', ?', count($cols)) . ')')
+            ->execute([$newSlug, $name, ...$vals]);
+        $id = (int) $pdo->lastInsertId();
+        $pdo->prepare('INSERT INTO photos (persona_id, file, caption, sort) SELECT ?, file, caption, sort FROM photos WHERE persona_id = ? ORDER BY id')
+            ->execute([$id, $pid]);
+        $pdo->prepare('INSERT INTO prompts (persona_id, title, kind, body) SELECT ?, title, kind, body FROM prompts WHERE persona_id = ? ORDER BY id')
+            ->execute([$id, $pid]);
+        return $id;
+    });
+    flash('ok', t('flash.persona.duplicated', ['name' => $name]));
+    redirect('/p/' . $newSlug);
+}
+
 if ($action === 'archive' && $method === 'POST') {
     csrf_check();
     $stmt = db()->prepare('UPDATE personas SET archived = 1 - archived WHERE id = ?');

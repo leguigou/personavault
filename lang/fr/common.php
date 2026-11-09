@@ -11,6 +11,10 @@ return [
     // --- général
     'app.default_title'   => 'Personas',
     'common.close'        => 'Fermer',
+    'lightbox.label' => 'Visionneuse de photos',
+    'lightbox.download' => 'Télécharger la photo',
+    'lightbox.prev' => 'Photo précédente',
+    'lightbox.next' => 'Photo suivante',
     'notfound.title'      => 'Introuvable',
     'notfound.text'       => 'Cette page n’existe pas (ou plus).',
     'notfound.back'       => 'Retour à la bibliothèque',

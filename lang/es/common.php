@@ -8,6 +8,10 @@ return [
     // --- general
     'app.default_title'   => 'Personas',
     'common.close'        => 'Cerrar',
+    'lightbox.label' => 'Visor de fotos',
+    'lightbox.download' => 'Descargar la foto',
+    'lightbox.prev' => 'Foto anterior',
+    'lightbox.next' => 'Foto siguiente',
     'notfound.title'      => 'No encontrado',
     'notfound.text'       => 'Esta página no existe (o ya no existe).',
     'notfound.back'       => 'Volver a la biblioteca',

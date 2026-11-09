@@ -8,6 +8,10 @@ return [
     // --- general
     'app.default_title'   => 'Personas',
     'common.close'        => 'Close',
+    'lightbox.label' => 'Photo viewer',
+    'lightbox.download' => 'Download the photo',
+    'lightbox.prev' => 'Previous photo',
+    'lightbox.next' => 'Next photo',
     'notfound.title'      => 'Not found',
     'notfound.text'       => 'This page doesn’t exist (anymore).',
     'notfound.back'       => 'Back to the library',

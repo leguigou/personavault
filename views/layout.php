@@ -124,9 +124,27 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
 </nav>
 <?php endif; ?>
 
-<div class="lightbox" id="lightbox" hidden>
-    <button class="lightbox-close" type="button" aria-label="<?= e(t('common.close')) ?>">&times;</button>
-    <img alt="">
+<!-- visionneuse : glisser à gauche / à droite entre les photos d'un même ensemble ([data-gallery]) -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="<?= e(t('lightbox.label')) ?>" hidden>
+    <div class="lb-track" data-lb-track></div>
+    <div class="lb-top">
+        <span class="lb-count" data-lb-count aria-live="polite"></span>
+        <div class="lb-actions">
+            <a class="lb-btn" data-lb-download download href="#" aria-label="<?= e(t('lightbox.download')) ?>" title="<?= e(t('lightbox.download')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <button class="lb-btn lightbox-close" type="button" aria-label="<?= e(t('common.close')) ?>" title="<?= e(t('common.close')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+        </div>
+    </div>
+    <button class="lb-nav lb-prev" type="button" data-lb-step="-1" aria-label="<?= e(t('lightbox.prev')) ?>">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="lb-nav lb-next" type="button" data-lb-step="1" aria-label="<?= e(t('lightbox.next')) ?>">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="lb-dots" data-lb-dots aria-hidden="true"></div>
 </div>
 
 <script type="application/json" id="pv-i18n"><?= json_encode((object) i18n_js(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>

@@ -89,6 +89,13 @@ $token    = csrf_token();
                         <span class="quick-label"><?= e($isArch ? t('persona.restore') : t('persona.archive')) ?></span>
                     </button>
                 </form>
+                <form method="post" action="/p/<?= e($persona['slug']) ?>/duplicate">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <button class="quick-tile" type="submit" title="<?= e(t('persona.duplicate_title')) ?>">
+                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                        <span class="quick-label"><?= e(t('persona.duplicate')) ?></span>
+                    </button>
+                </form>
             </div>
 
             <!-- 3. l'action destructrice, à part et discrète -->
@@ -147,7 +154,7 @@ $token    = csrf_token();
             <?= t('persona.paste_hint_html'), "\n" ?>
         </p>
 
-        <div class="gallery">
+        <div class="gallery" data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>">
                 <?php foreach ($photos as $ph): ?>
                     <figure class="shot">
                         <img src="<?= e(media_url($ph['file'])) ?>" alt="<?= e($ph['caption'] ?: $persona['name']) ?>" loading="lazy"

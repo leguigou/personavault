@@ -70,6 +70,9 @@
 303 text/html  POST /chat/1/pin (retirer)
 200 application/json  POST /chat/1/msg-delete
 400 application/json  POST /settings/test
+303 text/html  POST /p/smoke-test/duplicate
+200 text/html  GET /p/smoke-test-copie
+303 text/html  POST /p/smoke-test-copie/delete
 303 text/html  POST /p/smoke-test/delete
 303 text/html  POST /logout
 303 text/html  GET / (après déconnexion)
