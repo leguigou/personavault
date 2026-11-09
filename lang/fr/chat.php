@@ -24,6 +24,12 @@ return [
     'chat.list.new_badge' => 'Nouveau',
     'chat.list.pin' => 'Épingler en haut',
     'chat.list.unpin' => 'Retirer des épinglées',
+    'chat.list.message_count' => ['one' => '{n} msg', 'other' => '{n} msg'],
+    'chat.list.actions' => 'Actions sur la conversation',
+    'chat.list.more' => 'Plus d\'actions',
+    'chat.list.delete' => 'Supprimer la conversation',
+    'chat.list.delete_confirm' => 'Supprimer « {title} » ? Les messages seront effacés définitivement (les souvenirs du persona sont gardés).',
+    'chat.list.long_press_hint' => 'Astuce : reste appuyé sur une conversation pour l\'épingler ou la supprimer.',
     'chat.list.search_persona'      => 'Chercher un persona…',
     'chat.list.no_persona'          => 'Aucun persona en bibliothèque. Crée une fiche d’abord.',
 

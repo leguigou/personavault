@@ -55,7 +55,8 @@
                 }
                 $when = (string) ($c['last_at'] ?? '') !== '' ? (string) $c['last_at'] : (string) $c['updated_at'];
                 ?>
-                <div class="conv-item<?= $unread ? ' is-unread' : '' ?><?= $pinned ? ' is-pinned' : '' ?>">
+                <div class="conv-item<?= $unread ? ' is-unread' : '' ?><?= $pinned ? ' is-pinned' : '' ?>"
+                     data-conv-id="<?= (int) $c['id'] ?>" data-conv-title="<?= e((string) $c['title']) ?>" data-pinned="<?= $pinned ? '1' : '0' ?>">
                     <a class="conv-card" href="/chat/<?= (int) $c['id'] ?>" style="--hue: <?= $hue ?>">
                         <div class="conv-avatar">
                             <?php if ($c['persona_avatar']): ?>
@@ -66,7 +67,7 @@
                         </div>
                         <div class="conv-body">
                             <div class="conv-line">
-                                <strong><?= e((string) $c['title']) ?></strong>
+                                <strong><?php if ($pinned): ?><svg class="conv-pinned-ico" viewBox="0 0 24 24" aria-label="<?= e(t('chat.list.pinned')) ?>"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg><?php endif; ?><?= e((string) $c['title']) ?></strong>
                                 <time datetime="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($when . ' UTC'))) ?>"><?= e(rel_time($when)) ?></time>
                             </div>
                             <div class="conv-line">
@@ -79,21 +80,43 @@
                                     <?php endif; ?>
                                 </span>
                                 <?php if ($unread): ?><span class="conv-badge"><?= e(t('chat.list.new_badge')) ?></span><?php endif; ?>
+                                <em class="conv-count"><?= e(t('chat.list.message_count', (int) $c['n'])) ?></em>
                             </div>
                         </div>
                     </a>
-                    <form method="post" action="/chat/<?= (int) $c['id'] ?>/pin" class="conv-pin-form" data-pin-form>
-                        <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-                        <input type="hidden" name="pinned" value="<?= $pinned ? '0' : '1' ?>">
-                        <button type="submit" class="conv-pin" aria-pressed="<?= $pinned ? 'true' : 'false' ?>"
-                                aria-label="<?= e($pinned ? t('chat.list.unpin') : t('chat.list.pin')) ?>" title="<?= e($pinned ? t('chat.list.unpin') : t('chat.list.pin')) ?>">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="<?= $pinned ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg>
-                        </button>
-                    </form>
+                    <button type="button" class="conv-more" data-conv-more aria-haspopup="dialog"
+                            aria-label="<?= e(t('chat.list.more')) ?>" title="<?= e(t('chat.list.more')) ?>">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/></svg>
+                    </button>
                 </div>
             <?php endforeach; ?>
         </div>
     <?php endforeach; ?>
+    <p class="conv-hint hint"><?= e(t('chat.list.long_press_hint')) ?></p>
+
+    <!-- menu d'une conversation : appui long (mobile), clic droit ou « ⋯ » (ordinateur) -->
+    <div class="modal action-sheet" id="conv-actions" data-token="<?= e(csrf_token()) ?>" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="conv-actions-title">
+            <header class="modal-head">
+                <div>
+                    <p class="eyebrow"><?= e(t('chat.list.actions')) ?></p>
+                    <h2 id="conv-actions-title" data-act-title></h2>
+                </div>
+                <button type="button" class="icon-btn btn-close" data-act-close aria-label="<?= e(t('common.close')) ?>">&times;</button>
+            </header>
+            <div class="action-list">
+                <button type="button" class="action-row" data-act="pin">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg>
+                    <span data-label-pin="<?= e(t('chat.list.pin')) ?>" data-label-unpin="<?= e(t('chat.list.unpin')) ?>"></span>
+                </button>
+                <button type="button" class="action-row is-danger" data-act="delete"
+                        data-confirm="<?= e(t('chat.list.delete_confirm')) ?>">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 11v6m4-6v6M8 7l1-3h6l1 3m-9 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span><?= e(t('chat.list.delete')) ?></span>
+                </button>
+            </div>
+        </div>
+    </div>
 <?php endif; ?>
 
 <!-- popin de sélection du persona -->

@@ -24,6 +24,12 @@ return [
     'chat.list.new_badge' => 'Nuevo',
     'chat.list.pin' => 'Fijar arriba',
     'chat.list.unpin' => 'Quitar de fijadas',
+    'chat.list.message_count' => ['one' => '{n} msj', 'other' => '{n} msjs'],
+    'chat.list.actions' => 'Acciones de la conversación',
+    'chat.list.more' => 'Más acciones',
+    'chat.list.delete' => 'Eliminar la conversación',
+    'chat.list.delete_confirm' => '¿Eliminar «{title}»? Los mensajes se borrarán definitivamente (los recuerdos del persona se conservan).',
+    'chat.list.long_press_hint' => 'Consejo: mantén pulsada una conversación para fijarla o eliminarla.',
     'chat.list.search_persona'      => 'Buscar un persona…',
     'chat.list.no_persona'          => 'No hay ningún persona en la biblioteca. Crea una ficha primero.',
 

@@ -24,6 +24,12 @@ return [
     'chat.list.new_badge' => 'New',
     'chat.list.pin' => 'Pin to top',
     'chat.list.unpin' => 'Unpin',
+    'chat.list.message_count' => ['one' => '{n} msg', 'other' => '{n} msgs'],
+    'chat.list.actions' => 'Conversation actions',
+    'chat.list.more' => 'More actions',
+    'chat.list.delete' => 'Delete conversation',
+    'chat.list.delete_confirm' => 'Delete “{title}”? Its messages will be permanently erased (the persona\'s memories are kept).',
+    'chat.list.long_press_hint' => 'Tip: press and hold a conversation to pin or delete it.',
     'chat.list.search_persona'      => 'Search for a persona…',
     'chat.list.no_persona'          => 'No personas in your library. Create a profile first.',
 

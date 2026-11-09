@@ -1198,6 +1198,123 @@
         });
     }
 
+    /* liste des discussions : appui long (mobile), clic droit ou « ⋯ » → menu épingler / supprimer */
+    const convSheet = document.getElementById("conv-actions");
+    // posées dans <main>, ces fenêtres passeraient sous la barre du bas : on les sort dans <body>
+    [convSheet, ...document.querySelectorAll(".modal[data-modal]")].forEach((m) => m && document.body.appendChild(m));
+    if (convSheet) {
+        let current = null;
+        let openedAt = 0;
+        const titleEl = convSheet.querySelector("[data-act-title]");
+        const pinLabel = convSheet.querySelector("[data-act=pin] span");
+        const openMenu = (item, byTouch = false) => {
+            current = item;
+            openedAt = Date.now();
+            titleEl.textContent = item.dataset.convTitle || "";
+            pinLabel.textContent = item.dataset.pinned === "1" ? pinLabel.dataset.labelUnpin : pinLabel.dataset.labelPin;
+            modalOpen(convSheet);
+            // au doigt, pas de surbrillance « sélectionné » sur la première ligne
+            if (!byTouch) convSheet.querySelector("[data-act]")?.focus({ preventScroll: true });
+        };
+        const closeMenu = () => modalClose(convSheet);
+        const post = (url, fields) => {
+            const f = document.createElement("form");
+            f.method = "post";
+            f.action = url;
+            Object.entries({ _token: convSheet.dataset.token, ...fields }).forEach(([k, v]) => {
+                const i = document.createElement("input");
+                i.type = "hidden";
+                i.name = k;
+                i.value = v;
+                f.appendChild(i);
+            });
+            document.body.appendChild(f);
+            f.submit();
+        };
+
+        document.querySelectorAll(".conv-item").forEach((item) => {
+            let timer = null;
+            let fired = false;
+            let x0 = 0;
+            let y0 = 0;
+            const cancel = () => {
+                clearTimeout(timer);
+                timer = null;
+            };
+            item.addEventListener("pointerdown", (e) => {
+                if (e.pointerType === "mouse" || e.target.closest("[data-conv-more]")) return;
+                fired = false;
+                x0 = e.clientX;
+                y0 = e.clientY;
+                cancel();
+                timer = setTimeout(() => {
+                    timer = null;
+                    fired = true;
+                    navigator.vibrate?.(12);
+                    openMenu(item, true);
+                }, 480);
+            });
+            item.addEventListener("pointermove", (e) => {
+                if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); // c'est un défilement
+            });
+            ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => item.addEventListener(ev, cancel));
+            // le doigt relevé après l'appui long ne doit ni ouvrir la conversation, ni « toucher »
+            // le menu qui vient d'apparaître sous lui : on annule le clic synthétique
+            item.addEventListener("touchend", (e) => {
+                if (fired && e.cancelable) e.preventDefault();
+            }, { passive: false });
+            item.addEventListener("click", (e) => {
+                if (!fired) return;
+                e.preventDefault();
+                fired = false;
+            }, true);
+            item.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                const touchy = timer !== null || fired;
+                cancel();
+                if (fired) return;
+                fired = touchy; // appui long natif (Android) : le clic qui suit n'ouvre pas la conversation
+                openMenu(item, touchy);
+            });
+            item.querySelector("[data-conv-more]")?.addEventListener("click", () => openMenu(item));
+        });
+
+        convSheet.addEventListener("click", async (e) => {
+            if (Date.now() - openedAt < 450) return; // clic fantôme de fin d'appui long
+            if (e.target === convSheet || e.target.closest("[data-act-close]")) return closeMenu();
+            const btn = e.target.closest("[data-act]");
+            if (!btn || !current) return;
+            const id = current.dataset.convId;
+            if (btn.dataset.act === "pin") {
+                post("/chat/" + id + "/pin", { pinned: current.dataset.pinned === "1" ? "0" : "1" });
+            } else if (btn.dataset.act === "delete") {
+                closeMenu();
+                const ok = await pvModal.confirm(
+                    btn.dataset.confirm.replace("{title}", current.dataset.convTitle || ""),
+                    { danger: true, ok: tr("modal.delete") }
+                );
+                if (ok) post("/chat/" + id + "/delete", {});
+            }
+        });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !convSheet.hidden) closeMenu();
+        });
+    }
+
+    /* fenêtres simples : [data-open-modal="#id"] ouvre, [data-close-modal] ou le fond ferme */
+    document.querySelectorAll("[data-open-modal]").forEach((b) =>
+        b.addEventListener("click", () => {
+            const m = document.querySelector(b.dataset.openModal);
+            if (m) modalOpen(m);
+        })
+    );
+    document.querySelectorAll(".modal[data-modal]").forEach((m) => {
+        m.querySelectorAll("[data-close-modal]").forEach((b) => b.addEventListener("click", () => modalClose(m)));
+        m.addEventListener("click", (e) => {
+            if (e.target === m) modalClose(m);
+        });
+    });
+
     const chatSheet = document.getElementById("chat-settings");
     /* un seul panneau, deux sujets : l'anneau ouvre « Contexte et mémoire » (memory),
        la roue « Conversation » (conversation) ; seules les sections du sujet sont visibles */
@@ -1266,6 +1383,7 @@
         if (e.key !== "Escape") return;
         if (chatSheet && chatSheet.classList.contains("is-open")) setSheet(false);
         if (picker && !picker.hidden) modalClose(picker);
+        document.querySelectorAll(".modal[data-modal]:not([hidden])").forEach(modalClose);
     });
 
     const chat = document.getElementById("chat");

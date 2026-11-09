@@ -23,6 +23,8 @@ return [
     'cards.import_title'               => 'Import a card: PersonaVault archive (.zip), Character Card (.json or .png)',
     'cards.import_hint'                => 'Already have a card? Import a PersonaVault archive (.zip) or a Character Card (.json, .png).',
     'cards.import_file'                => 'Import a file',
+    'cards.import_link' => 'Import an existing card',
+    'cards.import_title_modal' => 'Import a card',
 
     // --- labels for card fields with no direct equivalent ("Other" prompts, attributes)
     'cards.field.personality'          => 'Personality',
