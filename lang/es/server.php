@@ -204,4 +204,5 @@ return [
     'labels.backup_readme.restore_how' => 'Ajustes → Copia de seguridad → Restaurar, eligiendo este archivo ZIP.',
     'labels.backup_readme.restore_slug' => 'Los personas importados reciben un slug único si el suyo ya existe:',
     'labels.backup_readme.restore_safe' => 'no se sobrescribe nada.',
+    'flash.chat.directive_saved' => 'Instrucción de la conversación guardada.',
 ];

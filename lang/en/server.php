@@ -204,4 +204,5 @@ return [
     'labels.backup_readme.restore_how' => 'Settings → Backup → Restore, then choose this ZIP file.',
     'labels.backup_readme.restore_slug' => 'Imported personas get a unique slug if theirs already exists:',
     'labels.backup_readme.restore_safe' => 'nothing is overwritten.',
+    'flash.chat.directive_saved' => 'Conversation instruction saved.',
 ];

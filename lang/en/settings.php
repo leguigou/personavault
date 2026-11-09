@@ -81,6 +81,7 @@ return [
     'settings.split.words_help' => 'The bubble is cut at the last sentence end before this limit.',
     'settings.split.bubbles'    => 'Maximum bubbles',
     'settings.split.bubbles_help' => '1 = never split.',
+    'settings.split.delay'      => 'Pause between bubbles',
     'settings.split.delay_min'  => 'Min pause',
     'settings.split.delay_max'  => 'Max pause',
     'settings.split.delay_help' => 'Random pause between two bubbles, within this range.',
@@ -89,7 +90,7 @@ return [
     'settings.followup.title'   => 'Spontaneous messages',
     'settings.followup.hint'    => 'The persona can write to you on its own after a long silence (can be turned off chat by chat).',
     'settings.followup.enable'  => 'Allow spontaneous follow-ups',
-    'settings.followup.idle'    => 'Safety: minimum silence',
+    'settings.followup.idle'    => 'Follow up after (hours of silence)',
     'settings.followup.idle_help' => 'Hours of silence before they can follow up.',
     'settings.followup.hours'   => 'Time window',
     'settings.followup.hours_from' => 'from',
@@ -282,4 +283,6 @@ return [
             add conversations and memories.</p>
             <p>On import, nothing is overwritten: a persona that already exists is recreated under a new URL name.
             Keep your backups off the server.</p>',
+    'settings.followup.gap'       => 'Time between two follow-ups (hours)',
+    'settings.followup.gap_help'  => 'In the same conversation, no new follow-up before this delay, even if the silence goes on.',
 ];

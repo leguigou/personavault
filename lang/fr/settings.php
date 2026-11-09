@@ -84,6 +84,7 @@ return [
     'settings.split.words_help' => 'La bulle se coupe à la dernière fin de phrase avant cette limite.',
     'settings.split.bubbles'    => 'Bulles maximum',
     'settings.split.bubbles_help' => '1 = jamais de découpage.',
+    'settings.split.delay'      => 'Pause entre deux bulles',
     'settings.split.delay_min'  => 'Pause min',
     'settings.split.delay_max'  => 'Pause max',
     'settings.split.delay_help' => 'Pause aléatoire entre deux bulles, dans cette plage.',
@@ -92,7 +93,7 @@ return [
     'settings.followup.title'   => 'Messages spontanés',
     'settings.followup.hint'    => 'Le persona peut t’écrire de lui-même après un long silence (désactivable conversation par conversation).',
     'settings.followup.enable'  => 'Autoriser les relances spontanées',
-    'settings.followup.idle'    => 'Sécurité : silence minimum',
+    'settings.followup.idle'    => 'Relancer après (heures de silence)',
     'settings.followup.idle_help' => 'Heures de silence avant qu’il/elle puisse relancer.',
     'settings.followup.hours'   => 'Plage horaire',
     'settings.followup.hours_from' => 'de',
@@ -285,4 +286,6 @@ return [
             y ajouter les conversations et les souvenirs.</p>
             <p>À l’import, rien n’est écrasé : un persona déjà présent est recréé sous un nouveau nom d’URL.
             Garde tes sauvegardes hors du serveur.</p>',
+    'settings.followup.gap'       => 'Délai entre deux relances (heures)',
+    'settings.followup.gap_help'  => 'Dans une même conversation, pas de nouvelle relance avant ce délai, même si le silence continue.',
 ];

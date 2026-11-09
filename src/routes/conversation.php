@@ -30,6 +30,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+(?:\.(?:txt|md))?))?$#', $path, $m)) {
     }
 
     $personaPrompts = fetch_prompts((int) $persona['id']);
+    $convDirective  = trim((string) ($conv['directive'] ?? '')); // consigne de cette conversation seule
     $conv           = chat_with_persona($conv, $persona);
 
     // une action = un bloc qui se termine par exit ; l'ordre est indifférent,

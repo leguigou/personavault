@@ -46,7 +46,7 @@ return [
     'js.settings.sum_titles_off'     => 'Désactivés',
     'js.settings.sum_titles_local'   => 'Modèle local',
     'js.settings.sum_titles_remote'  => 'Modèle distant',
-    'js.settings.sum_followup'       => 'De {from} h à {to} h',
+    'js.settings.sum_followup'       => 'Après {idle} h de silence · de {from} h à {to} h',
     'js.settings.sum_followup_off'   => 'Désactivées',
 
     // réglages : test du modèle, purge de LM Studio
@@ -148,4 +148,9 @@ return [
     // titres du panneau de la conversation (anneau / roue)
     'js.chat.sheet_memory' => 'Contexte et mémoire',
     'js.chat.sheet_conversation' => 'Conversation',
+    // interrupteurs de la conversation enregistrés au changement
+    'js.chat.toggle_saved' => 'Enregistré',
+    'js.chat.toggle_failed' => 'Impossible d’enregistrer, réessaie.',
+    // curseur à deux poignées des pauses (aussi utilisé côté serveur)
+    'js.settings.pause_range' => '{min} s – {max} s',
 ];

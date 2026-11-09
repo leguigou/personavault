@@ -126,6 +126,7 @@ await post('/p/smoke-test/favorite', { _token: 'mauvais' }, '/p/smoke-test/favor
 await post('/chat', { persona_id: '2' });
 await post('/chat/1/rename', { title: 'Renommée' });
 await post('/chat/1/toggles', { memory_enabled: '1' });
+await post('/chat/1/directive', { directive: 'Consigne de test pour cette conversation.' });
 await post('/chat/1/facts-toggle', { enabled: '0' });
 await post('/chat/1/facts-toggle', { enabled: '1' }, '/chat/1/facts-toggle (2)');
 const comp = await post('/chat/1/compress', { force: '1' });

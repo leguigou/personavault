@@ -46,7 +46,7 @@ return [
     'js.settings.sum_titles_off'     => 'Off',
     'js.settings.sum_titles_local'   => 'Local model',
     'js.settings.sum_titles_remote'  => 'Remote model',
-    'js.settings.sum_followup'       => 'From {from}:00 to {to}:00',
+    'js.settings.sum_followup'       => 'After {idle} h of silence · from {from} h to {to} h',
     'js.settings.sum_followup_off'   => 'Off',
 
     // settings: model test, LM Studio purge
@@ -148,4 +148,9 @@ return [
     // titres du panneau de la conversation (anneau / roue)
     'js.chat.sheet_memory' => 'Context and memory',
     'js.chat.sheet_conversation' => 'Conversation',
+    // interrupteurs de la conversation enregistrés au changement
+    'js.chat.toggle_saved' => 'Saved',
+    'js.chat.toggle_failed' => 'Couldn’t save, please try again.',
+    // curseur à deux poignées des pauses (aussi utilisé côté serveur)
+    'js.settings.pause_range' => '{min} s – {max} s',
 ];

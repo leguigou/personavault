@@ -2629,32 +2629,40 @@ textarea.input::-webkit-scrollbar-track { background: transparent; }
 .settings-sub { margin-top: 28px; }
 
 .check { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); cursor: pointer; }
+/* interrupteur (bascule) : la case native reste en dessous, accessible au clavier
+   et aux lecteurs d'écran ; seule son apparence change */
 .check input {
     appearance: none;
     -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 42px;
+    height: 24px;
     flex: 0 0 auto;
-    border-radius: 6px;
-    border: 1px solid rgba(var(--ink), .22);
-    background: rgba(var(--ink), .05);
+    margin: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--ink), .18);
+    background: rgba(var(--ink), .12);
     cursor: pointer;
     position: relative;
-    transition: .18s;
+    transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
-.check input:checked { background: var(--grad); border-color: transparent; }
-.check input:checked::after {
+.check input::after {
     content: "";
     position: absolute;
-    left: 6px;
     top: 2px;
-    width: 4px;
-    height: 9px;
-    border: solid var(--on-acc);
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+    transition: transform .22s cubic-bezier(.3, .7, .3, 1);
 }
+.check input:checked { background: var(--grad); border-color: transparent; box-shadow: 0 0 0 3px rgba(var(--acc), .14); }
+.check input:checked::after { transform: translateX(18px); }
+.check input:focus-visible { outline: 2px solid rgba(var(--acc), .9); outline-offset: 2px; }
 .check:hover input { border-color: rgba(var(--acc), .6); }
+.check input:disabled { opacity: .45; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .check input, .check input::after { transition: none; } }
 
 .llm-status {
     display: flex;
@@ -3234,3 +3242,39 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
 .msg-user .msg-time { margin-right: 6px; }
 /* persona : boutons à gauche, date après eux ; utilisateur : date à gauche, boutons contre la bulle */
 .msg-bot .msg-time { order: 99; margin: 0 0 0 6px; }
+
+/* curseur à deux poignées : deux curseurs natifs superposés sur une même piste */
+.dual-range {
+    --lo: 0;
+    --hi: 1;
+    --thumb: 18px;
+    position: relative;
+    height: 26px;
+}
+.dual-range::before,
+.dual-range-fill {
+    content: "";
+    position: absolute;
+    top: 50%;
+    height: 4px;
+    margin-top: -2px;
+    border-radius: 99px;
+}
+.dual-range::before { left: 0; right: 0; background: rgba(var(--ink), .14); }
+/* le centre d'une poignée va de thumb/2 à 100 % - thumb/2 */
+.dual-range-fill {
+    left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--lo));
+    width: calc((100% - var(--thumb)) * (var(--hi) - var(--lo)));
+    background: var(--grad);
+}
+.dual-range .range {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    margin: 0;
+    pointer-events: none; /* seules les poignées captent le doigt */
+}
+.dual-range .range::-webkit-slider-runnable-track { background: transparent; }
+.dual-range .range::-moz-range-track { background: transparent; }
+.dual-range { cursor: pointer; touch-action: pan-y; } /* glisser à l'horizontale, défiler à la verticale */
+.dual-range .range:focus-visible::-webkit-slider-thumb { outline: 2px solid rgba(var(--acc), .9); outline-offset: 2px; }

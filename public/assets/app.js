@@ -191,6 +191,56 @@
     })();
     window.pvModal = pvModal;
 
+    /* interrupteurs de la conversation : enregistrés dès qu'ils changent */
+    document.querySelectorAll(".sheet-form").forEach((form) => {
+        form.querySelector("[data-autosave-fallback]")?.setAttribute("hidden", "");
+        form.addEventListener("change", async (e) => {
+            const input = e.target;
+            if (!(input instanceof HTMLInputElement) || input.type !== "checkbox") return;
+            // valeurs lues AVANT de désactiver l'interrupteur (un champ désactivé n'est pas envoyé)
+            const body = new FormData(form);
+            input.disabled = true;
+            try {
+                const r = await fetch(form.action, {
+                    method: "POST",
+                    body,
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!r.ok || !d.ok) throw new Error(d.error || "");
+                toast(d.message || tr("chat.toggle_saved"));
+            } catch (err) {
+                input.checked = !input.checked; // on revient à l'état réellement enregistré
+                toast(tr("chat.toggle_failed"), true);
+            } finally {
+                input.disabled = false;
+            }
+        });
+    });
+
+    /* consigne de la conversation : enregistrée sans recharger la page */
+    document.querySelectorAll("[data-directive-form]").forEach((form) => {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const btn = form.querySelector("button[type=submit]");
+            const body = new FormData(form);
+            if (btn) btn.disabled = true;
+            try {
+                const r = await fetch(form.action, { method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!r.ok || !d.ok) throw new Error(d.error || "");
+                toast(d.message || tr("chat.toggle_saved"));
+            } catch (err) {
+                toast(tr("chat.toggle_failed"), true);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
+    });
+
+    /* cases à cocher présentées en interrupteur : annoncées comme telles */
+    document.querySelectorAll(".check input[type=checkbox]").forEach((c) => c.setAttribute("role", "switch"));
+
     /* --------------------------------------------------- confirmations */
     document.addEventListener("submit", (e) => {
         const form = e.target;
@@ -400,7 +450,7 @@
                 } else if (el.dataset.foldSum === "followup") {
                     const on = val("chat_followup_enabled")?.checked;
                     el.textContent = on
-                        ? tr("settings.sum_followup", { from: val("chat_followup_from")?.value || "", to: val("chat_followup_to")?.value || "" })
+                        ? tr("settings.sum_followup", { idle: val("chat_followup_idle_hours")?.value || "", from: val("chat_followup_from")?.value || "", to: val("chat_followup_to")?.value || "" })
                         : tr("settings.sum_followup_off");
                 }
             });
@@ -464,6 +514,19 @@
             if (!h) {
                 try { h = sessionStorage.getItem("pv_settings_tab") || ""; } catch (e) { h = ""; }
             }
+            // ancre d'une section repliable (ex. #followup depuis une conversation)
+            const fold = h ? document.getElementById(h) : null;
+            if (fold && fold.tagName === "DETAILS") {
+                const panel = fold.closest("[data-panel]");
+                if (panel) activate(panel.dataset.panel);
+                fold.open = true;
+                // après l'animation des onglets ; décalage = en-tête + barre d'onglets collés en haut
+                setTimeout(() => {
+                    const offset = (document.querySelector(".topbar")?.offsetHeight || 0) + (tabsNav.offsetHeight || 0) + 16;
+                    window.scrollTo({ top: fold.getBoundingClientRect().top + window.scrollY - offset, behavior: "smooth" });
+                }, 350);
+                return;
+            }
             if (h && document.querySelector('[data-panel="' + h + '"]')) activate(h);
         };
         fromHash();
@@ -483,22 +546,75 @@
         paint();
     });
 
-    const rangeMin = document.querySelector('[name="chat_split_delay_min"]');
-    const rangeMax = document.querySelector('[name="chat_split_delay_max"]');
-    if (rangeMin && rangeMax) {
-        rangeMin.addEventListener("input", () => {
-            if (+rangeMin.value > +rangeMax.value) {
-                rangeMax.value = rangeMin.value;
-                rangeMax.dispatchEvent(new Event("input"));
-            }
+    /* curseur à deux poignées (pause min / max entre deux bulles) :
+       chaque poignée reste de son côté, la bande entre les deux est colorée */
+    document.querySelectorAll("[data-dual-range]").forEach((box) => {
+        const [lo, hi] = box.querySelectorAll('input[type="range"]');
+        const out = box.closest(".range-field")?.querySelector("[data-pause-out]");
+        if (!lo || !hi) return;
+        const span = (+lo.max - +lo.min) || 1;
+        const paint = () => {
+            const a = (+lo.value - +lo.min) / span;
+            const b = (+hi.value - +lo.min) / span;
+            box.style.setProperty("--lo", a);
+            box.style.setProperty("--hi", b);
+            if (out) out.textContent = tr("settings.pause_range", { min: fmt1(+lo.value), max: fmt1(+hi.value) });
+        };
+        lo.addEventListener("input", () => {
+            if (+lo.value > +hi.value) lo.value = hi.value;
+            paint();
         });
-        rangeMax.addEventListener("input", () => {
-            if (+rangeMax.value < +rangeMin.value) {
-                rangeMin.value = rangeMax.value;
-                rangeMin.dispatchEvent(new Event("input"));
-            }
+        hi.addEventListener("input", () => {
+            if (+hi.value < +lo.value) hi.value = lo.value;
+            paint();
         });
-    }
+
+        // souris et doigt gérés ici (le clavier reste sur les curseurs natifs) :
+        // la poignée la plus proche suit ; si les deux sont au même endroit,
+        // le premier mouvement décide (gauche = minimum, droite = maximum)
+        const step = +lo.step || 0.1;
+        const valueAt = (clientX) => {
+            const r = box.getBoundingClientRect();
+            const half = 9; // demi-poignée
+            const f = Math.min(1, Math.max(0, (clientX - r.left - half) / (r.width - 2 * half)));
+            return Math.round((+lo.min + f * span) / step) * step;
+        };
+        const move = (input, v) => {
+            input.value = v.toFixed(1);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        let active = null;
+        let startX = 0;
+        box.addEventListener("pointerdown", (e) => {
+            const v = valueAt(e.clientX);
+            const dLo = Math.abs(v - +lo.value);
+            const dHi = Math.abs(v - +hi.value);
+            active = dLo < dHi ? lo : dHi < dLo ? hi : v < +lo.value ? lo : v > +hi.value ? hi : null;
+            startX = e.clientX;
+            box.setPointerCapture(e.pointerId);
+            if (active) {
+                active.focus({ preventScroll: true });
+                move(active, v);
+            }
+            e.preventDefault();
+        });
+        box.addEventListener("pointermove", (e) => {
+            if (!box.hasPointerCapture(e.pointerId)) return;
+            if (!active) {
+                if (Math.abs(e.clientX - startX) < 3) return;
+                active = e.clientX < startX ? lo : hi;
+                active.focus({ preventScroll: true });
+            }
+            move(active, valueAt(e.clientX));
+        });
+        const stop = (e) => {
+            if (box.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId);
+            active = null;
+        };
+        box.addEventListener("pointerup", stop);
+        box.addEventListener("pointercancel", stop);
+        paint();
+    });
 
     /* ------------------------------------------ sauvegarde : option conv */
     const backupLink = document.querySelector("[data-backup-link]");

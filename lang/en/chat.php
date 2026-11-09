@@ -71,6 +71,7 @@ return [
 
     // --- conversation options
     'chat.toggles.memory'           => 'Keep memory (rolling summary)',
+    'chat.toggles.followup_settings' => 'Set the delay and hours for follow-ups',
     'chat.toggles.followup'         => 'Spontaneous messages after a long silence',
 
     // --- memory (rolling summary)
@@ -115,4 +116,9 @@ return [
     'chat.fallback.hint'            => 'You can wait for it to come back — the message will be resent as is — or have DeepSeek generate the reply.',
     'chat.fallback.wait'            => 'Wait and retry',
     'chat.fallback.use'             => 'Use DeepSeek',
+    // consigne propre à la conversation
+    'chat.directive.label'       => 'Instruction for this conversation',
+    'chat.directive.placeholder' => 'E.g. We’re on holiday in Lisbon and she’s showing me around.',
+    'chat.directive.help'        => 'Added to the character’s instruction, only in this conversation.',
+    'chat.directive.save'        => 'Save the instruction',
 ];

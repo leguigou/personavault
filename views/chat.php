@@ -240,10 +240,24 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <span><?= e(t('chat.persona.max_tokens', ['count' => (int) $conv['max_tokens']])) ?></span>
                 <span><?= e(t('chat.persona.window', ['size' => fmt_number((int) $conv['context_window'])])) ?></span>
             </p>
-            <?php if (trim((string) $conv['directive']) !== ''): ?>
-                <p class="hint perso-directive"><?= e(t('chat.persona.directive', ['text' => mb_substr(trim((string) $conv['directive']), 0, 160)])) ?></p>
+            <?php $personaDirective = trim((string) ($persona['directive'] ?? '')); ?>
+            <?php if ($personaDirective !== ''): ?>
+                <p class="hint perso-directive"><?= e(t('chat.persona.directive', ['text' => mb_substr($personaDirective, 0, 160)])) ?></p>
             <?php endif; ?>
         </section>
+
+        <!-- consigne propre à cette conversation (s'ajoute à celle du personnage) -->
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/directive" class="sheet-directive" data-sheet-group="conversation" data-directive-form>
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <label class="field">
+                <span><?= e(t('chat.directive.label')) ?></span>
+                <textarea class="input" name="directive" rows="3" maxlength="2000" placeholder="<?= e(t('chat.directive.placeholder')) ?>"><?= e($convDirective ?? '') ?></textarea>
+                <small><?= e(t('chat.directive.help')) ?></small>
+            </label>
+            <div class="form-actions">
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
+            </div>
+        </form>
 
         <!-- options propres à cette conversation -->
         <form method="post" action="/chat/<?= (int) $conv['id'] ?>/toggles" class="sheet-form" data-sheet-group="conversation">
@@ -258,8 +272,9 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <input type="checkbox" name="auto_followup" value="1" <?= (int) ($conv['auto_followup'] ?? 1) === 1 ? 'checked' : '' ?>>
                 <span><?= e(t('chat.toggles.followup')) ?></span>
             </label>
+            <a class="mini-link" href="/settings#followup"><?= e(t('chat.toggles.followup_settings')) ?></a>
 
-            <div class="form-actions">
+            <div class="form-actions" data-autosave-fallback>
                 <button class="btn btn-primary btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
             </div>
         </form>

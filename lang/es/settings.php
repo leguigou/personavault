@@ -82,6 +82,7 @@ return [
     'settings.split.words_help' => 'La burbuja se corta en el último final de frase antes de este límite.',
     'settings.split.bubbles'    => 'Burbujas máximas',
     'settings.split.bubbles_help' => '1 = nunca dividir.',
+    'settings.split.delay'      => 'Pausa entre burbujas',
     'settings.split.delay_min'  => 'Pausa mín.',
     'settings.split.delay_max'  => 'Pausa máx.',
     'settings.split.delay_help' => 'Pausa aleatoria entre dos burbujas, dentro de este intervalo.',
@@ -90,7 +91,7 @@ return [
     'settings.followup.title'   => 'Mensajes espontáneos',
     'settings.followup.hint'    => 'La persona puede escribirte por iniciativa propia tras un largo silencio (se puede desactivar conversación por conversación).',
     'settings.followup.enable'  => 'Permitir mensajes espontáneos',
-    'settings.followup.idle'    => 'Seguridad: silencio mínimo',
+    'settings.followup.idle'    => 'Relanzar tras (horas de silencio)',
     'settings.followup.idle_help' => 'Horas de silencio antes de que pueda escribirte.',
     'settings.followup.hours'   => 'Franja horaria',
     'settings.followup.hours_from' => 'de',
@@ -283,4 +284,6 @@ return [
             añadir las conversaciones y los recuerdos.</p>
             <p>Al importar, no se sobrescribe nada: una persona que ya existe se vuelve a crear con un nuevo nombre de URL.
             Guarda tus copias de seguridad fuera del servidor.</p>',
+    'settings.followup.gap'       => 'Tiempo entre dos mensajes (horas)',
+    'settings.followup.gap_help'  => 'En una misma conversación, no habrá otro mensaje antes de este plazo, aunque el silencio continúe.',
 ];
