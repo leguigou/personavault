@@ -94,27 +94,58 @@ if ($action === 'favorite' && $method === 'POST') {
 
 /*
  * Dupliquer : nouvelle fiche « X (copie) » avec les mêmes textes, réglages IA, photos et prompts.
- * Les fichiers photo ne sont pas recopiés : ils sont comptés par référence (media_ref_count),
- * donc partagés tant qu'une des deux fiches les utilise. Ni conversations ni souvenirs :
+ * Les fichiers photo sont recopiés : les deux fiches sont totalement indépendantes (supprimer
+ * ou remplacer une photo d'un côté ne touche jamais l'autre). Ni conversations ni souvenirs :
  * la copie repart de zéro.
  */
 if ($action === 'duplicate' && $method === 'POST') {
     csrf_check();
     $name    = mb_substr(t('persona.copy_name', ['name' => (string) $persona['name']]), 0, 120);
     $newSlug = unique_slug($name);
-    $newId   = db_tx(static function (PDO $pdo) use ($persona, $pid, $name, $newSlug): int {
-        // toutes les colonnes de la fiche (y compris celles ajoutées par les migrations)
-        $cols = array_values(array_diff(table_columns($pdo, 'personas'), ['id', 'slug', 'name', 'favorite', 'archived', 'created_at', 'updated_at']));
-        $vals = array_map(static fn (string $c) => $persona[$c], $cols);
-        $pdo->prepare('INSERT INTO personas (slug, name, ' . implode(', ', $cols) . ') VALUES (?, ?' . str_repeat(', ?', count($cols)) . ')')
-            ->execute([$newSlug, $name, ...$vals]);
-        $id = (int) $pdo->lastInsertId();
-        $pdo->prepare('INSERT INTO photos (persona_id, file, caption, sort) SELECT ?, file, caption, sort FROM photos WHERE persona_id = ? ORDER BY id')
-            ->execute([$id, $pid]);
-        $pdo->prepare('INSERT INTO prompts (persona_id, title, kind, body) SELECT ?, title, kind, body FROM prompts WHERE persona_id = ? ORDER BY id')
-            ->execute([$id, $pid]);
-        return $id;
-    });
+
+    // copie des fichiers d'abord (hors transaction) ; un même fichier n'est copié qu'une fois,
+    // pour que le portrait reste aussi l'une des photos de la galerie s'il l'était
+    $map    = [];
+    $copyOf = static function (string $base) use (&$map): string {
+        if ($base === '') {
+            return '';
+        }
+        return $map[$base] ??= media_copy($base);
+    };
+    try {
+        $avatar = $copyOf((string) $persona['avatar']);
+        $photos = [];
+        foreach (fetch_photos($pid) as $ph) {
+            $file = $copyOf((string) $ph['file']);
+            if ($file !== '') {
+                $photos[] = [$file, (string) $ph['caption'], (int) $ph['sort']];
+            }
+        }
+        $newId = db_tx(static function (PDO $pdo) use ($persona, $pid, $name, $newSlug, $avatar, $photos): int {
+            // toutes les colonnes de la fiche (y compris celles ajoutées par les migrations)
+            $cols = array_values(array_diff(table_columns($pdo, 'personas'), ['id', 'slug', 'name', 'avatar', 'favorite', 'archived', 'created_at', 'updated_at']));
+            $vals = array_map(static fn (string $c) => $persona[$c], $cols);
+            $pdo->prepare('INSERT INTO personas (slug, name, avatar, ' . implode(', ', $cols) . ') VALUES (?, ?, ?' . str_repeat(', ?', count($cols)) . ')')
+                ->execute([$newSlug, $name, $avatar, ...$vals]);
+            $id  = (int) $pdo->lastInsertId();
+            $ins = $pdo->prepare('INSERT INTO photos (persona_id, file, caption, sort) VALUES (?, ?, ?, ?)');
+            foreach ($photos as [$file, $caption, $sort]) {
+                $ins->execute([$id, $file, $caption, $sort]);
+            }
+            $pdo->prepare('INSERT INTO prompts (persona_id, title, kind, body) SELECT ?, title, kind, body FROM prompts WHERE persona_id = ? ORDER BY id')
+                ->execute([$id, $pid]);
+            return $id;
+        });
+    } catch (Throwable $e) {
+        // rien d'enregistré : on retire les copies de fichiers déjà faites
+        foreach ($map as $copy) {
+            if ($copy !== '') {
+                delete_media($copy);
+            }
+        }
+        flash('error', t('flash.persona.duplicate_failed', ['error' => public_error($e)]));
+        redirect('/p/' . $slug);
+    }
     flash('ok', t('flash.persona.duplicated', ['name' => $name]));
     redirect('/p/' . $newSlug);
 }

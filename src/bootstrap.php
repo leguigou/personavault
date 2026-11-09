@@ -1098,6 +1098,29 @@ function delete_media(string $base): void
     }
 }
 
+/**
+ * Copie physique d'une image (grand format + miniature) sous un nouveau nom aléatoire.
+ * Renvoie le nouveau nom, ou '' si l'original est introuvable.
+ */
+function media_copy(string $base): string
+{
+    $dir = (string) config('uploads');
+    // même format que les noms créés par store_gd_image() et servis par /media
+    if (!preg_match('/^p[0-9a-f]{16}$/', $base) || !is_file($dir . '/' . $base . '.webp')) {
+        return '';
+    }
+    do {
+        $new = 'p' . bin2hex(random_bytes(8));
+    } while (is_file($dir . '/' . $new . '.webp'));
+    foreach (['.webp', '.thumb.webp'] as $ext) {
+        if (is_file($dir . '/' . $base . $ext) && !copy($dir . '/' . $base . $ext, $dir . '/' . $new . $ext)) {
+            delete_media($new);
+            throw new RuntimeException('copie impossible : ' . $base . $ext);
+        }
+    }
+    return $new;
+}
+
 /** Nombre de références en base vers un fichier image (galerie, portrait, chat). */
 function media_ref_count(string $base): int
 {

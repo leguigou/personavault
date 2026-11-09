@@ -29,6 +29,7 @@ return [
     'flash.persona.restored'      => 'Persona restauré.',
     'flash.persona.archived'      => 'Persona archivé.',
     'flash.persona.duplicated' => 'Copie créée : {name}. Modifie-la à ta guise, l\'original ne change pas.',
+    'flash.persona.duplicate_failed' => 'Duplication impossible : {error}',
     'flash.persona.photos_added'  => ['one' => '{n} photo ajoutée.', 'other' => '{n} photos ajoutées.'],
     'flash.persona.no_photo'      => 'Aucune photo ajoutée.',
     'flash.prompt.empty'          => 'Le prompt est vide.',
