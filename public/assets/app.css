@@ -3278,3 +3278,25 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
 .dual-range .range::-moz-range-track { background: transparent; }
 .dual-range { cursor: pointer; touch-action: pan-y; } /* glisser à l'horizontale, défiler à la verticale */
 .dual-range .range:focus-visible::-webkit-slider-thumb { outline: 2px solid rgba(var(--acc), .9); outline-offset: 2px; }
+
+/* bouton fermer (×) : pastille ronde avec contour, bien visible */
+.icon-btn.btn-close {
+    width: 36px;
+    height: 36px;
+    flex: none;
+    border-radius: 50%;
+    border-color: rgba(var(--ink), .18);
+    background: rgba(var(--ink), .06);
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1;
+}
+.icon-btn.btn-close:hover {
+    border-color: rgba(var(--acc), .6);
+    background: rgba(var(--ink), .1);
+}
+.icon-btn.btn-close:active { transform: scale(.94); }
+@media (pointer: coarse) {
+    /* écran tactile : un peu plus grand pour le doigt */
+    .icon-btn.btn-close { width: 40px; height: 40px; }
+}

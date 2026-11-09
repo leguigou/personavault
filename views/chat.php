@@ -189,7 +189,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
             <p class="eyebrow" data-sheet-eyebrow><?= e(t('chat.sheet.eyebrow')) ?></p>
             <h2><?= e((string) $conv['title']) ?></h2>
         </div>
-        <button type="button" class="icon-btn" data-close-settings aria-label="<?= e(t('common.close')) ?>">&times;</button>
+        <button type="button" class="icon-btn btn-close" data-close-settings aria-label="<?= e(t('common.close')) ?>">&times;</button>
     </header>
 
     <div class="sheet-body">
@@ -397,7 +397,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="fb-title">
         <header class="modal-head">
             <h2 id="fb-title"><?= e(t('chat.fallback.title')) ?></h2>
-            <button type="button" class="icon-btn" data-fb-wait aria-label="<?= e(t('common.close')) ?>">&times;</button>
+            <button type="button" class="icon-btn btn-close" data-fb-wait aria-label="<?= e(t('common.close')) ?>">&times;</button>
         </header>
         <p class="fb-msg" data-fb-msg></p>
         <p class="fb-hint"><?= e(t('chat.fallback.hint')) ?></p>
