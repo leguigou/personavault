@@ -58,6 +58,61 @@
     const fmt = (n) => Number(n || 0).toLocaleString(LOCALE);
     const fmt1 = (n) => Number(n).toFixed(1).replace(".", DECIMAL); // une décimale
 
+    /* ------------------------------------- photos : compression avant envoi */
+    /* Une photo de téléphone pèse souvent 3 à 10 Mo, au-delà de ce que le serveur accepte
+       (2 Mo par fichier avec PHP par défaut). Au-dessus de SHRINK_FROM, on la redimensionne
+       (2400 px au plus) et on la réencode en JPEG dans le navigateur, en baissant la qualité
+       jusqu'à passer sous SHRINK_TO. Le serveur la recompresse ensuite (~500 Ko). GIF animés
+       et fichiers illisibles : envoyés tels quels. */
+    const SHRINK_FROM = 1.2 * 1024 * 1024;
+    const SHRINK_TO = 1.5 * 1024 * 1024;
+    const shrinkImage = async (file) => {
+        if (!file || !/^image\//.test(file.type) || file.type === "image/gif" || file.size <= SHRINK_FROM) return file;
+        let bmp;
+        try {
+            bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+        } catch {
+            return file; // format que le navigateur ne sait pas lire : le serveur décidera
+        }
+        const toBlob = (canvas, q) => new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
+        let best = null;
+        for (const side of [2400, 1800, 1400]) {
+            const r = Math.min(1, side / Math.max(bmp.width, bmp.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(bmp.width * r));
+            canvas.height = Math.max(1, Math.round(bmp.height * r));
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#fff"; // transparence (PNG) → fond blanc en JPEG
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+            for (const q of [0.9, 0.82, 0.74]) {
+                const blob = await toBlob(canvas, q);
+                if (blob && (!best || blob.size < best.size)) best = blob;
+                if (blob && blob.size <= SHRINK_TO) {
+                    bmp.close?.();
+                    return new File([blob], (file.name || "photo").replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+                }
+            }
+        }
+        bmp.close?.();
+        return best && best.size < file.size
+            ? new File([best], (file.name || "photo").replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" })
+            : file;
+    };
+    /* remplace le contenu d'un <input type=file> par des fichiers compressés */
+    const shrinkInput = async (input) => {
+        const files = Array.from(input.files || []);
+        if (!files.some((f) => f.size > SHRINK_FROM)) return;
+        const out = await Promise.all(files.map(shrinkImage));
+        try {
+            const dt = new DataTransfer();
+            out.forEach((f) => dt.items.add(f));
+            input.files = dt.files;
+        } catch {
+            // navigateur trop ancien : les fichiers partent tels quels
+        }
+    };
+
     /* ------------------------------------------------ toasts éphémères */
     const toast = (msg, isError = false) => {
         let el = document.querySelector(".toast");
@@ -794,11 +849,17 @@
     document.addEventListener("change", (e) => {
         const input = e.target;
         if (!(input instanceof HTMLInputElement)) return;
-        if (input.matches("[data-autosubmit]") && input.files && input.files.length) {
+        // la galerie de la fiche envoie elle-même ses photos (compressées), voir plus bas
+        if (input.matches("[data-autosubmit]") && input.files && input.files.length && !input.closest("[data-photo-upload]")) {
             input.closest("form")?.submit();
         }
         /* aperçu de l'avatar avant envoi */
         if (input.matches("[data-preview]") && input.files && input.files[0]) {
+            // portrait : compressé pendant qu'on regarde l'aperçu ; l'envoi attend la fin
+            const pForm = input.closest("form");
+            if (input.files[0].size > SHRINK_FROM && pForm) {
+                pForm._shrinking = shrinkInput(input).finally(() => { pForm._shrinking = null; });
+            }
             const box = document.querySelector(input.dataset.preview);
             if (!box) return;
             const url = URL.createObjectURL(input.files[0]);
@@ -810,6 +871,14 @@
             else box.appendChild(img);
         }
     });
+
+    document.addEventListener("submit", (e) => {
+        const f = e.target;
+        if (!(f instanceof HTMLFormElement) || !f._shrinking) return;
+        e.preventDefault();
+        const submitter = e.submitter || null;
+        f._shrinking.then(() => (f.requestSubmit ? f.requestSubmit(submitter && f.contains(submitter) ? submitter : undefined) : f.submit()));
+    }, true);
 
     /* ------------------------------------------------------- lightbox */
     /* Visionneuse : les photos d'un même ensemble ([data-gallery]) défilent au doigt
@@ -1323,24 +1392,39 @@
         const tokenInput = photoForm.querySelector('input[name="_token"]');
         let sending = false;
 
-        const sendImage = async (file) => {
-            if (!file || !file.type || !file.type.startsWith("image/")) return false;
-            if (sending) return false;
+        const sendImage = async (input) => {
+            const list = (Array.isArray(input) ? input : [input]).filter((f) => f && f.type && f.type.startsWith("image/"));
+            if (!list.length || sending) return false;
             sending = true;
-
-            const fd = new FormData();
-            fd.append("_token", tokenInput ? tokenInput.value : "");
-            fd.append("photos[]", file, file.name || "collage.png");
             toast(tr("persona.photo_adding"));
+            const files = [];
+            for (const f of list) files.push(await shrinkImage(f));
+
+            // par lots de ~6 Mo : PHP refuse par défaut un envoi de plus de 8 Mo au total
+            const batches = [[]];
+            let size = 0;
+            for (const f of files) {
+                if (batches[batches.length - 1].length && size + f.size > 6 * 1024 * 1024) {
+                    batches.push([]);
+                    size = 0;
+                }
+                batches[batches.length - 1].push(f);
+                size += f.size;
+            }
 
             try {
-                const res = await fetch(photoForm.action, {
-                    method: "POST",
-                    body: fd,
-                    headers: { "X-Requested-With": "XMLHttpRequest" },
-                });
-                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
-                if (!res.ok || !data.ok) throw new Error(data.error || tr("common.send_failed"));
+                for (const batch of batches) {
+                    const fd = new FormData();
+                    fd.append("_token", tokenInput ? tokenInput.value : "");
+                    batch.forEach((file) => fd.append("photos[]", file, file.name || "collage.png"));
+                    const res = await fetch(photoForm.action, {
+                        method: "POST",
+                        body: fd,
+                        headers: { "X-Requested-With": "XMLHttpRequest" },
+                    });
+                    const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+                    if (!res.ok || !data.ok) throw new Error(data.error || tr("common.send_failed"));
+                }
                 toast(tr("persona.photo_added"));
                 setTimeout(() => window.location.reload(), 450);
                 return true;
@@ -1370,8 +1454,14 @@
             e.preventDefault();
             photoForm.classList.remove("is-drop");
             const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
-            const img = files.find((f) => f.type.startsWith("image/"));
-            if (img) sendImage(img);
+            const imgs = files.filter((f) => f.type.startsWith("image/"));
+            if (imgs.length) sendImage(imgs);
+        });
+        // bouton « Ajouter » : les photos choisies partent compressées, sans recharger la page avant
+        photoForm.querySelector('input[type="file"]')?.addEventListener("change", (e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length) sendImage(files);
+            e.target.value = "";
         });
     }
 
@@ -2862,9 +2952,11 @@
         const attachInput = form.querySelector("[data-attach-input]");
         const attachPreview = document.querySelector("[data-attach-preview]");
         let pendingFile = null;
+        let pendingShrink = null;
 
         const clearAttach = () => {
             pendingFile = null;
+            pendingShrink = null;
             if (attachInput) attachInput.value = "";
             if (attachPreview) {
                 attachPreview.hidden = true;
@@ -2883,6 +2975,7 @@
                 return;
             }
             pendingFile = f;
+            pendingShrink = shrinkImage(f); // compressée pendant qu'on écrit le message
             const img = attachPreview?.querySelector("img");
             if (img) img.src = URL.createObjectURL(f);
             if (attachPreview) attachPreview.hidden = false;
@@ -3035,7 +3128,8 @@
                 if (regen) fd.append("regen", "1");
                 if (regen && regenMid) fd.append("regen_mid", String(regenMid));
                 if (pendingFile) {
-                    fd.append("image", pendingFile);
+                    const file = (await pendingShrink?.catch(() => null)) || pendingFile;
+                    fd.append("image", file, file.name || "photo.jpg");
                     clearAttach();
                 }
 

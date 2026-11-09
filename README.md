@@ -108,6 +108,13 @@ mets `127.0.0.1` si seul un reverse proxy local doit y accéder)
 > valeurs. Passe-les en `-d` comme ci-dessus, ou dans le `php.ini` / la configuration PHP-FPM.
 > `post_max_size` doit couvrir l'envoi complet (plusieurs photos, ou la sauvegarde entière).
 > L'app accepte ensuite jusqu'à 15 Mo et 40 Mpx par image (`max_upload`, `max_pixels`).
+>
+> **Photos : compressées avant l'envoi.** Au-delà de 1,2 Mo, une photo (portrait, galerie, chat)
+> est redimensionnée et réencodée dans le navigateur avant de partir : elle passe donc même avec
+> les limites par défaut de PHP. Le serveur l'enregistre ensuite en WebP d'environ 500 Ko au plus
+> (`media_max_bytes`, 1800 px de côté). Les sauvegardes ZIP et les fiches importées ne sont pas
+> recompressées : pour elles, les limites ci-dessus restent à relever. `public/.user.ini` les relève
+> déjà sous PHP-FPM / CGI.
 
 Vérification rapide après installation ou mise à jour (base temporaire, la vraie base n'est pas touchée) :
 

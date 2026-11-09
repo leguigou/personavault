@@ -994,7 +994,7 @@ function store_gd_image(GdImage $img, string $prefix = 'p'): string
     if (!is_dir($dir)) {
         mkdir($dir, 0700, true);
     }
-    save_webp($img, $dir . '/' . $base . '.webp', 1800, 88);
+    save_webp($img, $dir . '/' . $base . '.webp', 1800, 88, (int) config('media_max_bytes', 500 * 1024));
     save_webp($img, $dir . '/' . $base . '.thumb.webp', 700, 84);
     return $base;
 }
@@ -1069,21 +1069,42 @@ function media_data_url(string $base, int $maxSide = 900): string
     return $jpeg === '' ? '' : 'data:image/jpeg;base64,' . base64_encode($jpeg);
 }
 
-function save_webp(GdImage $src, string $dest, int $maxSide, int $quality): void
+/**
+ * Enregistre $src en WebP, côté le plus long ≤ $maxSide. Avec $maxBytes > 0, la qualité
+ * baisse par paliers (puis l'image rétrécit) jusqu'à tenir dans ce poids : une photo de
+ * 8 Mo finit autour de 500 Ko sans perte visible à l'écran.
+ */
+function save_webp(GdImage $src, string $dest, int $maxSide, int $quality, int $maxBytes = 0): void
 {
     $w = imagesx($src);
     $h = imagesy($src);
-    $ratio = min(1, $maxSide / max($w, $h));
-    $nw = max(1, (int) round($w * $ratio));
-    $nh = max(1, (int) round($h * $ratio));
+    $side = $maxSide;
+    $data = '';
+    for ($pass = 0; $pass < 4; $pass++) {
+        $ratio = min(1, $side / max($w, $h));
+        $nw = max(1, (int) round($w * $ratio));
+        $nh = max(1, (int) round($h * $ratio));
 
-    $dst = imagecreatetruecolor($nw, $nh);
-    imagealphablending($dst, false);
-    imagesavealpha($dst, true);
-    imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
-    imagealphablending($dst, true);
-    imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
-    imagewebp($dst, $dest, $quality);
+        $dst = imagecreatetruecolor($nw, $nh);
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
+        imagealphablending($dst, true);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+
+        foreach ($maxBytes > 0 ? array_unique([$quality, 80, 72, 64]) : [$quality] as $q) {
+            ob_start();
+            imagewebp($dst, null, $q);
+            $data = (string) ob_get_clean();
+            if ($maxBytes <= 0 || strlen($data) <= $maxBytes) {
+                break 2;
+            }
+        }
+        $side = (int) round(min($side, max($w, $h)) * 0.8); // encore trop lourd : plus petit
+    }
+    if (file_put_contents($dest, $data) === false) {
+        throw new RuntimeException('écriture impossible : ' . basename($dest));
+    }
 }
 
 /** Suppression brute des fichiers d'une image (sans vérifier les références). */
