@@ -66,13 +66,40 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
 <?php endif; ?>
 
 <?php if (!$personas): ?>
-    <div class="empty">
+    <?php
+    // un écran vide par situation : recherche sans résultat, favoris, archives, bibliothèque vide
+    $emptyKind = ($q !== '' || $tag !== '') ? 'found' : ($fav ? 'fav' : ($arch ? 'arch' : 'lib'));
+    ?>
+    <div class="empty empty-<?= e($emptyKind) ?>">
         <div class="empty-orb" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 3.2 14.9 9l6.4.9-4.7 4.5 1.1 6.4L12 17.8 6.3 20.8l1.1-6.4L2.7 9.9 9.1 9 12 3.2Z" fill="url(#eg)"/><defs><linearGradient id="eg" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#f472b6"/></linearGradient></defs></svg>
+            <?php if ($emptyKind === 'found'): ?>
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4M8.5 11h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <?php elseif ($emptyKind === 'fav'): ?>
+                <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <?php elseif ($emptyKind === 'arch'): ?>
+                <svg viewBox="0 0 24 24"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+            <?php else: ?>
+                <svg viewBox="0 0 24 24"><path d="M12 3.2 14.9 9l6.4.9-4.7 4.5 1.1 6.4L12 17.8 6.3 20.8l1.1-6.4L2.7 9.9 9.1 9 12 3.2Z" fill="url(#eg)"/><defs><linearGradient id="eg" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#f472b6"/></linearGradient></defs></svg>
+            <?php endif; ?>
         </div>
-        <h2><?= e($q !== '' || $tag !== '' ? t('library.empty_found_title') : t('library.empty_title')) ?></h2>
-        <p><?= e($q !== '' || $tag !== '' ? t('library.empty_found_text') : t('library.empty_text')) ?></p>
-        <?php if ($q === '' && $tag === ''): ?>
+        <h2><?= e(match ($emptyKind) {
+            'found' => t('library.empty_found_title'),
+            'fav'   => t('library.empty_fav_title'),
+            'arch'  => t('library.empty_arch_title'),
+            default => t('library.empty_title'),
+        }) ?></h2>
+        <p><?= e(match ($emptyKind) {
+            'found' => t('library.empty_found_text'),
+            'fav'   => t('library.empty_fav_text'),
+            'arch'  => t('library.empty_arch_text'),
+            default => t('library.empty_text'),
+        }) ?></p>
+        <?php if ($emptyKind === 'found'): ?>
+            <a class="btn btn-ghost btn-sm" href="/<?= $fav ? '?fav=1' : ($arch ? '?arch=1' : '') ?>"><?= e(t('library.empty_found_reset')) ?></a>
+        <?php elseif ($emptyKind === 'fav' || $emptyKind === 'arch'): ?>
+            <a class="btn btn-ghost btn-sm" href="/"><?= e(t('library.empty_back')) ?></a>
+        <?php endif; ?>
+        <?php if ($emptyKind === 'lib'): ?>
             <a class="btn btn-primary" href="/p/new"><?= e(t('library.create')) ?></a>
             <form method="post" action="/import" enctype="multipart/form-data" style="margin:0" data-card-import>
                 <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">

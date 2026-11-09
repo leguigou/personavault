@@ -86,6 +86,8 @@ if ($action === 'msg-edit' && $method === 'POST') {
     $images = db_tx(static function (PDO $pdo) use ($cid, $mid, $content): array {
         $pdo->prepare('UPDATE messages SET content = ?, split_points = "" WHERE id = ?')
             ->execute([$content, $mid]);
+        // les réponses gardées répondaient à l'ancien texte : elles ne valent plus
+        $pdo->prepare('DELETE FROM reply_versions WHERE user_message_id = ?')->execute([$mid]);
         $st = $pdo->prepare("SELECT image FROM messages WHERE conversation_id = ? AND id > ? AND image <> ''");
         $st->execute([$cid, $mid]);
         $images = $st->fetchAll(PDO::FETCH_COLUMN);
@@ -105,6 +107,41 @@ if ($action === 'msg-edit' && $method === 'POST') {
         'content'      => $content,
         'split_points' => [],
         'replay'       => $replay,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* --- passer d'une version de réponse à l'autre (‹ 1/3 ›) --- */
+if ($action === 'version' && $method === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    csrf_check_json();
+    session_write_close();
+    $mid = (int) ($_POST['mid'] ?? 0);
+    $dir = (int) ($_POST['dir'] ?? 0) < 0 ? -1 : 1;
+
+    $stmt = db()->prepare("SELECT * FROM messages WHERE id = ? AND conversation_id = ? AND role = 'assistant'");
+    $stmt->execute([$mid, $cid]);
+    $msg  = $stmt->fetch();
+    $ids  = $msg ? reply_version_ids(reply_user_message_id($cid, $mid)) : [];
+    $pos  = $msg ? array_search((int) $msg['version_id'], $ids, true) : false;
+    if ($pos === false) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => t('error.message.not_found')], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $pos = max(0, min(count($ids) - 1, $pos + $dir));
+
+    $st = db()->prepare('SELECT * FROM reply_versions WHERE id = ?');
+    $st->execute([$ids[$pos]]);
+    $v = $st->fetch();
+    db()->prepare('UPDATE messages SET content = ?, model = ?, split_points = ?, version_id = ? WHERE id = ?')
+        ->execute([(string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id'], $mid]);
+
+    echo json_encode([
+        'ok'           => true,
+        'content'      => (string) $v['content'],
+        'split_points' => json_list($v['split_points'] ?: '[]'),
+        'versions'     => ['index' => $pos + 1, 'total' => count($ids)],
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -190,10 +227,22 @@ if ($action === '' && $method === 'GET') {
     }
     $total    = (int) db()->query('SELECT COUNT(*) FROM messages WHERE conversation_id = ' . (int) $cid)->fetchColumn();
     $messages = fetch_messages($cid, 50);
+    // ‹ 1/3 › : seulement sous la dernière réponse (celle qu'on peut régénérer)
+    $replyVersions = null;
+    for ($i = count($messages) - 1; $i >= 0; $i--) {
+        if ((string) $messages[$i]['role'] === 'assistant') {
+            $info = reply_versions_info($cid, $messages[$i]);
+            $replyVersions = $info ? ['mid' => (int) $messages[$i]['id']] + $info : null;
+            break;
+        }
+        if ((string) $messages[$i]['role'] === 'user') {
+            break;
+        }
+    }
     $convs = db()->query(
         'SELECT c.id, c.title, c.updated_at, c.unread, p.name AS persona_name, p.avatar AS persona_avatar
              FROM conversations c JOIN personas p ON p.id = c.persona_id
-             ORDER BY c.updated_at DESC LIMIT 30'
+             ORDER BY c.pinned DESC, c.updated_at DESC LIMIT 30'
     )->fetchAll();
 
     render('chat', [
@@ -203,6 +252,7 @@ if ($action === '' && $method === 'GET') {
         'persona'   => $persona,
         'memory'    => chat_memory_stats($cid, $conv),
         'messages'  => $messages,
+        'replyVersions' => $replyVersions,
         'totalMsgs' => $total,
         'personaMemories' => chat_persona_memories((int) $persona['id'], 12),
         'olderLeft' => max(0, $total - count($messages)),

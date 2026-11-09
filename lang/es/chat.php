@@ -17,7 +17,13 @@ return [
     'chat.list.empty_text'          => 'Elige un persona y empieza a hablarle.',
     'chat.list.pick_persona'        => 'Elegir un persona',
     'chat.list.no_message'          => 'Todavía no hay mensajes',
-    'chat.list.message_count'       => ['one' => '{n} msj', 'other' => '{n} msjs'],
+    'chat.list.pinned' => 'Fijadas',
+    'chat.list.recent' => 'Recientes',
+    'chat.list.photo' => '📷 Foto',
+    'chat.list.you' => 'Tú:',
+    'chat.list.new_badge' => 'Nuevo',
+    'chat.list.pin' => 'Fijar arriba',
+    'chat.list.unpin' => 'Quitar de fijadas',
     'chat.list.search_persona'      => 'Buscar un persona…',
     'chat.list.no_persona'          => 'No hay ningún persona en la biblioteca. Crea una ficha primero.',
 
@@ -33,6 +39,10 @@ return [
 
     // --- conversación: mensajes y redacción
     'chat.intro.first_message'      => 'Escribe el primer mensaje.',
+    'chat.intro.starters_label' => 'Ideas para empezar',
+    'chat.intro.starter_1' => '¡Hola! ¿Qué tal?',
+    'chat.intro.starter_2' => 'Cuéntame tu día.',
+    'chat.intro.starter_3' => 'Háblame un poco de ti.',
     'chat.msg.photo_sent'           => 'Foto enviada',
     'chat.composer.attach_preview'  => 'Vista previa de la foto adjunta',
     'chat.composer.attach_remove'   => 'Quitar la foto',
@@ -71,7 +81,12 @@ return [
 
     // --- opciones de la conversación
     'chat.toggles.memory'           => 'Conservar la memoria (resumen continuo)',
+    'chat.toggles.pinned' => 'Fijar arriba de la lista',
     'chat.toggles.followup_settings' => 'Ajustar el plazo y el horario de los mensajes',
+    'chat.toggles.followup_global_off' => 'Los mensajes espontáneos están desactivados en Ajustes: este interruptor no tiene efecto por ahora.',
+    'chat.toggles.followup_enable' => 'Activarlos',
+    'chat.toggles.followup_no_cron' => 'El programador de mensajes espontáneos nunca se ha ejecutado en este servidor: no se enviará ningún mensaje espontáneo.',
+    'chat.toggles.followup_how' => 'Cómo activarlo',
     'chat.toggles.followup'         => 'Mensajes espontáneos tras un largo silencio',
 
     // --- memoria (resumen continuo)

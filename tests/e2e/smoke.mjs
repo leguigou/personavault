@@ -143,6 +143,14 @@ await post('/settings/chat', { chat_provider: 'lmstudio', chat_base_url: `http:/
     facts_frequency: 'each', chat_title_model: 'chat' });
 const sse = await post('/chat/1/stream', { message: 'Bonjour, test du flux' });
 expect(sse.includes('"delta"') && sse.includes('"done"'), 'la réponse arrive en streaming jusqu’au bout');
+// régénérer deux fois : l'ancienne réponse est gardée, on navigue entre les versions (‹ 2/2 ›)
+const regen1 = await post('/chat/1/stream', { regen: '1' }, '/chat/1/stream (régénérer)');
+expect(/"versions":\{"index":2,"total":2\}/.test(regen1), 'la régénération garde l’ancienne réponse comme version 1/2');
+const vid = (regen1.match(/"reply":\{"id":(\d+)/) || [])[1];
+const vprev = await post('/chat/1/version', { mid: vid, dir: '-1' }, '/chat/1/version (précédente)');
+expect(vprev.includes('"index":1') && vprev.includes('"total":2'), 'on revient à la version 1/2');
+await post('/chat/1/pin', { pinned: '1' });
+await post('/chat/1/pin', { pinned: '0' }, '/chat/1/pin (retirer)');
 await post('/chat/1/msg-delete', { mid: '1' });
 await post('/settings/test');
 await post('/p/smoke-test/delete');

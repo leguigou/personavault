@@ -3,9 +3,13 @@ $flashes = $flashes ?? [];
 $nav = $nav ?? [];
 $isAuth = is_logged();
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-$isFav = ($_GET['fav'] ?? '') === '1';
-$isArch = ($_GET['arch'] ?? '') === '1';
-$isLib = !$isFav && !$isArch && !str_starts_with($currentPath, '/chat');
+$isFav = $currentPath === '/' && ($_GET['fav'] ?? '') === '1';
+$isArch = $currentPath === '/' && ($_GET['arch'] ?? '') === '1';
+$isNew = $currentPath === '/p/new';
+$isSettings = $currentPath === '/settings' || str_starts_with($currentPath, '/settings/');
+// Bibliothèque : l'accueil et les fiches persona, pas les Réglages ni la création
+$isLib = !$isFav && !$isArch && !$isNew && !$isSettings
+    && !str_starts_with($currentPath, '/chat') && !str_starts_with($currentPath, '/memories');
 $isChat = str_starts_with($currentPath, '/chat') || str_starts_with($currentPath, '/memories');
 $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
 ?>
@@ -71,7 +75,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             <span class="hide-sm"><?= e(t('nav.new')) ?></span>
         </a>
-        <a class="icon-btn <?= $currentPath === '/settings' ? 'is-active' : '' ?>" href="/settings" title="<?= e(t('nav.settings')) ?>" aria-label="<?= e(t('nav.settings')) ?>">
+        <a class="icon-btn <?= $isSettings ? 'is-active' : '' ?>"<?= $isSettings ? ' aria-current="page"' : '' ?> href="/settings" title="<?= e(t('nav.settings')) ?>" aria-label="<?= e(t('nav.settings')) ?>">
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
         </a>
         <form method="post" action="/logout" class="logout-form">
@@ -105,7 +109,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
         <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
         <span class="tab-label"><?= e(t('nav.chats')) ?></span>
     </a>
-    <a href="/p/new" class="tab-add" aria-label="<?= e(t('nav.new_persona')) ?>">
+    <a href="/p/new" class="tab-add"<?= $isNew ? ' aria-current="page"' : '' ?> aria-label="<?= e(t('nav.new_persona')) ?>">
         <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>
         <span class="tab-label"><?= e(t('nav.new')) ?></span>
     </a>

@@ -17,7 +17,13 @@ return [
     'chat.list.empty_text'          => 'Pick a persona and start talking.',
     'chat.list.pick_persona'        => 'Choose a persona',
     'chat.list.no_message'          => 'No messages yet',
-    'chat.list.message_count'       => ['one' => '{n} msg', 'other' => '{n} msgs'],
+    'chat.list.pinned' => 'Pinned',
+    'chat.list.recent' => 'Recent',
+    'chat.list.photo' => '📷 Photo',
+    'chat.list.you' => 'You:',
+    'chat.list.new_badge' => 'New',
+    'chat.list.pin' => 'Pin to top',
+    'chat.list.unpin' => 'Unpin',
     'chat.list.search_persona'      => 'Search for a persona…',
     'chat.list.no_persona'          => 'No personas in your library. Create a profile first.',
 
@@ -33,6 +39,10 @@ return [
 
     // --- conversation: messages and composer
     'chat.intro.first_message'      => 'Write the first message.',
+    'chat.intro.starters_label' => 'Ideas to get started',
+    'chat.intro.starter_1' => 'Hi! How are you?',
+    'chat.intro.starter_2' => 'Tell me about your day.',
+    'chat.intro.starter_3' => 'Tell me a bit about yourself.',
     'chat.msg.photo_sent'           => 'Photo sent',
     'chat.composer.attach_preview'  => 'Preview of the attached photo',
     'chat.composer.attach_remove'   => 'Remove the photo',
@@ -71,7 +81,12 @@ return [
 
     // --- conversation options
     'chat.toggles.memory'           => 'Keep memory (rolling summary)',
+    'chat.toggles.pinned' => 'Pin to the top of the list',
     'chat.toggles.followup_settings' => 'Set the delay and hours for follow-ups',
+    'chat.toggles.followup_global_off' => 'Spontaneous follow-ups are turned off in Settings: this switch has no effect for now.',
+    'chat.toggles.followup_enable' => 'Turn them on',
+    'chat.toggles.followup_no_cron' => 'The follow-up scheduler has never run on this server: no spontaneous message will be sent.',
+    'chat.toggles.followup_how' => 'How to set it up',
     'chat.toggles.followup'         => 'Spontaneous messages after a long silence',
 
     // --- memory (rolling summary)

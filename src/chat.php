@@ -425,7 +425,10 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
 function chat_ring(array $m, int $size = 40): string
 {
     $pct = max(0, min(100, (int) ($m['percent'] ?? 0)));
-    $color = $pct >= 80 ? '#f87171' : ($pct >= 50 ? '#fbbf24' : '#34d399');
+    // fond clair : teintes plus foncées (le mode « auto » est corrigé par app.js)
+    $color = ui_style()['mode'] === 'light'
+        ? ($pct >= 80 ? '#dc2626' : ($pct >= 50 ? '#b45309' : '#059669'))
+        : ($pct >= 80 ? '#f87171' : ($pct >= 50 ? '#fbbf24' : '#34d399'));
 
     $r  = 15.5;
     $c  = 2 * M_PI * $r;
@@ -1502,4 +1505,92 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     $res['provider'] = 'chat';
     $res['notice']   = '';
     return $res;
+}
+
+/* ------------------------------------------------- versions d'une réponse (‹ 1/3 ›) */
+
+/** Message de l'utilisateur auquel répond la réponse $msgId (0 si aucun). */
+function reply_user_message_id(int $cid, int $msgId): int
+{
+    $st = db()->prepare("SELECT COALESCE(MAX(id), 0) FROM messages WHERE conversation_id = ? AND role = 'user' AND id < ?");
+    $st->execute([$cid, $msgId]);
+    return (int) $st->fetchColumn();
+}
+
+/** Identifiants des versions d'une réponse, dans l'ordre où elles ont été obtenues. */
+function reply_version_ids(int $userMsgId): array
+{
+    $st = db()->prepare('SELECT id FROM reply_versions WHERE user_message_id = ? ORDER BY id');
+    $st->execute([$userMsgId]);
+    return array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
+ * Position de la version affichée : ['index' => 2, 'total' => 3], ou null si la réponse
+ * n'a jamais été régénérée (une seule version, rien à afficher).
+ */
+function reply_versions_info(int $cid, array $msg): ?array
+{
+    $vid = (int) ($msg['version_id'] ?? 0);
+    if ($vid <= 0 || (string) ($msg['role'] ?? '') !== 'assistant') {
+        return null;
+    }
+    $ids = reply_version_ids(reply_user_message_id($cid, (int) $msg['id']));
+    $pos = array_search($vid, $ids, true);
+    if ($pos === false || count($ids) < 2) {
+        return null;
+    }
+    return ['index' => $pos + 1, 'total' => count($ids)];
+}
+
+/**
+ * Avant de régénérer : garde la réponse actuelle comme version, si ce n'est pas déjà fait
+ * (une réponse déjà versionnée est identique à sa version : le personnage ne s'édite pas).
+ */
+function reply_version_archive(int $cid, int $userMsgId): void
+{
+    $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ? ORDER BY id");
+    $st->execute([$cid, $userMsgId]);
+    $rows = $st->fetchAll();
+    if (!$rows || (int) $rows[0]['version_id'] > 0) {
+        return;
+    }
+    $content = trim(implode("\n\n", array_map(static fn (array $r): string => trim((string) $r['content']), $rows)));
+    if ($content === '') {
+        return;
+    }
+    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)')
+        ->execute([
+            $cid, $userMsgId, $content, (string) $rows[0]['model'],
+            count($rows) === 1 ? (string) $rows[0]['split_points'] : '',
+            (string) $rows[0]['created_at'],
+        ]);
+}
+
+/** Enregistre la réponse $msgId comme nouvelle version de la réponse à $userMsgId. */
+function reply_version_register(int $cid, int $userMsgId, int $msgId): void
+{
+    $st = db()->prepare('SELECT content, model, split_points FROM messages WHERE id = ?');
+    $st->execute([$msgId]);
+    $m = $st->fetch();
+    if (!$m) {
+        return;
+    }
+    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points) VALUES (?, ?, ?, ?, ?)')
+        ->execute([$cid, $userMsgId, (string) $m['content'], (string) $m['model'], (string) $m['split_points']]);
+    db()->prepare('UPDATE messages SET version_id = ? WHERE id = ?')->execute([(int) db()->lastInsertId(), $msgId]);
+}
+
+/** La régénération a échoué sans rien produire : on remet la dernière version à l'écran. */
+function reply_version_restore_last(int $cid, int $userMsgId): void
+{
+    $st = db()->prepare('SELECT * FROM reply_versions WHERE user_message_id = ? ORDER BY id DESC LIMIT 1');
+    $st->execute([$userMsgId]);
+    $v = $st->fetch();
+    if (!$v) {
+        return;
+    }
+    db()->prepare('INSERT INTO messages (conversation_id, role, content, model, split_points, version_id) VALUES (?, "assistant", ?, ?, ?, ?)')
+        ->execute([$cid, (string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id']]);
 }

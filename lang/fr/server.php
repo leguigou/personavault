@@ -125,6 +125,22 @@ return [
     'date.month_short.12'         => 'déc.',
     'date.day_month_format'       => 'd/m', // format PHP date() : jour/mois
     'date.short'                  => '{day} {month} {year}',
+    'date.just_now' => 'À l\'instant',
+    'date.just_now_long' => 'à l\'instant',
+    'date.minutes_short' => '{n} min',
+    'date.minutes_ago' => 'il y a {n} min',
+    'date.time_format' => 'H:i',
+    'date.today' => 'aujourd\'hui',
+    'date.yesterday' => 'Hier',
+    'date.yesterday_long' => 'hier',
+    'date.at_time' => '{day} à {time}',
+    'date.weekday_short.0' => 'dim.',
+    'date.weekday_short.1' => 'lun.',
+    'date.weekday_short.2' => 'mar.',
+    'date.weekday_short.3' => 'mer.',
+    'date.weekday_short.4' => 'jeu.',
+    'date.weekday_short.5' => 'ven.',
+    'date.weekday_short.6' => 'sam.',
 
     // --- nombres et tailles
     'labels.number.decimal'       => ',',

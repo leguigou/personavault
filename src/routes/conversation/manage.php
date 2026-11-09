@@ -6,13 +6,29 @@ declare(strict_types=1);
  * Inclus par src/routes/conversation.php ($cid, $action, $conv, $persona, $personaPrompts).
  */
 
-/* --- options propres à la conversation (mémoire / relances) --- */
+/* --- épingler / désépingler (bouton de la liste des discussions) --- */
+if ($action === 'pin' && $method === 'POST') {
+    $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+    $ajax ? csrf_check_json() : csrf_check();
+    $pinned = !empty($_POST['pinned']) ? 1 : 0;
+    db()->prepare('UPDATE conversations SET pinned = ? WHERE id = ?')->execute([$pinned, $cid]);
+    if ($ajax) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true, 'pinned' => (bool) $pinned], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    redirect('/chat');
+}
+
+/* --- options propres à la conversation (mémoire / relances / épinglage) --- */
 if ($action === 'toggles' && $method === 'POST') {
     csrf_check();
-    db()->prepare('UPDATE conversations SET memory_enabled = ?, auto_followup = ?, updated_at = datetime("now") WHERE id = ?')
+    // sans toucher à updated_at : changer un réglage ne remonte pas la conversation dans la liste
+    db()->prepare('UPDATE conversations SET memory_enabled = ?, auto_followup = ?, pinned = ? WHERE id = ?')
         ->execute([
             !empty($_POST['memory_enabled']) ? 1 : 0,
             !empty($_POST['auto_followup']) ? 1 : 0,
+            !empty($_POST['pinned']) ? 1 : 0,
             $cid,
         ]);
     if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {

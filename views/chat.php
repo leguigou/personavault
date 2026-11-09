@@ -99,6 +99,11 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     <h2><?= e((string) $persona['name']) ?></h2>
                     <?php if ($persona['tagline']): ?><p><?= e((string) $persona['tagline']) ?></p><?php endif; ?>
                     <span class="hint"><?= e(t('chat.intro.first_message')) ?></span>
+                    <div class="chat-starters" role="group" aria-label="<?= e(t('chat.intro.starters_label')) ?>">
+                        <?php foreach ([t('chat.intro.starter_1'), t('chat.intro.starter_2'), t('chat.intro.starter_3')] as $starter): ?>
+                            <button type="button" class="chip" data-starter="<?= e($starter) ?>"><?= e($starter) ?></button>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             <?php endif; ?>
 
@@ -112,7 +117,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <?php elseif ($role === 'notice'): ?>
                     <div class="msg-notice" data-msg-id="<?= (int) $m['id'] ?>"><?= e((string) $m['content']) ?></div>
                 <?php else: ?>
-                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>">
+                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>"<?php if (($replyVersions['mid'] ?? 0) === (int) $m['id']): ?> data-ver="<?= (int) $replyVersions['index'] ?>" data-vers="<?= (int) $replyVersions['total'] ?>"<?php endif; ?>>
                         <?php if ($role !== 'user'): ?>
                             <span class="msg-avatar">
                                 <?php if ($persona['avatar']): ?>
@@ -264,6 +269,11 @@ $fmt   = fn (float $n): string => fmt_number($n);
             <input type="hidden" name="_token" value="<?= e($token) ?>">
 
             <label class="check">
+                <input type="checkbox" name="pinned" value="1" <?= (int) ($conv['pinned'] ?? 0) === 1 ? 'checked' : '' ?>>
+                <span><?= e(t('chat.toggles.pinned')) ?></span>
+            </label>
+
+            <label class="check">
                 <input type="checkbox" name="memory_enabled" value="1" <?= (int) $conv['memory_enabled'] ? 'checked' : '' ?>>
                 <span><?= e(t('chat.toggles.memory')) ?></span>
             </label>
@@ -272,7 +282,25 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <input type="checkbox" name="auto_followup" value="1" <?= (int) ($conv['auto_followup'] ?? 1) === 1 ? 'checked' : '' ?>>
                 <span><?= e(t('chat.toggles.followup')) ?></span>
             </label>
-            <a class="mini-link" href="/settings#followup"><?= e(t('chat.toggles.followup_settings')) ?></a>
+            <?php
+            // l'interrupteur ne sert à rien si les relances sont coupées partout,
+            // ou si le planificateur (bin/followup.php) n'a jamais tourné
+            $fuGlobalOff = setting('chat_followup_enabled', '1') !== '1';
+            $fuNeverRan  = !$fuGlobalOff && setting('followup_last_run', '') === '';
+            ?>
+            <?php if ($fuGlobalOff): ?>
+                <p class="inline-warn" role="note">
+                    <?= e(t('chat.toggles.followup_global_off')) ?>
+                    <a href="/settings#followup"><?= e(t('chat.toggles.followup_enable')) ?></a>
+                </p>
+            <?php elseif ($fuNeverRan): ?>
+                <p class="inline-warn" role="note">
+                    <?= e(t('chat.toggles.followup_no_cron')) ?>
+                    <a href="/settings#followup"><?= e(t('chat.toggles.followup_how')) ?></a>
+                </p>
+            <?php else: ?>
+                <a class="mini-link" href="/settings#followup"><?= e(t('chat.toggles.followup_settings')) ?></a>
+            <?php endif; ?>
 
             <div class="form-actions" data-autosave-fallback>
                 <button class="btn btn-primary btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>

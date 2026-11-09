@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 3);
+define('PV_SCHEMA_VERSION', 4);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -188,6 +188,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 3) {
             migrate_v3($pdo);
+        }
+        if ($version < 4) {
+            migrate_v4($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -397,6 +400,29 @@ END;
 
 INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');
 SQL);
+}
+
+/**
+ * v4 : versions d'une réponse régénérée (‹ 1/3 ›) et conversations épinglées.
+ * reply_versions garde chaque réponse obtenue pour un même message de l'utilisateur ;
+ * messages.version_id désigne la version affichée (0 = réponse jamais régénérée).
+ */
+function migrate_v4(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS reply_versions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id  INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_message_id  INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    content          TEXT NOT NULL,
+    model            TEXT NOT NULL DEFAULT '',
+    split_points     TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_reply_versions_user ON reply_versions(user_message_id, id);
+SQL);
+    add_column_if_missing($pdo, 'messages', 'version_id', 'INTEGER NOT NULL DEFAULT 0');
+    add_column_if_missing($pdo, 'conversations', 'pinned', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 /* --------------------------------------------------------------- réglages */
@@ -738,6 +764,75 @@ function fr_date(?string $sqlDate): string
         'month' => $months[(int) date('n', $ts) - 1],
         'year'  => date('Y', $ts),
     ]);
+}
+
+/** Horodatage SQL (UTC) → date dans le fuseau configuré, ou null. */
+function local_dt(?string $sqlDate): ?DateTimeImmutable
+{
+    if (!$sqlDate) {
+        return null;
+    }
+    try {
+        return (new DateTimeImmutable($sqlDate, new DateTimeZone('UTC')))
+            ->setTimezone(new DateTimeZone((string) config('timezone', 'Europe/Paris')));
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Date courte façon messagerie, pour une liste : « 5 min », « 14:32 », « Hier », « mar. »,
+ * puis « 8 nov. 2026 » au-delà d'une semaine.
+ */
+function rel_time(?string $sqlDate): string
+{
+    $d = local_dt($sqlDate);
+    if (!$d) {
+        return '';
+    }
+    $now  = new DateTimeImmutable('now', $d->getTimezone());
+    $secs = $now->getTimestamp() - $d->getTimestamp();
+    if ($secs < 60) {
+        return t('date.just_now');
+    }
+    if ($secs < 3600) {
+        return t('date.minutes_short', ['n' => (int) floor($secs / 60)]);
+    }
+    $days = (int) $now->setTime(0, 0)->diff($d->setTime(0, 0))->days;
+    if ($days === 0) {
+        return $d->format(t('date.time_format'));
+    }
+    if ($days === 1) {
+        return t('date.yesterday');
+    }
+    if ($days < 7) {
+        $wd = [
+            t('date.weekday_short.0'), t('date.weekday_short.1'), t('date.weekday_short.2'), t('date.weekday_short.3'),
+            t('date.weekday_short.4'), t('date.weekday_short.5'), t('date.weekday_short.6'),
+        ];
+        return $wd[(int) $d->format('w')];
+    }
+    return fr_date($sqlDate);
+}
+
+/** Date relative en toutes lettres : « à l'instant », « il y a 5 min », « hier à 14:32 »… */
+function rel_time_long(?string $sqlDate): string
+{
+    $d = local_dt($sqlDate);
+    if (!$d) {
+        return '';
+    }
+    $now  = new DateTimeImmutable('now', $d->getTimezone());
+    $secs = $now->getTimestamp() - $d->getTimestamp();
+    if ($secs < 60) {
+        return t('date.just_now_long');
+    }
+    if ($secs < 3600) {
+        return t('date.minutes_ago', ['n' => (int) floor($secs / 60)]);
+    }
+    $days = (int) $now->setTime(0, 0)->diff($d->setTime(0, 0))->days;
+    $day  = $days === 0 ? t('date.today') : ($days === 1 ? t('date.yesterday_long') : fr_date($sqlDate));
+    return t('date.at_time', ['day' => $day, 'time' => $d->format(t('date.time_format'))]);
 }
 
 function parse_tags(string $raw): array
