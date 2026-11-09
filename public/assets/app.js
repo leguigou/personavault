@@ -728,32 +728,102 @@
     });
 
     /* ------------------------------------------------------- lightbox */
+    /* Visionneuse : les photos d'un même ensemble ([data-gallery]) défilent au doigt
+       (défilement horizontal aimanté), aux flèches du clavier ou avec ‹ › ; compteur
+       « 3 / 9 », points, et bouton rond de téléchargement de la photo affichée. */
     const lb = document.getElementById("lightbox");
     if (lb) {
-        const lbImg = lb.querySelector("img");
+        const track = lb.querySelector("[data-lb-track]");
+        const count = lb.querySelector("[data-lb-count]");
+        const dots = lb.querySelector("[data-lb-dots]");
+        const dl = lb.querySelector("[data-lb-download]");
+        let items = [];
+        let index = 0;
+        let baseName = "photo";
+
+        const paint = () => {
+            const n = items.length;
+            count.textContent = n > 1 ? (index + 1) + " / " + n : "";
+            lb.classList.toggle("is-single", n <= 1);
+            const url = items[index] || "";
+            dl.href = url;
+            const ext = (url.split("?")[0].match(/\.(\w+)$/) || [, "webp"])[1];
+            dl.setAttribute("download", baseName + (n > 1 ? "-" + (index + 1) : "") + "." + ext);
+            [...dots.children].forEach((d, k) => d.classList.toggle("is-on", k === index));
+            lb.querySelector(".lb-prev").disabled = index <= 0;
+            lb.querySelector(".lb-next").disabled = index >= n - 1;
+        };
+        const goTo = (k, smooth = true) => {
+            index = Math.max(0, Math.min(items.length - 1, k));
+            track.scrollTo({ left: index * track.clientWidth, behavior: smooth ? "smooth" : "auto" });
+            paint();
+        };
+        const open = (img) => {
+            const group = img.closest("[data-gallery]");
+            const imgs = group ? [...group.querySelectorAll("[data-full]")] : [img];
+            items = imgs.map((x) => x.dataset.full);
+            baseName = group?.dataset.galleryName || "photo";
+            track.replaceChildren(...items.map((src, k) => {
+                const slide = document.createElement("div");
+                slide.className = "lb-slide";
+                const im = document.createElement("img");
+                im.alt = imgs[k].alt || "";
+                im.decoding = "async";
+                // la photo touchée et ses voisines tout de suite, les autres à l'approche
+                im.loading = Math.abs(k - imgs.indexOf(img)) <= 1 ? "eager" : "lazy";
+                im.src = src;
+                slide.appendChild(im);
+                return slide;
+            }));
+            dots.replaceChildren(...(items.length > 1 && items.length <= 20
+                ? items.map(() => document.createElement("i")) : []));
+            lb.hidden = false;
+            document.body.style.overflow = "hidden";
+            requestAnimationFrame(() => goTo(imgs.indexOf(img), false));
+        };
         const close = () => {
             lb.hidden = true;
             document.body.style.overflow = "";
+            track.replaceChildren();
         };
+
+        // compteur à jour pendant le glissement du doigt
+        let raf = 0;
+        track.addEventListener("scroll", () => {
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => {
+                const k = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+                if (k !== index) {
+                    index = k;
+                    paint();
+                }
+            });
+        }, { passive: true });
+        window.addEventListener("resize", () => {
+            if (!lb.hidden) goTo(index, false);
+        });
+
         document.addEventListener("click", (e) => {
             const img = e.target.closest("[data-full]");
-            if (!img) return;
-            lbImg.src = img.dataset.full;
-            lb.hidden = false;
-            document.body.style.overflow = "hidden";
+            if (img && !lb.contains(img)) open(img);
         });
         document.addEventListener("keydown", (e) => {
             const img = e.target.closest?.("[data-full]");
-            if (img && (e.key === "Enter" || e.key === " ")) {
+            if (img && lb.hidden && (e.key === "Enter" || e.key === " ")) {
                 e.preventDefault();
-                lbImg.src = img.dataset.full;
-                lb.hidden = false;
-                document.body.style.overflow = "hidden";
+                open(img);
+                return;
             }
-            if (e.key === "Escape" && !lb.hidden) close();
+            if (lb.hidden) return;
+            if (e.key === "Escape") close();
+            else if (e.key === "ArrowRight") goTo(index + 1);
+            else if (e.key === "ArrowLeft") goTo(index - 1);
         });
         lb.addEventListener("click", (e) => {
-            if (e.target === lb || e.target.closest(".lightbox-close")) close();
+            const step = e.target.closest("[data-lb-step]");
+            if (step) return goTo(index + Number(step.dataset.lbStep));
+            // fermer : la croix, ou un toucher hors de la photo et des boutons
+            if (e.target.closest(".lightbox-close") || e.target === lb || e.target.classList.contains("lb-slide")) close();
         });
     }
 
@@ -876,7 +946,8 @@
             const original = btn.innerHTML;
             btn.classList.add("is-busy");
             btn.disabled = true;
-            btn.textContent = tr("persona.ai_fill_busy");
+            const lbl = btn.querySelector(".quick-label"); // tuile : on ne change que le libellé
+            (lbl || btn).textContent = tr("persona.ai_fill_busy");
 
             try {
                 const fd = new FormData();

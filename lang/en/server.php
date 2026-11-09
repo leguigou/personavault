@@ -25,6 +25,7 @@ return [
     'flash.persona.deleted'       => '{name} has been deleted.',
     'flash.persona.restored'      => 'Persona restored.',
     'flash.persona.archived'      => 'Persona archived.',
+    'flash.persona.duplicated' => 'Copy created: {name}. Edit it freely, the original stays as it is.',
     'flash.persona.photos_added'  => ['one' => '{n} photo added.', 'other' => '{n} photos added.'],
     'flash.persona.no_photo'      => 'No photo added.',
     'flash.prompt.empty'          => 'The prompt is empty.',
@@ -120,7 +121,6 @@ return [
     'date.month_short.10'         => 'Oct',
     'date.month_short.11'         => 'Nov',
     'date.month_short.12'         => 'Dec',
-    'date.day_month_format'       => 'm/d', // format PHP date() : month/day
     'date.short'                  => '{month} {day}, {year}',
     'date.just_now' => 'Just now',
     'date.just_now_long' => 'just now',

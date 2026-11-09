@@ -45,79 +45,100 @@ $token    = csrf_token();
         </div>
 
         <div class="hero-actions">
-            <a class="btn btn-primary" href="/p/<?= e($persona['slug']) ?>/edit">
-                <svg viewBox="0 0 24 24" class="ico"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-                <?= e(t('persona.edit')), "\n" ?>
-            </a>
-            <?php if (llm_ready()): ?>
-                <button type="button" class="btn btn-ai" data-ai-fill="/p/<?= e($persona['slug']) ?>/ai-fill" data-token="<?= e($token) ?>"
-                        title="<?= e(t('persona.ai_fill_title')) ?>">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M12 3.4l1.7 4.9 4.9 1.7-4.9 1.7L12 16.6l-1.7-4.9L5.4 10l4.9-1.7L12 3.4Z" fill="currentColor"/><path d="M18.4 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z" fill="currentColor" opacity=".65"/></svg>
-                    <span class="ai-full"><?= e(t('persona.ai_fill')) ?></span><span class="ai-short"><?= e(t('persona.ai_fill_short')) ?></span>
+            <!-- 1. les deux actions principales -->
+            <div class="hero-main">
+                <form method="post" action="/chat">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <input type="hidden" name="persona_id" value="<?= (int) $persona['id'] ?>">
+                    <button class="btn btn-primary" type="submit">
+                        <svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                        <?= e(t('persona.chat')), "\n" ?>
+                    </button>
+                </form>
+                <a class="btn btn-ghost" href="/p/<?= e($persona['slug']) ?>/edit">
+                    <svg viewBox="0 0 24 24" class="ico"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                    <?= e(t('persona.edit')), "\n" ?>
+                </a>
+            </div>
+
+            <!-- 2. actions rapides : petites tuiles icône + libellé -->
+            <div class="hero-quick">
+                <?php if (llm_ready()): ?>
+                    <button type="button" class="quick-tile is-ai" data-ai-fill="/p/<?= e($persona['slug']) ?>/ai-fill" data-token="<?= e($token) ?>"
+                            title="<?= e(t('persona.ai_fill_title')) ?>">
+                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 3.4l1.7 4.9 4.9 1.7-4.9 1.7L12 16.6l-1.7-4.9L5.4 10l4.9-1.7L12 3.4Z" fill="currentColor"/><path d="M18.4 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z" fill="currentColor" opacity=".65"/></svg></span>
+                        <span class="quick-label"><?= e(t('persona.ai_fill_short')) ?></span>
+                    </button>
+                <?php endif; ?>
+                <button type="button" class="quick-tile" data-open-modal="#export-modal" aria-haspopup="dialog">
+                    <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span class="quick-label"><?= e(t('cards.export')) ?></span>
                 </button>
-            <?php endif; ?>
-            <form method="post" action="/chat">
-                <input type="hidden" name="_token" value="<?= e($token) ?>">
-                <input type="hidden" name="persona_id" value="<?= (int) $persona['id'] ?>">
-                <button class="btn btn-ghost" type="submit">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                    <?= e(t('persona.chat')), "\n" ?>
-                </button>
-            </form>
-            <button class="btn btn-ghost" type="button" data-toggle="#export-panel" aria-controls="export-panel">
-                <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <?= e(t('cards.export')), "\n" ?>
-            </button>
-            <form method="post" action="/p/<?= e($persona['slug']) ?>/favorite">
-                <input type="hidden" name="_token" value="<?= e($token) ?>">
-                <button class="btn btn-ghost" type="submit" title="<?= e(t('persona.favorite_toggle')) ?>">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="<?= (int) $persona['favorite'] ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-                    <?= e(t('persona.favorite')), "\n" ?>
-                </button>
-            </form>
-            <form method="post" action="/p/<?= e($persona['slug']) ?>/archive">
-                <input type="hidden" name="_token" value="<?= e($token) ?>">
-                <button class="btn btn-ghost" type="submit">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                    <?= e($isArch ? t('persona.restore') : t('persona.archive')) ?>
-                </button>
-            </form>
+                <form method="post" action="/p/<?= e($persona['slug']) ?>/favorite">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <button class="quick-tile<?= (int) $persona['favorite'] ? ' is-on' : '' ?>" type="submit" title="<?= e(t('persona.favorite_toggle')) ?>"
+                            aria-pressed="<?= (int) $persona['favorite'] ? 'true' : 'false' ?>">
+                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="<?= (int) $persona['favorite'] ? 'currentColor' : 'none' ?>" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+                        <span class="quick-label"><?= e(t('persona.favorite')) ?></span>
+                    </button>
+                </form>
+                <form method="post" action="/p/<?= e($persona['slug']) ?>/archive">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <button class="quick-tile" type="submit">
+                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8Zm-1-3h18v3H3V5Zm6 7h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+                        <span class="quick-label"><?= e($isArch ? t('persona.restore') : t('persona.archive')) ?></span>
+                    </button>
+                </form>
+                <form method="post" action="/p/<?= e($persona['slug']) ?>/duplicate">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <button class="quick-tile" type="submit" title="<?= e(t('persona.duplicate_title')) ?>">
+                        <span class="quick-ico"><svg viewBox="0 0 24 24" class="ico"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                        <span class="quick-label"><?= e(t('persona.duplicate')) ?></span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- 3. l'action destructrice, à part et discrète -->
             <form method="post" action="/p/<?= e($persona['slug']) ?>/delete" class="hero-delete" data-confirm="<?= e(t('persona.delete_confirm', ['name' => $persona['name']])) ?>">
                 <input type="hidden" name="_token" value="<?= e($token) ?>">
-                <button class="btn btn-danger-ghost" type="submit">
+                <button class="hero-delete-btn" type="submit">
                     <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                    <?= e(t('persona.delete')), "\n" ?>
+                    <?= e(t('persona.delete_persona')), "\n" ?>
                 </button>
             </form>
         </div>
     </div>
 </section>
 
-<section class="panel panel-wide" id="export-panel" hidden>
-    <header class="panel-head">
-        <h2><?= e(t('cards.export_title')) ?></h2>
-        <button type="button" class="mini" data-toggle="#export-panel"><?= e(t('cards.export_close')) ?></button>
-    </header>
-    <div class="prompt-list">
-        <?php foreach ([
-            ['export.zip', t('cards.export_zip'), t('cards.export_zip_hint')],
-            ['card.json', t('cards.export_json'), t('cards.export_json_hint')],
-            ['card.png', t('cards.export_png'), $avatar ? t('cards.export_png_hint') : t('cards.export_png_hint_initials')],
-        ] as [$file, $label, $hint]): ?>
-            <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px">
-                <div style="min-width:0;flex:1 1 220px">
-                    <strong><?= e($label) ?></strong>
-                    <p class="hint"><?= e($hint) ?></p>
-                </div>
-                <a class="btn btn-ghost btn-sm" href="/p/<?= e($persona['slug']) ?>/<?= e($file) ?>" download data-export="<?= e($file) ?>">
-                    <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <?= e(t('cards.download')), "\n" ?>
-                </a>
+<!-- export de la fiche : fenêtre (feuille en bas sur mobile) -->
+<div class="modal action-sheet" id="export-modal" data-modal hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="export-title">
+        <header class="modal-head">
+            <div>
+                <p class="eyebrow"><?= e((string) $persona['name']) ?></p>
+                <h2 id="export-title"><?= e(t('cards.export_title')) ?></h2>
             </div>
-        <?php endforeach; ?>
+            <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
+        </header>
+        <div class="export-list">
+            <?php foreach ([
+                ['export.zip', 'zip', t('cards.export_zip'), t('cards.export_zip_hint'), t('cards.export_badge_full')],
+                ['card.json', 'json', t('cards.export_json'), t('cards.export_json_hint'), ''],
+                ['card.png', 'png', t('cards.export_png'), $avatar ? t('cards.export_png_hint') : t('cards.export_png_hint_initials'), ''],
+            ] as [$file, $kind, $label, $hint, $badge]): ?>
+                <a class="export-option export-<?= e($kind) ?>" href="/p/<?= e($persona['slug']) ?>/<?= e($file) ?>" download data-export="<?= e($file) ?>">
+                    <span class="export-ico" aria-hidden="true"><?= e(strtoupper($kind)) ?></span>
+                    <span class="export-text">
+                        <strong><?= e($label) ?><?php if ($badge !== ''): ?> <em class="export-badge"><?= e($badge) ?></em><?php endif; ?></strong>
+                        <small><?= e($hint) ?></small>
+                    </span>
+                    <span class="export-go" aria-hidden="true"><svg viewBox="0 0 24 24" class="ico"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+        <p class="hint export-note"><?= e(t('cards.export_note')) ?></p>
     </div>
-    <p class="hint" style="margin-top:12px"><?= e(t('cards.export_note')) ?></p>
-</section>
+</div>
 
 <div class="detail-cols">
     <section class="panel">
@@ -133,7 +154,7 @@ $token    = csrf_token();
             <?= t('persona.paste_hint_html'), "\n" ?>
         </p>
 
-        <div class="gallery">
+        <div class="gallery" data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>">
                 <?php foreach ($photos as $ph): ?>
                     <figure class="shot">
                         <img src="<?= e(media_url($ph['file'])) ?>" alt="<?= e($ph['caption'] ?: $persona['name']) ?>" loading="lazy"

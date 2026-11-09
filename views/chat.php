@@ -76,7 +76,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
             </button>
         </header>
 
-        <div class="chat-scroll" data-scroll>
+        <div class="chat-scroll" data-scroll data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>-chat">
             <?php if (!empty($olderLeft)): ?>
                 <div class="chat-older">
                     <button type="button" class="btn btn-ghost btn-sm" data-load-older
@@ -129,7 +129,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
                         <?php endif; ?>
                         <?php if ((string) ($m['image'] ?? '') !== ''): ?>
                             <img class="bubble-img" src="<?= e(media_url((string) $m['image'], true)) ?>"
-                                 alt="<?= e(t('chat.msg.photo_sent')) ?>" data-full="<?= e(media_url((string) $m['image'])) ?>">
+                                 alt="<?= e(t('chat.msg.photo_sent')) ?>" data-full="<?= e(media_url((string) $m['image'], false)) ?>">
                         <?php endif; ?>
                         <?php
                         $__mc   = (string) $m['content'];
