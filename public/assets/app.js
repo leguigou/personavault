@@ -1083,12 +1083,24 @@
     }
 
     const chatSheet = document.getElementById("chat-settings");
-    const setSheet = (open) => {
+    /* un seul panneau, deux sujets : l'anneau ouvre « Contexte et mémoire » (memory),
+       la roue « Conversation » (conversation) ; seules les sections du sujet sont visibles */
+    let sheetGroup = "";
+    const setSheet = (open, group) => {
         if (!chatSheet) return;
+        if (open && group) {
+            sheetGroup = group;
+            chatSheet.querySelectorAll("[data-sheet-group]").forEach((s) => {
+                s.hidden = s.dataset.sheetGroup !== group;
+            });
+            const eyebrow = chatSheet.querySelector("[data-sheet-eyebrow]");
+            if (eyebrow) eyebrow.textContent = tr(group === "memory" ? "chat.sheet_memory" : "chat.sheet_conversation");
+            chatSheet.querySelector(".sheet-body")?.scrollTo(0, 0);
+        }
         chatSheet.classList.toggle("is-open", open);
         chatSheet.setAttribute("aria-hidden", String(!open));
         document.querySelectorAll("[data-open-settings]").forEach((b) =>
-            b.setAttribute("aria-expanded", String(open))
+            b.setAttribute("aria-expanded", String(open && b.dataset.openSettings === sheetGroup))
         );
         document.body.classList.toggle("sheet-open", open);
 
@@ -1116,7 +1128,10 @@
             b.addEventListener("click", (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                setSheet(!chatSheet.classList.contains("is-open"));
+                const group = b.dataset.openSettings || "conversation";
+                // même bouton : on referme ; autre bouton : on change de sujet
+                const isOpen = chatSheet.classList.contains("is-open");
+                setSheet(!(isOpen && sheetGroup === group), group);
             })
         );
         document.querySelectorAll("[data-close-settings]").forEach((b) =>

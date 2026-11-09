@@ -29,7 +29,7 @@ return [
     'chat.head.model_state'         => 'État du modèle',
     'chat.head.model_default'       => 'modèle par défaut',
     'chat.head.context_memory'      => 'Contexte et mémoire',
-    'chat.head.settings'            => 'Contexte et réglages',
+    'chat.head.settings'            => 'Réglages de la conversation',
 
     // --- conversation : messages et composeur
     // {count} est remplacé par un <span> (le JavaScript met le nombre à jour) ; {n} choisit la forme

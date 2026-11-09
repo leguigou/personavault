@@ -66,11 +66,11 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     </span>
                 </div>
             </a>
-            <button class="ctx-ring-btn" type="button" data-open-settings aria-expanded="false"
+            <button class="ctx-ring-btn" type="button" data-open-settings="memory" aria-expanded="false"
                     aria-controls="chat-settings" aria-label="<?= e(t('chat.head.context_memory')) ?>">
                 <span data-ctx-ring><?= chat_ring($memory, 32) ?></span>
             </button>
-            <button type="button" class="icon-btn" data-open-settings aria-expanded="false"
+            <button type="button" class="icon-btn" data-open-settings="conversation" aria-expanded="false"
                     aria-controls="chat-settings" title="<?= e(t('chat.head.settings')) ?>" aria-label="<?= e(t('chat.head.settings')) ?>">
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
             </button>
@@ -182,11 +182,11 @@ $fmt   = fn (float $n): string => fmt_number($n);
     </section>
 </div>
 
-<!-- panneau contexte + réglages (toggle depuis la roue et l'anneau) -->
+<!-- panneau : l'anneau montre « Contexte et mémoire », la roue « Conversation » (sections data-sheet-group) -->
 <aside class="chat-sheet" id="chat-settings" aria-hidden="true" aria-label="<?= e(t('chat.sheet.label')) ?>">
     <header class="sheet-head">
         <div>
-            <p class="eyebrow"><?= e(t('chat.sheet.eyebrow')) ?></p>
+            <p class="eyebrow" data-sheet-eyebrow><?= e(t('chat.sheet.eyebrow')) ?></p>
             <h2><?= e((string) $conv['title']) ?></h2>
         </div>
         <button type="button" class="icon-btn" data-close-settings aria-label="<?= e(t('common.close')) ?>">&times;</button>
@@ -194,7 +194,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
 
     <div class="sheet-body">
         <!-- contexte -->
-        <section class="sheet-ctx">
+        <section data-sheet-group="memory" class="sheet-ctx">
             <span data-ctx-ring-big><?= chat_ring($memory, 62) ?></span>
             <div class="sheet-ctx-text">
                 <strong><?= e(t('chat.sheet.ctx_percent', ['percent' => (int) $memory['percent']])) ?></strong>
@@ -203,12 +203,13 @@ $fmt   = fn (float $n): string => fmt_number($n);
             </div>
         </section>
 
-        <section class="lms-status" data-lms-status data-state="loading">
+        <section data-sheet-group="conversation" class="lms-status" data-lms-status data-state="loading">
             <span class="lms-dot"></span>
             <span class="lms-text"><?= e(t('chat.lms.checking')) ?></span>
             <button type="button" class="lms-refresh" data-lms-refresh aria-label="<?= e(t('chat.lms.refresh')) ?>">&#8635;</button>
         </section>
 
+        <div data-sheet-group="conversation"><!-- chargement du modèle : bouton et progression (masquée par le JS) -->
         <div class="lms-actions">
             <button type="button" class="btn btn-ghost btn-sm" data-load-model>
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -225,9 +226,10 @@ $fmt   = fn (float $n): string => fmt_number($n);
             </ol>
             <p class="lms-timer" data-lms-timer><?= e(t('chat.lms.timer_zero')) ?></p>
         </div>
+        </div>
 
         <!-- réglages du personnage : communs à toutes ses conversations -->
-        <section class="persona-summary">
+        <section data-sheet-group="conversation" class="persona-summary">
             <div class="mem-head">
                 <h3><?= e(t('chat.persona.title')) ?></h3>
                 <a class="mini" href="/p/<?= e((string) $persona['slug']) ?>/edit#ia"><?= e(t('chat.persona.edit')) ?></a>
@@ -244,7 +246,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
         </section>
 
         <!-- options propres à cette conversation -->
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/toggles" class="sheet-form">
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/toggles" class="sheet-form" data-sheet-group="conversation">
             <input type="hidden" name="_token" value="<?= e($token) ?>">
 
             <label class="check">
@@ -263,7 +265,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
         </form>
 
         <!-- mémoire -->
-        <section class="mem-box">
+        <section data-sheet-group="memory" class="mem-box">
             <div class="mem-head">
                 <h3><?= e(t('chat.memory.title')) ?></h3>
                 <span class="mem-pct <?= $memory['percent'] > 80 ? 'is-hot' : '' ?>"><?= e(t('chat.memory.percent', ['percent' => (int) $memory['percent']])) ?></span>
@@ -296,7 +298,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
         </section>
 
         <!-- souvenirs partagés avec toutes les conversations du persona -->
-        <section class="fact-box" data-fact-box
+        <section data-sheet-group="memory" class="fact-box" data-fact-box
                  data-add="/chat/<?= (int) $conv['id'] ?>/fact-add"
                  data-del="/chat/<?= (int) $conv['id'] ?>/fact-delete"
                  data-facts-url="/chat/<?= (int) $conv['id'] ?>/facts-toggle"
@@ -331,7 +333,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
         </section>
 
         <!-- recherche dans toutes les conversations du persona -->
-        <section class="recall-box" data-recall-box data-url="/chat/<?= (int) $conv['id'] ?>/search">
+        <section data-sheet-group="memory" class="recall-box" data-recall-box data-url="/chat/<?= (int) $conv['id'] ?>/search">
             <div class="mem-head">
                 <h3><?= e(t('chat.recall.title')) ?></h3>
             </div>
@@ -346,7 +348,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
         </section>
 
         <!-- exporter toute la conversation (texte, Markdown, page imprimable → PDF) -->
-        <section class="recall-box export-box">
+        <section data-sheet-group="conversation" class="recall-box export-box">
             <div class="mem-head">
                 <h3><?= e(t('export.sheet.title')) ?></h3>
             </div>
@@ -360,13 +362,13 @@ $fmt   = fn (float $n): string => fmt_number($n);
         </section>
 
         <!-- renommer / supprimer -->
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/rename" class="rename-row">
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/rename" class="rename-row" data-sheet-group="conversation">
             <input type="hidden" name="_token" value="<?= e($token) ?>">
             <input class="input" type="text" name="title" value="<?= e((string) $conv['title']) ?>" aria-label="<?= e(t('chat.rename.label')) ?>">
             <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.rename.submit')) ?></button>
         </form>
 
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/delete" data-confirm="<?= e(t('chat.delete.confirm')) ?>" class="chat-danger">
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/delete" data-confirm="<?= e(t('chat.delete.confirm')) ?>" class="chat-danger" data-sheet-group="conversation">
             <input type="hidden" name="_token" value="<?= e($token) ?>">
             <button class="btn btn-danger-ghost btn-block" type="submit">
                 <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>

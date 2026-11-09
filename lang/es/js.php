@@ -145,4 +145,7 @@ return [
     ],
     // date et heure affichées sous un message touché ({date} : « Aujourd’hui », « 8 nov. »…)
     'js.chat.msg_time' => '{date}, {time}',
+    // titres du panneau de la conversation (anneau / roue)
+    'js.chat.sheet_memory' => 'Contexto y memoria',
+    'js.chat.sheet_conversation' => 'Conversación',
 ];
