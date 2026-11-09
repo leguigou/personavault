@@ -15,6 +15,12 @@ if ($action === 'toggles' && $method === 'POST') {
             !empty($_POST['auto_followup']) ? 1 : 0,
             $cid,
         ]);
+    if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+        // interrupteur basculé dans le panneau : enregistré tout de suite, sans recharger
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true, 'message' => t('flash.chat.toggles_saved')], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     flash('ok', t('flash.chat.toggles_saved'));
     redirect('/chat/' . $cid);
 }

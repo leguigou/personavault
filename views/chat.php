@@ -260,7 +260,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
             </label>
             <a class="mini-link" href="/settings#followup"><?= e(t('chat.toggles.followup_settings')) ?></a>
 
-            <div class="form-actions">
+            <div class="form-actions" data-autosave-fallback>
                 <button class="btn btn-primary btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
             </div>
         </form>

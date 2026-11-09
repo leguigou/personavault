@@ -148,4 +148,7 @@ return [
     // titres du panneau de la conversation (anneau / roue)
     'js.chat.sheet_memory' => 'Context and memory',
     'js.chat.sheet_conversation' => 'Conversation',
+    // interrupteurs de la conversation enregistrés au changement
+    'js.chat.toggle_saved' => 'Saved',
+    'js.chat.toggle_failed' => 'Couldn’t save, please try again.',
 ];

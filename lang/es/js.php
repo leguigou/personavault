@@ -148,4 +148,7 @@ return [
     // titres du panneau de la conversation (anneau / roue)
     'js.chat.sheet_memory' => 'Contexto y memoria',
     'js.chat.sheet_conversation' => 'Conversación',
+    // interrupteurs de la conversation enregistrés au changement
+    'js.chat.toggle_saved' => 'Guardado',
+    'js.chat.toggle_failed' => 'No se pudo guardar, vuelve a intentarlo.',
 ];

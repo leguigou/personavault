@@ -191,6 +191,33 @@
     })();
     window.pvModal = pvModal;
 
+    /* interrupteurs de la conversation : enregistrés dès qu'ils changent */
+    document.querySelectorAll(".sheet-form").forEach((form) => {
+        form.querySelector("[data-autosave-fallback]")?.setAttribute("hidden", "");
+        form.addEventListener("change", async (e) => {
+            const input = e.target;
+            if (!(input instanceof HTMLInputElement) || input.type !== "checkbox") return;
+            // valeurs lues AVANT de désactiver l'interrupteur (un champ désactivé n'est pas envoyé)
+            const body = new FormData(form);
+            input.disabled = true;
+            try {
+                const r = await fetch(form.action, {
+                    method: "POST",
+                    body,
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!r.ok || !d.ok) throw new Error(d.error || "");
+                toast(d.message || tr("chat.toggle_saved"));
+            } catch (err) {
+                input.checked = !input.checked; // on revient à l'état réellement enregistré
+                toast(tr("chat.toggle_failed"), true);
+            } finally {
+                input.disabled = false;
+            }
+        });
+    });
+
     /* cases à cocher présentées en interrupteur : annoncées comme telles */
     document.querySelectorAll(".check input[type=checkbox]").forEach((c) => c.setAttribute("role", "switch"));
 
