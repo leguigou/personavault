@@ -63,6 +63,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     <span class="chat-model">
                         <i class="model-dot" data-model-dot data-state="idle" title="<?= e(t('chat.head.model_state')) ?>"></i>
                         <span data-model-name><?= e($model !== '' ? $model : t('chat.head.model_default')) ?></span>
+                        <em class="model-test" data-model-test <?= trim((string) ($conv['model_override'] ?? '')) === '' ? 'hidden' : '' ?>><?= e(t('chat.model.test_badge')) ?></em>
                     </span>
                 </div>
             </a>
@@ -189,7 +190,9 @@ $fmt   = fn (float $n): string => fmt_number($n);
 
 <!-- panneau : l'anneau montre « Contexte et mémoire », la roue « Conversation » (sections data-sheet-group) -->
 <aside class="chat-sheet" id="chat-settings" aria-hidden="true" aria-label="<?= e(t('chat.sheet.label')) ?>">
-    <header class="sheet-head">
+    <!-- poignée : tirer vers le bas pour refermer (mobile) -->
+    <div class="sheet-grab" data-sheet-grab aria-hidden="true"><span></span></div>
+    <header class="sheet-head" data-sheet-drag>
         <div>
             <p class="eyebrow" data-sheet-eyebrow><?= e(t('chat.sheet.eyebrow')) ?></p>
             <h2><?= e((string) $conv['title']) ?></h2>
@@ -207,6 +210,31 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <span data-threshold="<?= e($fmt((float) chat_memory_threshold())) ?>"><?= e(t('js.chat.ctx_auto_summary', ['n' => (int) $memory['compressions'], 'threshold' => $fmt((float) chat_memory_threshold())])) ?></span>
             </div>
         </section>
+
+        <!-- modèle de CETTE conversation (pour tester), sans toucher au persona -->
+        <?php
+        $overrideModel = trim((string) ($conv['model_override'] ?? ''));
+        $personaModel  = (string) (($persona['model'] ?? '') !== '' ? $persona['model'] : $chatModel);
+        $modelIds      = array_column($models ?? [], 'id');
+        ?>
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/model-override" class="conv-model" data-sheet-group="conversation" data-model-override>
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <label class="conv-model-label" for="conv-model"><?= e(t('chat.model.label')) ?></label>
+            <div class="conv-model-row">
+                <select id="conv-model" name="model" class="input conv-model-select">
+                    <option value=""><?= e(t('chat.model.persona_default', ['model' => $personaModel !== '' ? $personaModel : t('chat.persona.model_global')])) ?></option>
+                    <?php foreach ($models ?? [] as $mo): ?>
+                        <option value="<?= e((string) $mo['id']) ?>" <?= $overrideModel === (string) $mo['id'] ? 'selected' : '' ?>><?= e(($mo['fav'] ? '★ ' : '') . $mo['id']) ?></option>
+                    <?php endforeach; ?>
+                    <?php if ($overrideModel !== '' && !in_array($overrideModel, $modelIds, true)): ?>
+                        <option value="<?= e($overrideModel) ?>" selected><?= e($overrideModel) ?></option>
+                    <?php endif; ?>
+                </select>
+                <button type="button" class="btn btn-ghost btn-sm conv-model-reset" data-model-reset <?= $overrideModel === '' ? 'hidden' : '' ?>><?= e(t('chat.model.reset')) ?></button>
+            </div>
+            <p class="hint" data-model-hint><?= e($overrideModel !== '' ? t('chat.model.hint_on') : t('chat.model.hint_off')) ?></p>
+            <noscript><button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button></noscript>
+        </form>
 
         <section data-sheet-group="conversation" class="lms-status" data-lms-status data-state="loading">
             <span class="lms-dot"></span>

@@ -1201,7 +1201,11 @@ function chat_with_persona(array $conv, array $persona): array
         $directive = trim($directive . "\n" . $convDirective);
     }
 
-    $conv['model']          = (string) (($persona['model'] ?? '') !== '' ? $persona['model'] : ($conv['model'] ?? ''));
+    // priorité : modèle choisi pour cette conversation > modèle du persona > dernier utilisé
+    $override = trim((string) ($conv['model_override'] ?? ''));
+    $conv['model'] = $override !== ''
+        ? $override
+        : (string) (($persona['model'] ?? '') !== '' ? $persona['model'] : ($conv['model'] ?? ''));
     $conv['temperature']    = (float) ($persona['temperature'] ?? 0.85);
     $conv['max_tokens']     = (int) ($persona['max_tokens'] ?? 400);
     $conv['context_window'] = (int) ($persona['context_window'] ?? 8192);

@@ -3906,3 +3906,82 @@ html[data-mode="light"] .icon-tool.is-danger { color: #dc2626; }
     }
 }
 .hero-portrait img[data-full] { cursor: zoom-in; }
+
+/* ---- panneau de la conversation : feuille qui monte du bas sur mobile, à tirer pour fermer ---- */
+.sheet-grab, .chat-sheet-backdrop { display: none; }
+.model-test {
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-style: normal;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #1a1205;
+    background: #fbbf24;
+}
+.conv-model { display: grid; gap: 8px; margin: 0; }
+.conv-model-label { font-size: 13px; font-weight: 650; }
+.conv-model-row { display: flex; gap: 8px; align-items: center; }
+.conv-model-select { flex: 1; min-width: 0; height: 46px; }
+.conv-model.is-override .conv-model-select { border-color: rgba(251, 191, 36, .6); }
+.conv-model .hint { margin: 0; }
+@media (max-width: 899px) {
+    .chat-sheet {
+        left: 0;
+        right: 0;
+        top: auto;
+        bottom: 0 !important;
+        width: auto;
+        max-height: calc(100dvh - max(32px, env(safe-area-inset-top, 0px) + 16px));
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding: 0 0 env(safe-area-inset-bottom, 0px);
+        border-radius: 24px 24px 0 0;
+        border-bottom: 0;
+        opacity: 1;
+        transform: translateY(105%);
+        transition: transform .34s cubic-bezier(.2, .85, .25, 1);
+        box-shadow: 0 -20px 60px -20px var(--sh, #000);
+    }
+    .chat-sheet.is-open { transform: translateY(var(--drag, 0px)); }
+    .chat-sheet.is-dragging { transition: none; }
+    .sheet-grab {
+        display: flex;
+        justify-content: center;
+        padding: 10px 0 4px;
+        flex: 0 0 auto;
+        touch-action: none;
+        cursor: grab;
+    }
+    .sheet-grab span { width: 42px; height: 5px; border-radius: 999px; background: rgba(var(--ink), .28); }
+    .chat-sheet .sheet-head {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 4px 16px 12px;
+        border-bottom: 1px solid var(--border-soft);
+        touch-action: none;
+    }
+    .chat-sheet .sheet-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        padding: 16px 16px 24px;
+    }
+    .chat-sheet-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 95;
+        background: rgba(4, 4, 9, .58);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .3s ease;
+    }
+    body.sheet-open .chat-sheet-backdrop { opacity: var(--backdrop-o, 1); pointer-events: auto; }
+    body.sheet-dragging .chat-sheet-backdrop { transition: none; }
+}

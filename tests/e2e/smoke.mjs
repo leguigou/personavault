@@ -149,6 +149,8 @@ expect(/"versions":\{"index":2,"total":2\}/.test(regen1), 'la régénération ga
 const vid = (regen1.match(/"reply":\{"id":(\d+)/) || [])[1];
 const vprev = await post('/chat/1/version', { mid: vid, dir: '-1' }, '/chat/1/version (précédente)');
 expect(vprev.includes('"index":1') && vprev.includes('"total":2'), 'on revient à la version 1/2');
+await post('/chat/1/model-override', { model: 'fake-model' });
+await post('/chat/1/model-override', { model: '' }, '/chat/1/model-override (retour persona)');
 await post('/chat/1/pin', { pinned: '1' });
 await post('/chat/1/pin', { pinned: '0' }, '/chat/1/pin (retirer)');
 await post('/chat/1/msg-delete', { mid: '1' });
