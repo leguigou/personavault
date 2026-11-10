@@ -44,6 +44,36 @@ function chat_llm_config(): array
     return $cfg;
 }
 
+/**
+ * Configuration LM Studio pour UNE conversation : son modèle (test ou persona) à la place du
+ * modèle global. $conv doit être passé par chat_with_persona(). Sans cela, la réponse partait
+ * vers le modèle global : LM Studio chargeait alors un autre modèle (lent) que celui affiché.
+ */
+function chat_llm_config_for(array $conv): array
+{
+    $cfg   = chat_llm_config();
+    $model = trim((string) ($conv['model'] ?? ''));
+    if ($model !== '') {
+        $cfg['model'] = $model;
+    }
+    return $cfg;
+}
+
+/** La conversation $cid avec les réglages de son persona (modèle, consigne…), ou null. */
+function chat_conv_effective(int $cid): ?array
+{
+    $st = db()->prepare('SELECT * FROM conversations WHERE id = ?');
+    $st->execute([$cid]);
+    $conv = $st->fetch();
+    if (!$conv) {
+        return null;
+    }
+    $st = db()->prepare('SELECT * FROM personas WHERE id = ?');
+    $st->execute([(int) $conv['persona_id']]);
+    $persona = $st->fetch();
+    return $persona ? chat_with_persona($conv, $persona) : $conv;
+}
+
 function chat_llm_ready(): bool
 {
     $c = chat_llm_config();
@@ -364,7 +394,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
         ['role' => 'user', 'content' => $payload['user']],
     ];
 
-    $cfg  = chat_llm_config();
+    $cfg  = chat_llm_config_for($conv); // même modèle que la discussion : pas de rechargement
     $opts = [
         'temperature'      => 0.2,
         'max_tokens'       => 1200,
@@ -1245,11 +1275,11 @@ function chat_with_persona(array $conv, array $persona): array
         $directive = trim($directive . "\n" . $convDirective);
     }
 
-    // priorité : modèle choisi pour cette conversation > modèle du persona > dernier utilisé
+    // priorité : modèle choisi pour cette conversation > modèle du persona > '' (= modèle global
+    // des Réglages). Le « dernier modèle utilisé » n'entre plus en compte : il pouvait garder
+    // un ancien modèle après un changement dans les Réglages.
     $override = trim((string) ($conv['model_override'] ?? ''));
-    $conv['model'] = $override !== ''
-        ? $override
-        : (string) (($persona['model'] ?? '') !== '' ? $persona['model'] : ($conv['model'] ?? ''));
+    $conv['model'] = $override !== '' ? $override : trim((string) ($persona['model'] ?? ''));
     $conv['temperature']    = (float) ($persona['temperature'] ?? 0.85);
     $conv['max_tokens']     = (int) ($persona['max_tokens'] ?? 400);
     $conv['context_window'] = (int) ($persona['context_window'] ?? 8192);
@@ -1313,7 +1343,7 @@ function chat_auto_title(int $cid): ?string
     try {
         $res = llm_request(
             [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $txt]],
-            $remote ? llm_config() : chat_llm_config(),
+            $remote ? llm_config() : chat_llm_config_for(chat_conv_effective($cid) ?? []),
             $opts
         );
     } catch (Throwable $e) {
@@ -1503,7 +1533,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         return $res;
     }
 
-    $cfg = chat_llm_config();
+    $cfg = chat_llm_config_for($conv); // le modèle de CETTE conversation
     if ($cfg['model'] === '') {
         throw new LlmUnavailable(t('error.chat.no_model'), 'no_model');
     }

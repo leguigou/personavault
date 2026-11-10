@@ -86,6 +86,13 @@ try {
     $check($throws(static fn () => store_upload($upload($tmp . '/bomb.png')), 'trop grande'), 'image de 400 Mpx refusée sans décodage');
     $check($throws(static fn () => store_upload(['tmp_name' => '', 'error' => UPLOAD_ERR_INI_SIZE, 'size' => 0]), 'upload_max_filesize'), 'UPLOAD_ERR_INI_SIZE → message explicite');
 
+    echo "Modèle d'une conversation\n";
+    set_setting('chat_llm_model', 'modele-global');
+    $mp = ['model' => 'modele-persona', 'directive' => ''];
+    $check(chat_llm_config_for(chat_with_persona(['model_override' => 'modele-test', 'model' => 'ancien'], $mp))['model'] === 'modele-test', 'modèle de test prioritaire');
+    $check(chat_llm_config_for(chat_with_persona(['model_override' => '', 'model' => 'ancien'], $mp))['model'] === 'modele-persona', 'sinon le modèle du persona');
+    $check(chat_llm_config_for(chat_with_persona(['model_override' => '', 'model' => 'ancien'], ['model' => '', 'directive' => '']))['model'] === 'modele-global', 'sinon le modèle global (pas l\'ancien modèle utilisé)');
+
     echo "Données\n";
     db()->prepare("INSERT INTO personas (slug, name, tagline, avatar, tags, meta, model) VALUES ('lisa', 'Lisa', 'Accroche', ?, ?, ?, 'qwen')")
         ->execute([$photo1, json_encode(['brune', 'paris']), json_encode([['k' => 'Âge', 'v' => '29']])]);
