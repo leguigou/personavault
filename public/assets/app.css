@@ -3910,17 +3910,18 @@ html[data-mode="light"] .icon-tool.is-danger { color: #dc2626; }
 /* ---- panneau de la conversation : feuille qui monte du bas sur mobile, à tirer pour fermer ---- */
 .sheet-grab, .chat-sheet-backdrop { display: none; }
 .model-test {
-    margin-left: 6px;
-    padding: 1px 7px;
-    border-radius: 999px;
-    font-style: normal;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: .04em;
-    text-transform: uppercase;
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 5px;
+    vertical-align: -4px;
+    border-radius: 50%;
     color: #1a1205;
     background: #fbbf24;
 }
+.model-test[hidden] { display: none; }
+.model-test svg { width: 12px; height: 12px; }
 .conv-model { display: grid; gap: 8px; margin: 0; }
 .conv-model-label { font-size: 13px; font-weight: 650; }
 .conv-model-row { display: flex; gap: 8px; align-items: center; }

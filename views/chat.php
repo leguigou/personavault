@@ -63,7 +63,10 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     <span class="chat-model">
                         <i class="model-dot" data-model-dot data-state="idle" title="<?= e(t('chat.head.model_state')) ?>"></i>
                         <span data-model-name><?= e($model !== '' ? $model : t('chat.head.model_default')) ?></span>
-                        <em class="model-test" data-model-test <?= trim((string) ($conv['model_override'] ?? '')) === '' ? 'hidden' : '' ?>><?= e(t('chat.model.test_badge')) ?></em>
+                        <!-- icône : modèle choisi pour cette conversation seulement (≠ celui du persona) -->
+                        <span class="model-test" data-model-test role="img" aria-label="<?= e(t('chat.model.test_badge')) ?>" title="<?= e(t('chat.model.test_badge')) ?>" <?= trim((string) ($conv['model_override'] ?? '')) === '' ? 'hidden' : '' ?>>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3.5h5M10.5 3.5v5.2L5.4 17.6A2 2 0 0 0 7.1 20.5h9.8a2 2 0 0 0 1.7-2.9l-5.1-8.9V3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.6 14.5h8.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+                        </span>
                     </span>
                 </div>
             </a>
@@ -177,14 +180,10 @@ $fmt   = fn (float $n): string => fmt_number($n);
             </button>
         </form>
 
-        <p class="chat-foot <?= $chatReady ? '' : 'is-ko' ?>" data-chat-foot>
-            <?php if ($chatReady): ?>
-                <?= e($model) ?> · <?= e(t('chat.foot.context', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?>
-                · <?= e(t('chat.foot.compressions', (int) $memory['compressions'])) ?>
-            <?php else: ?>
-                <?= e(t('chat.foot.no_model')) . "\n" ?>
-            <?php endif; ?>
-        </p>
+        <?php if (!$chatReady): ?>
+            <!-- seulement pour prévenir : modèle, contexte et compressions sont dans l'anneau en haut -->
+            <p class="chat-foot is-ko" data-chat-foot><?= e(t('chat.foot.no_model')) ?></p>
+        <?php endif; ?>
     </section>
 </div>
 

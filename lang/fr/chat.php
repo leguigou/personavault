@@ -57,8 +57,6 @@ return [
     'chat.composer.placeholder'     => 'Écris un message…',
     'chat.composer.label'           => 'Message',
     'chat.composer.send'            => 'Envoyer',
-    'chat.foot.context'             => 'contexte {used} / {window}',
-    'chat.foot.compressions'        => ['one' => '{n} compression', 'other' => '{n} compressions'],
     'chat.foot.no_model'            => 'Aucun modèle de discussion joignable — vérifie LM Studio dans les réglages.',
 
     // --- panneau « contexte et réglages »
@@ -86,7 +84,7 @@ return [
     'chat.model.reset' => 'Revenir au persona',
     'chat.model.hint_off' => 'Pour essayer un autre modèle ici seulement : le persona garde le sien.',
     'chat.model.hint_on' => 'Modèle de test, pour cette conversation seulement. Le persona garde le sien.',
-    'chat.model.test_badge' => 'test',
+    'chat.model.test_badge' => 'Modèle choisi pour cette conversation seulement',
     'chat.persona.temperature'      => 'température {value}',
     'chat.persona.max_tokens'       => '{count} tokens',
     'chat.persona.window'           => 'fenêtre {size}',

@@ -56,8 +56,6 @@ return [
     'chat.composer.placeholder'     => 'Escribe un mensaje…',
     'chat.composer.label'           => 'Mensaje',
     'chat.composer.send'            => 'Enviar',
-    'chat.foot.context'             => 'contexto {used} / {window}',
-    'chat.foot.compressions'        => ['one' => '{n} compresión', 'other' => '{n} compresiones'],
     'chat.foot.no_model'            => 'Ningún modelo de chat disponible: revisa LM Studio en los ajustes.',
 
     // --- panel «contexto y ajustes»
@@ -85,7 +83,7 @@ return [
     'chat.model.reset' => 'Volver al persona',
     'chat.model.hint_off' => 'Para probar otro modelo solo aquí: el persona conserva el suyo.',
     'chat.model.hint_on' => 'Modelo de prueba, solo para esta conversación. El persona conserva el suyo.',
-    'chat.model.test_badge' => 'prueba',
+    'chat.model.test_badge' => 'Modelo elegido solo para esta conversación',
     'chat.persona.temperature'      => 'temperatura {value}',
     'chat.persona.max_tokens'       => '{count} tokens',
     'chat.persona.window'           => 'ventana {size}',
