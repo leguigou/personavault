@@ -67,10 +67,6 @@ return [
     'js.chat.percent'             => '{n} %',
     'js.chat.ctx_percent'         => '{n} % del contexto',
     'js.chat.ctx_tokens'          => '{used} / {window} tokens',
-    'js.chat.foot'                => [
-        'one'   => '{model} · contexto {used} / {window} · {n} compresión',
-        'other' => '{model} · contexto {used} / {window} · {n} compresiones',
-    ],
     'js.chat.compressing'         => 'Comprimiendo…',
     'js.chat.compressed'          => ['one' => '{n} mensaje resumido', 'other' => '{n} mensajes resumidos'],
     'js.chat.nothing_to_compress' => 'Nada que resumir',

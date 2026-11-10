@@ -2130,16 +2130,9 @@
             }
         };
 
-        const updateFoot = (m) => {
-            if (!foot || !m) return;
-            foot.classList.remove("is-ko");
-            foot.textContent = tr("chat.foot", {
-                model: chat.dataset.model,
-                used: fmt(m.context_tokens),
-                window: fmt(m.window),
-                n: m.compressions,
-            });
-        };
+        // le pied de page ne sert plus qu'à prévenir quand aucun modèle n'est configuré :
+        // modèle, contexte et compressions sont dans l'anneau et le panneau « Contexte et mémoire »
+        const updateFoot = () => {};
 
 
         /* --- état du serveur / du modèle chargé --- */
@@ -2472,7 +2465,7 @@
                 const res = await fetch(chat.dataset.compress, { method: "POST", body: fd });
                 const data = await res.json();
                 if (!data.ok) return null;
-                updateFoot(data.memory);
+                updateFoot();
                 updateRing(data.memory);
                 updateMemPanel(data.memory, data.summary);
                 return data;
@@ -2723,7 +2716,9 @@
                     syncSend();
                     input.focus();
                 }
+                scroll.querySelectorAll(".msg-notice[data-fb-kept]").forEach((n) => n.remove());
                 notice(tr("chat.fb_kept"));
+                scroll.lastElementChild?.setAttribute("data-fb-kept", "1");
                 scrollBottom();
             })
         );
@@ -2731,7 +2726,11 @@
         fbModal?.querySelector("[data-fb-use]")?.addEventListener("click", () => {
             fbModal.hidden = true;
             const t = lastText;
-            if (t) send(t, "fallback", false);
+            if (t) {
+                input.value = "";
+                grow();
+                send(t, "fallback", true);
+            }
         });
 
         document.addEventListener("keydown", (e) => {
@@ -3120,6 +3119,11 @@
             }
 
             let userEl = null;
+            // pas de réponse du tout : le serveur n'a pas gardé le message (sauf photo jointe),
+            // on retire donc sa bulle de l'écran pour ne pas afficher un message fantôme
+            const dropGhost = (el) => {
+                if (el && !el.querySelector(".bubble-img")) el.remove();
+            };
             if (!regen) {
                 clearIntro();
                 if (echo) userEl = bubble(text, "user");
@@ -3130,6 +3134,7 @@
             if (mode === "auto" && lastStatus && lastStatus.reachable === false) {
                 document.getElementById("chat-typing")?.remove();
                 setStreaming(false);
+                dropGhost(userEl);
                 askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down");
                 busy = false;
                 syncSend();
@@ -3374,6 +3379,7 @@
                     if (failed) {
                         if (!live) {
                             clearInterval(probe);
+                            dropGhost(userEl);
                             askFallback(text, failed, failedKind);
                             busy = false;
                             setStreaming(false);

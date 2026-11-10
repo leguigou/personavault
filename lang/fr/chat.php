@@ -57,8 +57,6 @@ return [
     'chat.composer.placeholder'     => 'Écris un message…',
     'chat.composer.label'           => 'Message',
     'chat.composer.send'            => 'Envoyer',
-    'chat.foot.context'             => 'contexte {used} / {window}',
-    'chat.foot.compressions'        => ['one' => '{n} compression', 'other' => '{n} compressions'],
     'chat.foot.no_model'            => 'Aucun modèle de discussion joignable — vérifie LM Studio dans les réglages.',
 
     // --- panneau « contexte et réglages »

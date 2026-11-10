@@ -177,14 +177,10 @@ $fmt   = fn (float $n): string => fmt_number($n);
             </button>
         </form>
 
-        <p class="chat-foot <?= $chatReady ? '' : 'is-ko' ?>" data-chat-foot>
-            <?php if ($chatReady): ?>
-                <?= e($model) ?> · <?= e(t('chat.foot.context', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?>
-                · <?= e(t('chat.foot.compressions', (int) $memory['compressions'])) ?>
-            <?php else: ?>
-                <?= e(t('chat.foot.no_model')) . "\n" ?>
-            <?php endif; ?>
-        </p>
+        <?php if (!$chatReady): ?>
+            <!-- seulement pour prévenir : modèle, contexte et compressions sont dans l'anneau en haut -->
+            <p class="chat-foot is-ko" data-chat-foot><?= e(t('chat.foot.no_model')) ?></p>
+        <?php endif; ?>
     </section>
 </div>
 
