@@ -553,17 +553,61 @@ function lms_load_async(string $model, int $contextLength = 8192): bool
         'context_length' => max(2048, $contextLength),
     ], JSON_UNESCAPED_UNICODE);
 
-    $cmd = sprintf(
-        'nohup curl -s -m 300 -X POST %s -H %s -d %s > %s 2>&1 &',
+    // la réponse de LM Studio et son code HTTP sont gardés dans le journal, suivis d'un
+    // marqueur de fin : lms_load_result() sait ainsi si le chargement a réussi ou échoué
+    $curl = sprintf(
+        'curl -s -m 300 -X POST %s -H %s -d %s -w %s',
         escapeshellarg($root . '/api/v1/models/load'),
         escapeshellarg('Content-Type: application/json'),
         escapeshellarg((string) $body),
-        escapeshellarg($log)
+        escapeshellarg("\n__HTTP:%{http_code}")
     );
+    $cmd = sprintf('nohup sh -c %s > %s 2>&1 &', escapeshellarg($curl . '; printf "\n__EXIT:%s\n" "$?"'), escapeshellarg($log));
 
     @unlink($log);
     exec($cmd);
     return true;
+}
+
+/**
+ * Résultat du dernier chargement demandé par lms_load_async() :
+ * ['done' => false] tant que LM Studio n'a pas répondu, puis
+ * ['done' => true, 'ok' => bool, 'error' => message de LM Studio ou ''].
+ */
+function lms_load_result(): array
+{
+    $log = dirname(__DIR__) . '/storage/lms-load.log';
+    $raw = is_file($log) ? (string) file_get_contents($log) : '';
+    if (!str_contains($raw, '__EXIT:')) {
+        return ['done' => false];
+    }
+    preg_match('/__HTTP:(\d{3})/', $raw, $h);
+    preg_match('/__EXIT:(\d+)/', $raw, $x);
+    $http = (int) ($h[1] ?? 0);
+    $exit = (int) ($x[1] ?? 1);
+    $body = trim((string) preg_replace('/\n?__HTTP:\d*\s*|\n?__EXIT:\d+\s*/', '', $raw));
+    $data = json_decode($body, true);
+    $err  = '';
+    if (is_array($data) && isset($data['error'])) {
+        $err = is_array($data['error']) ? (string) ($data['error']['message'] ?? json_encode($data['error'])) : (string) $data['error'];
+    }
+    $ok = $exit === 0 && $http >= 200 && $http < 300 && $err === '';
+    if (!$ok && $err === '') {
+        $err = $exit === 28 ? 'délai dépassé' : ($body !== '' ? mb_substr($body, 0, 400) : 'HTTP ' . $http);
+    }
+    return ['done' => true, 'ok' => $ok, 'error' => $err];
+}
+
+/** Message clair (dans la langue de l'interface) pour une erreur de chargement de LM Studio. */
+function lms_load_hint(string $error): string
+{
+    if (preg_match('/out of memory|insufficient|not enough (memory|vram)|failed to allocate|oom/i', $error)) {
+        return t('error.lms.load_memory');
+    }
+    if (preg_match('/exited before becoming healthy|unknown (model )?architecture|unsupported|not supported|invalid (model|gguf)/i', $error)) {
+        return t('error.lms.load_crash');
+    }
+    return t('error.lms.load_generic');
 }
 
 function lms_unload(string $instanceId): bool
