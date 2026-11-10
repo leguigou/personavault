@@ -83,7 +83,7 @@ return [
     'chat.model.reset' => 'Back to persona',
     'chat.model.hint_off' => 'To try another model here only: the persona keeps its own.',
     'chat.model.hint_on' => 'Test model, for this conversation only. The persona keeps its own.',
-    'chat.model.test_badge' => 'test',
+    'chat.model.test_badge' => 'Model chosen for this conversation only',
     'chat.persona.temperature'      => 'temperature {value}',
     'chat.persona.max_tokens'       => '{count} tokens',
     'chat.persona.window'           => 'window {size}',

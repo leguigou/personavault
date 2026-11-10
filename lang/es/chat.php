@@ -83,7 +83,7 @@ return [
     'chat.model.reset' => 'Volver al persona',
     'chat.model.hint_off' => 'Para probar otro modelo solo aquí: el persona conserva el suyo.',
     'chat.model.hint_on' => 'Modelo de prueba, solo para esta conversación. El persona conserva el suyo.',
-    'chat.model.test_badge' => 'prueba',
+    'chat.model.test_badge' => 'Modelo elegido solo para esta conversación',
     'chat.persona.temperature'      => 'temperatura {value}',
     'chat.persona.max_tokens'       => '{count} tokens',
     'chat.persona.window'           => 'ventana {size}',
