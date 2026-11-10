@@ -3009,6 +3009,8 @@
                     id,
                     role: isUser ? "user" : "assistant",
                     content: d.content,
+                    image: d.image || "", // la photo jointe reste affichée
+                    at: el.dataset.at,    // et la date du message aussi
                     split_points: d.split_points || [],
                 });
                 fresh.dataset.msgId = id;
