@@ -66,6 +66,7 @@
 200 text/event-stream  POST /chat/1/stream
 200 text/event-stream  POST /chat/1/stream (régénérer)
 200 application/json  POST /chat/1/version (précédente)
+200 application/json  GET /chat/1/load-result
 303 text/html  POST /chat/1/model-override
 303 text/html  POST /chat/1/model-override (retour persona)
 303 text/html  POST /chat/1/pin

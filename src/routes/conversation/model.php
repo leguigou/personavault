@@ -27,6 +27,18 @@ if ($action === 'status' && $method === 'GET') {
     exit;
 }
 
+/* --- résultat du chargement en cours : réussi, échoué (avec le message de LM Studio) ou pas fini --- */
+if ($action === 'load-result' && $method === 'GET') {
+    session_write_close();
+    header('Content-Type: application/json; charset=utf-8');
+    $r = lms_load_result();
+    if (($r['done'] ?? false) && !($r['ok'] ?? false)) {
+        $r['hint'] = lms_load_hint((string) $r['error']);
+    }
+    echo json_encode($r, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /* --- chargement manuel du modèle (AJAX) --- */
 if ($action === 'load' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
@@ -43,16 +55,15 @@ if ($action === 'load' && $method === 'POST') {
         exit;
     }
 
+    // le modèle de la conversation, et lui seul : s'il n'existe pas dans LM Studio, on le dit
+    // (avant, un autre modèle était chargé à sa place sans prévenir)
     $model = (string) ($conv['model'] !== '' ? $conv['model'] : chat_llm_config()['model']);
-    if (!empty($st['available']) && !in_array($model, $st['available'], true)) {
-        $alt = (string) chat_llm_config()['model'];
-        $model = in_array($alt, $st['available'], true) ? $alt : '';
-    }
-    if ($model === '') {
+    if ($model === '' || (!empty($st['available']) && !in_array($model, $st['available'], true))) {
         echo json_encode([
             'ok'    => false,
             'kind'  => 'not_found',
-            'error' => t('error.lms.not_downloaded'),
+            'model' => $model,
+            'error' => $model === '' ? t('error.lms.not_downloaded') : t('error.lms.model_missing', ['model' => $model]),
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }

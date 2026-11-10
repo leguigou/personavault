@@ -2602,10 +2602,29 @@
             if (li) li.dataset.state = state;
         };
         const resetSteps = () => ["server", "request", "loading", "ready"].forEach((n) => setStep(n, ""));
+        const errBox = document.querySelector("[data-lms-error]");
+        const showLoadError = (hint, detail) => {
+            if (!errBox) return;
+            errBox.querySelector("[data-lms-error-hint]").textContent = hint || "";
+            const more = errBox.querySelector(".lms-error-more");
+            errBox.querySelector("[data-lms-error-detail]").textContent = detail || "";
+            if (more) more.hidden = !detail;
+            // modèle de test en cause : retour au modèle du persona en un geste
+            const resetBtn = errBox.querySelector("[data-lms-error-reset]");
+            const testModel = document.querySelector("[data-model-override] select")?.value || "";
+            if (resetBtn) resetBtn.hidden = testModel === "";
+            errBox.hidden = false;
+        };
+        errBox?.querySelector("[data-lms-error-reset]")?.addEventListener("click", () => {
+            errBox.hidden = true;
+            document.querySelector("[data-model-reset]")?.click();
+        });
+        const loadResultUrl = statusUrl.replace(/\/status$/, "/load-result");
 
         const loadModel = async () => {
             if (!loadBtn || loadBtn.disabled) return;
             loadBtn.disabled = true;
+            if (errBox) errBox.hidden = true;
             if (progressBox) progressBox.hidden = false;
             if (timerEl) timerEl.hidden = false;
             resetSteps();
@@ -2657,7 +2676,7 @@
             if (!asked || !asked.ok) {
                 setStep("request", "fail");
                 done(tr("lms.load_failed"));
-                notice(tr("lms.load_error", { message: (asked && asked.error) || tr("lms.unknown_error") }));
+                showLoadError((asked && asked.error) || tr("lms.unknown_error"), "");
                 return;
             }
             setStep("request", "done");
@@ -2669,6 +2688,15 @@
                 await new Promise((r) => setTimeout(r, 700));
                 st = await fetchStatus();
                 paintStatus(st);
+                // LM Studio a répondu à la demande de chargement : échec → on le dit tout de suite
+                const res = await fetch(loadResultUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+                    .then((r) => r.json()).catch(() => null);
+                if (res && res.done && !res.ok && !(st && st.is_loaded)) {
+                    setStep("loading", "fail");
+                    done(tr("lms.load_failed"));
+                    showLoadError(res.hint, res.error);
+                    return;
+                }
                 if (st && st.is_loaded) {
                     setStep("loading", "done");
                     setStep("ready", "done");

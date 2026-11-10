@@ -82,6 +82,8 @@ return [
     'chat.model.label' => 'Modèle de cette conversation',
     'chat.model.persona_default' => 'Celui du persona · {model}',
     'chat.model.reset' => 'Revenir au persona',
+    'chat.lms.error_reset' => 'Revenir au modèle du persona',
+    'chat.lms.error_detail' => 'Message de LM Studio :',
     'chat.model.hint_off' => 'Pour essayer un autre modèle ici seulement : le persona garde le sien.',
     'chat.model.hint_on' => 'Modèle de test, pour cette conversation seulement. Le persona garde le sien.',
     'chat.model.test_badge' => 'Modèle choisi pour cette conversation seulement',

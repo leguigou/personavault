@@ -258,6 +258,15 @@ $fmt   = fn (float $n): string => fmt_number($n);
             </ol>
             <p class="lms-timer" data-lms-timer><?= e(t('chat.lms.timer_zero')) ?></p>
         </div>
+        <!-- échec du chargement : explication claire + message brut de LM Studio -->
+        <div class="lms-error" data-lms-error role="alert" hidden>
+            <p class="lms-error-hint" data-lms-error-hint></p>
+            <details class="lms-error-more">
+                <summary><?= e(t('chat.lms.error_detail')) ?></summary>
+                <p data-lms-error-detail></p>
+            </details>
+            <button type="button" class="btn btn-ghost btn-sm" data-lms-error-reset hidden><?= e(t('chat.lms.error_reset')) ?></button>
+        </div>
         </div>
 
         <!-- réglages du personnage : communs à toutes ses conversations -->
