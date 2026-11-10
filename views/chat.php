@@ -150,8 +150,9 @@ $fmt   = fn (float $n): string => fmt_number($n);
                             <div class="bubbles">
                                 <?php $__prev = 0; ?>
                                 <?php foreach (array_merge($__pts, [$__len]) as $__cut): ?>
-                                    <div class="bubble"><?= nl2br(e(trim(mb_substr($__mc, $__prev, $__cut - $__prev)))) ?></div>
-                                    <?php $__prev = $__cut; ?>
+                                    <?php $__part = trim(mb_substr($__mc, $__prev, $__cut - $__prev)); $__prev = $__cut; ?>
+                                    <?php if ($__part === '') continue; // jamais de bulle vide ?>
+                                    <div class="bubble"><?= nl2br(e($__part)) ?></div>
                                 <?php endforeach; ?>
                             </div>
                         <?php else: ?>
