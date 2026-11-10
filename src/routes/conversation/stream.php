@@ -52,6 +52,11 @@ if ($action === 'stream' && $method === 'POST') {
         }
         $text      = (string) $lastUser['content'];
         $userMsgId = (int) $lastUser['id'];
+        // photo jointe à ce message : relue en base (le message n'est pas toujours dans
+        // l'historique envoyé, par exemple s'il a déjà été résumé dans la mémoire)
+        $imgSt = db()->prepare('SELECT image FROM messages WHERE id = ?');
+        $imgSt->execute([$userMsgId]);
+        $regenImage = (string) $imgSt->fetchColumn();
         // l'ancienne réponse n'est pas perdue : elle devient une version (‹ 1/2 ›)
         reply_version_archive($cid, $userMsgId);
         db()->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ?")
@@ -96,11 +101,9 @@ if ($action === 'stream' && $method === 'POST') {
     // uniquement ce qui n'est pas déjà dans le résumé (+ léger recouvrement)
     $history = fetch_context_messages($cid, $conv);
     if ($regen) {
-        // régénérer un message qui contenait une image : on la renvoie
-        foreach ($history as $h) {
-            if ((int) $h['id'] === $userMsgId && (string) ($h['image'] ?? '') !== '') {
-                $imageBase = (string) $h['image'];
-            }
+        // régénérer (ou rejouer après modification) un message avec photo : on la renvoie
+        if ($regenImage !== '') {
+            $imageBase = $regenImage;
         }
         $history = array_values(array_filter($history, static fn (array $m): bool => (int) $m['id'] !== $userMsgId));
     }

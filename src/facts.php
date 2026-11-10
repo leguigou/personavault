@@ -241,12 +241,13 @@ function facts_settings(): array
 }
 
 /** Configuration du modèle qui extrait les souvenirs (distant seulement s'il est configuré). */
-function facts_llm_config(): array
+function facts_llm_config(int $cid = 0): array
 {
     if (facts_settings()['model'] === 'remote' && llm_ready()) {
         return llm_config() + ['_remote' => true];
     }
-    return chat_llm_config();
+    // local : le modèle de la conversation (déjà chargé), pas le modèle global
+    return $cid > 0 ? chat_llm_config_for(chat_conv_effective($cid) ?? []) : chat_llm_config();
 }
 
 /**
@@ -311,7 +312,7 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
         . "\nDernier message de l'utilisateur (le plus important) :\n" . ($lastUser !== '' ? $lastUser : '(aucun)')
         . "\nÉchange récent :\n" . $transcript;
 
-    $cfg  = facts_llm_config();
+    $cfg  = facts_llm_config($cid);
     $remote = !empty($cfg['_remote']);
     unset($cfg['_remote']);
     $msgs = [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]];

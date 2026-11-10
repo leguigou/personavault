@@ -124,7 +124,7 @@ foreach ($convs as $conv) {
     $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
 
     try {
-        $res = llm_request($messages, chat_llm_config(), [
+        $res = llm_request($messages, chat_llm_config_for($conv), [
             'temperature'      => max(0.7, (float) ($conv['temperature'] ?? 0.85)),
             'max_tokens'       => 140,
             'timeout'          => 120,

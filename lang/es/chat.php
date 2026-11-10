@@ -81,6 +81,7 @@ return [
     'chat.model.label' => 'Modelo de esta conversación',
     'chat.model.persona_default' => 'El del persona · {model}',
     'chat.model.reset' => 'Volver al persona',
+    'chat.model.vision_legend' => '👁 = también lee imágenes (se pueden adjuntar fotos).',
     'chat.lms.error_reset' => 'Volver al modelo del persona',
     'chat.lms.error_detail' => 'Mensaje de LM Studio:',
     'chat.model.hint_off' => 'Para probar otro modelo solo aquí: el persona conserva el suyo.',

@@ -114,18 +114,33 @@
     };
 
     /* ------------------------------------------------ toasts éphémères */
+    /* toast(texte) ou toast({ title, text, code }) : carton d'information en bas de l'écran,
+       icône ✓ (ou ! en cas d'erreur), titre en gras, détail dessous ; code = détail en police
+       à chasse fixe (nom de modèle, fichier…) */
+    const TOAST_OK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.5 12.5 4 4 9-9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const TOAST_ERR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v6m0 3.5v.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
     const toast = (msg, isError = false) => {
         let el = document.querySelector(".toast");
         if (!el) {
             el = document.createElement("div");
             el.className = "toast";
+            el.setAttribute("role", "status");
+            el.setAttribute("aria-live", "polite");
+            el.innerHTML = '<span class="toast-ico"></span><span class="toast-body"><strong class="toast-title"></strong><span class="toast-text"></span></span>';
             document.body.appendChild(el);
         }
-        el.textContent = msg;
+        const m = typeof msg === "object" && msg ? msg : { title: String(msg ?? "") };
+        el.querySelector(".toast-ico").innerHTML = isError ? TOAST_ERR : TOAST_OK;
+        el.querySelector(".toast-title").textContent = m.title || "";
+        const text = el.querySelector(".toast-text");
+        text.textContent = m.text || "";
+        text.hidden = !m.text;
+        text.classList.toggle("is-code", Boolean(m.code));
         el.classList.toggle("is-error", Boolean(isError));
         requestAnimationFrame(() => el.classList.add("is-on"));
         clearTimeout(toast._t);
-        toast._t = setTimeout(() => el.classList.remove("is-on"), 1900);
+        // un peu plus long quand il y a un détail à lire
+        toast._t = setTimeout(() => el.classList.remove("is-on"), m.text ? 3200 : 2200);
     };
 
     /* ------------------------------- formulaires : ne jamais bloquer en silence */
@@ -1954,9 +1969,11 @@
                 holder.className = "bubbles";
                 const bounds = [0, ...pts, chars.length];
                 for (let i = 0; i < bounds.length - 1; i++) {
+                    const part = chars.slice(bounds[i], bounds[i + 1]).join("").trim();
+                    if (part === "") continue; // une coupe en fin de texte ne doit pas laisser de bulle vide
                     const b = document.createElement("div");
                     b.className = "bubble";
-                    b.textContent = chars.slice(bounds[i], bounds[i + 1]).join("").trim();
+                    b.textContent = part;
                     holder.appendChild(b);
                 }
                 wrap.appendChild(holder);
@@ -2169,6 +2186,18 @@
 
             if (attachBtn) {
                 attachBtn.hidden = !(d && d.vision === true);
+                // 👁 devant les modèles de vision dans la liste du panneau (une seule fois)
+                if (d && Array.isArray(d.vision_models)) {
+                    const vis = new Set(d.vision_models);
+                    document.querySelectorAll("[data-model-override] option[value]").forEach((o) => {
+                        if (o.value === "" || o.dataset.vision === "1" || !vis.has(o.value)) return;
+                        o.dataset.vision = "1";
+                        o.textContent += " 👁";
+                        o.title = tr("chat.vision_model");
+                    });
+                    const hint = document.querySelector("[data-model-vision-hint]");
+                    if (hint) hint.hidden = vis.size === 0;
+                }
                 if (attachBtn.hidden && pendingFile) clearAttach();
             }
 
@@ -2233,7 +2262,7 @@
                     const name = document.querySelector("[data-model-name]");
                     if (name) name.textContent = d.model || tr("chat.model_default");
                     paintOverride(!!d.override);
-                    toast(d.message);
+                    toast({ title: d.override ? tr("chat.model_changed") : tr("chat.model_back"), text: d.model, code: true });
                     loadStatus(2500); // nouveau modèle : chargé ou non dans LM Studio ?
                 } catch (e) {
                     toast(tr("common.error", { message: e.message }), true);
@@ -2982,6 +3011,8 @@
                     id,
                     role: isUser ? "user" : "assistant",
                     content: d.content,
+                    image: d.image || "", // la photo jointe reste affichée
+                    at: el.dataset.at,    // et la date du message aussi
                     split_points: d.split_points || [],
                 });
                 fresh.dataset.msgId = id;
@@ -3181,6 +3212,25 @@
             let bubbleEls = [];
             let splitTimer = null;
 
+            /* fin de réponse : les bulles affichées pendant l'arrivée du texte (un bloc par bulle)
+               sont remplacées par UN message, comme après un rechargement. Sinon seule la première
+               bulle portait l'identifiant : supprimer, régénérer ou voir la date ne marchait pas
+               sur les autres, et elles restaient à l'écran après suppression du message. */
+            const settleLive = (reply) => {
+                const wraps = [...new Set([live, ...bubbleEls].filter(Boolean).map((b) => b.closest(".msg")).filter(Boolean))];
+                if (!wraps.length || !reply || !reply.id) return null;
+                const fresh = renderMsg({
+                    id: reply.id,
+                    role: "assistant",
+                    content: reply.content,
+                    split_points: reply.split_points || [],
+                    at: reply.at || new Date().toISOString(),
+                });
+                wraps[0].replaceWith(fresh);
+                wraps.slice(1).forEach((w) => w.remove());
+                return fresh;
+            };
+
             const countWords = (s) => (s.trim() === "" ? 0 : s.trim().split(/\s+/).length);
 
             // coupe une portion à la dernière fin de phrase avant la limite de mots
@@ -3314,6 +3364,7 @@
                     let buf = "";
                     let finalId = null;
                     let finalVersions = null;
+                    let finalReply = null;
                     let failed = "";
                     let failedKind = "error";
 
@@ -3360,6 +3411,7 @@
                             } else if (evt.done) {
                                 finalId = (evt.reply && evt.reply.id) || null;
                                 finalVersions = (evt.reply && evt.reply.versions) || null;
+                                finalReply = evt.reply || null;
 
                                 // les coupes officielles viennent du serveur (stockées en base)
                                 const pts = Array.isArray(evt.reply && evt.reply.split_points)
@@ -3393,15 +3445,18 @@
 
                     document.getElementById("chat-typing")?.remove();
                     if (live) {
-                        if (finalId) live.parentElement.dataset.msgId = finalId;
-                        const liveMsg = live.closest(".msg");
+                        const settled = settleLive(finalReply);
+                        if (!settled) {
+                            if (finalId) live.parentElement.dataset.msgId = finalId;
+                            live.closest(".msg")?.setAttribute("data-at", new Date().toISOString());
+                            live.parentElement.removeAttribute("data-live");
+                        }
+                        const liveMsg = settled || live.closest(".msg");
                         if (liveMsg && finalVersions) {
                             liveMsg.dataset.ver = String(finalVersions.index);
                             liveMsg.dataset.vers = String(finalVersions.total);
                         }
                         paintVersions();
-                        live.closest(".msg")?.setAttribute("data-at", new Date().toISOString());
-                        live.parentElement.removeAttribute("data-live");
                     }
 
                     if (failed) {
@@ -3435,11 +3490,33 @@
                 if (err.name === "AbortError") {
                     if (live) live.parentElement.removeAttribute("data-live");
                     notice(tr("chat.aborted"));
+                    // réponse arrêtée : le serveur enregistre le début reçu ; on récupère son
+                    // identifiant pour que le message se comporte comme les autres
+                    if (live && streamed.trim() !== "") {
+                        const wanted = streamed.trim();
+                        const url = endpoint.replace(/\/send$/, "/messages") + "?limit=10";
+                        (async () => {
+                            for (let i = 0; i < 6; i++) {
+                                await new Promise((r) => setTimeout(r, 400));
+                                const d = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } }).then((r) => r.json()).catch(() => null);
+                                const last = d && d.ok ? [...d.messages].reverse().find((m) => m.role === "assistant") : null;
+                                if (last && String(last.content).trim() === wanted && !scroll.querySelector('[data-msg-id="' + last.id + '"]')) {
+                                    settleLive(last);
+                                    paintVersions();
+                                    return;
+                                }
+                            }
+                        })();
+                    }
                 } else {
                     notice(tr("common.error", { message: err.message }));
                 }
                 scrollBottom();
             } finally {
+                [live, ...bubbleEls].filter(Boolean).forEach((b) => {
+                    const w = b.closest(".msg");
+                    if (w && w.isConnected && b.textContent.trim() === "" && ![...w.querySelectorAll(".bubble")].some((x) => x.textContent.trim() !== "")) w.remove();
+                });
                 controller = null;
                 clearInterval(probe);
                 loadingLabel("");

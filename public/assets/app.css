@@ -2753,21 +2753,45 @@ textarea.input::-webkit-scrollbar-track { background: transparent; }
     position: fixed;
     left: 50%;
     bottom: calc(84px + var(--safe-b));
-    transform: translate(-50%, 12px);
-    z-index: 80;
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: var(--elev, rgba(20, 20, 32, .95));
-    border: 1px solid rgba(var(--acc), .4);
-    color: rgb(var(--acc-faint));
-    font-size: 13px;
-    font-weight: 600;
+    z-index: 130; /* au-dessus des panneaux et fenêtres */
+    width: min(420px, calc(100vw - 32px));
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px 12px 12px;
+    border-radius: 16px;
+    background: var(--elev, #14141f);
+    background-image: linear-gradient(rgba(var(--ink), .03), rgba(var(--ink), .03));
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    text-align: left;
     opacity: 0;
-    transition: .25s;
+    transform: translate(-50%, 14px);
+    transition: opacity .22s ease, transform .28s cubic-bezier(.2, .85, .25, 1);
     pointer-events: none;
-    box-shadow: 0 18px 40px -18px var(--sh, #000);
+    box-shadow: 0 22px 50px -18px var(--sh, #000);
 }
 .toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.toast-ico {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--grad);
+}
+.toast-ico svg { width: 16px; height: 16px; }
+.toast-body { flex: 1; min-width: 0; display: grid; gap: 3px; padding-top: 4px; }
+.toast-title { font-size: 13.5px; font-weight: 650; line-height: 1.35; }
+.toast-text { font-size: 12.5px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+.toast-text[hidden] { display: none; }
+.toast-text.is-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--text); opacity: .85; }
+.toast.is-error .toast-ico { background: #ef4444; }
 
 /* ------------------------------------------------------- sélecteur custom */
 
@@ -2918,7 +2942,7 @@ textarea.input::-webkit-scrollbar-track { background: transparent; }
     animation: spin .7s linear infinite;
 }
 
-.toast.is-error { border-color: rgba(248, 113, 113, .5); color: var(--err-t, #fecaca); background: var(--elev-err, rgba(30, 12, 16, .96)); }
+.toast.is-error { border-color: rgba(248, 113, 113, .45); }
 
 .icon-btn.is-active { color: var(--text); background: rgba(var(--ink), .08); }
 

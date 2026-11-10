@@ -105,6 +105,7 @@ if ($action === 'msg-edit' && $method === 'POST') {
     echo json_encode([
         'ok'           => true,
         'content'      => $content,
+        'image'        => (string) ($msg['image'] ?? ''), // la photo jointe reste avec le message
         'split_points' => [],
         'replay'       => $replay,
     ], JSON_UNESCAPED_UNICODE);
