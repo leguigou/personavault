@@ -114,18 +114,33 @@
     };
 
     /* ------------------------------------------------ toasts éphémères */
+    /* toast(texte) ou toast({ title, text, code }) : carton d'information en bas de l'écran,
+       icône ✓ (ou ! en cas d'erreur), titre en gras, détail dessous ; code = détail en police
+       à chasse fixe (nom de modèle, fichier…) */
+    const TOAST_OK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.5 12.5 4 4 9-9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const TOAST_ERR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v6m0 3.5v.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
     const toast = (msg, isError = false) => {
         let el = document.querySelector(".toast");
         if (!el) {
             el = document.createElement("div");
             el.className = "toast";
+            el.setAttribute("role", "status");
+            el.setAttribute("aria-live", "polite");
+            el.innerHTML = '<span class="toast-ico"></span><span class="toast-body"><strong class="toast-title"></strong><span class="toast-text"></span></span>';
             document.body.appendChild(el);
         }
-        el.textContent = msg;
+        const m = typeof msg === "object" && msg ? msg : { title: String(msg ?? "") };
+        el.querySelector(".toast-ico").innerHTML = isError ? TOAST_ERR : TOAST_OK;
+        el.querySelector(".toast-title").textContent = m.title || "";
+        const text = el.querySelector(".toast-text");
+        text.textContent = m.text || "";
+        text.hidden = !m.text;
+        text.classList.toggle("is-code", Boolean(m.code));
         el.classList.toggle("is-error", Boolean(isError));
         requestAnimationFrame(() => el.classList.add("is-on"));
         clearTimeout(toast._t);
-        toast._t = setTimeout(() => el.classList.remove("is-on"), 1900);
+        // un peu plus long quand il y a un détail à lire
+        toast._t = setTimeout(() => el.classList.remove("is-on"), m.text ? 3200 : 2200);
     };
 
     /* ------------------------------- formulaires : ne jamais bloquer en silence */
@@ -2245,7 +2260,7 @@
                     const name = document.querySelector("[data-model-name]");
                     if (name) name.textContent = d.model || tr("chat.model_default");
                     paintOverride(!!d.override);
-                    toast(d.message);
+                    toast({ title: d.override ? tr("chat.model_changed") : tr("chat.model_back"), text: d.model, code: true });
                     loadStatus(2500); // nouveau modèle : chargé ou non dans LM Studio ?
                 } catch (e) {
                     toast(tr("common.error", { message: e.message }), true);
