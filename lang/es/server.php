@@ -10,6 +10,8 @@ return [
     'flash.backup.import_failed'  => 'No se pudo importar: {error}',
     'flash.chat.pick_persona'     => 'Elige un persona para empezar la conversación.',
     'flash.chat.toggles_saved'    => 'Ajustes de la conversación guardados.',
+    'flash.chat.model_override_set' => 'Esta conversación usa ahora {model}.',
+    'flash.chat.model_override_cleared' => 'Vuelta al modelo del persona.',
     'flash.chat.deleted'          => 'Conversación eliminada.',
     'flash.chat.memory_cleared'   => 'Memoria borrada: la próxima compresión empezará desde cero.',
     'flash.chat.summary_saved'    => 'Resumen guardado.',

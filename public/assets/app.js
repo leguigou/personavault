@@ -1663,25 +1663,106 @@
             b.setAttribute("aria-expanded", String(open && b.dataset.openSettings === sheetGroup))
         );
         document.body.classList.toggle("sheet-open", open);
-
-        // le panneau se cale juste au-dessus de la zone de saisie (hauteur variable)
-        if (open && window.matchMedia("(max-width: 899px)").matches) {
-            const composer = document.querySelector(".chat-composer");
-            if (composer) {
-                const top = composer.getBoundingClientRect().top;
-                chatSheet.style.bottom = Math.max(12, window.innerHeight - top + 8) + "px";
-            }
-        }
+        chatSheet.style.removeProperty("--drag");
+        document.body.style.removeProperty("--backdrop-o");
+        // mobile : feuille qui recouvre la conversation → la page derrière ne défile plus
+        if (isSheetMobile()) document.body.style.overflow = open ? "hidden" : "";
     };
+    const isSheetMobile = () => window.matchMedia("(max-width: 899px)").matches;
 
-    window.addEventListener("resize", () => {
-        if (chatSheet && chatSheet.classList.contains("is-open") && window.matchMedia("(max-width: 899px)").matches) {
-            const composer = document.querySelector(".chat-composer");
-            if (composer) {
-                chatSheet.style.bottom = Math.max(12, window.innerHeight - composer.getBoundingClientRect().top + 8) + "px";
+    /* mobile : fond assombri + tirer la feuille vers le bas pour la refermer
+       (par la poignée, l'en-tête, ou le contenu quand il est déjà tout en haut) */
+    if (chatSheet) {
+        const backdrop = document.createElement("div");
+        backdrop.className = "chat-sheet-backdrop";
+        chatSheet.before(backdrop);
+
+        const body = chatSheet.querySelector(".sheet-body");
+        let startY = 0;
+        let lastY = 0;
+        let lastT = 0;
+        let speed = 0;
+        let dragging = false;
+        let fromBody = false;
+        const move = (dy) => {
+            const d = Math.max(0, dy);
+            chatSheet.style.setProperty("--drag", d + "px");
+            document.body.style.setProperty("--backdrop-o", String(Math.max(0, 1 - d / Math.max(1, chatSheet.offsetHeight))));
+        };
+        const begin = (y) => {
+            startY = lastY = y;
+            lastT = performance.now();
+            speed = 0;
+        };
+        const track = (y) => {
+            const now = performance.now();
+            speed = (y - lastY) / Math.max(1, now - lastT); // px/ms, positif vers le bas
+            lastY = y;
+            lastT = now;
+            if (!dragging) {
+                dragging = true;
+                chatSheet.classList.add("is-dragging");
+                document.body.classList.add("sheet-dragging");
             }
-        }
-    });
+            move(y - startY);
+        };
+        const end = () => {
+            if (!dragging) return;
+            dragging = false;
+            chatSheet.classList.remove("is-dragging");
+            document.body.classList.remove("sheet-dragging");
+            const dy = lastY - startY;
+            // assez tiré (un tiers de la feuille, ou 120 px) ou lancé vers le bas : on ferme
+            if (dy > Math.min(120, chatSheet.offsetHeight / 3) || (speed > 0.6 && dy > 24)) setSheet(false);
+            else move(0);
+            setTimeout(() => {
+                if (!chatSheet.classList.contains("is-open")) chatSheet.style.removeProperty("--drag");
+            }, 400);
+        };
+
+        // poignée et en-tête : on suit le doigt tout de suite
+        chatSheet.querySelectorAll("[data-sheet-grab], [data-sheet-drag]").forEach((zone) => {
+            zone.addEventListener("pointerdown", (e) => {
+                if (!isSheetMobile() || e.button > 0 || e.target.closest("button, a, input, select, textarea")) return;
+                zone.setPointerCapture(e.pointerId);
+                begin(e.clientY);
+            });
+            zone.addEventListener("pointermove", (e) => {
+                if (!zone.hasPointerCapture(e.pointerId)) return;
+                if (dragging || Math.abs(e.clientY - startY) > 4) track(e.clientY);
+            });
+            zone.addEventListener("pointerup", end);
+            zone.addEventListener("pointercancel", end);
+        });
+
+        // contenu : seulement quand il est déjà en haut et qu'on tire vers le bas
+        body?.addEventListener("touchstart", (e) => {
+            if (!isSheetMobile() || e.touches.length !== 1) return;
+            fromBody = body.scrollTop <= 0 && !e.target.closest("input, select, textarea, [data-dual-range]");
+            begin(e.touches[0].clientY);
+        }, { passive: true });
+        body?.addEventListener("touchmove", (e) => {
+            if (!fromBody) return;
+            const y = e.touches[0].clientY;
+            if (!dragging && (y - startY < 6 || body.scrollTop > 0)) {
+                if (y < startY) fromBody = false; // on fait défiler vers le haut : défilement normal
+                return;
+            }
+            e.preventDefault(); // la feuille descend au lieu de faire défiler
+            track(y);
+        }, { passive: false });
+        body?.addEventListener("touchend", () => {
+            fromBody = false;
+            end();
+        });
+        body?.addEventListener("touchcancel", () => {
+            fromBody = false;
+            end();
+        });
+        window.addEventListener("resize", () => {
+            if (!isSheetMobile()) document.body.style.overflow = "";
+        });
+    }
 
     if (chatSheet) {
         document.querySelectorAll("[data-open-settings]").forEach((b) =>
@@ -2133,6 +2214,48 @@
                 paintStatus(null);
             }
         };
+
+        /* modèle de cette conversation (test) : enregistré dès le choix, sans toucher au persona */
+        const mForm = document.querySelector("[data-model-override]");
+        if (mForm) {
+            const sel = mForm.querySelector("select[name=model]");
+            const reset = mForm.querySelector("[data-model-reset]");
+            const hint = mForm.querySelector("[data-model-hint]");
+            const hintOff = hint?.textContent || "";
+            const paintOverride = (on) => {
+                mForm.classList.toggle("is-override", on);
+                if (reset) reset.hidden = !on;
+                document.querySelector("[data-model-test]")?.toggleAttribute("hidden", !on);
+                if (hint) hint.textContent = on ? tr("chat.model_hint_on") : hintOff;
+            };
+            const save = async () => {
+                sel.disabled = true;
+                try {
+                    const fd = new FormData(mForm);
+                    fd.set("model", sel.value);
+                    const r = await fetch(mForm.action, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                    const d = await r.json().catch(() => ({ ok: false }));
+                    if (!d.ok) throw new Error(d.error || tr("common.send_failed"));
+                    chat.dataset.model = d.model;
+                    const name = document.querySelector("[data-model-name]");
+                    if (name) name.textContent = d.model || tr("chat.model_default");
+                    paintOverride(!!d.override);
+                    toast(d.message);
+                    loadStatus(2500); // nouveau modèle : chargé ou non dans LM Studio ?
+                } catch (e) {
+                    toast(tr("common.error", { message: e.message }), true);
+                } finally {
+                    sel.disabled = false;
+                }
+            };
+            paintOverride(sel.value !== "");
+            if (sel.value !== "" && hint) hint.textContent = tr("chat.model_hint_on");
+            sel.addEventListener("change", save);
+            reset?.addEventListener("click", () => {
+                sel.value = "";
+                save();
+            });
+        }
 
         document.querySelector("[data-lms-refresh]")?.addEventListener("click", () => loadStatus(2000));
         loadStatus();

@@ -13,6 +13,8 @@ return [
     'flash.backup.import_failed'  => 'Import impossible : {error}',
     'flash.chat.pick_persona'     => 'Choisis un persona pour démarrer la discussion.',
     'flash.chat.toggles_saved'    => 'Réglages de la conversation enregistrés.',
+    'flash.chat.model_override_set' => 'Cette conversation utilise maintenant {model}.',
+    'flash.chat.model_override_cleared' => 'Retour au modèle du persona.',
     'flash.chat.deleted'          => 'Conversation supprimée.',
     'flash.chat.memory_cleared'   => 'Mémoire effacée : la prochaine compression repartira de zéro.',
     'flash.chat.summary_saved'    => 'Résumé enregistré.',

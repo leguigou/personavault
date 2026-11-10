@@ -10,6 +10,8 @@ return [
     'flash.backup.import_failed'  => 'Import failed: {error}',
     'flash.chat.pick_persona'     => 'Pick a persona to start the chat.',
     'flash.chat.toggles_saved'    => 'Conversation settings saved.',
+    'flash.chat.model_override_set' => 'This conversation now uses {model}.',
+    'flash.chat.model_override_cleared' => 'Back to the persona\'s model.',
     'flash.chat.deleted'          => 'Conversation deleted.',
     'flash.chat.memory_cleared'   => 'Memory cleared: the next compression will start from scratch.',
     'flash.chat.summary_saved'    => 'Summary saved.',

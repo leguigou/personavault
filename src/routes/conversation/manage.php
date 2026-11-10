@@ -6,6 +6,33 @@ declare(strict_types=1);
  * Inclus par src/routes/conversation.php ($cid, $action, $conv, $persona, $personaPrompts).
  */
 
+/* --- modèle de cette conversation seulement (pour tester ; vide = celui du persona) --- */
+if ($action === 'model-override' && $method === 'POST') {
+    $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+    $ajax ? csrf_check_json() : csrf_check();
+    $override = mb_substr(trim((string) ($_POST['model'] ?? '')), 0, 200);
+    // retour au modèle du persona : on oublie aussi le « dernier modèle utilisé » (le modèle de test)
+    db()->prepare($override === ''
+        ? "UPDATE conversations SET model_override = '', model = '' WHERE id = ?"
+        : 'UPDATE conversations SET model_override = ? WHERE id = ?')
+        ->execute($override === '' ? [$cid] : [$override, $cid]);
+    $raw = db()->prepare('SELECT * FROM conversations WHERE id = ?');
+    $raw->execute([$cid]);
+    $eff = chat_with_persona((array) $raw->fetch(), $persona); // depuis la ligne brute
+    $effective = (string) ($eff['model'] !== '' ? $eff['model'] : chat_llm_config_raw()['model']);
+    if ($ajax) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok'       => true,
+            'model'    => $effective,
+            'override' => $override !== '',
+            'message'  => $override !== '' ? t('flash.chat.model_override_set', ['model' => $override]) : t('flash.chat.model_override_cleared'),
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    redirect('/chat/' . $cid);
+}
+
 /* --- épingler / désépingler (bouton de la liste des discussions) --- */
 if ($action === 'pin' && $method === 'POST') {
     $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';

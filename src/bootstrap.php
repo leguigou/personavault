@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 4);
+define('PV_SCHEMA_VERSION', 5);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -191,6 +191,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 4) {
             migrate_v4($pdo);
+        }
+        if ($version < 5) {
+            migrate_v5($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -423,6 +426,12 @@ CREATE INDEX IF NOT EXISTS idx_reply_versions_user ON reply_versions(user_messag
 SQL);
     add_column_if_missing($pdo, 'messages', 'version_id', 'INTEGER NOT NULL DEFAULT 0');
     add_column_if_missing($pdo, 'conversations', 'pinned', 'INTEGER NOT NULL DEFAULT 0');
+}
+
+/** v5 : modèle choisi pour une seule conversation (vide = celui du persona). */
+function migrate_v5(PDO $pdo): void
+{
+    add_column_if_missing($pdo, 'conversations', 'model_override', "TEXT NOT NULL DEFAULT ''");
 }
 
 /* --------------------------------------------------------------- réglages */
