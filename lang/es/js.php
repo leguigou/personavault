@@ -84,6 +84,7 @@ return [
     'js.chat.regen'               => 'Regenerar la respuesta',
     'js.chat.model_hint_on' => 'Modelo de prueba, solo para esta conversación. El persona conserva el suyo.',
     'js.chat.model_default' => 'modelo predeterminado',
+    'js.chat.vision_model' => 'Modelo de visión: también lee imágenes',
     'js.prompt.chars' => ['one' => '{n} carácter', 'other' => '{n} caracteres'],
     'js.prompt.modified' => 'modificado',
     'js.chat.versions_label' => 'Versiones de la respuesta',

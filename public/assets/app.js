@@ -2169,6 +2169,18 @@
 
             if (attachBtn) {
                 attachBtn.hidden = !(d && d.vision === true);
+                // 👁 devant les modèles de vision dans la liste du panneau (une seule fois)
+                if (d && Array.isArray(d.vision_models)) {
+                    const vis = new Set(d.vision_models);
+                    document.querySelectorAll("[data-model-override] option[value]").forEach((o) => {
+                        if (o.value === "" || o.dataset.vision === "1" || !vis.has(o.value)) return;
+                        o.dataset.vision = "1";
+                        o.textContent += " 👁";
+                        o.title = tr("chat.vision_model");
+                    });
+                    const hint = document.querySelector("[data-model-vision-hint]");
+                    if (hint) hint.hidden = vis.size === 0;
+                }
                 if (attachBtn.hidden && pendingFile) clearAttach();
             }
 

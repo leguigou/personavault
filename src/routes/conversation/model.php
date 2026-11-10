@@ -23,6 +23,8 @@ if ($action === 'status' && $method === 'GET') {
         'url'       => lms_root(),
         'is_loaded' => in_array($wanted, $ids, true) || in_array($wanted, $keys, true),
         'vision'    => ($st['types'][$wanted] ?? '') === 'vlm',
+        // modèles qui lisent les images : 👁 dans la liste « Modèle de cette conversation »
+        'vision_models' => array_keys(array_filter($st['types'], static fn ($t) => $t === 'vlm')),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

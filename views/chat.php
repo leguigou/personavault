@@ -231,6 +231,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 </select>
                 <button type="button" class="btn btn-ghost btn-sm conv-model-reset" data-model-reset <?= $overrideModel === '' ? 'hidden' : '' ?>><?= e(t('chat.model.reset')) ?></button>
             </div>
+            <p class="hint conv-model-legend" data-model-vision-hint hidden><?= e(t('chat.model.vision_legend')) ?></p>
             <p class="hint" data-model-hint><?= e($overrideModel !== '' ? t('chat.model.hint_on') : t('chat.model.hint_off')) ?></p>
             <noscript><button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button></noscript>
         </form>

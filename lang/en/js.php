@@ -84,6 +84,7 @@ return [
     'js.chat.regen'               => 'Regenerate the reply',
     'js.chat.model_hint_on' => 'Test model, for this conversation only. The persona keeps its own.',
     'js.chat.model_default' => 'default model',
+    'js.chat.vision_model' => 'Vision model: can also read images',
     'js.prompt.chars' => ['one' => '{n} character', 'other' => '{n} characters'],
     'js.prompt.modified' => 'edited',
     'js.chat.versions_label' => 'Reply versions',

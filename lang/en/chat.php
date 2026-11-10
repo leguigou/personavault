@@ -81,6 +81,7 @@ return [
     'chat.model.label' => 'Model for this conversation',
     'chat.model.persona_default' => 'The persona\'s · {model}',
     'chat.model.reset' => 'Back to persona',
+    'chat.model.vision_legend' => '👁 = can also read images (photo attachments).',
     'chat.lms.error_reset' => 'Back to the persona\'s model',
     'chat.lms.error_detail' => 'LM Studio said:',
     'chat.model.hint_off' => 'To try another model here only: the persona keeps its own.',
