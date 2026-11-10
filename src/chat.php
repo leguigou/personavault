@@ -1363,7 +1363,12 @@ function chat_auto_title(int $cid): ?string
     return $title;
 }
 
-function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null): array
+/**
+ * @param bool $historyVision le modèle lit les images : la dernière photo récente de l'historique
+ *                            lui est renvoyée (sinon « décris-la » dans le message suivant ne
+ *                            pouvait rien donner : seul le texte des anciens messages partait)
+ */
+function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false): array
 {
     // 1) Partie STABLE en tête : consignes, fiche, consigne de jeu, résumé.
     //    Elle ne change qu'à la compression : LM Studio / llama.cpp réutilisent alors
@@ -1406,18 +1411,36 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
 
     $kept = [];
     $dropped = 0;
+    $imageSent = false;
     foreach (array_reverse($history) as $msg) {
         $role = (string) $msg['role'];
         if ($role !== 'user' && $role !== 'assistant') {
             continue;
         }
-        $cost = chat_estimate_tokens((string) $msg['content']) + 4;
+        $content = (string) $msg['content'];
+        $image   = $role === 'user' ? (string) ($msg['image'] ?? '') : '';
+        $cost = chat_estimate_tokens($content) + 4;
         if ($used + $cost > $budget && $kept) {
             $dropped = (int) $msg['id'];
             break;
         }
         $used += $cost;
-        array_unshift($kept, ['role' => $role, 'content' => (string) $msg['content']]);
+        if ($image !== '') {
+            // photo dans un message précédent : la plus récente (6 derniers messages) est renvoyée
+            // au modèle de vision ; les autres sont signalées, pour qu'il sache qu'une photo existait
+            $url = ($historyVision && !$imageSent && ($imageDataUrl === null || $imageDataUrl === '') && count($kept) < 6)
+                ? media_data_url($image) : '';
+            if ($url !== '') {
+                $imageSent = true;
+                array_unshift($kept, ['role' => 'user', 'content' => [
+                    ['type' => 'text', 'text' => $content !== '' ? $content : 'Regarde cette photo.'],
+                    ['type' => 'image_url', 'image_url' => ['url' => $url]],
+                ]]);
+                continue;
+            }
+            $content = trim($content . ' [photo jointe]');
+        }
+        array_unshift($kept, ['role' => $role, 'content' => $content]);
     }
 
     $messages = [['role' => 'system', 'content' => $system]];
