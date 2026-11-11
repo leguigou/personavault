@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 5);
+define('PV_SCHEMA_VERSION', 6);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -194,6 +194,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 5) {
             migrate_v5($pdo);
+        }
+        if ($version < 6) {
+            migrate_v6($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -432,6 +435,28 @@ SQL);
 function migrate_v5(PDO $pdo): void
 {
     add_column_if_missing($pdo, 'conversations', 'model_override', "TEXT NOT NULL DEFAULT ''");
+}
+
+/** v6 : journal des échanges avec les modèles (20 derniers appels). */
+function migrate_v6(PDO $pdo): void
+{
+    $pdo->exec("CREATE TABLE IF NOT EXISTS llm_logs (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+        purpose           TEXT NOT NULL DEFAULT 'other',
+        conversation_id   INTEGER,
+        endpoint          TEXT NOT NULL DEFAULT '',
+        model             TEXT NOT NULL DEFAULT '',
+        status            TEXT NOT NULL DEFAULT 'ok',
+        http_code         INTEGER NOT NULL DEFAULT 0,
+        ms                INTEGER NOT NULL DEFAULT 0,
+        prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+        completion_tokens INTEGER NOT NULL DEFAULT 0,
+        params            TEXT NOT NULL DEFAULT '{}',
+        request           TEXT NOT NULL DEFAULT '[]',
+        response          TEXT NOT NULL DEFAULT '',
+        error             TEXT NOT NULL DEFAULT ''
+    )");
 }
 
 /* --------------------------------------------------------------- réglages */
@@ -1218,6 +1243,7 @@ function fetch_prompts(int $personaId): array
 
 require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/llm.php';
+require_once __DIR__ . '/llm_log.php';
 require_once __DIR__ . '/prompts.php';
 require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/facts.php';

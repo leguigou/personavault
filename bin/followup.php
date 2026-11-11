@@ -155,7 +155,9 @@ foreach ($convs as $conv) {
     $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
 
     try {
+        llm_log_context(['cid' => $cid]);
         $res = llm_request($messages, $fuCfg, [
+            'purpose'          => 'followup',
             'temperature'      => max(0.7, (float) ($conv['temperature'] ?? 0.85)),
             'max_tokens'       => 140,
             'timeout'          => 120,

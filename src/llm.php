@@ -175,24 +175,35 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
         'aborted'           => $aborted,
     ];
 
+    // journal (Réglages › Journal) : une entrée par appel, quelle qu'en soit l'issue
+    $log = static function (string $status, string $error = '') use ($body, $base, $options, $result, $code): void {
+        llm_log_write($body, $base, $options, $result + ['status' => $status, 'code' => $code, 'response' => $result['content'], 'error' => $error]);
+    };
+
     if ($aborted) {
+        $log('aborted');
         return $result; // arrêt demandé par le client : on rend ce qui a été reçu
     }
     if ($ok === false) {
+        $log('error', $err);
         throw new RuntimeException(t('error.llm.connect', ['error' => $err]), LLM_ERR_CONNECT);
     }
     if ($code < 200 || $code >= 300) {
         $data = json_decode($rawHead, true);
         $msg  = $data['error']['message'] ?? mb_substr(trim($rawHead), 0, 180);
+        $log('error', 'HTTP ' . $code . ' : ' . $msg);
         throw new RuntimeException(t('error.llm.api', ['code' => $code, 'message' => $msg]), $code);
     }
     if ($streamErr !== '') {
+        $log('error', $streamErr);
         throw new RuntimeException(t('error.llm.model_error', ['message' => mb_substr($streamErr, 0, 300)]));
     }
     if (trim($content) === '') {
+        $log('error', t('error.llm.empty'));
         throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
 
+    $log('ok');
     return $result;
 }
 
@@ -261,21 +272,34 @@ function llm_request(array $messages, array $cfg, array $options = []): array
     curl_close($ch);
     $ms = (int) round((microtime(true) - $t0) * 1000);
 
+    $log = static function (string $status, string $response, string $error = '', array $data = []) use ($body, $base, $options, $code, $ms, $model): void {
+        llm_log_write($body, $base, $options, [
+            'status' => $status, 'code' => $code, 'ms' => $ms, 'response' => $response, 'error' => $error,
+            'model' => (string) ($data['model'] ?? $model),
+            'prompt_tokens' => (int) ($data['usage']['prompt_tokens'] ?? 0),
+            'completion_tokens' => (int) ($data['usage']['completion_tokens'] ?? 0),
+        ]);
+    };
+
     if ($raw === false) {
+        $log('error', '', $err);
         throw new RuntimeException(t('error.llm.connect', ['error' => $err]), LLM_ERR_CONNECT);
     }
 
     $data = json_decode((string) $raw, true);
     if ($code < 200 || $code >= 300) {
         $msg = $data['error']['message'] ?? mb_substr(trim((string) $raw), 0, 200);
+        $log('error', '', 'HTTP ' . $code . ' : ' . $msg);
         throw new RuntimeException(t('error.llm.api', ['code' => $code, 'message' => $msg]), $code);
     }
 
     $content = $data['choices'][0]['message']['content'] ?? null;
     if (!is_string($content) || trim($content) === '') {
+        $log('error', '', t('error.llm.empty'), (array) $data);
         throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
 
+    $log('ok', $content, '', (array) $data);
     return [
         'content'           => $content,
         'model'             => (string) ($data['model'] ?? $model),
@@ -319,24 +343,39 @@ function llm_chat(array $messages, bool $json = false, int $timeout = 90, ?array
         CURLOPT_POSTFIELDS     => json_encode($body, JSON_UNESCAPED_UNICODE),
     ]);
 
+    $t0   = microtime(true);
     $raw  = curl_exec($ch);
     $err  = curl_error($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+    $ms = (int) round((microtime(true) - $t0) * 1000);
+
+    $data = $raw === false ? [] : (array) json_decode((string) $raw, true);
+    $log  = static function (string $status, string $response, string $error = '') use ($body, $c, $code, $ms, $data): void {
+        llm_log_write($body, (string) $c['base_url'], [], [
+            'status' => $status, 'code' => $code, 'ms' => $ms, 'response' => $response, 'error' => $error,
+            'model' => (string) ($data['model'] ?? $c['model']),
+            'prompt_tokens' => (int) ($data['usage']['prompt_tokens'] ?? 0),
+            'completion_tokens' => (int) ($data['usage']['completion_tokens'] ?? 0),
+        ]);
+    };
 
     if ($raw === false) {
+        $log('error', '', $err);
         throw new RuntimeException(t('error.llm.connect', ['error' => $err]), LLM_ERR_CONNECT);
     }
 
-    $data = json_decode((string) $raw, true);
     if ($code < 200 || $code >= 300) {
         $msg = $data['error']['message'] ?? mb_substr(trim((string) $raw), 0, 200);
+        $log('error', '', 'HTTP ' . $code . ' : ' . $msg);
         throw new RuntimeException(t('error.llm.api', ['code' => $code, 'message' => $msg]), $code);
     }
     $content = $data['choices'][0]['message']['content'] ?? null;
     if (!is_string($content) || trim($content) === '') {
+        $log('error', '', t('error.llm.empty'));
         throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
+    $log('ok', $content);
     return $content;
 }
 
@@ -517,7 +556,7 @@ TXT;
         }
     }
 
-    $opts = ['temperature' => 0.6, 'max_tokens' => 900, 'timeout' => 150];
+    $opts = ['temperature' => 0.6, 'max_tokens' => 900, 'timeout' => 150, 'purpose' => 'ai_prompt'];
     $text = static fn (bool $withImage): array => [
         ['role' => 'system', 'content' => $system],
         ['role' => 'user', 'content' => $withImage

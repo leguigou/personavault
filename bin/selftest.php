@@ -483,6 +483,23 @@ try {
     $check(export_filename('Week-end à Lisbonne !', 'md', '2026-11-08') === 'week-end-a-lisbonne-2026-11-08.md'
         && export_filename('???', 'txt', '2026-11-08') === 'conversation-2026-11-08.txt', 'nom de fichier propre à partir du titre');
     $check(export_bubbles(['content' => 'Un. Deux.', 'split_points' => '[4]']) === ['Un.', 'Deux.'], 'page imprimable : découpage en bulles');
+    // journal des échanges : image remplacée par sa taille, 20 entrées au plus, jamais la clé
+    $__lm = llm_log_messages([['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Regarde'], ['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,' . str_repeat('A', 4096)]]]]]);
+    $check(($__lm[0]['content'] ?? '') === "Regarde\n[image ~3 Ko]", 'journal : photo remplacée par sa taille');
+    db()->exec('DELETE FROM llm_logs');
+    for ($__i = 0; $__i < 25; $__i++) {
+        llm_log_write(['model' => 'm', 'messages' => [['role' => 'user', 'content' => 'q' . $__i]]], 'http://127.0.0.1:1/v1', ['purpose' => 'test'], ['status' => 'ok', 'response' => 'r' . $__i]);
+    }
+    $__rows = llm_log_list();
+    $check(count($__rows) === 20 && $__rows[0]['response'] === 'r24' && $__rows[19]['response'] === 'r5', 'journal : 20 derniers échanges, le plus récent en haut');
+    try {
+        llm_request([['role' => 'user', 'content' => 'ping']], ['base_url' => 'http://127.0.0.1:1/v1', 'model' => 'm', 'key' => 'sk-secret'], ['timeout' => 2, 'purpose' => 'test']);
+    } catch (Throwable $__e) {
+    }
+    $__last = llm_log_list()[0] ?? [];
+    $check(($__last['status'] ?? '') === 'error' && ($__last['error'] ?? '') !== ''
+        && !str_contains(json_encode($__last), 'sk-secret'), 'journal : erreur de connexion enregistrée, sans la clé');
+    db()->exec('DELETE FROM llm_logs');
     // 51 mots : coupe après « tout.. », pas sur le « ! » final (sinon aucune coupe côté serveur
     // alors que le navigateur en affichait une → bulle répétée)
     $__t = trim(str_repeat('mot ', 44)) . ' et tout.. mais bon on fait avec !';

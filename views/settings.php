@@ -498,6 +498,16 @@ $facts = facts_settings();
             <button class="btn btn-ghost" type="button" data-purge-lms><?= e(t('settings.purge.button')) ?></button>
         </div>
     </section>
+
+    <!-- journal : ce qui part au modèle et ce qui en revient (20 derniers échanges) -->
+    <a class="backup-card settings-logs-link" href="/settings/logs">
+        <span class="settings-logs-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7h10M7 12h10M7 17h6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M17.5 14.5v5m0 0-2-2m2 2 2-2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="settings-logs-text">
+            <strong><?= e(t('logs.link_title')) ?></strong>
+            <small><?= e(t('logs.link_text')) ?></small>
+        </span>
+        <svg class="settings-logs-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
     </div>
 
     <div class="tab-panel" data-panel="look" hidden>

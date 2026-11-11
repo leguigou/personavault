@@ -69,6 +69,7 @@ if ($action === 'ai-fill' && $method === 'POST') {
             throw new RuntimeException(t('error.ai.need_prompt'));
         }
 
+        llm_log_context(['purpose' => 'ai_fill']);
         $ai = llm_complete_persona($persona, $prompts);
 
         $changes = [];

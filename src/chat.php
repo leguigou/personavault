@@ -396,6 +396,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
 
     $cfg  = chat_llm_config_for($conv); // même modèle que la discussion : pas de rechargement
     $opts = [
+        'purpose'          => 'memory',
         'temperature'      => 0.2,
         'max_tokens'       => 1200,
         'timeout'          => 180,
@@ -1314,7 +1315,7 @@ function persona_ai_directive(array $persona, array $prompts): array
     $res = llm_request(
         [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]],
         $cfg,
-        ['temperature' => 0.4, 'max_tokens' => 420, 'timeout' => 120, 'json' => true]
+        ['temperature' => 0.4, 'max_tokens' => 420, 'timeout' => 120, 'json' => true, 'purpose' => 'directive']
     );
 
     $json = llm_json((string) $res['content']);
@@ -1503,8 +1504,8 @@ function chat_auto_title(int $cid): ?string
     // distant seulement s'il est configuré ; sinon le modèle local (rien ne sort)
     $remote = $mode === 'remote' && llm_ready();
     $opts   = $remote
-        ? ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 25]
-        : ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 60,
+        ? ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 25, 'purpose' => 'title']
+        : ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 60, 'purpose' => 'title',
            'reasoning_effort' => setting('chat_reasoning_effort', 'none')];
 
     try {
@@ -1704,6 +1705,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         'timeout'          => 300,
         'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
         'should_abort'     => $shouldAbort,
+        'purpose'          => 'chat',
     ];
 
     if ($mode === 'fallback') {
@@ -1713,6 +1715,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         }
         $o = $opts;
         unset($o['reasoning_effort']);
+        $o['purpose'] = 'fallback';
         try {
             $res = llm_stream($messages, $fb, $o, $onDelta);
         } catch (Throwable $e) {
