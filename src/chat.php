@@ -396,6 +396,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
 
     $cfg  = chat_llm_config_for($conv); // même modèle que la discussion : pas de rechargement
     $opts = [
+        'purpose'          => 'memory',
         'temperature'      => 0.2,
         'max_tokens'       => 1200,
         'timeout'          => 180,
@@ -704,6 +705,86 @@ function lms_make_room_for(string $model, ?array $status = null): array
         }
     }
     return $st['loaded'] ? lms_purge_except($model)['unloaded'] : [];
+}
+
+/**
+ * Charge un modèle et attend la fin (fenêtre de contexte imposée). $onTick est appelé
+ * toutes les ~2 s pendant l'attente (ping SSE derrière un proxy).
+ */
+function lms_load_sync(string $model, int $contextLength, ?callable $onTick = null): bool
+{
+    if ($model === '') {
+        return false;
+    }
+    $ch = curl_init(lms_root() . '/api/v1/models/load');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 300,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode(['model' => $model, 'context_length' => max(2048, $contextLength)], JSON_UNESCAPED_UNICODE),
+    ]);
+    if ($onTick) {
+        $last = microtime(true);
+        curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+        curl_setopt($ch, CURLOPT_XFERINFOFUNCTION, static function () use ($onTick, &$last): int {
+            if (microtime(true) - $last >= 2.0) {
+                $last = microtime(true);
+                $onTick();
+            }
+            return 0;
+        });
+    }
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return $raw !== false && $code >= 200 && $code < 300;
+}
+
+/**
+ * Fait correspondre la mémoire de la conversation à celle du modèle dans LM Studio.
+ * - Modèle pas encore chargé : on le charge NOUS-MÊMES avec la fenêtre du persona. Sinon
+ *   LM Studio le chargerait à la première requête avec sa taille par défaut (souvent plus
+ *   petite) et couperait en silence une partie de l'historique.
+ * - Modèle déjà chargé avec une fenêtre plus petite : on réduit le budget de la conversation
+ *   à cette taille, pour que l'app choisisse elle-même les messages gardés (les plus récents).
+ * @return array{conv:array, loaded:bool, ctx:int}
+ */
+function chat_fit_context(array $conv, ?callable $onLoading = null, ?callable $onTick = null): array
+{
+    $cfg = chat_llm_config_for($conv);
+    $out = ['conv' => $conv, 'loaded' => false, 'ctx' => 0];
+    if ((string) $cfg['provider'] !== 'lmstudio' || (string) $cfg['model'] === '') {
+        return $out;
+    }
+    $st = lms_status();
+    if (empty($st['reachable'])) {
+        return $out;
+    }
+    $model  = (string) $cfg['model'];
+    $window = max(2048, (int) ($conv['context_window'] ?? 8192));
+    foreach ($st['loaded'] as $l) {
+        if ($l['key'] === $model || $l['id'] === $model) {
+            $ctx = (int) $l['ctx'];
+            if ($ctx > 0 && $ctx < $window) {
+                $out['conv']['context_window'] = max(1024, $ctx);
+            }
+            $out['ctx'] = $ctx;
+            return $out;
+        }
+    }
+    // pas chargé : n'en garder qu'un en mémoire (réglage), puis charger avec la bonne fenêtre
+    if (setting('lms_single_model', '1') === '1' && $st['loaded']) {
+        lms_purge_except($model);
+    }
+    if ($onLoading) {
+        $onLoading();
+    }
+    lms_touch_activity();
+    $out['loaded'] = lms_load_sync($model, $window, $onTick);
+    $out['ctx']    = $out['loaded'] ? $window : 0;
+    return $out;
 }
 
 /** Note l'heure d'utilisation de LM Studio (réponse, chargement…) : base du déchargement après inactivité. */
@@ -1234,7 +1315,7 @@ function persona_ai_directive(array $persona, array $prompts): array
     $res = llm_request(
         [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]],
         $cfg,
-        ['temperature' => 0.4, 'max_tokens' => 420, 'timeout' => 120, 'json' => true]
+        ['temperature' => 0.4, 'max_tokens' => 420, 'timeout' => 120, 'json' => true, 'purpose' => 'directive']
     );
 
     $json = llm_json((string) $res['content']);
@@ -1258,6 +1339,7 @@ function persona_ai_directive(array $persona, array $prompts): array
  */
 function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2): array
 {
+    $lead       = strlen($text) - strlen(ltrim($text)); // décalages rendus sur le texte d'origine
     $text       = trim($text);
     $maxBubbles = max(1, min(8, $maxBubbles));
     $maxWords   = max(8, $maxWords);
@@ -1283,11 +1365,19 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2):
         $boundaries = [];
         $wi = 0;
         foreach ($mb[0] as $b) {
-            $pos = $b[1];
-            while ($wi < $wordCount && $mw[0][$wi][1] < $pos) {
+            // mots comptés jusqu'à la FIN de la ponctuation (même calcul que le navigateur)
+            $end = $b[1] + strlen((string) $b[0]);
+            while ($wi < $wordCount && $mw[0][$wi][1] < $end) {
                 $wi++;
             }
-            $boundaries[] = ['byte' => $pos + strlen((string) $b[0]), 'words' => $wi];
+            // une fin de phrase en toute fin de texte ne peut pas servir de coupe
+            if (trim(substr($rest, $end)) === '') {
+                continue;
+            }
+            $boundaries[] = ['byte' => $end, 'words' => $wi];
+        }
+        if (!$boundaries) {
+            break;
         }
 
         $chosen = null;
@@ -1326,7 +1416,7 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2):
         }
 
         $offset += $cut;
-        $cuts[]  = $offset;
+        $cuts[]  = $offset + $lead;
     }
 
     return $cuts;
@@ -1414,8 +1504,8 @@ function chat_auto_title(int $cid): ?string
     // distant seulement s'il est configuré ; sinon le modèle local (rien ne sort)
     $remote = $mode === 'remote' && llm_ready();
     $opts   = $remote
-        ? ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 25]
-        : ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 60,
+        ? ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 25, 'purpose' => 'title']
+        : ['temperature' => 0.3, 'max_tokens' => 24, 'timeout' => 60, 'purpose' => 'title',
            'reasoning_effort' => setting('chat_reasoning_effort', 'none')];
 
     try {
@@ -1576,7 +1666,8 @@ function lms_status(): array
                 $loaded[] = [
                     'id'  => $id,
                     'key' => (string) ($m['key'] ?? $id),
-                    'ctx' => (int) ($m['loaded_context_length'] ?? 0),
+                    // API v1 : la taille réelle de la fenêtre est dans la config de l'instance
+                    'ctx' => (int) ($inst['config']['context_length'] ?? $m['loaded_context_length'] ?? 0),
                 ];
             }
         }
@@ -1614,6 +1705,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         'timeout'          => 300,
         'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
         'should_abort'     => $shouldAbort,
+        'purpose'          => 'chat',
     ];
 
     if ($mode === 'fallback') {
@@ -1623,6 +1715,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         }
         $o = $opts;
         unset($o['reasoning_effort']);
+        $o['purpose'] = 'fallback';
         try {
             $res = llm_stream($messages, $fb, $o, $onDelta);
         } catch (Throwable $e) {

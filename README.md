@@ -219,6 +219,15 @@ est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le 
   libre pendant l'échange ; si la page est fermée avant, l'extraction se fait la fois suivante, sans perte) ;
 - modèle : local (rien ne sort) ou distant (les derniers messages sont envoyés au fournisseur).
 
+### Journal des échanges
+
+Réglages › Discussion › **Journal des échanges** (`/settings/logs`) : les 20 derniers appels aux
+modèles (discussion, résumé de mémoire, souvenirs, titres, relances, boutons IA, test de connexion),
+du plus récent au plus ancien. Pour chacun : ce qui est envoyé (réglages et messages, rôle par rôle)
+et ce qui revient (réponse ou erreur), avec la durée et les tokens. La clé d'API n'est jamais
+enregistrée ; les photos sont remplacées par leur taille. Table `llm_logs` (migration v6), vidée
+par le bouton « Vider le journal ».
+
 ### Relances spontanées (tâche planifiée)
 
 Les messages spontanés sont envoyés par un script à lancer régulièrement, par exemple toutes les

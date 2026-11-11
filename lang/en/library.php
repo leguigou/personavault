@@ -78,6 +78,7 @@ return [
     'persona.prompts_empty'       => 'Store your prompts here: image, negative, system, video…',
     'persona.prompt_kind_other'   => 'Other',
     'persona.prompt_copy'         => 'Copy',
+    'persona.prompt_ai' => 'Write with AI (from the profile and the main photo)',
     'persona.prompt_edit'         => 'Edit',
     'persona.prompt_delete_confirm' => 'Delete this prompt?',
     'persona.prompt_title'        => 'Title',

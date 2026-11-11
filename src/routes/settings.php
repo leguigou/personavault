@@ -7,6 +7,22 @@ declare(strict_types=1);
 
 /* ---------------------------------------------------------------- réglages */
 
+/* --- journal des échanges avec les modèles (20 derniers) --- */
+if ($path === '/settings/logs' && $method === 'GET') {
+    render('llm_logs', [
+        'title' => t('logs.title'),
+        'rows'  => llm_log_list(),
+    ]);
+    exit;
+}
+
+if ($path === '/settings/logs/clear' && $method === 'POST') {
+    csrf_check();
+    db()->exec('DELETE FROM llm_logs');
+    flash('ok', t('logs.cleared'));
+    redirect('/settings/logs');
+}
+
 if ($path === '/settings/prompts' && $method === 'POST') {
     csrf_check();
     $defaults = engine_prompt_defaults();
@@ -227,6 +243,7 @@ if ($path === '/settings/test' && $method === 'POST') {
             throw new RuntimeException(t('error.settings.test_other_url'));
         }
         $t0  = microtime(true);
+        llm_log_context(['purpose' => 'test']);
         $out = llm_chat([
             ['role' => 'system', 'content' => 'Tu réponds uniquement par le mot OK.'],
             ['role' => 'user', 'content' => 'ping'],

@@ -317,6 +317,7 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
     unset($cfg['_remote']);
     $msgs = [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]];
     $opts = [
+        'purpose'          => 'facts',
         'temperature'      => 0.2,
         'max_tokens'       => 700,
         'timeout'          => 120,

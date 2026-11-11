@@ -473,6 +473,46 @@
         form.addEventListener("input", paint);
         form.addEventListener("change", paint);
         pe.querySelector("[data-pe-copy]").addEventListener("click", (e) => copyText(body.value, e.currentTarget));
+        // IA : prompt vide → rédigé à partir de la fiche (et de la photo principale) ; sinon complété
+        const aiBtn = pe.querySelector("[data-pe-ai]");
+        aiBtn?.addEventListener("click", async () => {
+            if (aiBtn.classList.contains("is-busy")) return;
+            aiBtn.classList.add("is-busy");
+            aiBtn.disabled = true;
+            body.readOnly = true;
+            const ph = body.placeholder;
+            body.placeholder = tr("prompt.ai_busy");
+            if (!body.value.trim()) body.value = "";
+            pe.classList.add("is-ai-busy");
+            try {
+                const fd = new FormData();
+                fd.append("_token", form.querySelector("[name=_token]").value);
+                fd.append("kind", form.querySelector("[name=kind]:checked")?.value || "image");
+                fd.append("title", title.value);
+                fd.append("body", body.value);
+                if (current) fd.append("prompt_id", current);
+                const res = await fetch(aiBtn.dataset.peAi, {
+                    method: "POST",
+                    body: fd,
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("prompt.ai_failed"));
+                body.value = data.body;
+                body.scrollTop = 0;
+                paint();
+                const done = data.used_image ? tr("prompt.ai_done_photo") : tr("prompt.ai_done");
+                toast(data.image_note ? { title: done, text: data.image_note } : done);
+            } catch (err) {
+                toast({ title: tr("prompt.ai_failed"), text: err.message }, true);
+            } finally {
+                body.readOnly = false;
+                body.placeholder = ph;
+                pe.classList.remove("is-ai-busy");
+                aiBtn.disabled = false;
+                aiBtn.classList.remove("is-busy");
+            }
+        });
         delBtn.addEventListener("click", () => {
             if (!current) return;
             const f = document.createElement("form");
@@ -1228,10 +1268,26 @@
                 model: "gpt-4o-mini",
                 models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "o4-mini"],
             },
+            // adresses compatibles OpenAI ; noms de modèles indicatifs (à vérifier chez le fournisseur)
+            xai: {
+                url: "https://api.x.ai/v1",
+                model: "grok-4",
+                models: ["grok-4", "grok-3", "grok-3-mini"],
+            },
+            gemini: {
+                url: "https://generativelanguage.googleapis.com/v1beta/openai",
+                model: "gemini-2.5-flash",
+                models: ["gemini-2.5-flash", "gemini-2.5-pro"],
+            },
+            mistral: {
+                url: "https://api.mistral.ai/v1",
+                model: "mistral-medium-latest",
+                models: ["mistral-medium-latest", "mistral-large-latest", "pixtral-large-latest", "mistral-small-latest"],
+            },
             openrouter: {
                 url: "https://openrouter.ai/api/v1",
                 model: "deepseek/deepseek-chat",
-                models: ["deepseek/deepseek-chat", "google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"],
+                models: ["deepseek/deepseek-chat", "openai/gpt-4o-mini", "google/gemini-2.5-flash", "x-ai/grok-4", "mistralai/mistral-medium-3"],
             },
             lmstudio: {
                 url: "http://localhost:1234/v1",
@@ -3246,6 +3302,8 @@
                bulle portait l'identifiant : supprimer, régénérer ou voir la date ne marchait pas
                sur les autres, et elles restaient à l'écran après suppression du message. */
             const settleLive = (reply) => {
+                clearTimeout(splitTimer);
+                splitTimer = null;
                 const wraps = [...new Set([live, ...bubbleEls].filter(Boolean).map((b) => b.closest(".msg")).filter(Boolean))];
                 if (!wraps.length || !reply || !reply.id) return null;
                 const fresh = renderMsg({
@@ -3273,7 +3331,10 @@
                 const ends = [];
                 const reEnd = /[.!?…]+(?=\s|$)|\n/g;
                 let mm;
-                while ((mm = reEnd.exec(seg))) ends.push(mm.index + mm[0].length);
+                while ((mm = reEnd.exec(seg))) {
+                    const at = mm.index + mm[0].length;
+                    if (seg.slice(at).trim() !== "") ends.push(at); // pas de coupe en toute fin de texte
+                }
                 if (!ends.length) return 0;
 
                 const bounds = ends.map((at) => ({ at, n: words.filter((w) => w < at).length }));
@@ -3423,6 +3484,8 @@
                                 if (!live) live = startLiveBubble();
                                 streamed += evt.delta;
                                 paintStream();
+                            } else if (evt.phase === "loading") {
+                                if (!live) loadingLabel(tr("lms.loading"));
                             } else if (evt.phase === "memory") {
                                 if (!live) loadingLabel(tr("chat.memory_phase"));
                             } else if (evt.start) {
@@ -3442,6 +3505,13 @@
                                 finalVersions = (evt.reply && evt.reply.versions) || null;
                                 finalReply = evt.reply || null;
 
+                                // réponse finie : la bulle « suivante » programmée pendant l'arrivée
+                                // du texte ne doit plus apparaître (sinon bulle fantôme qui répète la fin)
+                                if (splitTimer) {
+                                    clearTimeout(splitTimer);
+                                    splitTimer = null;
+                                }
+
                                 // les coupes officielles viennent du serveur (stockées en base)
                                 const pts = Array.isArray(evt.reply && evt.reply.split_points)
                                     ? evt.reply.split_points
@@ -3453,10 +3523,6 @@
                                         .filter((n) => n > 0 && n < streamed.length);
                                     if (units.length) {
                                         cuts = units;
-                                        if (splitTimer) {
-                                            clearTimeout(splitTimer);
-                                            splitTimer = null;
-                                        }
                                         while (bubbleEls.length < cuts.length + 1) {
                                             bubbleEls.push(startLiveBubble());
                                         }

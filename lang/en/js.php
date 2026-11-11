@@ -169,4 +169,8 @@ return [
     'js.settings.idle_min' => '{m} min',
     'js.settings.idle_h' => '{h} h',
     'js.settings.idle_hm' => '{h} h {m}',
+    'js.prompt.ai_busy' => 'The AI is writing the prompt…',
+    'js.prompt.ai_done' => 'Prompt suggested by the AI. Review it, then save.',
+    'js.prompt.ai_done_photo' => 'Prompt suggested from the profile and the main photo. Review it, then save.',
+    'js.prompt.ai_failed' => 'The AI couldn’t write the prompt.',
 ];

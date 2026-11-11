@@ -63,6 +63,23 @@ if ($action === 'stream' && $method === 'POST') {
             ->execute([$cid, $userMsgId]);
     }
 
+    // modèle chargé avec la bonne taille de mémoire AVANT tout appel (compression comprise) :
+    // sinon LM Studio le charge avec sa taille par défaut et coupe l'historique sans prévenir
+    try {
+        $conv = chat_fit_context(
+            $conv,
+            static function () use ($sse): void {
+                $sse(['phase' => 'loading']);
+            },
+            static function (): void {
+                echo ": ping\n\n";
+                flush();
+            }
+        )['conv'];
+    } catch (Throwable $e) {
+        // jamais bloquant : la requête de discussion dira elle-même ce qui ne va pas
+    }
+
     if (!$regen) {
         try {
             $mem = chat_memory_stats($cid, $conv);

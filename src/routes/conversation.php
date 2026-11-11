@@ -30,6 +30,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+(?:\.(?:txt|md))?))?$#', $path, $m)) {
     }
 
     $personaPrompts = fetch_prompts((int) $persona['id']);
+    llm_log_context(['cid' => $cid]); // journal des échanges : rattache les appels à cette discussion
     $convDirective  = trim((string) ($conv['directive'] ?? '')); // consigne de cette conversation seule
     $conv           = chat_with_persona($conv, $persona);
 
