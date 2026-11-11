@@ -219,24 +219,32 @@ est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le 
   libre pendant l'échange ; si la page est fermée avant, l'extraction se fait la fois suivante, sans perte) ;
 - modèle : local (rien ne sort) ou distant (les derniers messages sont envoyés au fournisseur).
 
-### Prompts : assistance IA et historique
+### Prompts : atelier IA et historique
 
-Dans l'éditeur de prompt, un seul bouton IA ouvre un menu qui dépend du prompt (modèle des
-Réglages › IA) :
+L'éditeur de prompt a trois onglets : **Texte**, **Atelier IA** et **Historique**. On ouvre aussi
+l'atelier directement depuis l'étincelle de chaque carte de prompt. L'atelier utilise le modèle des
+Réglages › IA ; il indique ce modèle et s'il lit la photo principale (couverture, sinon première photo).
 
-- prompt vide : **Créer à partir de la fiche** (description, attributs, autres prompts, photo
-  principale) ou **Créer avec une consigne** ;
-- prompt image, négatif ou vidéo rempli : **Analyser** (niveau de détail, éléments manquants, rien
-  n'est modifié), **Optimiser pour la génération** (réécrit pour les générateurs en gardant tous les
-  détails), **Modifier avec une consigne** ;
-- prompt système ou autre rempli : **Analyser**, **Compléter sans écraser** (le modèle ne renvoie que
-  les informations manquantes, que l'app ajoute à la fin : le texte existant n'est jamais réécrit),
-  **Modifier avec une consigne** (« cheveux plus courts », « ton plus froid »…).
+- **Prompt vide** : « Créer à partir de la fiche » (description, attributs, autres prompts, photo),
+  avec des idées de départ selon le type (portrait studio, plan en pied, base complète…) et une
+  consigne libre facultative.
+- **Bilan** (rien n'est modifié) : note sur 100, critères vérifiés un par un selon le type (visage,
+  cheveux, lumière, cadrage… pour une image ; identité, voix, règles, exemples… pour un prompt
+  système), contradictions avec la fiche ou les autres prompts, idées de retouches. Chaque critère
+  manquant a son bouton « Ajouter ».
+- **Améliorer** : image, négatif, vidéo → « Optimiser pour la génération » (réécriture qui garde
+  tous les détails) et « 3 variantes de scène » (même personne, autres lieux et lumières) ; système
+  et autre → « Compléter sans écraser » : le modèle ne renvoie que les ajouts, l'app les place à la
+  fin, le texte existant n'est jamais réécrit (forcé côté serveur, `llm_prompt_mode()`).
+- **Retouches rapides** et **consigne libre** (« cheveux plus courts », « ton plus froid »…).
+- **Revue** : toute proposition s'affiche d'abord en différences mot à mot (ajouts en vert,
+  retraits en rouge, compte des mots) avec Appliquer, Réessayer ou Refuser ; une demande en cours
+  peut être arrêtée. Après application, « ↶ Annuler » revient au texte d'avant ; rien n'est
+  enregistré tant qu'on n'appuie pas sur « Enregistrer ».
 
-Bouton « Annuler » pour revenir au texte d'avant une proposition. Le bouton horloge montre
-les 10 dernières modifications enregistrées (table `prompt_versions`, migration v7) avec le nombre
-de lignes ajoutées en vert et supprimées en rouge, le détail ligne à ligne, et de quoi reprendre
-l'avant ou l'après dans l'éditeur.
+L'onglet Historique montre les 10 dernières modifications enregistrées (table `prompt_versions`,
+migration v7), avec les lignes ajoutées en vert et supprimées en rouge, le détail ligne à ligne, et
+de quoi reprendre l'avant ou l'après dans l'éditeur.
 
 ### Journal des échanges
 

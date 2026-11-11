@@ -474,25 +474,72 @@ function llm_provider_without_vision(string $provider, string $model = ''): bool
 const LLM_VISUAL_KINDS = ['image', 'negative', 'video'];
 
 /**
- * Mode réellement appliqué, selon le texte et le type :
+ * Critères du bilan, par type de prompt : clé → [libellé (langue de l'interface), ce que le
+ * modèle doit vérifier (français, pour le modèle)].
+ */
+function llm_prompt_criteria(string $kind): array
+{
+    $c = [
+        'face'     => [t('labels.ai_crit.face'), 'visage : forme, yeux et leur couleur, sourcils, nez, lèvres, peau, signes distinctifs'],
+        'hair'     => [t('labels.ai_crit.hair'), 'cheveux : couleur, longueur, coupe, texture, coiffure'],
+        'body'     => [t('labels.ai_crit.body'), 'âge apparent, morphologie, taille'],
+        'outfit'   => [t('labels.ai_crit.outfit'), 'tenue, accessoires, maquillage'],
+        'pose'     => [t('labels.ai_crit.pose'), 'pose, expression, regard, action'],
+        'scene'    => [t('labels.ai_crit.scene'), 'décor, lieu, moment, ambiance'],
+        'light'    => [t('labels.ai_crit.light'), 'lumière : source, direction, couleur, heure'],
+        'camera'   => [t('labels.ai_crit.camera'), 'cadrage, plan, focale ou objectif, angle, profondeur de champ'],
+        'style'    => [t('labels.ai_crit.style'), 'rendu (photo, manga, 3D…), grain, qualité, références de style'],
+        'motion'   => [t('labels.ai_crit.motion'), 'mouvement de caméra, action dans le temps, durée, rythme'],
+        'defects'  => [t('labels.ai_crit.defects'), 'défauts à éviter : mains, doigts, déformations, membres en trop'],
+        'quality'  => [t('labels.ai_crit.quality'), 'qualité à éviter : flou, bruit, compression, texte, filigrane'],
+        'offstyle' => [t('labels.ai_crit.offstyle'), 'ce qui contredirait le style voulu (ex. dessin si photo réaliste)'],
+        'identity' => [t('labels.ai_crit.identity'), "identité : nom, âge, métier, origine, situation, ce qui la rend unique"],
+        'looks'    => [t('labels.ai_crit.looks'), 'apparence physique décrite, cohérente avec la fiche'],
+        'persona'  => [t('labels.ai_crit.persona'), 'personnalité, valeurs, centres d’intérêt, histoire'],
+        'voice'    => [t('labels.ai_crit.voice'), 'voix : ton, registre, tutoiement, longueur des réponses, tics de langage'],
+        'relation' => [t('labels.ai_crit.relation'), "relation avec l'utilisateur, contexte de la discussion"],
+        'rules'    => [t('labels.ai_crit.rules'), 'règles de conduite et limites (ce qu’elle ne fait jamais, sujets à éviter)'],
+        'examples' => [t('labels.ai_crit.examples'), 'exemples de répliques ou de façon de répondre'],
+        'goal'     => [t('labels.ai_crit.goal'), 'objectif clair du prompt'],
+        'context'  => [t('labels.ai_crit.context'), 'contexte et informations utiles du persona'],
+        'precision'=> [t('labels.ai_crit.precision'), 'précision et absence d’ambiguïté'],
+    ];
+    $keys = [
+        'image'    => ['face', 'hair', 'body', 'outfit', 'pose', 'scene', 'light', 'camera', 'style'],
+        'video'    => ['face', 'hair', 'outfit', 'pose', 'scene', 'light', 'camera', 'motion', 'style'],
+        'negative' => ['defects', 'quality', 'offstyle'],
+        'system'   => ['identity', 'looks', 'persona', 'voice', 'relation', 'rules', 'examples'],
+        'other'    => ['goal', 'context', 'precision'],
+    ][$kind] ?? ['goal', 'context', 'precision'];
+    return array_intersect_key($c, array_flip($keys));
+}
+
+/**
+ * Mode réellement appliqué (choisi côté serveur, quoi que demande l'interface) :
  * - create   : prompt vide → rédigé à partir de la fiche et de la photo principale ;
  * - instruct : consigne libre de l'utilisateur appliquée au texte ;
- * - analyze  : évaluation sans rien modifier (niveau de détail, ce qui manque) ;
+ * - analyze  : bilan sans rien modifier (score, critères, contradictions, idées) ;
  * - optimize : prompt visuel réécrit pour la génération (tous ses détails gardés) ;
  * - complete : prompt système / autre : seuls des AJOUTS, placés à la fin par l'app
- *              (le texte existant n'est jamais réécrit).
+ *              (le texte existant n'est jamais réécrit) ;
+ * - variants : prompt visuel : 3 variantes de scène, même personne.
+ * Une consigne sert de PRÉCISION (« se concentrer sur… ») pour create, optimize,
+ * complete et variants.
  */
 function llm_prompt_mode(string $kind, string $body, string $instruction, string $wanted): string
 {
+    $visual = in_array($kind, LLM_VISUAL_KINDS, true);
+    if ($wanted === 'variants' && $visual && $kind !== 'negative') {
+        return 'variants';
+    }
     if (trim($body) === '') {
         return 'create'; // une éventuelle consigne guide alors la création
     }
-    if (trim($instruction) !== '') {
-        return 'instruct';
-    }
-    $visual = in_array($kind, LLM_VISUAL_KINDS, true);
     if ($wanted === 'analyze') {
         return 'analyze';
+    }
+    if ($wanted === 'instruct' || ($wanted === '' && trim($instruction) !== '')) {
+        return trim($instruction) !== '' ? 'instruct' : ($visual ? 'optimize' : 'complete');
     }
     return $visual && $wanted !== 'complete' ? 'optimize' : 'complete';
 }
@@ -552,12 +599,18 @@ function llm_visual_prompt(array $persona, array $prompts, string $kind, string 
         'other'    => "un prompt utile pour ce persona",
     ][$kind];
 
+    $crit     = llm_prompt_criteria($kind);
+    $critText = '';
+    foreach ($crit as $k => [, $what]) {
+        $critText .= '- ' . $k . ' : ' . $what . "\n";
+    }
     $rules = [
         'create'   => "TÂCHE : le texte est vide. Écris le prompt complet à partir de la fiche, des prompts existants et de la photo. Si une CONSIGNE est donnée, respecte-la.\nRéponds UNIQUEMENT avec le texte du prompt, sans titre, sans guillemets, sans explication, sans balises markdown.",
         'instruct' => "TÂCHE : applique la CONSIGNE DE MODIFICATION au texte existant et UNIQUEMENT elle. Garde tout le reste à l'identique (mêmes segments, même ordre, même langue) ; remplace ou retire seulement ce que la consigne contredit. Elle prime sur la fiche pour ce qu'elle demande.\nRéponds UNIQUEMENT avec le texte complet modifié, sans explication ni balises markdown.",
-        'optimize' => "TÂCHE : analyse le texte existant puis réécris-le en prompt de génération optimal.\n- Garde TOUS ses détails et ses choix (sujet, tenue, décor, style…) ; n'en retire aucun, ne les contredis pas.\n- Précise ce qui est vague, ajoute ce qui manque pour que la personne soit reconnaissable (traits du visage, cheveux, morphologie, peau) et pour une image réussie (cadrage, objectif, lumière, ambiance, style, qualité), à partir de la fiche et de la photo.\n- Remets les segments dans l'ordre le plus efficace pour un générateur.\nRéponds UNIQUEMENT avec le texte du prompt, sans explication ni balises markdown.",
-        'complete' => "TÂCHE : NE RÉÉCRIS PAS le texte existant : il appartient à l'utilisateur et sera gardé tel quel.\nÉcris SEULEMENT les informations qui manquent (tirées de la fiche, des autres prompts et de la photo), à ajouter À LA FIN du texte, dans son style et sa forme (mêmes tournures, même personne grammaticale).\nNe répète rien de ce qui y figure déjà, ne contredis rien.\nS'il ne manque rien d'utile, réponds exactement : RIEN\nRéponds UNIQUEMENT avec le texte à ajouter, sans titre, sans explication, sans balises markdown.",
-        'analyze'  => "TÂCHE : n'écris pas de prompt. ÉVALUE le texte existant pour son usage ({$goal}) : est-il assez détaillé et efficace ?\nRéponds UNIQUEMENT avec un objet JSON, en français :\n{\"level\": \"faible|moyen|bon\", \"summary\": \"une ou deux phrases\", \"missing\": [\"élément manquant ou à préciser\", \"…\"]}\n- missing : 0 à 8 éléments concrets et courts (ex. « couleur des yeux », « focale et cadrage », « ton de voix »), tirés de ce que la fiche ou la photo permettent d'ajouter.",
+        'optimize' => "TÂCHE : analyse le texte existant puis réécris-le en prompt de génération optimal.\n- Garde TOUS ses détails et ses choix (sujet, tenue, décor, style…) ; n'en retire aucun, ne les contredis pas.\n- Précise ce qui est vague, ajoute ce qui manque pour que la personne soit reconnaissable (traits du visage, cheveux, morphologie, peau) et pour une image réussie (cadrage, objectif, lumière, ambiance, style, qualité), à partir de la fiche et de la photo.\n- Remets les segments dans l'ordre le plus efficace pour un générateur.\n- Si une PRÉCISION de l'utilisateur est donnée, concentre-toi sur elle.\nRéponds UNIQUEMENT avec le texte du prompt, sans explication ni balises markdown.",
+        'complete' => "TÂCHE : NE RÉÉCRIS PAS le texte existant : il appartient à l'utilisateur et sera gardé tel quel.\nÉcris SEULEMENT les informations qui manquent (tirées de la fiche, des autres prompts et de la photo), à ajouter À LA FIN du texte, dans son style et sa forme (mêmes tournures, même personne grammaticale).\nNe répète rien de ce qui y figure déjà, ne contredis rien. Si une PRÉCISION de l'utilisateur est donnée, n'ajoute que ce qui la concerne.\nS'il ne manque rien d'utile, réponds exactement : RIEN\nRéponds UNIQUEMENT avec le texte à ajouter, sans titre, sans explication, sans balises markdown.",
+        'analyze'  => "TÂCHE : n'écris pas de prompt. ÉVALUE le texte existant pour son usage ({$goal}).\nCritères à vérifier :\n{$critText}\nCompare aussi le texte à la fiche, aux autres prompts et à la photo : relève les CONTRADICTIONS (ex. yeux verts ici, bleus dans la fiche).\nRéponds UNIQUEMENT avec un objet JSON, en français :\n{\"score\": 0-100, \"summary\": \"une ou deux phrases\", \"criteria\": [{\"key\": \"clé ci-dessus\", \"status\": \"ok|partial|missing\", \"note\": \"ce qui manque ou à préciser, 12 mots max, vide si ok\"}], \"conflicts\": [\"contradiction courte\"], \"suggestions\": [\"retouche courte et concrète, 5 mots max\"]}\n- un objet par critère listé, dans cet ordre ; 0 à 4 suggestions adaptées à CE persona.",
+        'variants' => "TÂCHE : propose 3 VARIANTES de ce prompt, chacune avec une scène différente (lieu, tenue, lumière, cadrage, ambiance), en gardant EXACTEMENT la même personne (visage, cheveux, morphologie) et le même style de rendu." . (trim($body) !== '' ? " Pars du texte existant." : '') . "\nRéponds UNIQUEMENT avec un objet JSON : {\"variants\": [{\"title\": \"titre court en français, 4 mots max\", \"prompt\": \"le prompt complet\"}]}",
     ][$mode];
 
     $system = <<<TXT
@@ -597,9 +650,12 @@ TXT;
                 'optimize' => "TEXTE EXISTANT À OPTIMISER :\n",
                 'complete' => "TEXTE EXISTANT (à garder tel quel, ne pas réécrire) :\n",
                 'analyze'  => "TEXTE EXISTANT À ÉVALUER :\n",
+                'variants' => "TEXTE EXISTANT (point de départ des variantes) :\n",
             ][$mode] . trim($body)
             : "TEXTE EXISTANT : (vide) — écris le prompt complet.")
-        . (trim($instruction) !== '' ? "\n\nCONSIGNE DE MODIFICATION (de l'utilisateur) :\n" . trim($instruction) : '');
+        . (trim($instruction) === '' ? '' : ($mode === 'instruct'
+            ? "\n\nCONSIGNE DE MODIFICATION (de l'utilisateur) :\n" . trim($instruction)
+            : "\n\nCONSIGNE / PRÉCISION DE L'UTILISATEUR (à respecter, prioritaire) :\n" . trim($instruction)));
 
     // photo principale : la couverture, sinon la première photo de la galerie
     $base = (string) ($persona['avatar'] ?? '');
@@ -617,7 +673,13 @@ TXT;
         }
     }
 
-    $opts = ['temperature' => $mode === 'analyze' ? 0.2 : 0.6, 'max_tokens' => 900, 'timeout' => 150, 'purpose' => 'ai_prompt'];
+    $opts = [
+        'temperature' => $mode === 'analyze' ? 0.2 : ($mode === 'variants' ? 0.9 : 0.6),
+        'max_tokens'  => $mode === 'variants' ? 1600 : 900,
+        'timeout'     => 150,
+        'purpose'     => 'ai_prompt',
+        'json'        => in_array($mode, ['analyze', 'variants'], true),
+    ];
     $text = static fn (bool $withImage): array => [
         ['role' => 'system', 'content' => $system],
         ['role' => 'user', 'content' => $withImage
@@ -629,8 +691,20 @@ TXT;
     ];
 
     $usedImage = $image !== '';
+    // certains serveurs refusent response_format (JSON forcé) : on réessaie sans
+    $call = static function (array $msgs) use ($cfg, &$opts): array {
+        try {
+            return llm_request($msgs, $cfg, $opts);
+        } catch (RuntimeException $e) {
+            if (empty($opts['json']) || !str_contains($e->getMessage(), 'response_format')) {
+                throw $e;
+            }
+            $opts['json'] = false;
+            return llm_request($msgs, $cfg, $opts);
+        }
+    };
     try {
-        $res = llm_request($text($usedImage), $cfg, $opts);
+        $res = $call($text($usedImage));
     } catch (RuntimeException $e) {
         // modèle sans vision : l'API refuse l'image (400/415/422 ; OpenRouter répond 404
         // « aucun fournisseur n'accepte l'image » pour ce modèle) → on réessaie sans
@@ -639,7 +713,7 @@ TXT;
         }
         $usedImage = false;
         $note      = t('labels.ai_prompt.no_vision_model');
-        $res       = llm_request($text(false), $cfg, $opts);
+        $res       = $call($text(false));
     }
 
     $out = trim((string) $res['content']);
@@ -653,19 +727,52 @@ TXT;
     $base = ['mode' => $mode, 'used_image' => $usedImage, 'image_note' => $note];
 
     if ($mode === 'analyze') {
-        $j     = llm_json($out);
-        $level = in_array($j['level'] ?? '', ['faible', 'moyen', 'bon'], true) ? (string) $j['level'] : 'moyen';
-        $miss  = [];
-        foreach ((array) ($j['missing'] ?? []) as $m) {
-            if (is_scalar($m) && trim((string) $m) !== '' && count($miss) < 8) {
-                $miss[] = mb_substr(trim((string) $m), 0, 160);
+        $j        = llm_json($out);
+        $score    = max(0, min(100, (int) ($j['score'] ?? 50)));
+        $byKey    = [];
+        foreach ((array) ($j['criteria'] ?? []) as $c) {
+            if (is_array($c) && isset($c['key'])) {
+                $byKey[(string) $c['key']] = $c;
             }
         }
+        $criteria = [];
+        foreach ($crit as $k => [$label]) {
+            $c          = $byKey[$k] ?? [];
+            $st         = in_array($c['status'] ?? '', ['ok', 'partial', 'missing'], true) ? (string) $c['status'] : 'missing';
+            $criteria[] = ['key' => $k, 'label' => $label, 'status' => $st, 'note' => mb_substr(trim((string) ($c['note'] ?? '')), 0, 140)];
+        }
+        $list = static function ($v, int $max, int $len): array {
+            $out = [];
+            foreach ((array) $v as $x) {
+                if (is_scalar($x) && trim((string) $x) !== '' && count($out) < $max) {
+                    $out[] = mb_substr(trim((string) $x), 0, $len);
+                }
+            }
+            return $out;
+        };
         return $base + ['body' => $body, 'analysis' => [
-            'level'   => $level,
-            'summary' => mb_substr(trim((string) ($j['summary'] ?? '')), 0, 400),
-            'missing' => $miss,
+            'score'       => $score,
+            'level'       => $score >= 75 ? 'bon' : ($score >= 45 ? 'moyen' : 'faible'),
+            'summary'     => mb_substr(trim((string) ($j['summary'] ?? '')), 0, 400),
+            'criteria'    => $criteria,
+            'conflicts'   => $list($j['conflicts'] ?? [], 5, 200),
+            'suggestions' => $list($j['suggestions'] ?? [], 4, 48),
         ]];
+    }
+
+    if ($mode === 'variants') {
+        $j    = llm_json($out);
+        $vars = [];
+        foreach ((array) ($j['variants'] ?? []) as $v) {
+            $pr = is_array($v) ? trim((string) ($v['prompt'] ?? '')) : '';
+            if ($pr !== '' && count($vars) < 3) {
+                $vars[] = ['title' => mb_substr(trim((string) ($v['title'] ?? '')), 0, 60), 'prompt' => mb_substr($pr, 0, 4000)];
+            }
+        }
+        if (!$vars) {
+            throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
+        }
+        return $base + ['body' => $body, 'variants' => $vars];
     }
 
     if ($mode === 'complete') {

@@ -504,6 +504,11 @@ try {
     $check(llm_prompt_mode('image', 'x', '', '') === 'optimize' && llm_prompt_mode('video', 'x', '', 'optimize') === 'optimize', 'IA prompt : image ou vidéo remplie → optimisation');
     $check(llm_prompt_mode('system', 'x', '', 'optimize') === 'complete' && llm_prompt_mode('other', 'x', '', '') === 'complete', 'IA prompt : système / autre rempli → complément seulement, jamais réécrit');
     $check(llm_prompt_mode('system', 'x', '', 'analyze') === 'analyze' && llm_prompt_mode('system', 'x', 'ton froid', '') === 'instruct', 'IA prompt : analyse et consigne explicites');
+    $check(llm_prompt_mode('image', '', '', 'variants') === 'variants' && llm_prompt_mode('negative', 'x', '', 'variants') !== 'variants'
+        && llm_prompt_mode('system', 'x', '', 'variants') === 'complete', 'IA prompt : variantes pour image et vidéo seulement');
+    $check(llm_prompt_mode('system', 'x', 'ajouter des limites', 'complete') === 'complete', 'IA prompt : une précision ne transforme pas un complément en réécriture');
+    $check(array_keys(llm_prompt_criteria('system')) === ['identity', 'looks', 'persona', 'voice', 'relation', 'rules', 'examples']
+        && in_array('motion', array_keys(llm_prompt_criteria('video')), true) && count(llm_prompt_criteria('negative')) === 3, 'IA prompt : critères du bilan adaptés au type');
     $check(llm_strip_known_lines("Tu es Camille.\nTu tutoies.", "tu tutoies.\nTu as les yeux verts.") === 'Tu as les yeux verts.', 'IA prompt : un complément ne répète pas les lignes existantes');
 
     // historique des prompts : lignes + / −, 10 dernières modifications seulement
