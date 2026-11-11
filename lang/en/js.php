@@ -86,6 +86,8 @@ return [
     'js.chat.model_default' => 'default model',
     'js.chat.model_changed' => 'Model changed for this conversation',
     'js.chat.model_back' => 'Back to the persona\'s model',
+    'js.chat.model_loading' => 'loading',
+    'js.chat.models_unloaded' => ['one' => '{n} other model unloaded', 'other' => '{n} other models unloaded'],
     'js.chat.vision_model' => 'Vision model: can also read images',
     'js.prompt.chars' => ['one' => '{n} character', 'other' => '{n} characters'],
     'js.prompt.modified' => 'edited',

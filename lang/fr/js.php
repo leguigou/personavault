@@ -86,6 +86,8 @@ return [
     'js.chat.model_default' => 'modèle par défaut',
     'js.chat.model_changed' => 'Modèle changé pour cette conversation',
     'js.chat.model_back' => 'Retour au modèle du persona',
+    'js.chat.model_loading' => 'chargement en cours',
+    'js.chat.models_unloaded' => ['one' => '{n} autre modèle déchargé', 'other' => '{n} autres modèles déchargés'],
     'js.chat.vision_model' => 'Modèle de vision : lit aussi les images',
     'js.prompt.chars' => ['one' => '{n} caractère', 'other' => '{n} caractères'],
     'js.prompt.modified' => 'modifié',

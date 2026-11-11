@@ -458,6 +458,15 @@ $facts = facts_settings();
             </div>
         </details>
 
+        <!-- un seul modèle à la fois dans LM Studio : les autres sont déchargés à chaque changement -->
+        <div class="settings-card single-model">
+            <label class="check">
+                <input type="checkbox" name="lms_single_model" value="1" <?= setting('lms_single_model', '1') === '1' ? 'checked' : '' ?>>
+                <span><?= e(t('settings.single_model.label')) ?></span>
+            </label>
+            <p class="hint"><?= e(t('settings.single_model.hint')) ?></p>
+        </div>
+
         <div class="form-actions save-bar">
             <span class="dirty-note"><?= e(t('settings.dirty')) ?></span>
             <button class="btn btn-primary" type="submit"><?= e(t('settings.save')) ?></button>

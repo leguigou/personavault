@@ -2262,7 +2262,12 @@
                     const name = document.querySelector("[data-model-name]");
                     if (name) name.textContent = d.model || tr("chat.model_default");
                     paintOverride(!!d.override);
-                    toast({ title: d.override ? tr("chat.model_changed") : tr("chat.model_back"), text: d.model, code: true });
+                    const freed = (d.purged || []).length;
+                    toast({
+                        title: d.override ? tr("chat.model_changed") : tr("chat.model_back"),
+                        text: d.model + (d.loading ? " · " + tr("chat.model_loading") : "") + (freed ? " · " + tr("chat.models_unloaded", freed) : ""),
+                        code: true,
+                    });
                     loadStatus(2500); // nouveau modèle : chargé ou non dans LM Studio ?
                 } catch (e) {
                     toast(tr("common.error", { message: e.message }), true);

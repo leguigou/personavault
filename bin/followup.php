@@ -124,6 +124,9 @@ foreach ($convs as $conv) {
     $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
 
     try {
+        if (setting('lms_single_model', '1') === '1') {
+            lms_make_room_for((string) chat_llm_config_for($conv)['model']); // un seul modèle en mémoire
+        }
         $res = llm_request($messages, chat_llm_config_for($conv), [
             'temperature'      => max(0.7, (float) ($conv['temperature'] ?? 0.85)),
             'max_tokens'       => 140,

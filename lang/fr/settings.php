@@ -299,4 +299,6 @@ return [
             Garde tes sauvegardes hors du serveur.</p>',
     'settings.followup.gap'       => 'Délai entre deux relances (heures)',
     'settings.followup.gap_help'  => 'Dans une même conversation, pas de nouvelle relance avant ce délai, même si le silence continue.',
+    'settings.single_model.label' => 'Un seul modèle à la fois dans LM Studio',
+    'settings.single_model.hint' => 'À chaque changement de modèle (autre conversation, autre persona, modèle de test), les autres modèles sont déchargés avant de charger le nouveau : la mémoire ne sature pas. Désactivez-le seulement si votre machine peut garder plusieurs modèles chargés.',
 ];

@@ -86,6 +86,8 @@ return [
     'js.chat.model_default' => 'modelo predeterminado',
     'js.chat.model_changed' => 'Modelo cambiado para esta conversación',
     'js.chat.model_back' => 'Vuelta al modelo del persona',
+    'js.chat.model_loading' => 'cargando',
+    'js.chat.models_unloaded' => ['one' => '{n} otro modelo descargado', 'other' => '{n} otros modelos descargados'],
     'js.chat.vision_model' => 'Modelo de visión: también lee imágenes',
     'js.prompt.chars' => ['one' => '{n} carácter', 'other' => '{n} caracteres'],
     'js.prompt.modified' => 'modificado',

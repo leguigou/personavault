@@ -684,6 +684,29 @@ function lms_purge_except(string $keep): array
 }
 
 /**
+ * Avant d'utiliser $model : s'il n'est pas déjà en mémoire, les autres modèles chargés sont
+ * déchargés d'abord, pour que LM Studio ne les empile pas (mémoire saturée). Rien n'est
+ * fait quand il est déjà chargé. $status : un lms_status() déjà lu, pour éviter un appel.
+ * @return array<int,string> instances déchargées
+ */
+function lms_make_room_for(string $model, ?array $status = null): array
+{
+    if ($model === '') {
+        return [];
+    }
+    $st = $status ?? lms_status();
+    if (empty($st['reachable'])) {
+        return [];
+    }
+    foreach ($st['loaded'] as $l) {
+        if ($l['key'] === $model || $l['id'] === $model) {
+            return []; // déjà en mémoire : on ne touche à rien
+        }
+    }
+    return $st['loaded'] ? lms_purge_except($model)['unloaded'] : [];
+}
+
+/**
  * Vide la mémoire du serveur local (tous les modèles chargés).
  * @return array<int,string> instances déchargées
  */
@@ -1586,6 +1609,11 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     $st = lms_status();
     if (!$st['reachable']) {
         throw new LlmUnavailable(t('error.chat.lms_down'), 'down');
+    }
+    // changement de modèle (autre conversation, autre persona, modèle de test) : on décharge
+    // les autres avant que LM Studio ne charge celui-ci, pour ne pas saturer la mémoire
+    if (setting('lms_single_model', '1') === '1') {
+        lms_make_room_for((string) $cfg['model'], $st);
     }
 
     $partial = false;

@@ -158,6 +158,9 @@ if ($path === '/settings/chat' && $method === 'POST') {
     $fm = (string) ($_POST['facts_model'] ?? 'chat');
     set_setting('facts_model', in_array($fm, ['chat', 'remote'], true) ? $fm : 'chat');
 
+    // un seul modèle en mémoire dans LM Studio (les autres déchargés à chaque changement)
+    set_setting('lms_single_model', !empty($_POST['lms_single_model']) ? '1' : '0');
+
     // titres automatiques des discussions
     $tm = (string) ($_POST['chat_title_model'] ?? 'remote');
     set_setting('chat_title_model', in_array($tm, ['remote', 'chat', 'off'], true) ? $tm : 'remote');

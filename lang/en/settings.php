@@ -296,4 +296,6 @@ return [
             Keep your backups off the server.</p>',
     'settings.followup.gap'       => 'Time between two follow-ups (hours)',
     'settings.followup.gap_help'  => 'In the same conversation, no new follow-up before this delay, even if the silence goes on.',
+    'settings.single_model.label' => 'Only one model at a time in LM Studio',
+    'settings.single_model.hint' => 'Whenever the model changes (another conversation, another persona, a test model), the other models are unloaded before loading the new one, so memory does not fill up. Turn it off only if your machine can keep several models loaded.',
 ];
