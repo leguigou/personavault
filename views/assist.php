@@ -71,7 +71,7 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
                 <div class="as-final-ico" aria-hidden="true"><?= $SPARK ?></div>
                 <strong><?= e($isNew ? t('assist.final_title_new') : t('assist.final_title_complete')) ?></strong>
                 <p><?= e(t('assist.final_text')) ?></p>
-                <div class="as-final-bar" aria-hidden="true"><i></i></div>
+                <div class="as-final-dots" aria-hidden="true"><i></i><i></i><i></i></div>
             </div>
         </div>
     <?php endif; ?>

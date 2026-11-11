@@ -34,6 +34,9 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Relance spontanée : le personnage peut écrire de lui-même après plusieurs heures de silence
   (nécessite une tâche planifiée, voir plus bas).
 - Photos : quand le modèle sait voir les images, un trombone apparaît pour en envoyer une.
+- Mise en forme : `*action*` s'affiche en italique et `**texte**` en gras (à l'affichage seulement : copie,
+  modification et exports gardent les astérisques).
+- Sur téléphone, la zone de saisie ne reprend pas le focus après une réponse (le clavier ne s'ouvre pas tout seul).
 - Édition : modifier son message efface la suite et rejoue la réponse depuis ce point.
 - Régénérer garde les réponses précédentes : flèches ‹ 2 / 3 › sous la dernière réponse pour
   passer de l'une à l'autre (la version affichée est celle que le modèle voit ensuite).
