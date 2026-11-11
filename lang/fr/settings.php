@@ -301,4 +301,7 @@ return [
     'settings.followup.gap_help'  => 'Dans une même conversation, pas de nouvelle relance avant ce délai, même si le silence continue.',
     'settings.single_model.label' => 'Un seul modèle à la fois dans LM Studio',
     'settings.single_model.hint' => 'À chaque changement de modèle (autre conversation, autre persona, modèle de test), les autres modèles sont déchargés avant de charger le nouveau : la mémoire ne sature pas. Désactivez-le seulement si votre machine peut garder plusieurs modèles chargés.',
+    'settings.idle_unload.label' => 'Libérer la mémoire de LM Studio après une inactivité de',
+    'settings.idle_unload.never' => 'Illimité',
+    'settings.idle_unload.hint' => 'Sans réponse ni chargement de modèle pendant cette durée, tous les modèles sont déchargés de LM Studio. Tout à gauche : jamais. Vérifié à chaque passage de la tâche planifiée (environ toutes les 30 min) ; les relances automatiques ne comptent pas comme activité.',
 ];

@@ -298,4 +298,7 @@ return [
     'settings.followup.gap_help'  => 'In the same conversation, no new follow-up before this delay, even if the silence goes on.',
     'settings.single_model.label' => 'Only one model at a time in LM Studio',
     'settings.single_model.hint' => 'Whenever the model changes (another conversation, another persona, a test model), the other models are unloaded before loading the new one, so memory does not fill up. Turn it off only if your machine can keep several models loaded.',
+    'settings.idle_unload.label' => 'Free LM Studio memory after being idle for',
+    'settings.idle_unload.never' => 'Unlimited',
+    'settings.idle_unload.hint' => 'With no reply or model load during this time, all models are unloaded from LM Studio. Far left: never. Checked on each run of the scheduled task (about every 30 min); automatic follow-ups do not count as activity.',
 ];

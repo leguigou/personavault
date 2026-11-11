@@ -824,6 +824,17 @@ function rel_time(?string $sqlDate): string
     return fr_date($sqlDate);
 }
 
+/** Durée en minutes lisible : « 30 min », « 1 h », « 2 h 30 ». */
+function idle_duration_label(int $minutes): string
+{
+    $h = intdiv($minutes, 60);
+    $m = $minutes % 60;
+    if ($h === 0) {
+        return t('date.duration_min', ['m' => $m]);
+    }
+    return $m === 0 ? t('date.duration_h', ['h' => $h]) : t('date.duration_hm', ['h' => $h, 'm' => sprintf('%02d', $m)]);
+}
+
 /** Date relative en toutes lettres : « à l'instant », « il y a 5 min », « hier à 14:32 »… */
 function rel_time_long(?string $sqlDate): string
 {

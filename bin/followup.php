@@ -25,6 +25,22 @@ if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
     exit(0);
 }
 
+// à la fin de chaque passage (même s'il n'y a rien à relancer) : déchargement de la mémoire de
+// LM Studio après la durée d'inactivité choisie (les relances ne comptent pas comme activité)
+register_shutdown_function(static function () use ($say, $dry): void {
+    if ($dry) {
+        return;
+    }
+    try {
+        $done = lms_idle_unload_check();
+        if ($done) {
+            $say('inactivité : mémoire de LM Studio libérée (' . implode(', ', $done) . ')');
+        }
+    } catch (Throwable $e) {
+        $say('déchargement après inactivité impossible : ' . $e->getMessage());
+    }
+});
+
 /**
  * Battement de cœur : les Réglages affichent le dernier passage et son résultat,
  * ce qui permet de voir que la tâche planifiée tourne bien (rien en simulation).

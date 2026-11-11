@@ -228,4 +228,7 @@ return [
     'labels.backup_readme.restore_slug' => 'Imported personas get a unique slug if theirs already exists:',
     'labels.backup_readme.restore_safe' => 'nothing is overwritten.',
     'flash.chat.directive_saved' => 'Conversation instruction saved.',
+    'date.duration_min' => '{m} min',
+    'date.duration_h' => '{h} h',
+    'date.duration_hm' => '{h} h {m}',
 ];

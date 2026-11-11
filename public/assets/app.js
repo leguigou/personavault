@@ -694,6 +694,16 @@
         const paint = () => {
             if (!out) return;
             const v = parseFloat(input.value);
+            if (input.dataset.format === "idle") {
+                // déchargement après inactivité : tout à gauche = illimité
+                const h = Math.floor(v / 60);
+                const m = v % 60;
+                out.textContent = v <= 0 ? tr("settings.idle_never")
+                    : h === 0 ? tr("settings.idle_min", { m })
+                    : m === 0 ? tr("settings.idle_h", { h })
+                    : tr("settings.idle_hm", { h, m: String(m).padStart(2, "0") });
+                return;
+            }
             out.textContent = suffix ? fmt1(v) + suffix : String(v);
         };
         input.addEventListener("input", paint);

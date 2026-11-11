@@ -706,6 +706,40 @@ function lms_make_room_for(string $model, ?array $status = null): array
     return $st['loaded'] ? lms_purge_except($model)['unloaded'] : [];
 }
 
+/** Note l'heure d'utilisation de LM Studio (réponse, chargement…) : base du déchargement après inactivité. */
+function lms_touch_activity(): void
+{
+    set_setting('lms_last_activity', gmdate('Y-m-d H:i:s'));
+}
+
+/**
+ * Déchargement après inactivité (Réglages › Chat) : si LM Studio n'a pas servi depuis
+ * lms_idle_unload_minutes (0 = jamais), tous les modèles sont déchargés. Appelé par la tâche
+ * planifiée (bin/followup.php), donc vérifié toutes les 30 min environ.
+ * @return array<int,string> instances déchargées
+ */
+function lms_idle_unload_check(): array
+{
+    $minutes = (int) setting('lms_idle_unload_minutes', '0');
+    if ($minutes <= 0) {
+        return [];
+    }
+    $last = setting('lms_last_activity', '');
+    if ($last === '') {
+        lms_touch_activity(); // premier passage : on part de maintenant
+        return [];
+    }
+    $idle = time() - (int) strtotime($last . ' UTC');
+    if ($idle < $minutes * 60) {
+        return [];
+    }
+    $done = lms_purge();
+    if ($done) {
+        set_setting('lms_idle_unloaded_at', gmdate('Y-m-d H:i:s'));
+    }
+    return $done;
+}
+
 /**
  * Vide la mémoire du serveur local (tous les modèles chargés).
  * @return array<int,string> instances déchargées
@@ -1610,6 +1644,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     if (!$st['reachable']) {
         throw new LlmUnavailable(t('error.chat.lms_down'), 'down');
     }
+    lms_touch_activity();
     // changement de modèle (autre conversation, autre persona, modèle de test) : on décharge
     // les autres avant que LM Studio ne charge celui-ci, pour ne pas saturer la mémoire
     if (setting('lms_single_model', '1') === '1') {

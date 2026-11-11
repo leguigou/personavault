@@ -69,6 +69,7 @@ if ($action === 'load' && $method === 'POST') {
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    lms_touch_activity();
     // 1. libérer la mémoire : les autres modèles chargés sont déchargés avant le chargement
     $purge = lms_purge_except($model);
 

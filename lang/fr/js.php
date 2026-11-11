@@ -165,4 +165,8 @@ return [
     'js.chat.toggle_failed' => 'Impossible d’enregistrer, réessaie.',
     // curseur à deux poignées des pauses (aussi utilisé côté serveur)
     'js.settings.pause_range' => '{min} s – {max} s',
+    'js.settings.idle_never' => 'Illimité',
+    'js.settings.idle_min' => '{m} min',
+    'js.settings.idle_h' => '{h} h',
+    'js.settings.idle_hm' => '{h} h {m}',
 ];

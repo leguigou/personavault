@@ -299,4 +299,7 @@ return [
     'settings.followup.gap_help'  => 'En una misma conversación, no habrá otro mensaje antes de este plazo, aunque el silencio continúe.',
     'settings.single_model.label' => 'Un solo modelo a la vez en LM Studio',
     'settings.single_model.hint' => 'Con cada cambio de modelo (otra conversación, otro persona, un modelo de prueba), los demás modelos se descargan antes de cargar el nuevo: la memoria no se satura. Desactívelo solo si su equipo puede mantener varios modelos cargados.',
+    'settings.idle_unload.label' => 'Liberar la memoria de LM Studio tras una inactividad de',
+    'settings.idle_unload.never' => 'Ilimitado',
+    'settings.idle_unload.hint' => 'Sin respuestas ni cargas de modelo durante este tiempo, todos los modelos se descargan de LM Studio. Todo a la izquierda: nunca. Se comprueba en cada ejecución de la tarea programada (unos 30 min); los mensajes automáticos no cuentan como actividad.',
 ];
