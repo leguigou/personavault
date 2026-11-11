@@ -169,4 +169,8 @@ return [
     'js.settings.idle_min' => '{m} min',
     'js.settings.idle_h' => '{h} h',
     'js.settings.idle_hm' => '{h} h {m}',
+    'js.prompt.ai_busy' => 'L’IA rédige le prompt…',
+    'js.prompt.ai_done' => 'Prompt proposé par l’IA. Relis-le puis enregistre.',
+    'js.prompt.ai_done_photo' => 'Prompt proposé à partir de la fiche et de la photo principale. Relis-le puis enregistre.',
+    'js.prompt.ai_failed' => 'L’IA n’a pas pu rédiger le prompt.',
 ];

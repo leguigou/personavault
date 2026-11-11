@@ -234,4 +234,6 @@ return [
     'date.duration_min' => '{m} min',
     'date.duration_h' => '{h} h',
     'date.duration_hm' => '{h} h {m}',
+    'labels.ai_prompt.no_vision_provider' => 'DeepSeek ne lit pas les images : la photo principale n’a pas été analysée.',
+    'labels.ai_prompt.no_vision_model' => 'Ce modèle n’accepte pas les images : prompt rédigé sans analyser la photo principale.',
 ];

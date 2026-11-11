@@ -169,4 +169,8 @@ return [
     'js.settings.idle_min' => '{m} min',
     'js.settings.idle_h' => '{h} h',
     'js.settings.idle_hm' => '{h} h {m}',
+    'js.prompt.ai_busy' => 'La IA está redactando el prompt…',
+    'js.prompt.ai_done' => 'Prompt propuesto por la IA. Revísalo y guarda.',
+    'js.prompt.ai_done_photo' => 'Prompt propuesto a partir de la ficha y la foto principal. Revísalo y guarda.',
+    'js.prompt.ai_failed' => 'La IA no ha podido redactar el prompt.',
 ];

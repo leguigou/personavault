@@ -483,6 +483,13 @@ try {
     $check(export_filename('Week-end à Lisbonne !', 'md', '2026-11-08') === 'week-end-a-lisbonne-2026-11-08.md'
         && export_filename('???', 'txt', '2026-11-08') === 'conversation-2026-11-08.txt', 'nom de fichier propre à partir du titre');
     $check(export_bubbles(['content' => 'Un. Deux.', 'split_points' => '[4]']) === ['Un.', 'Deux.'], 'page imprimable : découpage en bulles');
+    // 51 mots : coupe après « tout.. », pas sur le « ! » final (sinon aucune coupe côté serveur
+    // alors que le navigateur en affichait une → bulle répétée)
+    $__t = trim(str_repeat('mot ', 44)) . ' et tout.. mais bon on fait avec !';
+    $__p = chat_split_points($__t, 50, 2);
+    $check(count($__p) === 1 && mb_substr($__t, $__p[0]) === 'mais bon on fait avec !', 'bulles : coupe à la dernière phrase, jamais en fin de texte');
+    $__p = chat_split_points("\n\n" . $__t, 50, 2);
+    $check(count($__p) === 1 && mb_substr("\n\n" . $__t, $__p[0]) === 'mais bon on fait avec !', 'bulles : décalage juste si la réponse commence par un saut de ligne');
     echo PHP_EOL . '— thèmes' . PHP_EOL;
     $ui = ui_style();
     $check($ui['accent'] === 'violet' && $ui['mode'] === 'dark', 'par défaut : Violet + Sombre (rendu historique)');

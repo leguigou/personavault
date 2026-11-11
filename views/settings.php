@@ -7,7 +7,10 @@
  */
 $providers = [
     'deepseek'   => 'DeepSeek',
-    'openai'     => 'OpenAI',
+    'openai'     => 'OpenAI (ChatGPT)',
+    'xai'        => 'xAI (Grok)',
+    'gemini'     => 'Google Gemini',
+    'mistral'    => 'Mistral AI',
     'openrouter' => 'OpenRouter',
     'lmstudio'   => t('settings.provider.lmstudio'),
     'custom'     => t('settings.provider.custom'),
@@ -68,6 +71,7 @@ $facts = facts_settings();
                     <?php endforeach; ?>
                 </select>
             </div>
+            <small><?= e(t('settings.ia.provider_hint')) ?></small>
         </div>
 
         <div class="row2">

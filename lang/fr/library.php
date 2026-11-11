@@ -79,6 +79,7 @@ return [
     'persona.prompts_empty'       => 'Stocke ici tes prompts : image, négatif, système, vidéo…',
     'persona.prompt_kind_other'   => 'Autre',
     'persona.prompt_copy'         => 'Copier',
+    'persona.prompt_ai' => 'Rédiger avec l’IA (à partir de la fiche et de la photo principale)',
     'persona.prompt_edit'         => 'Éditer',
     'persona.prompt_delete_confirm' => 'Supprimer ce prompt ?',
     'persona.prompt_title'        => 'Titre',

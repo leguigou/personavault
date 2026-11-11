@@ -1258,6 +1258,7 @@ function persona_ai_directive(array $persona, array $prompts): array
  */
 function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2): array
 {
+    $lead       = strlen($text) - strlen(ltrim($text)); // décalages rendus sur le texte d'origine
     $text       = trim($text);
     $maxBubbles = max(1, min(8, $maxBubbles));
     $maxWords   = max(8, $maxWords);
@@ -1283,11 +1284,19 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2):
         $boundaries = [];
         $wi = 0;
         foreach ($mb[0] as $b) {
-            $pos = $b[1];
-            while ($wi < $wordCount && $mw[0][$wi][1] < $pos) {
+            // mots comptés jusqu'à la FIN de la ponctuation (même calcul que le navigateur)
+            $end = $b[1] + strlen((string) $b[0]);
+            while ($wi < $wordCount && $mw[0][$wi][1] < $end) {
                 $wi++;
             }
-            $boundaries[] = ['byte' => $pos + strlen((string) $b[0]), 'words' => $wi];
+            // une fin de phrase en toute fin de texte ne peut pas servir de coupe
+            if (trim(substr($rest, $end)) === '') {
+                continue;
+            }
+            $boundaries[] = ['byte' => $end, 'words' => $wi];
+        }
+        if (!$boundaries) {
+            break;
         }
 
         $chosen = null;
@@ -1326,7 +1335,7 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2):
         }
 
         $offset += $cut;
-        $cuts[]  = $offset;
+        $cuts[]  = $offset + $lead;
     }
 
     return $cuts;

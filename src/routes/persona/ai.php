@@ -27,6 +27,33 @@ if ($action === 'ai-directive' && $method === 'POST') {
     exit;
 }
 
+/* --- rédiger / améliorer un prompt avec l'IA (éditeur de prompt) --- */
+if ($action === 'ai-prompt' && $method === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    csrf_check_json();
+    session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
+    if (!llm_ready()) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => t('error.ai.configure_settings')]);
+        exit;
+    }
+    try {
+        $res = llm_visual_prompt(
+            $persona,
+            fetch_prompts($pid),
+            (string) ($_POST['kind'] ?? 'image'),
+            mb_substr(trim((string) ($_POST['title'] ?? '')), 0, 120),
+            mb_substr((string) ($_POST['body'] ?? ''), 0, 20000),
+            (int) ($_POST['prompt_id'] ?? 0)
+        );
+        echo json_encode(['ok' => true] + $res, JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
 if ($action === 'ai-fill' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();

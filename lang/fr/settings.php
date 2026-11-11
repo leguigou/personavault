@@ -35,8 +35,9 @@ return [
 
     // --- onglet IA : création de fiches
     'settings.ia.title'         => 'Création de fiches',
-    'settings.ia.subtitle'      => 'Modèle qui remplit les fiches persona (bouton IA).',
+    'settings.ia.subtitle'      => 'Modèle qui remplit les fiches et rédige les prompts (boutons IA).',
     'settings.ia.model_examples' => 'Ex. deepseek-chat, deepseek-reasoner',
+    'settings.ia.provider_hint' => 'Pour que l’IA analyse la photo principale en rédigeant un prompt, choisis un modèle qui lit les images (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek ne lit que le texte.',
     'settings.ia.api_key'       => 'Clé API',
     'settings.ia.api_key_keep'  => 'Laisser vide pour conserver la clé',
     'settings.ia.api_key_saved_help' => 'Une clé est déjà enregistrée. Saisis-en une nouvelle pour la remplacer.',
