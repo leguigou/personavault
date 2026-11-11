@@ -37,7 +37,7 @@ return [
     'settings.ia.title'         => 'Création de fiches',
     'settings.ia.subtitle'      => 'Modèle qui remplit les fiches et rédige les prompts (boutons IA).',
     'settings.ia.model_examples' => 'Ex. deepseek-chat, deepseek-reasoner',
-    'settings.ia.provider_hint' => 'Pour que l’IA analyse la photo principale en rédigeant un prompt, choisis un modèle qui lit les images (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek ne lit que le texte.',
+    'settings.ia.provider_hint' => 'Pour que l’IA analyse la photo principale en rédigeant un prompt, choisis un modèle qui lit les images (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek ne lit que le texte. OpenRouter donne accès à tous ces modèles avec une seule clé : le nom du modèle s’écrit « fournisseur/modèle » (ex. google/gemini-2.5-flash).',
     'settings.ia.api_key'       => 'Clé API',
     'settings.ia.api_key_keep'  => 'Laisser vide pour conserver la clé',
     'settings.ia.api_key_saved_help' => 'Une clé est déjà enregistrée. Saisis-en une nouvelle pour la remplacer.',

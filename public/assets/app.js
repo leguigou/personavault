@@ -1287,7 +1287,7 @@
             openrouter: {
                 url: "https://openrouter.ai/api/v1",
                 model: "deepseek/deepseek-chat",
-                models: ["deepseek/deepseek-chat", "google/gemini-2.0-flash-001", "anthropic/claude-3.5-sonnet"],
+                models: ["deepseek/deepseek-chat", "openai/gpt-4o-mini", "google/gemini-2.5-flash", "x-ai/grok-4", "mistralai/mistral-medium-3"],
             },
             lmstudio: {
                 url: "http://localhost:1234/v1",

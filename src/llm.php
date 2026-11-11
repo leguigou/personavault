@@ -413,9 +413,14 @@ TXT;
  * Fournisseurs connus pour lesquels on sait que l'API n'accepte pas d'image :
  * on n'envoie pas la photo (évite un aller-retour en erreur).
  */
-function llm_provider_without_vision(string $provider): bool
+function llm_provider_without_vision(string $provider, string $model = ''): bool
 {
-    return in_array($provider, ['deepseek'], true);
+    if ($provider === 'deepseek') {
+        return true;
+    }
+    // via OpenRouter (ou adresse perso) : les modèles DeepSeek de discussion ne lisent pas non plus les images
+    $m = strtolower($model);
+    return str_contains($m, 'deepseek') && !str_contains($m, 'vl');
 }
 
 /**
@@ -505,7 +510,7 @@ TXT;
     $image = '';
     $note  = '';
     if ($base !== '') {
-        if (llm_provider_without_vision((string) $cfg['provider'])) {
+        if (llm_provider_without_vision((string) $cfg['provider'], (string) $cfg['model'])) {
             $note = t('labels.ai_prompt.no_vision_provider');
         } else {
             $image = media_data_url($base, 1024);
@@ -527,8 +532,9 @@ TXT;
     try {
         $res = llm_request($text($usedImage), $cfg, $opts);
     } catch (RuntimeException $e) {
-        // modèle sans vision : l'API refuse l'image (400/415/422) → on réessaie sans
-        if (!$usedImage || !in_array((int) $e->getCode(), [400, 415, 422], true)) {
+        // modèle sans vision : l'API refuse l'image (400/415/422 ; OpenRouter répond 404
+        // « aucun fournisseur n'accepte l'image » pour ce modèle) → on réessaie sans
+        if (!$usedImage || !in_array((int) $e->getCode(), [400, 404, 415, 422], true)) {
             throw $e;
         }
         $usedImage = false;

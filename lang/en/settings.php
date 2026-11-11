@@ -34,7 +34,7 @@ return [
     'settings.ia.title'         => 'Profile creation',
     'settings.ia.subtitle'      => 'Model that fills in profiles and writes prompts (AI buttons).',
     'settings.ia.model_examples' => 'E.g. deepseek-chat, deepseek-reasoner',
-    'settings.ia.provider_hint' => 'For the AI to analyse the main photo when writing a prompt, pick a model that reads images (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek reads text only.',
+    'settings.ia.provider_hint' => 'For the AI to analyse the main photo when writing a prompt, pick a model that reads images (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek reads text only. OpenRouter gives access to all these models with a single key: the model name is “provider/model” (e.g. google/gemini-2.5-flash).',
     'settings.ia.api_key'       => 'API key',
     'settings.ia.api_key_keep'  => 'Leave empty to keep the key',
     'settings.ia.api_key_saved_help' => 'A key is already saved. Enter a new one to replace it.',

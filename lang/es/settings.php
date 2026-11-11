@@ -35,7 +35,7 @@ return [
     'settings.ia.title'         => 'Creación de fichas',
     'settings.ia.subtitle'      => 'Modelo que rellena las fichas y redacta los prompts (botones IA).',
     'settings.ia.model_examples' => 'Ej.: deepseek-chat, deepseek-reasoner',
-    'settings.ia.provider_hint' => 'Para que la IA analice la foto principal al redactar un prompt, elige un modelo que lea imágenes (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek solo lee texto.',
+    'settings.ia.provider_hint' => 'Para que la IA analice la foto principal al redactar un prompt, elige un modelo que lea imágenes (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek solo lee texto. OpenRouter da acceso a todos estos modelos con una sola clave: el nombre del modelo es «proveedor/modelo» (p. ej. google/gemini-2.5-flash).',
     'settings.ia.api_key'       => 'Clave API',
     'settings.ia.api_key_keep'  => 'Déjalo vacío para conservar la clave',
     'settings.ia.api_key_saved_help' => 'Ya hay una clave guardada. Escribe una nueva para sustituirla.',
