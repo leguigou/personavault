@@ -663,6 +663,84 @@ function lms_unload(string $instanceId): bool
 }
 
 /**
+ * Libère la mémoire avant un chargement : décharge tous les modèles sauf $keep (s'il est déjà
+ * chargé, on le garde : inutile de le recharger).
+ * @return array{unloaded: array<int,string>, failed: array<int,string>}
+ */
+function lms_purge_except(string $keep): array
+{
+    $done = ['unloaded' => [], 'failed' => []];
+    foreach (lms_loaded_models() as $m) {
+        if ($keep !== '' && ($m['model'] === $keep || $m['id'] === $keep)) {
+            continue;
+        }
+        if (lms_unload($m['id'])) {
+            $done['unloaded'][] = $m['id'];
+        } else {
+            $done['failed'][] = $m['id'];
+        }
+    }
+    return $done;
+}
+
+/**
+ * Avant d'utiliser $model : s'il n'est pas déjà en mémoire, les autres modèles chargés sont
+ * déchargés d'abord, pour que LM Studio ne les empile pas (mémoire saturée). Rien n'est
+ * fait quand il est déjà chargé. $status : un lms_status() déjà lu, pour éviter un appel.
+ * @return array<int,string> instances déchargées
+ */
+function lms_make_room_for(string $model, ?array $status = null): array
+{
+    if ($model === '') {
+        return [];
+    }
+    $st = $status ?? lms_status();
+    if (empty($st['reachable'])) {
+        return [];
+    }
+    foreach ($st['loaded'] as $l) {
+        if ($l['key'] === $model || $l['id'] === $model) {
+            return []; // déjà en mémoire : on ne touche à rien
+        }
+    }
+    return $st['loaded'] ? lms_purge_except($model)['unloaded'] : [];
+}
+
+/** Note l'heure d'utilisation de LM Studio (réponse, chargement…) : base du déchargement après inactivité. */
+function lms_touch_activity(): void
+{
+    set_setting('lms_last_activity', gmdate('Y-m-d H:i:s'));
+}
+
+/**
+ * Déchargement après inactivité (Réglages › Chat) : si LM Studio n'a pas servi depuis
+ * lms_idle_unload_minutes (0 = jamais), tous les modèles sont déchargés. Appelé par la tâche
+ * planifiée (bin/followup.php), donc vérifié toutes les 30 min environ.
+ * @return array<int,string> instances déchargées
+ */
+function lms_idle_unload_check(): array
+{
+    $minutes = (int) setting('lms_idle_unload_minutes', '0');
+    if ($minutes <= 0) {
+        return [];
+    }
+    $last = setting('lms_last_activity', '');
+    if ($last === '') {
+        lms_touch_activity(); // premier passage : on part de maintenant
+        return [];
+    }
+    $idle = time() - (int) strtotime($last . ' UTC');
+    if ($idle < $minutes * 60) {
+        return [];
+    }
+    $done = lms_purge();
+    if ($done) {
+        set_setting('lms_idle_unloaded_at', gmdate('Y-m-d H:i:s'));
+    }
+    return $done;
+}
+
+/**
  * Vide la mémoire du serveur local (tous les modèles chargés).
  * @return array<int,string> instances déchargées
  */
@@ -1565,6 +1643,12 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     $st = lms_status();
     if (!$st['reachable']) {
         throw new LlmUnavailable(t('error.chat.lms_down'), 'down');
+    }
+    lms_touch_activity();
+    // changement de modèle (autre conversation, autre persona, modèle de test) : on décharge
+    // les autres avant que LM Studio ne charge celui-ci, pour ne pas saturer la mémoire
+    if (setting('lms_single_model', '1') === '1') {
+        lms_make_room_for((string) $cfg['model'], $st);
     }
 
     $partial = false;

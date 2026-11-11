@@ -70,6 +70,7 @@ return [
     'chat.lms.checking'             => 'Vérification du serveur…',
     'chat.lms.refresh'              => 'Actualiser l’état',
     'chat.lms.step_server'          => 'Serveur',
+    'chat.lms.step_purge' => 'Mémoire',
     'chat.lms.step_request'         => 'Requête',
     'chat.lms.step_loading'         => 'Chargement',
     'chat.lms.step_ready'           => 'Prêt',

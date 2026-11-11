@@ -86,6 +86,8 @@ return [
     'js.chat.model_default' => 'modelo predeterminado',
     'js.chat.model_changed' => 'Modelo cambiado para esta conversación',
     'js.chat.model_back' => 'Vuelta al modelo del persona',
+    'js.chat.model_loading' => 'cargando',
+    'js.chat.models_unloaded' => ['one' => '{n} otro modelo descargado', 'other' => '{n} otros modelos descargados'],
     'js.chat.vision_model' => 'Modelo de visión: también lee imágenes',
     'js.prompt.chars' => ['one' => '{n} carácter', 'other' => '{n} caracteres'],
     'js.prompt.modified' => 'modificado',
@@ -125,6 +127,8 @@ return [
     'js.lms.unreachable'          => 'LM Studio inaccesible',
     'js.lms.already_loaded_timer' => 'ya cargado',
     'js.lms.already_loaded'       => 'Ya cargado',
+    'js.lms.purged' => ['one' => 'Memoria liberada: {n} modelo descargado —', 'other' => 'Memoria liberada: {n} modelos descargados —'],
+    'js.lms.purge_failed' => 'No se pudo descargar: {models}. La carga puede quedarse sin memoria.',
     'js.lms.request_failed'       => 'No se pudo enviar la solicitud.',
     'js.lms.load_failed'          => 'Error de carga',
     'js.lms.load_error'           => 'No se pudo cargar: {message}',
@@ -161,4 +165,8 @@ return [
     'js.chat.toggle_failed' => 'No se pudo guardar, vuelve a intentarlo.',
     // curseur à deux poignées des pauses (aussi utilisé côté serveur)
     'js.settings.pause_range' => '{min} s – {max} s',
+    'js.settings.idle_never' => 'Ilimitado',
+    'js.settings.idle_min' => '{m} min',
+    'js.settings.idle_h' => '{h} h',
+    'js.settings.idle_hm' => '{h} h {m}',
 ];

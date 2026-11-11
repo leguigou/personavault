@@ -694,6 +694,16 @@
         const paint = () => {
             if (!out) return;
             const v = parseFloat(input.value);
+            if (input.dataset.format === "idle") {
+                // déchargement après inactivité : tout à gauche = illimité
+                const h = Math.floor(v / 60);
+                const m = v % 60;
+                out.textContent = v <= 0 ? tr("settings.idle_never")
+                    : h === 0 ? tr("settings.idle_min", { m })
+                    : m === 0 ? tr("settings.idle_h", { h })
+                    : tr("settings.idle_hm", { h, m: String(m).padStart(2, "0") });
+                return;
+            }
             out.textContent = suffix ? fmt1(v) + suffix : String(v);
         };
         input.addEventListener("input", paint);
@@ -2262,7 +2272,12 @@
                     const name = document.querySelector("[data-model-name]");
                     if (name) name.textContent = d.model || tr("chat.model_default");
                     paintOverride(!!d.override);
-                    toast({ title: d.override ? tr("chat.model_changed") : tr("chat.model_back"), text: d.model, code: true });
+                    const freed = (d.purged || []).length;
+                    toast({
+                        title: d.override ? tr("chat.model_changed") : tr("chat.model_back"),
+                        text: d.model + (d.loading ? " · " + tr("chat.model_loading") : "") + (freed ? " · " + tr("chat.models_unloaded", freed) : ""),
+                        code: true,
+                    });
                     loadStatus(2500); // nouveau modèle : chargé ou non dans LM Studio ?
                 } catch (e) {
                     toast(tr("common.error", { message: e.message }), true);
@@ -2630,7 +2645,8 @@
             const li = stepsEl && stepsEl.querySelector('[data-step="' + name + '"]');
             if (li) li.dataset.state = state;
         };
-        const resetSteps = () => ["server", "request", "loading", "ready"].forEach((n) => setStep(n, ""));
+        const resetSteps = () => ["server", "purge", "request", "loading", "ready"].forEach((n) => setStep(n, ""));
+        const purgedEl = document.querySelector("[data-lms-purged]");
         const errBox = document.querySelector("[data-lms-error]");
         const showLoadError = (hint, detail) => {
             if (!errBox) return;
@@ -2682,17 +2698,9 @@
             }
             setStep("server", "done");
 
-            if (st.is_loaded) {
-                setStep("request", "done");
-                setStep("loading", "done");
-                setStep("ready", "done");
-                if (timerEl) timerEl.textContent = tr("lms.already_loaded_timer");
-                done(tr("lms.already_loaded"));
-                return;
-            }
-
-            // 2. demande de chargement
-            setStep("request", "active");
+            // 2. libérer la mémoire (le serveur décharge les autres modèles) puis 3. demande de chargement
+            if (purgedEl) purgedEl.hidden = true;
+            setStep("purge", "active");
             let asked = null;
             try {
                 const fd = new FormData();
@@ -2702,15 +2710,36 @@
             } catch (e) {
                 asked = { ok: false, error: tr("lms.request_failed") };
             }
+            const purged = (asked && asked.purged) || [];
+            const purgeFailed = (asked && asked.purge_failed) || [];
+            if (asked && asked.ok) {
+                setStep("purge", purgeFailed.length ? "fail" : "done");
+                if (purgedEl && (purged.length || purgeFailed.length)) {
+                    purgedEl.textContent = purgeFailed.length
+                        ? tr("lms.purge_failed", { models: purgeFailed.join(", ") })
+                        : tr("lms.purged", purged.length) + " " + purged.join(", ");
+                    purgedEl.hidden = false;
+                }
+            }
             if (!asked || !asked.ok) {
+                // modèle introuvable : rien n'a été déchargé (étape laissée neutre)
+                setStep("purge", asked && asked.kind === "not_found" ? "" : "fail");
                 setStep("request", "fail");
                 done(tr("lms.load_failed"));
                 showLoadError((asked && asked.error) || tr("lms.unknown_error"), "");
                 return;
             }
             setStep("request", "done");
+            if (asked.already) {
+                setStep("loading", "done");
+                setStep("ready", "done");
+                if (timerEl) timerEl.textContent = tr("lms.already_loaded_timer");
+                done(tr("lms.already_loaded"));
+                loadStatus();
+                return;
+            }
 
-            // 3. chargement en cours -> 4. prêt
+            // 4. chargement en cours -> 5. prêt
             setStep("loading", "active");
             const deadline = Date.now() + 180000;
             for (;;) {

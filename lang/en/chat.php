@@ -69,6 +69,7 @@ return [
     'chat.lms.checking'             => 'Checking the server…',
     'chat.lms.refresh'              => 'Refresh status',
     'chat.lms.step_server'          => 'Server',
+    'chat.lms.step_purge' => 'Memory',
     'chat.lms.step_request'         => 'Request',
     'chat.lms.step_loading'         => 'Loading',
     'chat.lms.step_ready'           => 'Ready',

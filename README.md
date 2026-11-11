@@ -235,6 +235,14 @@ résultat (ou « jamais lancée », avec la ligne à copier), et une conversatio
 relances ne peuvent pas partir (désactivées partout, ou tâche jamais lancée). Deux passages ne se
 chevauchent pas (verrou `storage/followup.lock`).
 
+Les relances utilisent **un seul modèle**, sans rien décharger ni charger : celui déjà chargé dans
+LM Studio s'il y en a un, sinon le modèle de base des Réglages (le modèle propre à un persona ou à
+une conversation est ignoré ici).
+
+La même tâche planifiée libère aussi la mémoire de LM Studio après une période sans activité
+(Réglages › Chat, de 30 min à 8 h, « Illimité » par défaut) : sans réponse ni chargement de modèle
+pendant cette durée, tous les modèles sont déchargés. Les relances ne comptent pas comme activité.
+
 ---
 
 ## Configuration

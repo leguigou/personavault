@@ -25,6 +25,22 @@ if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
     exit(0);
 }
 
+// à la fin de chaque passage (même s'il n'y a rien à relancer) : déchargement de la mémoire de
+// LM Studio après la durée d'inactivité choisie (les relances ne comptent pas comme activité)
+register_shutdown_function(static function () use ($say, $dry): void {
+    if ($dry) {
+        return;
+    }
+    try {
+        $done = lms_idle_unload_check();
+        if ($done) {
+            $say('inactivité : mémoire de LM Studio libérée (' . implode(', ', $done) . ')');
+        }
+    } catch (Throwable $e) {
+        $say('déchargement après inactivité impossible : ' . $e->getMessage());
+    }
+});
+
 /**
  * Battement de cœur : les Réglages affichent le dernier passage et son résultat,
  * ce qui permet de voir que la tâche planifiée tourne bien (rien en simulation).
@@ -62,6 +78,21 @@ if (!$st['reachable']) {
     $beat('llm_down');
     exit(0);
 }
+
+// un seul modèle pour toutes les relances du passage, sans rien décharger ni charger :
+// celui déjà en mémoire dans LM Studio s'il y en a un (en cours d'utilisation), sinon le
+// modèle de base des Réglages. Le modèle propre au persona ou à la conversation est ignoré
+// ici : sinon chaque relance ferait décharger puis recharger des modèles.
+$fuCfg = chat_llm_config();
+if (!empty($st['loaded'])) {
+    $fuCfg['model'] = (string) ($st['loaded'][0]['key'] ?: $st['loaded'][0]['id']);
+}
+if ((string) $fuCfg['model'] === '') {
+    $say('aucun modèle de discussion configuré — aucune relance envoyée');
+    $beat('llm_down');
+    exit(0);
+}
+$verbose && $say('modèle des relances : ' . $fuCfg['model'] . (!empty($st['loaded']) ? ' (déjà chargé)' : ' (modèle de base)'));
 
 $convs = db()->query('SELECT * FROM conversations WHERE auto_followup = 1 ORDER BY id')->fetchAll();
 $sent  = 0;
@@ -124,7 +155,7 @@ foreach ($convs as $conv) {
     $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
 
     try {
-        $res = llm_request($messages, chat_llm_config_for($conv), [
+        $res = llm_request($messages, $fuCfg, [
             'temperature'      => max(0.7, (float) ($conv['temperature'] ?? 0.85)),
             'max_tokens'       => 140,
             'timeout'          => 120,

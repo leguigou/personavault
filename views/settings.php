@@ -458,6 +458,26 @@ $facts = facts_settings();
             </div>
         </details>
 
+        <!-- un seul modèle à la fois dans LM Studio : les autres sont déchargés à chaque changement -->
+        <div class="settings-card single-model">
+            <label class="check">
+                <input type="checkbox" name="lms_single_model" value="1" <?= setting('lms_single_model', '1') === '1' ? 'checked' : '' ?>>
+                <span><?= e(t('settings.single_model.label')) ?></span>
+            </label>
+            <p class="hint"><?= e(t('settings.single_model.hint')) ?></p>
+        </div>
+
+        <!-- libérer la mémoire de LM Studio après un temps d'inactivité (0 = jamais) -->
+        <?php $idleMin = (int) setting('lms_idle_unload_minutes', '0'); ?>
+        <div class="settings-card">
+            <label class="field range-field">
+                <span><?= e(t('settings.idle_unload.label')) ?> <b data-out="idle"><?= e($idleMin === 0 ? t('settings.idle_unload.never') : idle_duration_label($idleMin)) ?></b></span>
+                <input class="range" type="range" name="lms_idle_unload_minutes" min="0" max="480" step="30"
+                       value="<?= $idleMin ?>" data-out="idle" data-format="idle">
+                <small><?= e(t('settings.idle_unload.hint')) ?></small>
+            </label>
+        </div>
+
         <div class="form-actions save-bar">
             <span class="dirty-note"><?= e(t('settings.dirty')) ?></span>
             <button class="btn btn-primary" type="submit"><?= e(t('settings.save')) ?></button>

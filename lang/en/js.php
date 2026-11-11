@@ -86,6 +86,8 @@ return [
     'js.chat.model_default' => 'default model',
     'js.chat.model_changed' => 'Model changed for this conversation',
     'js.chat.model_back' => 'Back to the persona\'s model',
+    'js.chat.model_loading' => 'loading',
+    'js.chat.models_unloaded' => ['one' => '{n} other model unloaded', 'other' => '{n} other models unloaded'],
     'js.chat.vision_model' => 'Vision model: can also read images',
     'js.prompt.chars' => ['one' => '{n} character', 'other' => '{n} characters'],
     'js.prompt.modified' => 'edited',
@@ -125,6 +127,8 @@ return [
     'js.lms.unreachable'          => 'LM Studio unreachable',
     'js.lms.already_loaded_timer' => 'already loaded',
     'js.lms.already_loaded'       => 'Already loaded',
+    'js.lms.purged' => ['one' => 'Memory freed: {n} model unloaded —', 'other' => 'Memory freed: {n} models unloaded —'],
+    'js.lms.purge_failed' => 'Could not unload: {models}. Loading may run short of memory.',
     'js.lms.request_failed'       => 'Request failed.',
     'js.lms.load_failed'          => 'Loading failed',
     'js.lms.load_error'           => 'Could not load: {message}',
@@ -161,4 +165,8 @@ return [
     'js.chat.toggle_failed' => 'Couldn’t save, please try again.',
     // curseur à deux poignées des pauses (aussi utilisé côté serveur)
     'js.settings.pause_range' => '{min} s – {max} s',
+    'js.settings.idle_never' => 'Unlimited',
+    'js.settings.idle_min' => '{m} min',
+    'js.settings.idle_h' => '{h} h',
+    'js.settings.idle_hm' => '{h} h {m}',
 ];

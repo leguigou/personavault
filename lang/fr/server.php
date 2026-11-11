@@ -231,4 +231,7 @@ return [
     'labels.backup_readme.restore_slug' => 'Les personas importés reçoivent un slug unique si le leur existe déjà :',
     'labels.backup_readme.restore_safe' => 'rien n\'est écrasé.',
     'flash.chat.directive_saved' => 'Consigne de la conversation enregistrée.',
+    'date.duration_min' => '{m} min',
+    'date.duration_h' => '{h} h',
+    'date.duration_hm' => '{h} h {m}',
 ];

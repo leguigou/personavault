@@ -158,6 +158,12 @@ if ($path === '/settings/chat' && $method === 'POST') {
     $fm = (string) ($_POST['facts_model'] ?? 'chat');
     set_setting('facts_model', in_array($fm, ['chat', 'remote'], true) ? $fm : 'chat');
 
+    // un seul modèle en mémoire dans LM Studio (les autres déchargés à chaque changement)
+    set_setting('lms_single_model', !empty($_POST['lms_single_model']) ? '1' : '0');
+    // déchargement après inactivité : 0 = jamais, sinon de 30 min à 8 h par paliers de 30 min
+    $idle = (int) ($_POST['lms_idle_unload_minutes'] ?? 0);
+    set_setting('lms_idle_unload_minutes', (string) (int) (round(max(0, min(480, $idle)) / 30) * 30));
+
     // titres automatiques des discussions
     $tm = (string) ($_POST['chat_title_model'] ?? 'remote');
     set_setting('chat_title_model', in_array($tm, ['remote', 'chat', 'off'], true) ? $tm : 'remote');

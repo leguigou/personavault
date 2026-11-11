@@ -20,12 +20,27 @@ if ($action === 'model-override' && $method === 'POST') {
     $raw->execute([$cid]);
     $eff = chat_with_persona((array) $raw->fetch(), $persona); // depuis la ligne brute
     $effective = (string) ($eff['model'] !== '' ? $eff['model'] : chat_llm_config_raw()['model']);
+    // nouveau modèle : les autres sont déchargés et il commence à se charger tout de suite
+    $purged = [];
+    $loading = false;
+    if (setting('lms_single_model', '1') === '1' && $effective !== '') {
+        $st = lms_status();
+        if ($st['reachable'] && (empty($st['available']) || in_array($effective, $st['available'], true))) {
+            $purged = lms_make_room_for($effective, $st);
+            $already = in_array($effective, array_merge(array_column($st['loaded'], 'key'), array_column($st['loaded'], 'id')), true);
+            if (!$already) {
+                $loading = lms_load_async($effective, max(2048, (int) ($eff['context_window'] ?? 8192)));
+            }
+        }
+    }
     if ($ajax) {
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'ok'       => true,
             'model'    => $effective,
             'override' => $override !== '',
+            'purged'   => $purged,
+            'loading'  => $loading,
             'message'  => $override !== '' ? t('flash.chat.model_override_set', ['model' => $override]) : t('flash.chat.model_override_cleared'),
         ], JSON_UNESCAPED_UNICODE);
         exit;
