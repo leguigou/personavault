@@ -51,6 +51,7 @@ if ($method === 'POST' && ($path === '/assist/turn' || $path === '/assist/create
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close(); // appel long : ne bloque pas les autres requêtes
+    @set_time_limit(300); // personnage existant : recherche en ligne + deux appels au modèle
     if (!llm_ready()) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => t('error.ai.configure_settings')], JSON_UNESCAPED_UNICODE);

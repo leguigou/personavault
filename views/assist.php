@@ -37,15 +37,19 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
             <a class="btn btn-primary" href="/settings"><?= e(t('assist.open_settings')) ?></a>
         </div>
     <?php else: ?>
-        <!-- la fiche en cours : jauge, et le détail en un toucher -->
+        <!-- la fiche en cours : jauge et étapes toujours visibles ; un toucher ouvre l'aperçu de ce qui est rédigé -->
         <details class="as-fiche" data-as-fiche>
             <summary>
                 <span class="as-fiche-name" data-as-name></span>
                 <span class="as-fiche-pct" data-as-pct></span>
                 <span class="as-bar" aria-hidden="true"><i data-as-bar></i></span>
+                <ol class="as-steps" data-as-steps></ol>
             </summary>
-            <ul class="as-check" data-as-check></ul>
-            <p class="as-fiche-note"><?= e($isNew ? t('assist.fiche_note_new') : t('assist.fiche_note_complete')) ?></p>
+            <div class="as-preview">
+                <p class="as-preview-title"><?= e(t('assist.preview_title')) ?></p>
+                <dl class="as-preview-list" data-as-preview></dl>
+                <p class="as-fiche-note"><?= e($isNew ? t('assist.fiche_note_new') : t('assist.fiche_note_complete')) ?></p>
+            </div>
         </details>
 
         <div class="as-thread" data-as-thread aria-live="polite"></div>

@@ -137,6 +137,19 @@ await post('/chat/1/autotitle');
 await post('/memories', { content: 'Aime le jazz', category: 'preference', confidence: 'confirme', persona_id: '' });
 await post('/settings/ui', { ui_font_size: '16', ui_bubble_style: 'carte', ui_density: 'compact', ui_width: 'large', ui_avatars: '1' });
 await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_followup: '' });
+// assistant de création : un personnage existant est retrouvé (faux Wikipédia) et toute la fiche remplie
+{
+    const t1 = JSON.parse(await post('/assist/turn', { draft: '{}', history: '[]', action: 'reply', answer: 'Je veux Sherlock Holmes' }, '/assist/turn (personnage existant)'));
+    expect(t1.ok && t1.draft.name === 'Sherlock Holmes' && t1.draft.looks !== '' && t1.draft.source.includes('Sherlock')
+        && (t1.source?.url || '').startsWith('https://fr.wikipedia.org/wiki/Sherlock_Holmes'), 'assistant : personnage existant retrouvé, fiche remplie, source citée');
+    const t2 = JSON.parse(await post('/assist/turn', { draft: '{}', history: '[]', action: 'reply', answer: 'Une fleuriste' }, '/assist/turn (idée libre)'));
+    expect(t2.ok && t2.source === null && t2.question !== '', 'assistant : idée libre, une question à la fois');
+    const c = JSON.parse(await post('/assist/create', { draft: JSON.stringify(t1.draft) }));
+    expect(c.ok && c.redirect === '/p/sherlock-holmes', 'assistant : fiche créée');
+    const page = await record('GET /p/sherlock-holmes', await http('/p/sherlock-holmes'));
+    expect(page.includes('Tu es Sherlock Holmes') && page.includes('Personnage d’origine'), 'assistant : prompt système et personnage d’origine sur la fiche');
+    await post('/p/sherlock-holmes/delete');
+}
 await post('/settings', { provider: 'deepseek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', api_key: '' });
 await post('/settings/chat', { chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`, chat_model: 'fake-model',
     chat_memory_threshold: '600', chat_memory_target: '300', chat_split_words: '50', chat_split_max_bubbles: '1',

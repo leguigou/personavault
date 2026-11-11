@@ -1001,19 +1001,53 @@
         const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
         const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch { return null; } };
 
-        /* fiche en cours */
+        /* fiche en cours : jauge, étapes (la prochaine en surbrillance) et aperçu du texte */
+        const FIELDS = [
+            ["source", tr("assist.f.source")], ["name", tr("assist.f.name")], ["tagline", tr("assist.f.tagline")],
+            ["description", tr("assist.f.description")], ["meta", tr("assist.f.meta")], ["looks", tr("assist.f.looks")],
+            ["style", tr("assist.f.style")], ["personality", tr("assist.f.personality")], ["voice", tr("assist.f.voice")],
+            ["relation", tr("assist.f.relation")], ["rules", tr("assist.f.rules")], ["tags", tr("assist.f.tags")],
+        ];
         const paintFiche = () => {
             const d = state.draft || {};
+            const pct = state.progress.percent || 0;
             asRoot.querySelector("[data-as-name]").textContent = d.name ? d.name + (d.tagline ? " · " + d.tagline : "") : tr("assist.unnamed");
-            asRoot.querySelector("[data-as-pct]").textContent = (state.progress.percent || 0) + " %";
-            asRoot.querySelector("[data-as-bar]").style.width = (state.progress.percent || 0) + "%";
-            const ul = asRoot.querySelector("[data-as-check]");
-            ul.replaceChildren(...(state.progress.items || []).map((it) => {
-                const li = el("li", it.done ? "is-done" : it.auto ? "is-auto" : "");
-                li.append(el("span", "as-ck", it.done ? "✓" : it.auto ? "✦" : "○"), el("span", "", it.label));
+            asRoot.querySelector("[data-as-pct]").textContent = pct + " %";
+            asRoot.querySelector("[data-as-bar]").style.width = pct + "%";
+            // étapes
+            const items = state.progress.items || [];
+            const next = items.findIndex((it) => !it.done && !it.auto);
+            const ol = asRoot.querySelector("[data-as-steps]");
+            ol.replaceChildren(...items.map((it, i) => {
+                const li = el("li", it.done ? "is-done" : i === next ? "is-now" : it.auto ? "is-auto" : "");
+                li.append(el("span", "as-step-dot", it.done ? "✓" : it.auto ? "✦" : String(i + 1)), el("span", "", it.label));
                 if (it.auto) li.title = tr("assist.auto_hint");
+                if (i === next) li.setAttribute("aria-current", "step");
                 return li;
             }));
+            const cur = ol.querySelector(".is-now");
+            if (cur) ol.scrollLeft = Math.max(0, ol.scrollLeft + cur.getBoundingClientRect().left - ol.getBoundingClientRect().left - 14);
+            // aperçu de ce qui est déjà rédigé
+            const dl = asRoot.querySelector("[data-as-preview]");
+            const rows = [];
+            FIELDS.forEach(([k, label]) => {
+                let v = d[k];
+                if (k === "meta") v = (Array.isArray(v) ? v : []).map((r) => r.k + " : " + r.v).join("\n");
+                else if (k === "tags") v = (Array.isArray(v) ? v : []).map((x) => "#" + x).join(" ");
+                v = String(v || "").trim();
+                if (!v) return;
+                const dd = el("dd", "", v);
+                if (k === "source" && /^https?:\/\//i.test(d.source_url || "")) {
+                    const a = el("a", "as-src", tr("assist.source_open"));
+                    a.href = d.source_url;
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
+                    dd.append(" ", a);
+                }
+                rows.push(el("dt", "", label), dd);
+            });
+            if (!rows.length) rows.push(el("dd", "as-preview-empty", tr("assist.preview_empty")));
+            dl.replaceChildren(...rows);
         };
 
         /* conversation */
@@ -1021,6 +1055,13 @@
             const b = el("div", "as-msg is-" + m.role + (m.kind ? " is-" + m.kind : ""));
             if (m.kind === "suggest") b.textContent = "✦ " + m.text;
             else b.textContent = m.text;
+            if (m.kind === "source" && /^https?:\/\//i.test(m.url || "")) {
+                const a = el("a", "as-src", tr("assist.source_open"));
+                a.href = m.url;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+                b.append(" ", a);
+            }
             return b;
         };
         const scrollEnd = () => requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
@@ -1093,6 +1134,7 @@
                 const said = [r.reply, r.question].filter(Boolean).join("\n\n");
                 state.history.push({ role: "assistant", content: said });
                 setBusy(false);
+                if (r.source && r.source.label) pushMsg({ role: "assistant", text: r.source.label, kind: "source", url: r.source.url || "" });
                 if (r.reply) pushMsg({ role: "assistant", text: r.reply, kind: "note" });
                 pushMsg({ role: "assistant", text: r.question });
                 paintFiche();

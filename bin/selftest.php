@@ -519,6 +519,14 @@ try {
     $__sys = array_values(array_filter($__pg['items'], static fn ($i) => $i['key'] === 'system'))[0];
     $check($__pg['percent'] === 33 && $__sys['done'] === true, 'assistant : avancement et prompt système existant reconnus');
     $check(unique_slug('Assist') !== 'assist' && unique_slug('new') !== 'new', 'assistant : /p/assist et /p/new restent réservés');
+    // personnage existant : référence nettoyée, lien de source limité au web, pas de nouvelle recherche pour le même
+    $__cn = assist_canon_ref(['name' => '  Sherlock Holmes ', 'work' => 'Conan Doyle']);
+    $check($__cn === ['name' => 'Sherlock Holmes', 'work' => 'Conan Doyle'] && assist_canon_ref(null) === null && assist_canon_ref(['name' => '']) === null,
+        'assistant : personnage existant reconnu seulement avec un nom');
+    $check(assist_clean(['source_url' => 'javascript:alert(1)'])['source_url'] === '' && assist_clean(['source_url' => 'https://fr.wikipedia.org/wiki/X'])['source_url'] !== '',
+        'assistant : lien de source en http(s) seulement');
+    $check(assist_same_canon(['source' => 'Sherlock Holmes — Conan Doyle'], $__cn) && !assist_same_canon([], $__cn),
+        'assistant : un personnage déjà retrouvé n’est pas recherché une seconde fois');
     db()->prepare('INSERT INTO personas (slug, name, tagline, description, tags, meta) VALUES (?,?,?,?,?,?)')
         ->execute(['assist-test', 'Zoé', 'Ma propre accroche', '', '[]', json_encode([['k' => 'Âge', 'v' => '40']])]);
     $__zid = (int) db()->lastInsertId();

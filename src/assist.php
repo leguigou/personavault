@@ -21,6 +21,8 @@ const ASSIST_TEXT_FIELDS = [
     'voice'       => 600,
     'relation'    => 500,
     'rules'       => 600,
+    'source'      => 200, // personnage existant : « Nom — Œuvre »
+    'source_url'  => 300, // page de référence consultée (http/https seulement)
 ];
 
 /** Fiche en cours nettoyée (types, longueurs, listes bornées). */
@@ -41,6 +43,9 @@ function assist_clean(array $d): array
         if ($t !== '' && !in_array($t, $tags, true) && count($tags) < 8) {
             $tags[] = $t;
         }
+    }
+    if ($out['source_url'] !== '' && !preg_match('~^https?://[^\s"<>]+$~i', $out['source_url'])) {
+        $out['source_url'] = '';
     }
     $out['tags'] = $tags;
     $meta = [];
@@ -194,10 +199,11 @@ Champs de la fiche :
 3. Choisis la prochaine question : la plus utile pour ce qui MANQUE encore (ordre conseillé : idée générale → prénom et âge → métier et lieu de vie → apparence → style visuel → personnalité → façon de parler → relation avec l'utilisateur → limites). Une seule question, courte, naturelle, en tutoyant.
 4. Propose 3 réponses possibles (« choices »), courtes (6 mots max), variées et adaptées à CE persona.
 5. Quand tout l'essentiel est rempli, ne pose plus de question obligatoire : propose plutôt un détail optionnel et dis que la fiche peut être créée.
+6. PERSONNAGE EXISTANT : si l'utilisateur veut un persona tiré d'un personnage qui existe déjà (roman, film, série, BD, manga, anime, jeu vidéo, conte, mythologie, figure historique…), renseigne "canon" : {"name": "nom usuel du personnage", "work": "œuvre ou univers d'origine"}. Sinon "canon": null. Un simple « dans le style de » ou « inspiré de » sans personnage précis n'est pas un personnage existant.
 Réponds en français. Ne mets jamais d'informations sur l'utilisateur réel dans la fiche.
 
 Réponds UNIQUEMENT avec un objet JSON :
-{"draft": {la fiche complète à jour, mêmes champs}, "reply": "une phrase : ce que tu as compris ou inventé (vide au tout premier message)", "question": "ta question suivante", "choices": ["…", "…", "…"]}
+{"draft": {la fiche complète à jour, mêmes champs}, "reply": "une phrase : ce que tu as compris ou inventé (vide au tout premier message)", "question": "ta question suivante", "choices": ["…", "…", "…"], "canon": null}
 TXT;
 
     $lines = '';
@@ -211,15 +217,21 @@ TXT;
         . "\nACTION : " . $action . "\n"
         . ($action === 'reply' ? "RÉPONSE DE L'UTILISATEUR : " . mb_substr(trim($answer), 0, 2000) . "\n" : '');
 
-    $j        = assist_llm_json($system, $user, 1600, $action === 'suggest' ? 0.95 : 0.7);
-    $newDraft = is_array($j['draft'] ?? null) ? $j['draft'] : [];
-    $merged   = assist_merge($draft, $newDraft);
-    $choices  = [];
-    foreach ((array) ($j['choices'] ?? []) as $c) {
-        if (is_scalar($c) && trim((string) $c) !== '' && count($choices) < 3) {
-            $choices[] = mb_substr(trim((string) $c), 0, 60);
+    $j = assist_llm_json($system, $user, 1600, $action === 'suggest' ? 0.95 : 0.7);
+
+    // personnage existant (nouveau, ou différent de celui déjà retrouvé) : on va chercher
+    // ses informations et on remplit toute la fiche d'un coup
+    $canon = assist_canon_ref($j['canon'] ?? null);
+    if ($canon && $action === 'reply' && !assist_same_canon($draft, $canon)) {
+        $res = assist_canon_fill($draft, $canon, $lines, $answer, $persona, $prompts);
+        if ($res !== null) {
+            return $res;
         }
     }
+
+    $newDraft = is_array($j['draft'] ?? null) ? $j['draft'] : [];
+    $merged   = assist_merge($draft, $newDraft);
+    $choices  = assist_choices($j['choices'] ?? []);
     $question = mb_substr(trim((string) ($j['question'] ?? '')), 0, 400);
     if ($question === '') {
         throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
@@ -231,6 +243,192 @@ TXT;
         'question' => $question,
         'choices'  => $choices,
         'progress' => assist_progress($merged, $prompts),
+        'source'   => null,
+    ];
+}
+
+/** Choix proposés par le modèle : 3 au plus, courts. */
+function assist_choices(mixed $raw): array
+{
+    $choices = [];
+    foreach ((array) $raw as $c) {
+        if (is_scalar($c) && trim((string) $c) !== '' && count($choices) < 3) {
+            $choices[] = mb_substr(trim((string) $c), 0, 60);
+        }
+    }
+    return $choices;
+}
+
+/** Personnage existant signalé par le modèle : {name, work} nettoyé, ou null. */
+function assist_canon_ref(mixed $c): ?array
+{
+    if (!is_array($c) || !is_scalar($c['name'] ?? null)) {
+        return null;
+    }
+    $name = mb_substr(trim((string) $c['name']), 0, 80);
+    $work = is_scalar($c['work'] ?? null) ? mb_substr(trim((string) $c['work']), 0, 100) : '';
+    return $name === '' ? null : ['name' => $name, 'work' => $work];
+}
+
+/** Libellé « Nom — Œuvre » d'un personnage existant. */
+function assist_canon_label(array $canon): string
+{
+    return mb_substr($canon['name'] . ($canon['work'] !== '' ? ' — ' . $canon['work'] : ''), 0, 200);
+}
+
+/** Ce personnage a-t-il déjà été retrouvé pour cette fiche ? */
+function assist_same_canon(array $draft, array $canon): bool
+{
+    $src = mb_strtolower(trim((string) ($draft['source'] ?? '')));
+    return $src !== '' && str_contains($src, mb_strtolower($canon['name']));
+}
+
+/**
+ * Adresse de l'API de recherche (MediaWiki) pour une langue, ou '' si la recherche
+ * en ligne est désactivée (config « assist_lookup_url » vide).
+ */
+function assist_lookup_endpoint(string $lang): string
+{
+    $tpl = (string) config('assist_lookup_url', 'https://{lang}.wikipedia.org/w/api.php');
+    return $tpl === '' ? '' : str_replace('{lang}', $lang, $tpl);
+}
+
+/** GET JSON court (recherche en ligne). Null en cas d'échec : la recherche est facultative. */
+function assist_http_json(string $url): ?array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_CONNECTTIMEOUT => 4,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
+        CURLOPT_PROTOCOLS      => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+        CURLOPT_HTTPHEADER     => ['Accept: application/json', 'User-Agent: PersonaVault/1.0 (self-hosted persona library)'],
+    ]);
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($raw === false || $code < 200 || $code >= 300) {
+        return null;
+    }
+    $j = json_decode((string) $raw, true);
+    return is_array($j) ? $j : null;
+}
+
+/**
+ * Cherche la page de référence d'un personnage existant (Wikipédia par défaut), dans la
+ * langue de l'interface puis en anglais.
+ * @return array{title:string, url:string, text:string, lang:string}|null
+ */
+function assist_lookup(array $canon): ?array
+{
+    $langs = array_values(array_unique([locale(), 'en']));
+    $words = array_filter(preg_split('/[\s\-]+/u', mb_strtolower($canon['name'])) ?: [], static fn ($w) => mb_strlen($w) >= 3);
+    foreach ($langs as $lang) {
+        $api = assist_lookup_endpoint($lang);
+        if ($api === '') {
+            return null;
+        }
+        $q   = trim($canon['name'] . ' ' . $canon['work']);
+        $res = assist_http_json($api . '?' . http_build_query([
+            'action' => 'query', 'list' => 'search', 'srsearch' => $q, 'srlimit' => 5,
+            'format' => 'json', 'formatversion' => 2, 'utf8' => 1,
+        ]));
+        $hits = is_array($res['query']['search'] ?? null) ? $res['query']['search'] : [];
+        // le titre qui contient le plus de mots du nom (sinon le premier résultat)
+        $best = null;
+        $bestScore = -1;
+        foreach ($hits as $h) {
+            $title = is_scalar($h['title'] ?? null) ? (string) $h['title'] : '';
+            if ($title === '') {
+                continue;
+            }
+            $score = 0;
+            foreach ($words as $w) {
+                $score += str_contains(mb_strtolower($title), $w) ? 1 : 0;
+            }
+            if ($score > $bestScore) {
+                [$best, $bestScore] = [$title, $score];
+            }
+        }
+        if ($best === null) {
+            continue;
+        }
+        $page = assist_http_json($api . '?' . http_build_query([
+            'action' => 'query', 'prop' => 'extracts|info', 'inprop' => 'url', 'explaintext' => 1,
+            'exsectionformat' => 'plain', 'redirects' => 1, 'titles' => $best,
+            'format' => 'json', 'formatversion' => 2, 'utf8' => 1,
+        ]));
+        $p    = $page['query']['pages'][0] ?? null;
+        $text = is_array($p) && is_scalar($p['extract'] ?? null) ? trim((string) $p['extract']) : '';
+        if (mb_strlen($text) < 200) {
+            continue;
+        }
+        $text = (string) preg_replace("/\n{3,}/", "\n\n", $text);
+        $url  = is_scalar($p['fullurl'] ?? null) ? (string) $p['fullurl'] : '';
+        return [
+            'title' => mb_substr(is_scalar($p['title'] ?? null) ? (string) $p['title'] : $best, 0, 120),
+            'url'   => preg_match('~^https?://~i', $url) ? mb_substr($url, 0, 300) : '',
+            'text'  => mb_substr($text, 0, 9000),
+            'lang'  => $lang,
+        ];
+    }
+    return null;
+}
+
+/**
+ * Remplit TOUTE la fiche d'après un personnage existant (référence en ligne si trouvée,
+ * sinon connaissances du modèle). Null si le modèle ne connaît pas ce personnage :
+ * la conversation reprend alors normalement.
+ */
+function assist_canon_fill(array $draft, array $canon, string $lines, string $answer, ?array $persona, array $prompts): ?array
+{
+    $ref   = assist_lookup($canon);
+    $label = assist_canon_label($canon);
+
+    $system = <<<TXT
+Tu remplis la fiche d'un PERSONA tiré d'un personnage EXISTANT : {$label}.
+Remplis TOUS les champs, fidèlement à l'œuvre, à partir de la RÉFÉRENCE (si elle est fournie) et de tes connaissances. Ne contredis jamais l'œuvre ; quand elle ne dit rien (façon de parler précise, limites…), déduis-le de façon cohérente avec le personnage. Si l'utilisateur a précisé une version (livre, film, série, époque de l'histoire), suis-la.
+- name : nom tel que dans l'œuvre ; tagline : qui il ou elle est, en une ligne (90 caractères max) ; description : 2 à 4 phrases (rôle dans l'œuvre, ce qui le ou la définit) ;
+- tags : 3 à 6 mots-clés en minuscules ; meta : 4 à 8 attributs courts (Œuvre, Créateur ou auteur, Âge, Origine, Rôle ou métier, Affiliations…) ;
+- looks : apparence canonique PRÉCISE pour les images (visage, yeux, cheveux, silhouette, tenue emblématique, signes distinctifs) ; style : rendu visuel cohérent avec l'œuvre ;
+- personality : caractère, valeurs, histoire et relations importantes dans l'œuvre ; voice : façon de parler, expressions et tics typiques ;
+- relation : par défaut, l'utilisateur est quelqu'un qu'il ou elle rencontre dans son univers ; rules : rester dans le personnage, ne pas connaître ce qui est hors de son univers, limites cohérentes avec lui ou elle.
+Si tu ne connais pas ce personnage et que la référence ne le décrit pas, n'invente rien : réponds {"found": false}.
+Sinon, pose UNE question d'ajustement courte en tutoyant (version de l'œuvre, moment de l'histoire, relation avec l'utilisateur…) avec 3 réponses possibles de 6 mots max.
+Réponds en français, UNIQUEMENT avec un objet JSON :
+{"found": true, "draft": {la fiche complète}, "reply": "une phrase : ce que tu as retrouvé et rempli", "question": "…", "choices": ["…", "…", "…"]}
+TXT;
+    $user = ($persona ? "MODE : compléter une fiche existante (ne rien contredire).\n" . assist_existing_context($persona, $prompts) . "\n" : '')
+        . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n"
+        . "CONVERSATION\n" . ($lines !== '' ? $lines : "(début)\n")
+        . "DERNIÈRE DEMANDE DE L'UTILISATEUR : " . mb_substr(trim($answer), 0, 2000) . "\n\n"
+        . ($ref
+            ? "RÉFÉRENCE (" . $ref['title'] . ", " . $ref['url'] . ")\n" . $ref['text'] . "\n"
+            : "RÉFÉRENCE : aucune trouvée en ligne, utilise tes connaissances.\n");
+
+    $j = assist_llm_json($system, $user, 2600, 0.6);
+    if (empty($j['found']) || !is_array($j['draft'] ?? null)) {
+        return null;
+    }
+    $new               = $j['draft'];
+    $new['source']     = $label;
+    $new['source_url'] = $ref['url'] ?? '';
+    $merged            = assist_merge($draft, $new);
+    $question          = mb_substr(trim((string) ($j['question'] ?? '')), 0, 400);
+    if ($question === '') {
+        $question = t('assist.canon.question');
+    }
+    return [
+        'draft'    => $merged,
+        'reply'    => mb_substr(trim((string) ($j['reply'] ?? '')), 0, 400),
+        'question' => $question,
+        'choices'  => assist_choices($j['choices'] ?? []),
+        'progress' => assist_progress($merged, $prompts),
+        'source'   => $ref
+            ? ['label' => t('assist.canon.found', ['title' => $ref['title']]), 'url' => $ref['url']]
+            : ['label' => t('assist.canon.memory', ['name' => $canon['name']]), 'url' => ''],
     ];
 }
 
@@ -250,10 +448,13 @@ Tu finalises la fiche d'un PERSONA à partir de la FICHE EN COURS.
 Réponds UNIQUEMENT avec un objet JSON :
 {"draft": {la fiche complète}, "system_prompt": "…", "image_prompt": "…"}
 TXT;
+    if ($draft['source'] !== '') {
+        $system .= "\nCe persona est un personnage EXISTANT (" . $draft['source'] . ") : reste fidèle à l'œuvre (apparence, caractère, façon de parler, relations). Le prompt système commence par « Tu es " . $draft['name'] . ", … » en situant l'œuvre ; le prompt image reprend son apparence canonique.";
+    }
     $user = ($persona ? assist_existing_context($persona, $prompts) . "\n" : '')
         . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-    $j = assist_llm_json($system, $user, 3000, 0.75);
+    $j = assist_llm_json($system, $user, 3000, $draft['source'] !== '' ? 0.6 : 0.75);
     $final = assist_merge($draft, is_array($j['draft'] ?? null) ? $j['draft'] : []);
     // ce que l'utilisateur a déjà donné prime toujours
     foreach (ASSIST_TEXT_FIELDS as $k => $_) {
@@ -276,7 +477,9 @@ function assist_meta_rows(array $d): array
 {
     $rows = $d['meta'];
     $extra = [
-        t('assist.meta.style') => $d['style'],
+        t('assist.meta.style')      => $d['style'],
+        t('assist.meta.source')     => $d['source'],
+        t('assist.meta.source_url') => $d['source_url'],
     ];
     $known = array_map(static fn ($r) => mb_strtolower($r['k']), $rows);
     foreach ($extra as $k => $v) {

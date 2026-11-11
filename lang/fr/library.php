@@ -190,6 +190,7 @@ return [
     'assist.final_title_complete' => 'L’IA complète la fiche',
     'assist.final_text' => 'Description, attributs, prompt système et prompt image. Ça prend quelques secondes.',
     'assist.entry_title' => 'Créer avec l’IA',
-    'assist.entry_text' => 'Décris ton idée : l’assistant pose les bonnes questions, invente si tu manques d’inspiration et rédige la fiche, prompts compris.',
+    'assist.entry_text' => 'Décris une idée ou un personnage existant, elle remplit la fiche',
     'assist.complete_title' => 'L’assistant repère ce qui manque, pose les questions et complète la fiche sans rien écraser.',
+    'assist.preview_title' => 'Aperçu de la fiche',
 ];

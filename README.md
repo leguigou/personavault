@@ -228,11 +228,20 @@ Sur la page de création, **Créer avec l'IA** (`/p/assist`) ouvre un assistant 
   fois** (prénom, âge, métier, apparence, style visuel, personnalité, façon de parler, relation,
   limites), avec trois réponses toutes prêtes ;
 - **Suggérer pour moi** : il invente lui-même une réponse cohérente quand l'inspiration manque ;
-- en haut, la **fiche en cours** : jauge et liste de ce qui est rempli ou manquant ;
+- **personnage existant** (héros ou héroïne de livre, film, série, BD, jeu…) : il suffit de le nommer.
+  L'assistant cherche sa page sur Wikipédia (langue de l'interface, puis anglais), remplit **toute la
+  fiche** fidèlement à l'œuvre (apparence canonique, caractère, façon de parler…) et cite la source ;
+  il pose ensuite une question d'ajustement (version de l'œuvre, moment de l'histoire…). Seuls le nom du
+  personnage et son œuvre sont envoyés à Wikipédia. Sans page trouvée, il s'appuie sur ce que le
+  modèle sait (et le dit) ; s'il ne connaît pas le personnage, il n'invente rien et pose des questions.
+  Désactivable : `'assist_lookup_url' => ''` dans `config.local.php` ;
+- en haut, la **fiche en cours** : jauge, **étapes** toujours visibles (la prochaine en surbrillance) ;
+  un toucher ouvre l'**aperçu** de tout ce qui est déjà rédigé ;
 - **Créer** (à tout moment) : l'IA complète ce qui manque et rédige la fiche avec son **prompt
   système** et son **prompt image** ; tout reste modifiable ensuite.
 
-La conversation est gardée dans l'onglet du navigateur : un rechargement ne la perd pas.
+La conversation est gardée dans l'onglet du navigateur : un rechargement ne la perd pas. Sur mobile,
+l'assistant est en plein écran (ni en-tête ni barre du bas) : la saisie reste toujours visible.
 
 Sur une fiche existante, le bouton **Compléter** ouvre le même assistant (`/p/{slug}/assist`) : il
 repère ce qui manque (par exemple l'absence de prompt système) et pose les questions

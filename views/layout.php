@@ -101,7 +101,7 @@ $isAssist = (bool) preg_match('#^/p/(?:[a-z0-9-]+/)?assist$#', $currentPath);
     <?= $content ?>
 </main>
 
-<?php if ($isAuth && !$isChatRoom): ?>
+<?php if ($isAuth && !$isChatRoom && !$isAssist): /* assistant : plein écran, la saisie est en bas */ ?>
 <nav class="tabbar" aria-label="<?= e(t('nav.mobile')) ?>">
     <a href="/" class="<?= $isLib ? 'is-active' : '' ?>"<?= $isLib ? ' aria-current="page"' : '' ?>>
         <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></span>

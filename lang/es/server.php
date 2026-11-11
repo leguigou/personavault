@@ -272,4 +272,9 @@ return [
     'assist.flash.created' => 'Ficha de {name} creada, con su prompt de sistema y su prompt de imagen. Revísalos y ajústalos a tu gusto.',
     'assist.flash.applied' => 'Añadido a la ficha: {fields}. No se ha cambiado nada de lo que existía.',
     'logs.purpose.assist' => 'Asistente de creación',
+    'assist.canon.question' => '¿Quieres ajustar algo: versión de la obra, momento de la historia, relación contigo?',
+    'assist.canon.found' => 'Información encontrada en Wikipedia: {title}',
+    'assist.canon.memory' => 'No se encontró ninguna página en línea: ficha rellenada con lo que la IA sabe de {name}. Revísala.',
+    'assist.meta.source' => 'Personaje original',
+    'assist.meta.source_url' => 'Referencia',
 ];
