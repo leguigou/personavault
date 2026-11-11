@@ -110,7 +110,16 @@ if ($action === 'stream' && $method === 'POST') {
 
     $imageDataUrl = $imageBase !== '' ? media_data_url($imageBase) : '';
 
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl);
+    // une photo dans les derniers messages ? on vérifie (une seule fois) si le modèle lit les images
+    $historyVision = false;
+    foreach (array_slice($history, -6) as $h) {
+        if ((string) ($h['image'] ?? '') !== '') {
+            $wantedModel   = (string) chat_llm_config_for($conv)['model'];
+            $historyVision = (lms_status()['types'][$wantedModel] ?? '') === 'vlm';
+            break;
+        }
+    }
+    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision);
 
     if (!$regen) {
         $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image) VALUES (?, "user", ?, ?)');
