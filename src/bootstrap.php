@@ -744,6 +744,9 @@ function slugify(string $text): string
 function unique_slug(string $name, ?int $ignoreId = null): string
 {
     $base = slugify($name);
+    if (in_array($base, ['new', 'assist'], true)) {
+        $base .= '-persona'; // adresses réservées (/p/new, /p/assist)
+    }
     $slug = $base;
     $i    = 2;
     $stmt = db()->prepare('SELECT id FROM personas WHERE slug = ? AND id IS NOT ?');
@@ -1262,6 +1265,7 @@ function fetch_prompts(int $personaId): array
 require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/llm.php';
 require_once __DIR__ . '/llm_log.php';
+require_once __DIR__ . '/assist.php';
 require_once __DIR__ . '/prompts.php';
 require_once __DIR__ . '/prompt_history.php';
 require_once __DIR__ . '/chat.php';

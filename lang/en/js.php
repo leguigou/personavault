@@ -26,10 +26,6 @@ return [
 
     // persona page
     'js.persona.preview_alt'     => 'Preview',
-    'js.persona.ai_fill_busy'    => 'Analyzing prompts…',
-    'js.persona.ai_fill_failed'  => 'Completion failed.',
-    'js.persona.ai_fill_nothing' => 'Nothing to complete.',
-    'js.persona.ai_fill_done'    => 'Profile completed.',
     'js.persona.photo_adding'    => 'Adding the image…',
     'js.persona.photo_added'     => 'Image added.',
 
@@ -235,4 +231,16 @@ return [
     'js.studio.menu_vision_on' => 'reads the main photo',
     'js.studio.menu_vision_off' => 'text only',
     'js.studio.menu_delete' => 'Delete this prompt',
+    'js.assist.unnamed' => 'New persona',
+    'js.assist.auto_hint' => 'Written by the AI on creation',
+    'js.assist.thinking' => 'The AI is thinking',
+    'js.assist.suggest' => 'Suggest for me',
+    'js.assist.suggest_said' => 'Suggest for me',
+    'js.assist.create_now' => 'Create the profile now',
+    'js.assist.apply_now' => 'Apply to the profile',
+    'js.assist.failed' => 'The assistant couldn’t reply.',
+    'js.assist.restart_confirm' => 'Start the conversation over? What was said here will be forgotten.',
+    'js.assist.restart_ok' => 'Start over',
+    'js.assist.intro_new' => 'Hi! Describe your persona idea in a few words: who they are, what they do, their world. I’ll then ask the useful questions. No idea? Tap “Suggest for me”.',
+    'js.assist.intro_choices' => 'A film photographer in Marseille|A grumpy chef|A student passionate about astronomy',
 ];

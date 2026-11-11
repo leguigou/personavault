@@ -26,10 +26,6 @@ return [
 
     // fiche persona
     'js.persona.preview_alt'     => 'Aperçu',
-    'js.persona.ai_fill_busy'    => 'Analyse des prompts…',
-    'js.persona.ai_fill_failed'  => 'Échec de la complétion.',
-    'js.persona.ai_fill_nothing' => 'Rien à compléter.',
-    'js.persona.ai_fill_done'    => 'Fiche complétée.',
     'js.persona.photo_adding'    => 'Ajout de l’image…',
     'js.persona.photo_added'     => 'Image ajoutée.',
 
@@ -235,4 +231,16 @@ return [
     'js.studio.menu_vision_on' => 'lit la photo principale',
     'js.studio.menu_vision_off' => 'texte seul',
     'js.studio.menu_delete' => 'Supprimer ce prompt',
+    'js.assist.unnamed' => 'Nouveau persona',
+    'js.assist.auto_hint' => 'Rédigé par l’IA à la création',
+    'js.assist.thinking' => 'L’IA réfléchit',
+    'js.assist.suggest' => 'Suggérer pour moi',
+    'js.assist.suggest_said' => 'Suggère pour moi',
+    'js.assist.create_now' => 'Créer la fiche maintenant',
+    'js.assist.apply_now' => 'Appliquer à la fiche',
+    'js.assist.failed' => 'L’assistant n’a pas pu répondre.',
+    'js.assist.restart_confirm' => 'Recommencer la conversation ? Ce qui a été dit ici sera oublié.',
+    'js.assist.restart_ok' => 'Recommencer',
+    'js.assist.intro_new' => 'Salut ! Décris-moi ton idée de persona en quelques mots : qui est-ce, ce qu’elle ou il fait, son univers. Je poserai ensuite les questions utiles. Pas d’idée ? Touche « Suggérer pour moi ».',
+    'js.assist.intro_choices' => 'Une photographe argentique à Marseille|Un chef cuisinier bourru|Une étudiante passionnée d’astronomie',
 ];

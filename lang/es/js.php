@@ -26,10 +26,6 @@ return [
 
     // ficha del persona
     'js.persona.preview_alt'     => 'Vista previa',
-    'js.persona.ai_fill_busy'    => 'Analizando los prompts…',
-    'js.persona.ai_fill_failed'  => 'Error al completar.',
-    'js.persona.ai_fill_nothing' => 'Nada que completar.',
-    'js.persona.ai_fill_done'    => 'Ficha completada.',
     'js.persona.photo_adding'    => 'Añadiendo la imagen…',
     'js.persona.photo_added'     => 'Imagen añadida.',
 
@@ -235,4 +231,16 @@ return [
     'js.studio.menu_vision_on' => 'lee la foto principal',
     'js.studio.menu_vision_off' => 'solo texto',
     'js.studio.menu_delete' => 'Eliminar este prompt',
+    'js.assist.unnamed' => 'Nuevo persona',
+    'js.assist.auto_hint' => 'Redactado por la IA al crear',
+    'js.assist.thinking' => 'La IA está pensando',
+    'js.assist.suggest' => 'Sugerir por mí',
+    'js.assist.suggest_said' => 'Sugiere por mí',
+    'js.assist.create_now' => 'Crear la ficha ahora',
+    'js.assist.apply_now' => 'Aplicar a la ficha',
+    'js.assist.failed' => 'El asistente no ha podido responder.',
+    'js.assist.restart_confirm' => '¿Empezar la conversación de nuevo? Lo dicho aquí se olvidará.',
+    'js.assist.restart_ok' => 'Empezar de nuevo',
+    'js.assist.intro_new' => '¡Hola! Describe tu idea de persona en pocas palabras: quién es, a qué se dedica, su mundo. Luego haré las preguntas útiles. ¿Sin ideas? Toca «Sugerir por mí».',
+    'js.assist.intro_choices' => 'Una fotógrafa analógica en Marsella|Un chef gruñón|Una estudiante apasionada por la astronomía',
 ];

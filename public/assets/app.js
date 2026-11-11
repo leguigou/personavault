@@ -6,7 +6,7 @@
        iOS ne réduit pas 100dvh quand le clavier s'ouvre : la page défile et
        l'en-tête sort de l'écran. On cale la hauteur du chat sur la zone
        réellement visible (visualViewport) et on garde la page en haut. */
-    if (document.body.classList.contains("chat-room") && window.visualViewport) {
+    if ((document.body.classList.contains("chat-room") || document.body.classList.contains("assist-room")) && window.visualViewport) {
         const vv = window.visualViewport;
         const root = document.documentElement;
         let raf = 0;
@@ -967,6 +967,218 @@
         form.addEventListener("submit", () => pending && endProposal(), true);
     }
 
+    /* ------------------------------------- assistant de création de persona
+       Conversation : l'IA tient la fiche à jour et pose une question à la fois, avec des
+       réponses toutes prêtes ; « Suggérer pour moi » la laisse inventer ; « Créer » rédige
+       la fiche complète (prompt système et prompt image compris). La conversation est gardée
+       dans l'onglet (sessionStorage) : un rechargement ne la perd pas. */
+    const asRoot = document.querySelector("[data-assist]");
+    if (asRoot && asRoot.querySelector("[data-as-thread]")) {
+        const slug = asRoot.dataset.slug || "";
+        const isNew = asRoot.dataset.new === "1";
+        const KEY = "pv-assist:" + (slug || "new");
+        const thread = asRoot.querySelector("[data-as-thread]");
+        const chipsEl = asRoot.querySelector("[data-as-chips]");
+        const formEl = asRoot.querySelector("[data-as-form]");
+        const input = asRoot.querySelector("[data-as-input]");
+        const sendBtn = asRoot.querySelector("[data-as-send]");
+        const finalEl = asRoot.querySelector("[data-as-final]");
+        const el = (tag, cls, text) => {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text !== undefined) n.textContent = text;
+            return n;
+        };
+        const parse = (s, d) => { try { return JSON.parse(s); } catch { return d; } };
+        let state = {
+            draft: parse(asRoot.dataset.draft, {}),
+            progress: parse(asRoot.dataset.progress, { items: [], percent: 0 }),
+            history: [], // [{role, content}] envoyé au serveur
+            msgs: [], // [{role, text, kind}] affiché
+            choices: [],
+        };
+        let busy = false;
+        const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+        const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch { return null; } };
+
+        /* fiche en cours */
+        const paintFiche = () => {
+            const d = state.draft || {};
+            asRoot.querySelector("[data-as-name]").textContent = d.name ? d.name + (d.tagline ? " · " + d.tagline : "") : tr("assist.unnamed");
+            asRoot.querySelector("[data-as-pct]").textContent = (state.progress.percent || 0) + " %";
+            asRoot.querySelector("[data-as-bar]").style.width = (state.progress.percent || 0) + "%";
+            const ul = asRoot.querySelector("[data-as-check]");
+            ul.replaceChildren(...(state.progress.items || []).map((it) => {
+                const li = el("li", it.done ? "is-done" : it.auto ? "is-auto" : "");
+                li.append(el("span", "as-ck", it.done ? "✓" : it.auto ? "✦" : "○"), el("span", "", it.label));
+                if (it.auto) li.title = tr("assist.auto_hint");
+                return li;
+            }));
+        };
+
+        /* conversation */
+        const bubble = (m) => {
+            const b = el("div", "as-msg is-" + m.role + (m.kind ? " is-" + m.kind : ""));
+            if (m.kind === "suggest") b.textContent = "✦ " + m.text;
+            else b.textContent = m.text;
+            return b;
+        };
+        const scrollEnd = () => requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
+        const paintThread = () => {
+            thread.replaceChildren(...state.msgs.map(bubble));
+            scrollEnd();
+        };
+        const pushMsg = (m) => {
+            state.msgs.push(m);
+            thread.appendChild(bubble(m));
+            scrollEnd();
+        };
+        const typing = (on) => {
+            thread.querySelector(".as-typing")?.remove();
+            if (on) {
+                const t = el("div", "as-msg is-assistant as-typing");
+                t.append(el("i"), el("i"), el("i"));
+                t.setAttribute("aria-label", tr("assist.thinking"));
+                thread.appendChild(t);
+                scrollEnd();
+            }
+        };
+        const paintChips = () => {
+            const list = state.choices.map((c) => {
+                const b = el("button", "as-chip", c);
+                b.type = "button";
+                b.addEventListener("click", () => answer(c));
+                return b;
+            });
+            const sug = el("button", "as-chip is-suggest", tr("assist.suggest"));
+            sug.type = "button";
+            sug.addEventListener("click", suggest);
+            list.unshift(sug);
+            if (state.history.length > 1) {
+                const now = el("button", "as-chip is-now", isNew ? tr("assist.create_now") : tr("assist.apply_now"));
+                now.type = "button";
+                now.addEventListener("click", create);
+                list.push(now);
+            }
+            chipsEl.replaceChildren(...list);
+            chipsEl.scrollLeft = 0;
+        };
+        const setBusy = (on) => {
+            busy = on;
+            asRoot.classList.toggle("is-busy", on);
+            sendBtn.disabled = on;
+            chipsEl.querySelectorAll("button").forEach((b) => (b.disabled = on));
+            asRoot.querySelectorAll("[data-as-create], [data-as-restart]").forEach((b) => (b.disabled = on));
+            typing(on);
+        };
+
+        const post = async (url, data) => {
+            const fd = new FormData();
+            fd.append("_token", asRoot.dataset.token);
+            fd.append("slug", slug);
+            Object.entries(data).forEach(([k, v]) => fd.append(k, typeof v === "string" ? v : JSON.stringify(v)));
+            const res = await fetch(url, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+            const out = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+            if (!res.ok || !out.ok) throw new Error(out.error || tr("assist.failed"));
+            return out;
+        };
+        const turn = async (action, text = "") => {
+            if (busy) return;
+            setBusy(true);
+            try {
+                const r = await post("/assist/turn", { draft: state.draft, history: state.history, action, answer: text });
+                state.draft = r.draft;
+                state.progress = r.progress;
+                state.choices = r.choices || [];
+                const said = [r.reply, r.question].filter(Boolean).join("\n\n");
+                state.history.push({ role: "assistant", content: said });
+                setBusy(false);
+                if (r.reply) pushMsg({ role: "assistant", text: r.reply, kind: "note" });
+                pushMsg({ role: "assistant", text: r.question });
+                paintFiche();
+                paintChips();
+                save();
+            } catch (err) {
+                setBusy(false);
+                toast({ title: tr("assist.failed"), text: err.message }, true);
+                paintChips();
+            }
+        };
+        function answer(text) {
+            text = String(text || "").trim();
+            if (!text || busy) return;
+            state.history.push({ role: "user", content: text });
+            pushMsg({ role: "user", text });
+            input.value = "";
+            autosize();
+            turn("reply", text);
+        }
+        function suggest() {
+            if (busy) return;
+            state.history.push({ role: "user", content: tr("assist.suggest_said") });
+            pushMsg({ role: "user", text: tr("assist.suggest_said"), kind: "suggest" });
+            turn("suggest");
+        }
+        async function create() {
+            if (busy) return;
+            busy = true;
+            finalEl.hidden = false;
+            try {
+                const r = await post("/assist/create", { draft: state.draft });
+                try { sessionStorage.removeItem(KEY); } catch {}
+                window.location.href = r.redirect;
+            } catch (err) {
+                busy = false;
+                finalEl.hidden = true;
+                toast({ title: tr("assist.failed"), text: err.message }, true);
+            }
+        }
+        asRoot.querySelector("[data-as-create]")?.addEventListener("click", create);
+        asRoot.querySelector("[data-as-restart]")?.addEventListener("click", async () => {
+            if (busy) return;
+            if (state.history.length > 1 && !(await pvModal.confirm(tr("assist.restart_confirm"), { ok: tr("assist.restart_ok") }))) return;
+            try { sessionStorage.removeItem(KEY); } catch {}
+            window.location.reload();
+        });
+
+        // saisie : Entrée envoie, Maj+Entrée va à la ligne ; la zone grandit avec le texte
+        const autosize = () => {
+            input.style.height = "auto";
+            input.style.height = Math.min(input.scrollHeight, 140) + "px";
+        };
+        input.addEventListener("input", autosize);
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+                e.preventDefault();
+                answer(input.value);
+            }
+        });
+        formEl.addEventListener("submit", (e) => {
+            e.preventDefault();
+            answer(input.value);
+        });
+
+        /* démarrage : reprise de la conversation, sinon premier message */
+        const saved = load();
+        if (saved && Array.isArray(saved.msgs) && saved.msgs.length) {
+            state = Object.assign(state, saved);
+            paintThread();
+            paintChips();
+        } else if (isNew) {
+            const intro = tr("assist.intro_new");
+            state.history.push({ role: "assistant", content: intro });
+            state.msgs.push({ role: "assistant", text: intro });
+            state.choices = tr("assist.intro_choices").split("|").map((s) => s.trim()).filter(Boolean);
+            paintThread();
+            paintChips();
+            save();
+        } else {
+            paintChips();
+            turn("start");
+        }
+        paintFiche();
+    }
+
     /* ------------------------- zones de texte qui s'adaptent au contenu */
     const autosize = (ta) => {
         if (!ta || !ta.offsetParent) return; // onglet masqué : recalculé à l'ouverture
@@ -1645,49 +1857,6 @@
 
         native.addEventListener("change", sync);
         rebuild();
-    });
-
-    /* ------------------------------------------------- complétion par l'IA */
-    document.querySelectorAll("[data-ai-fill]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-            if (btn.classList.contains("is-busy")) return;
-            const original = btn.innerHTML;
-            btn.classList.add("is-busy");
-            btn.disabled = true;
-            // bouton rond : le libellé est à côté (aria-describedby) ; on ne change que lui
-            const lbl = document.getElementById(btn.getAttribute("aria-describedby") || "");
-            const lblText = lbl ? lbl.textContent : "";
-            const restore = () => {
-                btn.innerHTML = original;
-                if (lbl) lbl.textContent = lblText;
-                btn.disabled = false;
-                btn.classList.remove("is-busy");
-            };
-            (lbl || btn).textContent = tr("persona.ai_fill_busy");
-
-            try {
-                const fd = new FormData();
-                fd.append("_token", btn.dataset.token || "");
-                const res = await fetch(btn.dataset.aiFill, {
-                    method: "POST",
-                    body: fd,
-                    headers: { "X-Requested-With": "XMLHttpRequest" },
-                });
-                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
-                if (!res.ok || !data.ok) throw new Error(data.error || tr("persona.ai_fill_failed"));
-
-                if (!data.changed || data.changed.length === 0) {
-                    toast(data.message || tr("persona.ai_fill_nothing"));
-                    restore();
-                    return;
-                }
-                toast(data.message || tr("persona.ai_fill_done"));
-                setTimeout(() => window.location.reload(), 800);
-            } catch (err) {
-                toast(tr("common.error", { message: err.message }), true);
-                restore();
-            }
-        });
     });
 
     /* ------------------------------------------------------ réglages du LLM */

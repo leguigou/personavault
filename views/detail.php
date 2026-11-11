@@ -74,10 +74,9 @@ $token    = csrf_token();
             </div>
             <?php if (llm_ready()): ?>
                 <div class="round-act">
-                    <button type="button" class="round-btn" data-ai-fill="/p/<?= e($persona['slug']) ?>/ai-fill" data-token="<?= e($token) ?>"
-                            title="<?= e(t('persona.ai_fill_title')) ?>" aria-describedby="act-ai">
+                    <a class="round-btn" href="/p/<?= e($persona['slug']) ?>/assist" title="<?= e(t('assist.complete_title')) ?>" aria-describedby="act-ai">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4l1.7 4.9 4.9 1.7-4.9 1.7L12 16.6l-1.7-4.9L5.4 10l4.9-1.7L12 3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M18.4 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z" fill="currentColor" opacity=".7"/></svg>
-                    </button>
+                    </a>
                     <span class="round-label" id="act-ai"><?= e(t('persona.ai_fill_short')) ?></span>
                 </div>
             <?php endif; ?>

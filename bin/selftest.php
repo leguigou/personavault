@@ -511,6 +511,28 @@ try {
         && in_array('motion', array_keys(llm_prompt_criteria('video')), true) && count(llm_prompt_criteria('negative')) === 3, 'IA prompt : critères du bilan adaptés au type');
     $check(llm_strip_known_lines("Tu es Camille.\nTu tutoies.", "tu tutoies.\nTu as les yeux verts.") === 'Tu as les yeux verts.', 'IA prompt : un complément ne répète pas les lignes existantes');
 
+    // assistant de création : fusion, avancement, application sans rien écraser
+    $__d = assist_merge(['name' => 'Inès', 'looks' => 'brune', 'meta' => [['k' => 'Âge', 'v' => '29']]], ['name' => '', 'tagline' => 'Photographe', 'meta' => [['k' => 'Ville', 'v' => 'Marseille']], 'tags' => ['#Photo', 'photo']]);
+    $check($__d['name'] === 'Inès' && $__d['looks'] === 'brune' && $__d['tagline'] === 'Photographe' && count($__d['meta']) === 2 && $__d['tags'] === ['photo'],
+        'assistant : un champ oublié par le modèle n’efface pas la fiche en cours');
+    $__pg = assist_progress(['name' => 'A', 'tagline' => 'B', 'description' => str_repeat('x', 50)], [['kind' => 'system']]);
+    $__sys = array_values(array_filter($__pg['items'], static fn ($i) => $i['key'] === 'system'))[0];
+    $check($__pg['percent'] === 33 && $__sys['done'] === true, 'assistant : avancement et prompt système existant reconnus');
+    $check(unique_slug('Assist') !== 'assist' && unique_slug('new') !== 'new', 'assistant : /p/assist et /p/new restent réservés');
+    db()->prepare('INSERT INTO personas (slug, name, tagline, description, tags, meta) VALUES (?,?,?,?,?,?)')
+        ->execute(['assist-test', 'Zoé', 'Ma propre accroche', '', '[]', json_encode([['k' => 'Âge', 'v' => '40']])]);
+    $__zid = (int) db()->lastInsertId();
+    db()->prepare('INSERT INTO prompts (persona_id, title, kind, body) VALUES (?,?,?,?)')->execute([$__zid, 'Mon système', 'system', 'Texte à moi']);
+    $__z  = db()->query('SELECT * FROM personas WHERE id = ' . $__zid)->fetch();
+    $__ch = assist_apply($__z, fetch_prompts($__zid), ['draft' => assist_clean(['tagline' => 'Autre accroche', 'description' => 'Une description', 'meta' => [['k' => 'Âge', 'v' => '22'], ['k' => 'Ville', 'v' => 'Lyon']]]), 'system_prompt' => 'Nouveau système', 'image_prompt' => 'portrait']);
+    $__z  = db()->query('SELECT * FROM personas WHERE id = ' . $__zid)->fetch();
+    $__pk = array_map(static fn ($p) => $p['kind'] . ':' . $p['body'], fetch_prompts($__zid));
+    $check($__z['tagline'] === 'Ma propre accroche' && $__z['description'] === 'Une description'
+        && json_list($__z['meta'])[0]['v'] === '40' && count(json_list($__z['meta'])) === 2
+        && $__pk === ['system:Texte à moi', 'image:portrait'] && $__ch !== [],
+        'assistant : fiche existante complétée sans rien écraser (accroche, âge et prompt système gardés)');
+    db()->prepare('DELETE FROM personas WHERE id = ?')->execute([$__zid]);
+
     // historique des prompts : lignes + / −, 10 dernières modifications seulement
     $check(line_diff_counts("a\nb\nc", "a\nB\nc\nd") === ['added' => 2, 'removed' => 1], 'historique : lignes ajoutées et supprimées');
     $check(line_diff_counts("a\r\nb", "a\nb") === ['added' => 0, 'removed' => 0], 'historique : fins de ligne Windows ignorées');

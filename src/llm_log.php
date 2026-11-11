@@ -32,6 +32,7 @@ function llm_log_purposes(): array
         'ai_prompt' => t('logs.purpose.ai_prompt'),
         'ai_fill'   => t('logs.purpose.ai_fill'),
         'directive' => t('logs.purpose.directive'),
+        'assist'    => t('logs.purpose.assist'),
         'test'      => t('logs.purpose.test'),
         'other'     => t('logs.purpose.other'),
     ];
