@@ -173,4 +173,13 @@ return [
     'js.prompt.ai_done' => 'Prompt suggested by the AI. Review it, then save.',
     'js.prompt.ai_done_photo' => 'Prompt suggested from the profile and the main photo. Review it, then save.',
     'js.prompt.ai_failed' => 'The AI couldn’t write the prompt.',
+    'js.prompt.history_loading' => 'Loading…',
+    'js.prompt.history_empty' => 'No changes saved yet. Every save that changes the text will show up here.',
+    'js.prompt.history_failed' => 'History unavailable.',
+    'js.prompt.history_same' => ['one' => '… {n} unchanged line', 'other' => '… {n} unchanged lines'],
+    'js.prompt.history_added' => ['one' => '{n} line added', 'other' => '{n} lines added'],
+    'js.prompt.history_removed' => ['one' => '{n} line removed', 'other' => '{n} lines removed'],
+    'js.prompt.history_take_old' => 'Use the before',
+    'js.prompt.history_take_new' => 'Use the after',
+    'js.prompt.history_restored' => 'Version loaded in the editor. Save to keep it.',
 ];

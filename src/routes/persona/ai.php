@@ -44,7 +44,8 @@ if ($action === 'ai-prompt' && $method === 'POST') {
             (string) ($_POST['kind'] ?? 'image'),
             mb_substr(trim((string) ($_POST['title'] ?? '')), 0, 120),
             mb_substr((string) ($_POST['body'] ?? ''), 0, 20000),
-            (int) ($_POST['prompt_id'] ?? 0)
+            (int) ($_POST['prompt_id'] ?? 0),
+            mb_substr(trim((string) ($_POST['instruction'] ?? '')), 0, 1000)
         );
         echo json_encode(['ok' => true] + $res, JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {

@@ -173,4 +173,13 @@ return [
     'js.prompt.ai_done' => 'Prompt propuesto por la IA. Revísalo y guarda.',
     'js.prompt.ai_done_photo' => 'Prompt propuesto a partir de la ficha y la foto principal. Revísalo y guarda.',
     'js.prompt.ai_failed' => 'La IA no ha podido redactar el prompt.',
+    'js.prompt.history_loading' => 'Cargando…',
+    'js.prompt.history_empty' => 'Todavía no hay cambios guardados. Cada guardado que cambie el texto aparecerá aquí.',
+    'js.prompt.history_failed' => 'Historial no disponible.',
+    'js.prompt.history_same' => ['one' => '… {n} línea igual', 'other' => '… {n} líneas iguales'],
+    'js.prompt.history_added' => ['one' => '{n} línea añadida', 'other' => '{n} líneas añadidas'],
+    'js.prompt.history_removed' => ['one' => '{n} línea eliminada', 'other' => '{n} líneas eliminadas'],
+    'js.prompt.history_take_old' => 'Recuperar el antes',
+    'js.prompt.history_take_new' => 'Recuperar el después',
+    'js.prompt.history_restored' => 'Versión cargada en el editor. Guarda para conservarla.',
 ];

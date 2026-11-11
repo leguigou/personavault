@@ -470,7 +470,7 @@ function llm_provider_without_vision(string $provider, string $model = ''): bool
  * @return array{body:string, used_image:bool, image_note:string}
  * @throws RuntimeException
  */
-function llm_visual_prompt(array $persona, array $prompts, string $kind, string $title, string $body, int $skipId = 0): array
+function llm_visual_prompt(array $persona, array $prompts, string $kind, string $title, string $body, int $skipId = 0, string $instruction = ''): array
 {
     $cfg = llm_config();
     if ($cfg['key'] === '') {
@@ -519,7 +519,8 @@ Méthode :
 3. Les informations de la fiche priment sur ce que tu crois voir ; n'invente rien qui les contredise. Si un détail est inconnu, ne le comble pas au hasard.
 
 Règles de sortie :
-- Si un texte existant est fourni, garde son intention et ses choix, complète-le et améliore-le plutôt que de tout réécrire.
+- Si une CONSIGNE DE MODIFICATION est donnée : applique-la au texte existant et UNIQUEMENT elle. Garde tout le reste à l'identique (mêmes segments, même ordre, même langue) ; remplace ou retire seulement ce que la consigne contredit. Elle prime sur la fiche pour ce qu'elle demande.
+- Sinon, si un texte existant est fourni, garde son intention et ses choix, complète-le et améliore-le plutôt que de tout réécrire.
 - Pour un prompt d'image ou de vidéo : écris en anglais (langue la mieux comprise par les générateurs), sauf si le texte existant est clairement dans une autre langue ; liste de segments séparés par des virgules, le sujet et le visage d'abord, puis tenue, pose, décor, lumière, cadrage, style et qualité.
 - Pour un prompt système ou autre : écris en français, sauf si le texte existant est dans une autre langue.
 - Réponds UNIQUEMENT avec le texte du prompt, sans titre, sans guillemets, sans explication, sans balises markdown.
@@ -537,8 +538,11 @@ TXT;
         . 'TYPE DEMANDÉ : ' . $kind . "\n"
         . ($title !== '' ? 'TITRE DU PROMPT : ' . $title . "\n" : '')
         . (trim($body) !== ''
-            ? "TEXTE EXISTANT À COMPLÉTER ET AMÉLIORER :\n" . trim($body)
-            : "TEXTE EXISTANT : (vide) — écris le prompt complet.");
+            ? (trim($instruction) !== ''
+                ? "TEXTE EXISTANT À MODIFIER :\n" . trim($body)
+                : "TEXTE EXISTANT À COMPLÉTER ET AMÉLIORER :\n" . trim($body))
+            : "TEXTE EXISTANT : (vide) — écris le prompt complet.")
+        . (trim($instruction) !== '' ? "\n\nCONSIGNE DE MODIFICATION (de l'utilisateur) :\n" . trim($instruction) : '');
 
     // photo principale : la couverture, sinon la première photo de la galerie
     $base = (string) ($persona['avatar'] ?? '');

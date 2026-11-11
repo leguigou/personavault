@@ -219,6 +219,16 @@ est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le 
   libre pendant l'échange ; si la page est fermée avant, l'extraction se fait la fois suivante, sans perte) ;
 - modèle : local (rien ne sort) ou distant (les derniers messages sont envoyés au fournisseur).
 
+### Prompts : assistance IA et historique
+
+Dans l'éditeur de prompt, le bouton IA rédige un prompt vide à partir de la fiche et de la photo
+principale. Si le prompt est déjà écrit, il ouvre une barre d'assistance : une consigne libre
+(« cheveux plus courts », « tenue de soirée »…) que le modèle des Réglages › IA applique au texte,
+sans toucher au reste (bouton « Annuler » pour revenir au texte d'avant). Le bouton horloge montre
+les 10 dernières modifications enregistrées (table `prompt_versions`, migration v7) avec le nombre
+de lignes ajoutées en vert et supprimées en rouge, le détail ligne à ligne, et de quoi reprendre
+l'avant ou l'après dans l'éditeur.
+
 ### Journal des échanges
 
 Réglages › Discussion › **Journal des échanges** (`/settings/logs`) : les 20 derniers appels aux

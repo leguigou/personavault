@@ -316,13 +316,32 @@ $token    = csrf_token();
             </div>
             <label class="sr-only" for="pe-body"><?= e(t('persona.prompt_body')) ?></label>
             <textarea id="pe-body" class="pe-body" name="body" required placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>"></textarea>
+            <!-- historique : 10 dernières modifications (lignes ajoutées / supprimées), à la place du texte -->
+            <div class="pe-history" data-pe-history-panel hidden>
+                <div class="pe-history-head">
+                    <strong><?= e(t('persona.prompt_history_title')) ?></strong>
+                    <button type="button" class="icon-tool" data-pe-history-close aria-label="<?= e(t('persona.prompt_history_close')) ?>" title="<?= e(t('persona.prompt_history_close')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                </div>
+                <div class="pe-history-list" data-pe-history-list></div>
+            </div>
+            <?php if (llm_ready()): ?>
+                <!-- assistance IA : une consigne en texte libre, le modèle des Réglages › IA corrige le prompt -->
+                <div class="pe-assist" data-pe-assist hidden>
+                    <label class="sr-only" for="pe-instruction"><?= e(t('persona.prompt_assist_label')) ?></label>
+                    <input id="pe-instruction" class="pe-assist-input" data-pe-instruction maxlength="1000" autocomplete="off"
+                           placeholder="<?= e(t('persona.prompt_assist_placeholder')) ?>" form="pe-noform">
+                    <button type="button" class="pe-assist-go" data-pe-assist-go aria-label="<?= e(t('persona.prompt_assist_go')) ?>" title="<?= e(t('persona.prompt_assist_go')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M12.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    <button type="button" class="pe-assist-undo" data-pe-undo hidden><?= e(t('persona.prompt_assist_undo')) ?></button>
+                </div>
+            <?php endif; ?>
             <div class="pe-meta">
                 <span class="pe-count" data-pe-count aria-live="polite"></span>
                 <div class="pe-tools">
                     <?php if (llm_ready()): ?>
                         <!-- IA : rédige le prompt (vide) ou le complète, à partir de la fiche et de la photo principale -->
-                        <button type="button" class="icon-tool is-ai" data-pe-ai="/p/<?= e($persona['slug']) ?>/ai-prompt" aria-label="<?= e(t('persona.prompt_ai')) ?>" title="<?= e(t('persona.prompt_ai')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg></button>
+                        <button type="button" class="icon-tool is-ai" data-pe-ai="/p/<?= e($persona['slug']) ?>/ai-prompt" aria-label="<?= e(t('persona.prompt_ai')) ?>" title="<?= e(t('persona.prompt_ai')) ?>" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg></button>
                     <?php endif; ?>
+                    <button type="button" class="icon-tool" data-pe-history aria-label="<?= e(t('persona.prompt_history')) ?>" title="<?= e(t('persona.prompt_history')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.8h3.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 8v4.3l2.8 1.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                     <button type="button" class="icon-tool" data-pe-copy aria-label="<?= e(t('persona.prompt_copy')) ?>" title="<?= e(t('persona.prompt_copy')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
                     <button type="button" class="icon-tool is-danger" data-pe-delete aria-label="<?= e(t('persona.prompt_delete')) ?>" title="<?= e(t('persona.prompt_delete')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
                 </div>

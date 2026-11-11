@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 6);
+define('PV_SCHEMA_VERSION', 7);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -197,6 +197,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 6) {
             migrate_v6($pdo);
+        }
+        if ($version < 7) {
+            migrate_v7($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -435,6 +438,21 @@ SQL);
 function migrate_v5(PDO $pdo): void
 {
     add_column_if_missing($pdo, 'conversations', 'model_override', "TEXT NOT NULL DEFAULT ''");
+}
+
+/** v7 : historique des modifications de prompts (10 dernières par prompt). */
+function migrate_v7(PDO $pdo): void
+{
+    $pdo->exec("CREATE TABLE IF NOT EXISTS prompt_versions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        prompt_id  INTEGER NOT NULL REFERENCES prompts(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        old_body   TEXT NOT NULL DEFAULT '',
+        new_body   TEXT NOT NULL DEFAULT '',
+        added      INTEGER NOT NULL DEFAULT 0,
+        removed    INTEGER NOT NULL DEFAULT 0
+    )");
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt ON prompt_versions(prompt_id, id)');
 }
 
 /** v6 : journal des échanges avec les modèles (20 derniers appels). */
@@ -1245,6 +1263,7 @@ require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/llm.php';
 require_once __DIR__ . '/llm_log.php';
 require_once __DIR__ . '/prompts.php';
+require_once __DIR__ . '/prompt_history.php';
 require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/facts.php';
 require_once __DIR__ . '/backup.php';

@@ -499,6 +499,21 @@ try {
     $check(export_filename('Week-end à Lisbonne !', 'md', '2026-11-08') === 'week-end-a-lisbonne-2026-11-08.md'
         && export_filename('???', 'txt', '2026-11-08') === 'conversation-2026-11-08.txt', 'nom de fichier propre à partir du titre');
     $check(export_bubbles(['content' => 'Un. Deux.', 'split_points' => '[4]']) === ['Un.', 'Deux.'], 'page imprimable : découpage en bulles');
+    // historique des prompts : lignes + / −, 10 dernières modifications seulement
+    $check(line_diff_counts("a\nb\nc", "a\nB\nc\nd") === ['added' => 2, 'removed' => 1], 'historique : lignes ajoutées et supprimées');
+    $check(line_diff_counts("a\r\nb", "a\nb") === ['added' => 0, 'removed' => 0], 'historique : fins de ligne Windows ignorées');
+    $__pp = (int) db()->query('SELECT id FROM personas ORDER BY id LIMIT 1')->fetchColumn();
+    db()->prepare('INSERT INTO prompts (persona_id, title, kind, body) VALUES (?, ?, ?, ?)')->execute([$__pp, 'h', 'image', 'v0']);
+    $__pr = (int) db()->lastInsertId();
+    for ($__i = 1; $__i <= 13; $__i++) {
+        prompt_version_record($__pr, 'v' . ($__i - 1), 'v' . $__i);
+    }
+    prompt_version_record($__pr, 'v13', 'v13'); // texte inchangé : rien d'enregistré
+    $__vs = prompt_versions($__pr);
+    $check(count($__vs) === 10 && $__vs[0]['new_body'] === 'v13' && $__vs[9]['new_body'] === 'v4', 'historique : 10 dernières modifications, la plus récente en haut');
+    db()->prepare('DELETE FROM prompts WHERE id = ?')->execute([$__pr]);
+    $check(prompt_versions($__pr) === [], 'historique : supprimé avec le prompt');
+
     // journal des échanges : image remplacée par sa taille, 20 entrées au plus, jamais la clé
     $__lm = llm_log_messages([['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Regarde'], ['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,' . str_repeat('A', 4096)]]]]]);
     $check(($__lm[0]['content'] ?? '') === "Regarde\n[image ~3 Ko]", 'journal : photo remplacée par sa taille');

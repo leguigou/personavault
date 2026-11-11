@@ -455,6 +455,16 @@
             form.querySelectorAll("[name=kind]").forEach((r) => (r.checked = r.value === kind));
             heading.textContent = current ? pe.dataset.labelEdit : pe.dataset.labelNew;
             delBtn.hidden = !current;
+            const hb = pe.querySelector("[data-pe-history]");
+            if (hb) hb.hidden = !current; // pas d'historique pour un nouveau prompt
+            pe.querySelector("[data-pe-history-panel]")?.setAttribute("hidden", "");
+            pe.classList.remove("is-history");
+            pe.querySelector("[data-pe-history]")?.classList.remove("is-on");
+            const as = pe.querySelector("[data-pe-assist]");
+            if (as) as.hidden = true;
+            pe.querySelector("[data-pe-ai]")?.classList.remove("is-on");
+            const ub = pe.querySelector("[data-pe-undo]");
+            if (ub) ub.hidden = true;
             initial = snapshot();
             paint();
             modalOpen(pe);
@@ -473,12 +483,26 @@
         form.addEventListener("input", paint);
         form.addEventListener("change", paint);
         pe.querySelector("[data-pe-copy]").addEventListener("click", (e) => copyText(body.value, e.currentTarget));
-        // IA : prompt vide → rédigé à partir de la fiche (et de la photo principale) ; sinon complété
+        // IA : prompt vide → rédigé à partir de la fiche (et de la photo principale) ;
+        // sinon, barre d'assistance : une consigne libre (« cheveux plus courts… ») que le
+        // modèle des Réglages › IA applique au texte. Vide = amélioration générale.
         const aiBtn = pe.querySelector("[data-pe-ai]");
-        aiBtn?.addEventListener("click", async () => {
-            if (aiBtn.classList.contains("is-busy")) return;
+        const assist = pe.querySelector("[data-pe-assist]");
+        const instr = pe.querySelector("[data-pe-instruction]");
+        const assistGo = pe.querySelector("[data-pe-assist-go]");
+        const undoBtn = pe.querySelector("[data-pe-undo]");
+        let beforeAi = null; // texte avant la dernière proposition de l'IA (annuler)
+        const showAssist = (on) => {
+            if (!assist) return;
+            assist.hidden = !on;
+            aiBtn?.setAttribute("aria-expanded", on ? "true" : "false");
+            aiBtn?.classList.toggle("is-on", on);
+        };
+        const runAi = async (instruction) => {
+            if (!aiBtn || aiBtn.classList.contains("is-busy")) return;
             aiBtn.classList.add("is-busy");
             aiBtn.disabled = true;
+            if (assistGo) assistGo.disabled = true;
             body.readOnly = true;
             const ph = body.placeholder;
             body.placeholder = tr("prompt.ai_busy");
@@ -490,6 +514,7 @@
                 fd.append("kind", form.querySelector("[name=kind]:checked")?.value || "image");
                 fd.append("title", title.value);
                 fd.append("body", body.value);
+                fd.append("instruction", instruction || "");
                 if (current) fd.append("prompt_id", current);
                 const res = await fetch(aiBtn.dataset.peAi, {
                     method: "POST",
@@ -498,8 +523,11 @@
                 });
                 const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
                 if (!res.ok || !data.ok) throw new Error(data.error || tr("prompt.ai_failed"));
+                beforeAi = body.value;
                 body.value = data.body;
                 body.scrollTop = 0;
+                if (undoBtn) undoBtn.hidden = beforeAi === "";
+                if (instr) instr.value = "";
                 paint();
                 const done = data.used_image ? tr("prompt.ai_done_photo") : tr("prompt.ai_done");
                 toast(data.image_note ? { title: done, text: data.image_note } : done);
@@ -510,9 +538,152 @@
                 body.placeholder = ph;
                 pe.classList.remove("is-ai-busy");
                 aiBtn.disabled = false;
+                if (assistGo) assistGo.disabled = false;
                 aiBtn.classList.remove("is-busy");
             }
+        };
+        aiBtn?.addEventListener("click", () => {
+            showHistory(false);
+            if (!body.value.trim()) {
+                runAi("");
+                return;
+            }
+            showAssist(assist.hidden);
+            if (!assist.hidden) instr.focus({ preventScroll: true });
         });
+        assistGo?.addEventListener("click", () => runAi(instr.value.trim()));
+        instr?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.isComposing) {
+                e.preventDefault();
+                runAi(instr.value.trim());
+            }
+        });
+        undoBtn?.addEventListener("click", () => {
+            if (beforeAi === null) return;
+            body.value = beforeAi;
+            beforeAi = null;
+            undoBtn.hidden = true;
+            paint();
+        });
+
+        // historique : 10 dernières modifications enregistrées, lignes + / − et détail
+        const histBtn = pe.querySelector("[data-pe-history]");
+        const histPanel = pe.querySelector("[data-pe-history-panel]");
+        const histList = pe.querySelector("[data-pe-history-list]");
+        function showHistory(on) {
+            if (!histPanel) return;
+            histPanel.hidden = !on;
+            pe.classList.toggle("is-history", on);
+            histBtn?.classList.toggle("is-on", on);
+            if (on) showAssist(false);
+        }
+        const diffView = (ops) => {
+            const box = document.createElement("div");
+            box.className = "pe-diff";
+            // lignes identiques regroupées, sauf 2 de contexte autour des changements
+            const keep = ops.map((o, i) => o[0] !== "=" || ops.slice(Math.max(0, i - 2), i + 3).some((x) => x[0] !== "="));
+            let hidden = 0;
+            const flush = () => {
+                if (!hidden) return;
+                const el = document.createElement("div");
+                el.className = "pe-diff-skip";
+                el.textContent = tr("prompt.history_same", hidden);
+                box.appendChild(el);
+                hidden = 0;
+            };
+            ops.forEach(([op, line], i) => {
+                if (!keep[i]) {
+                    hidden++;
+                    return;
+                }
+                flush();
+                const el = document.createElement("div");
+                el.className = "pe-diff-line " + (op === "+" ? "is-add" : op === "-" ? "is-del" : "is-same");
+                el.textContent = (op === "=" ? "  " : op + " ") + (line || " ");
+                box.appendChild(el);
+            });
+            flush();
+            return box;
+        };
+        const restore = (text) => {
+            body.value = text;
+            showHistory(false);
+            paint();
+            toast(tr("prompt.history_restored"));
+        };
+        const loadHistory = async () => {
+            histList.replaceChildren();
+            const wait = document.createElement("p");
+            wait.className = "hint";
+            wait.textContent = tr("prompt.history_loading");
+            histList.appendChild(wait);
+            try {
+                const res = await fetch("/prompts/" + current + "/history", { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await res.json();
+                if (!res.ok || !data.ok) throw new Error();
+                histList.replaceChildren();
+                if (!data.versions.length) {
+                    const p = document.createElement("p");
+                    p.className = "hint";
+                    p.textContent = tr("prompt.history_empty");
+                    histList.appendChild(p);
+                    return;
+                }
+                data.versions.forEach((v) => {
+                    const item = document.createElement("details");
+                    item.className = "pe-hist";
+                    const sum = document.createElement("summary");
+                    const when = document.createElement("span");
+                    when.className = "pe-hist-when";
+                    when.textContent = v.when;
+                    when.title = v.at;
+                    const add = document.createElement("span");
+                    add.className = "pe-hist-add";
+                    add.textContent = "+" + v.added;
+                    add.title = tr("prompt.history_added", v.added);
+                    const del = document.createElement("span");
+                    del.className = "pe-hist-del";
+                    del.textContent = "−" + v.removed;
+                    del.title = tr("prompt.history_removed", v.removed);
+                    sum.append(when, add, del);
+                    item.appendChild(sum);
+                    item.addEventListener("toggle", () => {
+                        if (!item.open || item.dataset.built) return;
+                        item.dataset.built = "1";
+                        item.appendChild(diffView(v.diff));
+                        const tools = document.createElement("div");
+                        tools.className = "pe-hist-tools";
+                        const before = document.createElement("button");
+                        before.type = "button";
+                        before.className = "btn btn-ghost btn-sm";
+                        before.textContent = tr("prompt.history_take_old");
+                        before.addEventListener("click", () => restore(v.old_body));
+                        const after = document.createElement("button");
+                        after.type = "button";
+                        after.className = "btn btn-ghost btn-sm";
+                        after.textContent = tr("prompt.history_take_new");
+                        after.addEventListener("click", () => restore(v.new_body));
+                        tools.append(before, after);
+                        item.appendChild(tools);
+                    });
+                    histList.appendChild(item);
+                });
+            } catch {
+                histList.replaceChildren();
+                const p = document.createElement("p");
+                p.className = "hint";
+                p.textContent = tr("prompt.history_failed");
+                histList.appendChild(p);
+            }
+        };
+        histBtn?.addEventListener("click", () => {
+            if (!current) return;
+            const on = histPanel.hidden;
+            showHistory(on);
+            if (on) loadHistory();
+        });
+        pe.querySelector("[data-pe-history-close]")?.addEventListener("click", () => showHistory(false));
+
         delBtn.addEventListener("click", () => {
             if (!current) return;
             const f = document.createElement("form");

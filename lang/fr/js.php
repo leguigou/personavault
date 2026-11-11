@@ -173,4 +173,13 @@ return [
     'js.prompt.ai_done' => 'Prompt proposé par l’IA. Relis-le puis enregistre.',
     'js.prompt.ai_done_photo' => 'Prompt proposé à partir de la fiche et de la photo principale. Relis-le puis enregistre.',
     'js.prompt.ai_failed' => 'L’IA n’a pas pu rédiger le prompt.',
+    'js.prompt.history_loading' => 'Chargement…',
+    'js.prompt.history_empty' => 'Aucune modification enregistrée pour l’instant. Chaque enregistrement qui change le texte apparaîtra ici.',
+    'js.prompt.history_failed' => 'Historique indisponible.',
+    'js.prompt.history_same' => ['one' => '… {n} ligne identique', 'other' => '… {n} lignes identiques'],
+    'js.prompt.history_added' => ['one' => '{n} ligne ajoutée', 'other' => '{n} lignes ajoutées'],
+    'js.prompt.history_removed' => ['one' => '{n} ligne supprimée', 'other' => '{n} lignes supprimées'],
+    'js.prompt.history_take_old' => 'Reprendre l’avant',
+    'js.prompt.history_take_new' => 'Reprendre l’après',
+    'js.prompt.history_restored' => 'Version reprise dans l’éditeur. Enregistre pour la garder.',
 ];
