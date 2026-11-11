@@ -235,6 +235,10 @@ résultat (ou « jamais lancée », avec la ligne à copier), et une conversatio
 relances ne peuvent pas partir (désactivées partout, ou tâche jamais lancée). Deux passages ne se
 chevauchent pas (verrou `storage/followup.lock`).
 
+Les relances utilisent **un seul modèle**, sans rien décharger ni charger : celui déjà chargé dans
+LM Studio s'il y en a un, sinon le modèle de base des Réglages (le modèle propre à un persona ou à
+une conversation est ignoré ici).
+
 ---
 
 ## Configuration

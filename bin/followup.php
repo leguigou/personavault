@@ -63,6 +63,21 @@ if (!$st['reachable']) {
     exit(0);
 }
 
+// un seul modèle pour toutes les relances du passage, sans rien décharger ni charger :
+// celui déjà en mémoire dans LM Studio s'il y en a un (en cours d'utilisation), sinon le
+// modèle de base des Réglages. Le modèle propre au persona ou à la conversation est ignoré
+// ici : sinon chaque relance ferait décharger puis recharger des modèles.
+$fuCfg = chat_llm_config();
+if (!empty($st['loaded'])) {
+    $fuCfg['model'] = (string) ($st['loaded'][0]['key'] ?: $st['loaded'][0]['id']);
+}
+if ((string) $fuCfg['model'] === '') {
+    $say('aucun modèle de discussion configuré — aucune relance envoyée');
+    $beat('llm_down');
+    exit(0);
+}
+$verbose && $say('modèle des relances : ' . $fuCfg['model'] . (!empty($st['loaded']) ? ' (déjà chargé)' : ' (modèle de base)'));
+
 $convs = db()->query('SELECT * FROM conversations WHERE auto_followup = 1 ORDER BY id')->fetchAll();
 $sent  = 0;
 
@@ -124,10 +139,7 @@ foreach ($convs as $conv) {
     $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
 
     try {
-        if (setting('lms_single_model', '1') === '1') {
-            lms_make_room_for((string) chat_llm_config_for($conv)['model']); // un seul modèle en mémoire
-        }
-        $res = llm_request($messages, chat_llm_config_for($conv), [
+        $res = llm_request($messages, $fuCfg, [
             'temperature'      => max(0.7, (float) ($conv['temperature'] ?? 0.85)),
             'max_tokens'       => 140,
             'timeout'          => 120,
