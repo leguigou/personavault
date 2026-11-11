@@ -337,6 +337,22 @@ try {
     $check(!str_contains($first, 'Contexte réel') && str_contains($first, 'Sujet : test'), 'prompt système stable (résumé, sans l’heure)');
     $check(str_starts_with($last, '<contexte>') && str_ends_with($last, 'bonjour'), 'heure et souvenirs dans le dernier message');
 
+    // les derniers échanges d'abord : on remonte du plus récent sans trou ; même si la place
+    // manque (fenêtre minuscule, longue consigne), les CHAT_MIN_RECENT derniers sont toujours là
+    $hist = [];
+    for ($i = 1; $i <= 120; $i++) {
+        $hist[] = ['id' => 1000 + $i, 'role' => $i % 2 ? 'user' : 'assistant', 'content' => 'M' . $i . ' ' . str_repeat('texte ', 60), 'image' => ''];
+    }
+    $roomy = chat_build_messages($persona, [], ['memory_enabled' => 0, 'context_window' => 8192, 'max_tokens' => 400] + $conv, $hist, 'et maintenant ?');
+    $tags  = array_map(static fn (array $m): string => strtok((string) $m['content'], ' '), array_slice($roomy['messages'], 1, -1));
+    $n     = count($tags);
+    $check($n > CHAT_MIN_RECENT && $n < 120 && end($tags) === 'M120' && $tags === array_map(static fn (int $k): string => 'M' . $k, range(121 - $n, 120)),
+        'contexte : les derniers messages, sans trou, du plus ancien gardé au plus récent (' . $n . ')');
+    $tight = chat_build_messages($persona, [], ['memory_enabled' => 0, 'context_window' => 2048, 'max_tokens' => 1200] + $conv, $hist, 'et maintenant ?');
+    $tags  = array_map(static fn (array $m): string => strtok((string) $m['content'], ' '), array_slice($tight['messages'], 1, -1));
+    $check($tags === ['M115', 'M116', 'M117', 'M118', 'M119', 'M120'] && str_ends_with((string) end($tight['messages'])['content'], 'et maintenant ?'),
+        'contexte serré : les ' . CHAT_MIN_RECENT . ' derniers messages restent (raccourcis au besoin)');
+
     echo PHP_EOL . '— index plein texte des messages' . PHP_EOL;
     db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$pid, 'ailleurs']);
     $cid2 = (int) db()->lastInsertId();

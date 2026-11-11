@@ -165,6 +165,24 @@ function chat_memory_target(): int
 /** Nombre de messages déjà résumés renvoyés tout de même au modèle, pour la continuité. */
 const CHAT_SUMMARY_OVERLAP = 2;
 
+/**
+ * Derniers messages TOUJOURS envoyés au modèle, même si la place manque : c'est ce qui
+ * garde la cohérence de la discussion. Au besoin, un message trop long est raccourci au
+ * milieu (début et fin gardés) plutôt que d'être retiré.
+ */
+const CHAT_MIN_RECENT = 6;
+
+/** Raccourcit un texte au milieu pour tenir dans ~$maxTokens (début et fin conservés). */
+function chat_shorten_middle(string $text, int $maxTokens): string
+{
+    $maxChars = max(240, (int) floor($maxTokens * 3.6));
+    if (mb_strlen($text) <= $maxChars) {
+        return $text;
+    }
+    $half = intdiv($maxChars - 10, 2);
+    return rtrim(mb_substr($text, 0, $half)) . ' […] ' . ltrim(mb_substr($text, -$half));
+}
+
 /** Le résumé de la conversation remplace-t-il les anciens messages ? */
 function chat_uses_summary(array $conv): bool
 {
@@ -238,16 +256,22 @@ function chat_memory_stats(int $cid, array $conv): array
     $base          = chat_base_tokens($conv) + ($useSummary ? $summaryTokens : 0);
 
     // historique effectivement envoyé (même règle que chat_build_messages)
-    $history = 0;
+    $history   = 0;
+    $sentCount = 0;
     foreach (array_reverse(fetch_context_messages($cid, $conv)) as $m) {
         if (!in_array((string) $m['role'], ['user', 'assistant'], true)) {
             continue;
         }
         $cost = chat_estimate_tokens((string) $m['content']) + 4;
-        if ($base + $history + $cost > $budget && $history > 0) {
-            break;
+        if ($base + $history + $cost > $budget) {
+            if ($sentCount >= CHAT_MIN_RECENT) {
+                break;
+            }
+            $cost = chat_estimate_tokens(chat_shorten_middle((string) $m['content'],
+                max(60, intdiv(max(0, $budget - $base - $history), CHAT_MIN_RECENT - $sentCount)))) + 4;
         }
         $history += $cost;
+        $sentCount++;
     }
     $sent = $base + $history;
 
@@ -376,7 +400,7 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
     $acc    = 0;
     foreach (array_reverse($pending) as $m) {
         $t = chat_estimate_tokens((string) $m['content']);
-        if ($acc + $t > $target && count($keep) >= 4) {
+        if ($acc + $t > $target && count($keep) >= CHAT_MIN_RECENT - CHAT_SUMMARY_OVERLAP) {
             break;
         }
         $acc += $t;
@@ -1588,9 +1612,16 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $content = (string) $msg['content'];
         $image   = $role === 'user' ? (string) ($msg['image'] ?? '') : '';
         $cost = chat_estimate_tokens($content) + 4;
-        if ($used + $cost > $budget && $kept) {
-            $dropped = (int) $msg['id'];
-            break;
+        if ($used + $cost > $budget) {
+            // on remonte du plus récent vers le plus ancien : au-delà du plancher, on s'arrête
+            // au premier message qui ne tient plus (jamais de trou dans le fil)
+            if (count($kept) >= CHAT_MIN_RECENT) {
+                $dropped = (int) $msg['id'];
+                break;
+            }
+            // dans le plancher : le message est gardé, raccourci s'il est long
+            $content = chat_shorten_middle($content, max(60, intdiv(max(0, $budget - $used), CHAT_MIN_RECENT - count($kept))));
+            $cost    = chat_estimate_tokens($content) + 4;
         }
         $used += $cost;
         if ($image !== '') {
