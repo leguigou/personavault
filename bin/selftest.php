@@ -511,6 +511,11 @@ try {
         && in_array('motion', array_keys(llm_prompt_criteria('video')), true) && count(llm_prompt_criteria('negative')) === 3, 'IA prompt : critères du bilan adaptés au type');
     $check(llm_strip_known_lines("Tu es Camille.\nTu tutoies.", "tu tutoies.\nTu as les yeux verts.") === 'Tu as les yeux verts.', 'IA prompt : un complément ne répète pas les lignes existantes');
 
+    // format JSON : retenu par serveur, json_schema pour LM Studio
+    $check(llm_json_mode('http://x.test/v1') === 'object' && llm_response_format('schema')['type'] === 'json_schema', 'format JSON : json_object par défaut, json_schema en repli');
+    llm_json_mode_set('http://x.test/v1/', 'schema');
+    $check(llm_json_mode('http://x.test/v1') === 'schema', 'format JSON : le format accepté est retenu pour ce serveur');
+
     // assistant de création : fusion, avancement, application sans rien écraser
     $__d = assist_merge(['name' => 'Inès', 'looks' => 'brune', 'meta' => [['k' => 'Âge', 'v' => '29']]], ['name' => '', 'tagline' => 'Photographe', 'meta' => [['k' => 'Ville', 'v' => 'Marseille']], 'tags' => ['#Photo', 'photo']]);
     $check($__d['name'] === 'Inès' && $__d['looks'] === 'brune' && $__d['tagline'] === 'Photographe' && count($__d['meta']) === 2 && $__d['tags'] === ['photo'],

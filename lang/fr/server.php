@@ -98,6 +98,7 @@ return [
     'error.llm.api'               => 'Erreur API ({code}) : {message}',
     'error.llm.model_error'       => 'Erreur du modèle : {message}',
     'error.llm.empty'             => 'Réponse vide du modèle.',
+    'error.llm.json_retry'        => 'format JSON refusé, nouvel essai avec un autre format',
     'error.llm.no_key'            => 'Aucune clé API enregistrée.',
     'error.llm.no_json'           => 'Le modèle n’a pas renvoyé de JSON exploitable.',
     'error.llm.bad_json'          => 'JSON invalide renvoyé par le modèle.',
