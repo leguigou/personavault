@@ -47,6 +47,12 @@ http.createServer(async (req, res) => {
     }
     if (req.url.endsWith('/chat/completions')) {
         const j = JSON.parse(body || '{}');
+        // comme LM Studio : json_object refusé, json_schema accepté
+        if (j.response_format?.type === 'json_object') {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ error: "'response_format.type' must be 'json_schema' or 'text'" }));
+        }
         const text = assist(String(j.messages?.[0]?.content ?? ''), String(j.messages?.[1]?.content ?? ''))
             ?? reply(String(j.messages?.[0]?.content ?? ''));
         const usage = { prompt_tokens: 100, completion_tokens: 20 };

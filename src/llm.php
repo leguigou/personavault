@@ -229,8 +229,9 @@ function llm_request(array $messages, array $cfg, array $options = []): array
         'max_tokens'  => (int) ($options['max_tokens'] ?? 400),
         'stream'      => false,
     ];
-    if (!empty($options['json'])) {
-        $body['response_format'] = ['type' => 'json_object'];
+    $jsonMode = !empty($options['json']) ? llm_json_mode($base) : '';
+    if ($jsonMode !== '' && $jsonMode !== 'none') {
+        $body['response_format'] = llm_response_format($jsonMode);
     }
     // LM Studio / modèles « thinking » : "none" coupe la réflexion (réponse directe)
     if (!empty($options['reasoning_effort'])) {
@@ -289,6 +290,15 @@ function llm_request(array $messages, array $cfg, array $options = []): array
     $data = json_decode((string) $raw, true);
     if ($code < 200 || $code >= 300) {
         $msg = $data['error']['message'] ?? mb_substr(trim((string) $raw), 0, 200);
+        $msg = is_string($msg) ? $msg : (string) json_encode($msg, JSON_UNESCAPED_UNICODE);
+        // format JSON refusé (LM Studio : « must be 'json_schema' or 'text' ») : on passe au
+        // format suivant, retenu pour ce serveur, et on relance une seule fois par format
+        if ($jsonMode !== '' && $jsonMode !== 'none' && $code >= 400 && $code < 500
+            && (str_contains($msg, 'response_format') || str_contains($msg, 'json_schema'))) {
+            $log('error', '', 'HTTP ' . $code . ' : ' . $msg . ' → ' . t('error.llm.json_retry'));
+            llm_json_mode_set($base, $jsonMode === 'object' ? 'schema' : 'none');
+            return llm_request($messages, $cfg, $options);
+        }
         $log('error', '', 'HTTP ' . $code . ' : ' . $msg);
         throw new RuntimeException(t('error.llm.api', ['code' => $code, 'message' => $msg]), $code);
     }
@@ -307,6 +317,30 @@ function llm_request(array $messages, array $cfg, array $options = []): array
         'completion_tokens' => (int) ($data['usage']['completion_tokens'] ?? 0),
         'ms'                => $ms,
     ];
+}
+
+/**
+ * Format de réponse JSON accepté par un serveur (retenu par adresse) :
+ *   object  response_format json_object (OpenAI, DeepSeek… : par défaut)
+ *   schema  response_format json_schema avec un schéma « objet quelconque » (LM Studio)
+ *   none    aucun : la consigne du prompt suffit, la réponse est extraite par llm_json()
+ */
+function llm_json_mode(string $base): string
+{
+    $m = setting('llm_json_mode:' . md5(rtrim($base, '/')), 'object');
+    return in_array($m, ['object', 'schema', 'none'], true) ? $m : 'object';
+}
+
+function llm_json_mode_set(string $base, string $mode): void
+{
+    set_setting('llm_json_mode:' . md5(rtrim($base, '/')), $mode);
+}
+
+function llm_response_format(string $mode): array
+{
+    return $mode === 'schema'
+        ? ['type' => 'json_schema', 'json_schema' => ['name' => 'reponse', 'strict' => false, 'schema' => ['type' => 'object']]]
+        : ['type' => 'json_object'];
 }
 
 /**
