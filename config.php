@@ -31,6 +31,12 @@ $config = [
     'zip_max_entry_size' => 40 * 1024 * 1024,  // taille décompressée max par entrée
     'zip_max_total'      => 2 * 1024 * 1024 * 1024, // taille décompressée totale max
 
+    // Assistant de création : quand on demande un personnage existant (livre, film, série…),
+    // ses informations sont cherchées sur Wikipédia ({lang} = langue de l'interface, puis « en »).
+    // Seuls le nom du personnage et son œuvre sont envoyés. '' pour désactiver la recherche
+    // (le modèle s'appuie alors sur ses seules connaissances).
+    'assist_lookup_url' => 'https://{lang}.wikipedia.org/w/api.php',
+
     // Valeurs par défaut du LLM (surchargées par les réglages enregistrés)
     'llm' => [
         'provider' => 'deepseek',

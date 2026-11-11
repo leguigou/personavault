@@ -65,6 +65,11 @@
 303 text/html  POST /memories
 303 text/html  POST /settings/ui
 303 text/html  POST /settings/prompts
+200 application/json  POST /assist/turn (personnage existant)
+200 application/json  POST /assist/turn (idée libre)
+200 application/json  POST /assist/create
+200 text/html  GET /p/sherlock-holmes
+303 text/html  POST /p/sherlock-holmes/delete
 303 text/html  POST /settings
 303 text/html  POST /settings/chat
 200 text/event-stream  POST /chat/1/stream

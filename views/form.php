@@ -23,14 +23,14 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
     </header>
 
     <?php if (!$isEdit && llm_ready()): ?>
-        <!-- création assistée : l'IA pose les questions et rédige la fiche, prompts compris -->
-        <a class="assist-entry" href="/p/assist">
-            <span class="assist-entry-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg></span>
-            <span>
+        <!-- création assistée : entrée discrète (le formulaire reste l'action principale) -->
+        <a class="assist-link" href="/p/assist">
+            <svg class="assist-link-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg>
+            <span class="assist-link-text">
                 <strong><?= e(t('assist.entry_title')) ?></strong>
                 <small><?= e(t('assist.entry_text')) ?></small>
             </span>
-            <span class="assist-entry-go" aria-hidden="true">›</span>
+            <svg class="assist-link-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
     <?php endif; ?>
 

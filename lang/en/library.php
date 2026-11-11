@@ -189,6 +189,7 @@ return [
     'assist.final_title_complete' => 'The AI is completing the profile',
     'assist.final_text' => 'Description, attributes, system prompt and image prompt. It takes a few seconds.',
     'assist.entry_title' => 'Create with AI',
-    'assist.entry_text' => 'Describe your idea: the assistant asks the right questions, invents when you’re short of ideas and writes the profile, prompts included.',
+    'assist.entry_text' => 'Describe an idea or an existing character, it fills the profile',
     'assist.complete_title' => 'The assistant spots what’s missing, asks questions and completes the profile without overwriting anything.',
+    'assist.preview_title' => 'Profile preview',
 ];

@@ -189,6 +189,7 @@ return [
     'assist.final_title_complete' => 'La IA completa la ficha',
     'assist.final_text' => 'Descripción, atributos, prompt de sistema y prompt de imagen. Tarda unos segundos.',
     'assist.entry_title' => 'Crear con IA',
-    'assist.entry_text' => 'Describe tu idea: el asistente hace las preguntas adecuadas, inventa si te falta inspiración y redacta la ficha, prompts incluidos.',
+    'assist.entry_text' => 'Describe una idea o un personaje existente, rellena la ficha',
     'assist.complete_title' => 'El asistente detecta lo que falta, hace preguntas y completa la ficha sin sobrescribir nada.',
+    'assist.preview_title' => 'Vista previa de la ficha',
 ];

@@ -272,4 +272,9 @@ return [
     'assist.flash.created' => '{name}’s profile is ready, with a system prompt and an image prompt. Review and tweak them as you like.',
     'assist.flash.applied' => 'Added to the profile: {fields}. Nothing that existed was changed.',
     'logs.purpose.assist' => 'Creation assistant',
+    'assist.canon.question' => 'Want to adjust anything: version of the work, point in the story, relationship with you?',
+    'assist.canon.found' => 'Details found on Wikipedia: {title}',
+    'assist.canon.memory' => 'No page found online: profile filled from what the AI knows about {name}. Please review it.',
+    'assist.meta.source' => 'Original character',
+    'assist.meta.source_url' => 'Reference',
 ];
