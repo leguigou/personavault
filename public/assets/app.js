@@ -465,6 +465,12 @@
             pe.querySelector("[data-pe-ai]")?.classList.remove("is-on");
             const ub = pe.querySelector("[data-pe-undo]");
             if (ub) ub.hidden = true;
+            const an = pe.querySelector("[data-pe-analysis]");
+            if (an) {
+                an.hidden = true;
+                an.replaceChildren();
+            }
+            pe.querySelector(".pe-ai-menu")?.remove();
             initial = snapshot();
             paint();
             modalOpen(pe);
@@ -498,7 +504,62 @@
             aiBtn?.setAttribute("aria-expanded", on ? "true" : "false");
             aiBtn?.classList.toggle("is-on", on);
         };
-        const runAi = async (instruction) => {
+        const VISUAL = ["image", "negative", "video"];
+        const kindNow = () => form.querySelector("[name=kind]:checked")?.value || "image";
+        const analysisBox = pe.querySelector("[data-pe-analysis]");
+        const hideAnalysis = () => {
+            if (analysisBox) {
+                analysisBox.hidden = true;
+                analysisBox.replaceChildren();
+            }
+        };
+        // résultat de l'analyse : niveau, résumé, éléments manquants, et l'action qui va avec
+        const showAnalysis = (a) => {
+            if (!analysisBox) return;
+            analysisBox.replaceChildren();
+            const head = document.createElement("div");
+            head.className = "pe-analysis-head";
+            const lvl = document.createElement("span");
+            lvl.className = "pe-level is-" + a.level;
+            lvl.textContent = a.level === "bon" ? tr("prompt.level_good") : a.level === "faible" ? tr("prompt.level_low") : tr("prompt.level_mid");
+            const close = document.createElement("button");
+            close.type = "button";
+            close.className = "icon-tool";
+            close.setAttribute("aria-label", tr("prompt.analysis_close"));
+            close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+            close.addEventListener("click", hideAnalysis);
+            head.append(lvl, close);
+            analysisBox.appendChild(head);
+            if (a.summary) {
+                const p = document.createElement("p");
+                p.textContent = a.summary;
+                analysisBox.appendChild(p);
+            }
+            if (a.missing && a.missing.length) {
+                const ul = document.createElement("ul");
+                a.missing.forEach((m) => {
+                    const li = document.createElement("li");
+                    li.textContent = m;
+                    ul.appendChild(li);
+                });
+                analysisBox.appendChild(ul);
+            }
+            const visual = VISUAL.includes(kindNow());
+            const act = document.createElement("button");
+            act.type = "button";
+            act.className = "btn btn-primary btn-sm";
+            act.textContent = visual ? tr("prompt.ai_optimize") : tr("prompt.ai_complete");
+            act.addEventListener("click", () => {
+                hideAnalysis();
+                runAi(visual ? "optimize" : "complete", "");
+            });
+            const row = document.createElement("div");
+            row.className = "pe-analysis-tools";
+            row.appendChild(act);
+            analysisBox.appendChild(row);
+            analysisBox.hidden = false;
+        };
+        const runAi = async (mode, instruction) => {
             if (!aiBtn || aiBtn.classList.contains("is-busy")) return;
             aiBtn.classList.add("is-busy");
             aiBtn.disabled = true;
@@ -515,6 +576,7 @@
                 fd.append("title", title.value);
                 fd.append("body", body.value);
                 fd.append("instruction", instruction || "");
+                fd.append("mode", mode || "");
                 if (current) fd.append("prompt_id", current);
                 const res = await fetch(aiBtn.dataset.peAi, {
                     method: "POST",
@@ -523,13 +585,25 @@
                 });
                 const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
                 if (!res.ok || !data.ok) throw new Error(data.error || tr("prompt.ai_failed"));
+                if (data.mode === "analyze") {
+                    showAnalysis(data.analysis || {});
+                    if (data.image_note) toast({ title: tr("prompt.ai_analyzed"), text: data.image_note });
+                    return;
+                }
+                if (data.mode === "complete" && data.nothing) {
+                    toast(tr("prompt.ai_nothing"));
+                    return;
+                }
+                hideAnalysis();
                 beforeAi = body.value;
                 body.value = data.body;
                 body.scrollTop = 0;
                 if (undoBtn) undoBtn.hidden = beforeAi === "";
                 if (instr) instr.value = "";
                 paint();
-                const done = data.used_image ? tr("prompt.ai_done_photo") : tr("prompt.ai_done");
+                const done = data.mode === "complete"
+                    ? tr("prompt.ai_completed")
+                    : data.used_image ? tr("prompt.ai_done_photo") : tr("prompt.ai_done");
                 toast(data.image_note ? { title: done, text: data.image_note } : done);
             } catch (err) {
                 toast({ title: tr("prompt.ai_failed"), text: err.message }, true);
@@ -542,20 +616,86 @@
                 aiBtn.classList.remove("is-busy");
             }
         };
-        aiBtn?.addEventListener("click", () => {
+        // un seul bouton : un petit menu propose ce qui a du sens pour ce prompt
+        let menu = null;
+        const closeMenu = () => {
+            menu?.remove();
+            menu = null;
+            aiBtn?.setAttribute("aria-expanded", assist && !assist.hidden ? "true" : "false");
+        };
+        const openAssist = () => {
             showHistory(false);
-            if (!body.value.trim()) {
-                runAi("");
+            showAssist(true);
+            instr.focus({ preventScroll: true });
+        };
+        const menuItems = () => {
+            const empty = !body.value.trim();
+            const visual = VISUAL.includes(kindNow());
+            if (empty) {
+                return [
+                    ["create", tr("prompt.ai_create"), tr("prompt.ai_create_hint")],
+                    ["assist", tr("prompt.ai_create_with"), tr("prompt.ai_create_with_hint")],
+                ];
+            }
+            return [
+                ["analyze", tr("prompt.ai_analyze"), tr("prompt.ai_analyze_hint")],
+                visual
+                    ? ["optimize", tr("prompt.ai_optimize"), tr("prompt.ai_optimize_hint")]
+                    : ["complete", tr("prompt.ai_complete"), tr("prompt.ai_complete_hint")],
+                ["assist", tr("prompt.ai_instruct"), tr("prompt.ai_instruct_hint")],
+            ];
+        };
+        aiBtn?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (menu && menu.isConnected) {
+                closeMenu();
                 return;
             }
-            showAssist(assist.hidden);
-            if (!assist.hidden) instr.focus({ preventScroll: true });
+            showHistory(false);
+            menu = document.createElement("div");
+            menu.className = "pe-ai-menu";
+            menu.setAttribute("role", "menu");
+            menuItems().forEach(([mode, label, hint]) => {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.setAttribute("role", "menuitem");
+                b.dataset.aiMode = mode;
+                const strong = document.createElement("strong");
+                strong.textContent = label;
+                const small = document.createElement("small");
+                small.textContent = hint;
+                b.append(strong, small);
+                b.addEventListener("click", () => {
+                    closeMenu();
+                    if (mode === "assist") openAssist();
+                    else runAi(mode, "");
+                });
+                menu.appendChild(b);
+            });
+            pe.querySelector(".pe-meta").appendChild(menu);
+            aiBtn.setAttribute("aria-expanded", "true");
+            menu.querySelector("button")?.focus({ preventScroll: true });
         });
-        assistGo?.addEventListener("click", () => runAi(instr.value.trim()));
+        document.addEventListener("click", (e) => {
+            if (menu && !menu.contains(e.target)) closeMenu();
+        });
+        pe.addEventListener("keydown", (e) => {
+            if (menu && e.key === "Escape") {
+                e.stopPropagation();
+                closeMenu();
+                aiBtn.focus();
+            }
+        });
+        const sendInstr = () => {
+            const v = instr.value.trim();
+            if (!v && body.value.trim()) return instr.focus();
+            runAi(body.value.trim() ? "instruct" : "create", v);
+        };
+        assistGo?.addEventListener("click", sendInstr);
         instr?.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.isComposing) {
                 e.preventDefault();
-                runAi(instr.value.trim());
+                sendInstr();
             }
         });
         undoBtn?.addEventListener("click", () => {

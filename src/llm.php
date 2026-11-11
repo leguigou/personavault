@@ -470,7 +470,53 @@ function llm_provider_without_vision(string $provider, string $model = ''): bool
  * @return array{body:string, used_image:bool, image_note:string}
  * @throws RuntimeException
  */
-function llm_visual_prompt(array $persona, array $prompts, string $kind, string $title, string $body, int $skipId = 0, string $instruction = ''): array
+/** Types de prompt « visuels » : on peut les réécrire pour la génération d'images. */
+const LLM_VISUAL_KINDS = ['image', 'negative', 'video'];
+
+/**
+ * Mode réellement appliqué, selon le texte et le type :
+ * - create   : prompt vide → rédigé à partir de la fiche et de la photo principale ;
+ * - instruct : consigne libre de l'utilisateur appliquée au texte ;
+ * - analyze  : évaluation sans rien modifier (niveau de détail, ce qui manque) ;
+ * - optimize : prompt visuel réécrit pour la génération (tous ses détails gardés) ;
+ * - complete : prompt système / autre : seuls des AJOUTS, placés à la fin par l'app
+ *              (le texte existant n'est jamais réécrit).
+ */
+function llm_prompt_mode(string $kind, string $body, string $instruction, string $wanted): string
+{
+    if (trim($body) === '') {
+        return 'create'; // une éventuelle consigne guide alors la création
+    }
+    if (trim($instruction) !== '') {
+        return 'instruct';
+    }
+    $visual = in_array($kind, LLM_VISUAL_KINDS, true);
+    if ($wanted === 'analyze') {
+        return 'analyze';
+    }
+    return $visual && $wanted !== 'complete' ? 'optimize' : 'complete';
+}
+
+/** Retire de $additions les lignes déjà présentes dans $body (le modèle les répète parfois). */
+function llm_strip_known_lines(string $body, string $additions): string
+{
+    $known = [];
+    foreach (preg_split('/\R/u', $body) as $l) {
+        $k = mb_strtolower(trim($l));
+        if ($k !== '') {
+            $known[$k] = true;
+        }
+    }
+    $out = [];
+    foreach (preg_split('/\R/u', $additions) as $l) {
+        if (!isset($known[mb_strtolower(trim($l))])) {
+            $out[] = $l;
+        }
+    }
+    return trim(implode("\n", $out));
+}
+
+function llm_visual_prompt(array $persona, array $prompts, string $kind, string $title, string $body, int $skipId = 0, string $instruction = '', string $wanted = ''): array
 {
     $cfg = llm_config();
     if ($cfg['key'] === '') {
@@ -481,6 +527,7 @@ function llm_visual_prompt(array $persona, array $prompts, string $kind, string 
     if (!in_array($kind, $kinds, true)) {
         $kind = 'image';
     }
+    $mode = llm_prompt_mode($kind, $body, $instruction, $wanted);
 
     // contexte : les autres prompts de la fiche (le système d'abord, il décrit souvent le physique)
     usort($prompts, static fn ($a, $b) => ((string) $a['kind'] === 'system' ? 0 : 1) <=> ((string) $b['kind'] === 'system' ? 0 : 1));
@@ -505,6 +552,14 @@ function llm_visual_prompt(array $persona, array $prompts, string $kind, string 
         'other'    => "un prompt utile pour ce persona",
     ][$kind];
 
+    $rules = [
+        'create'   => "TÂCHE : le texte est vide. Écris le prompt complet à partir de la fiche, des prompts existants et de la photo. Si une CONSIGNE est donnée, respecte-la.\nRéponds UNIQUEMENT avec le texte du prompt, sans titre, sans guillemets, sans explication, sans balises markdown.",
+        'instruct' => "TÂCHE : applique la CONSIGNE DE MODIFICATION au texte existant et UNIQUEMENT elle. Garde tout le reste à l'identique (mêmes segments, même ordre, même langue) ; remplace ou retire seulement ce que la consigne contredit. Elle prime sur la fiche pour ce qu'elle demande.\nRéponds UNIQUEMENT avec le texte complet modifié, sans explication ni balises markdown.",
+        'optimize' => "TÂCHE : analyse le texte existant puis réécris-le en prompt de génération optimal.\n- Garde TOUS ses détails et ses choix (sujet, tenue, décor, style…) ; n'en retire aucun, ne les contredis pas.\n- Précise ce qui est vague, ajoute ce qui manque pour que la personne soit reconnaissable (traits du visage, cheveux, morphologie, peau) et pour une image réussie (cadrage, objectif, lumière, ambiance, style, qualité), à partir de la fiche et de la photo.\n- Remets les segments dans l'ordre le plus efficace pour un générateur.\nRéponds UNIQUEMENT avec le texte du prompt, sans explication ni balises markdown.",
+        'complete' => "TÂCHE : NE RÉÉCRIS PAS le texte existant : il appartient à l'utilisateur et sera gardé tel quel.\nÉcris SEULEMENT les informations qui manquent (tirées de la fiche, des autres prompts et de la photo), à ajouter À LA FIN du texte, dans son style et sa forme (mêmes tournures, même personne grammaticale).\nNe répète rien de ce qui y figure déjà, ne contredis rien.\nS'il ne manque rien d'utile, réponds exactement : RIEN\nRéponds UNIQUEMENT avec le texte à ajouter, sans titre, sans explication, sans balises markdown.",
+        'analyze'  => "TÂCHE : n'écris pas de prompt. ÉVALUE le texte existant pour son usage ({$goal}) : est-il assez détaillé et efficace ?\nRéponds UNIQUEMENT avec un objet JSON, en français :\n{\"level\": \"faible|moyen|bon\", \"summary\": \"une ou deux phrases\", \"missing\": [\"élément manquant ou à préciser\", \"…\"]}\n- missing : 0 à 8 éléments concrets et courts (ex. « couleur des yeux », « focale et cadrage », « ton de voix »), tirés de ce que la fiche ou la photo permettent d'ajouter.",
+    ][$mode];
+
     $system = <<<TXT
 Tu es un expert en prompts pour les générateurs d'images et de vidéos (Stable Diffusion, Flux, Midjourney, DALL·E, Sora…) et pour les agents conversationnels.
 Ta tâche : écrire {$goal}.
@@ -518,12 +573,11 @@ Méthode :
    - si c'est un dessin, un manga, un anime, une 3D, une peinture… : reprends précisément ce style (technique, trait, couleurs, ombrage, époque ou artiste de référence s'il est évident).
 3. Les informations de la fiche priment sur ce que tu crois voir ; n'invente rien qui les contredise. Si un détail est inconnu, ne le comble pas au hasard.
 
-Règles de sortie :
-- Si une CONSIGNE DE MODIFICATION est donnée : applique-la au texte existant et UNIQUEMENT elle. Garde tout le reste à l'identique (mêmes segments, même ordre, même langue) ; remplace ou retire seulement ce que la consigne contredit. Elle prime sur la fiche pour ce qu'elle demande.
-- Sinon, si un texte existant est fourni, garde son intention et ses choix, complète-le et améliore-le plutôt que de tout réécrire.
-- Pour un prompt d'image ou de vidéo : écris en anglais (langue la mieux comprise par les générateurs), sauf si le texte existant est clairement dans une autre langue ; liste de segments séparés par des virgules, le sujet et le visage d'abord, puis tenue, pose, décor, lumière, cadrage, style et qualité.
-- Pour un prompt système ou autre : écris en français, sauf si le texte existant est dans une autre langue.
-- Réponds UNIQUEMENT avec le texte du prompt, sans titre, sans guillemets, sans explication, sans balises markdown.
+Langue :
+- Prompt d'image ou de vidéo : en anglais (langue la mieux comprise par les générateurs), sauf si le texte existant est clairement dans une autre langue ; liste de segments séparés par des virgules, le sujet et le visage d'abord, puis tenue, pose, décor, lumière, cadrage, style et qualité.
+- Prompt système ou autre : en français, sauf si le texte existant est dans une autre langue.
+
+{$rules}
 TXT;
 
     $facts = [
@@ -538,9 +592,12 @@ TXT;
         . 'TYPE DEMANDÉ : ' . $kind . "\n"
         . ($title !== '' ? 'TITRE DU PROMPT : ' . $title . "\n" : '')
         . (trim($body) !== ''
-            ? (trim($instruction) !== ''
-                ? "TEXTE EXISTANT À MODIFIER :\n" . trim($body)
-                : "TEXTE EXISTANT À COMPLÉTER ET AMÉLIORER :\n" . trim($body))
+            ? [
+                'instruct' => "TEXTE EXISTANT À MODIFIER :\n",
+                'optimize' => "TEXTE EXISTANT À OPTIMISER :\n",
+                'complete' => "TEXTE EXISTANT (à garder tel quel, ne pas réécrire) :\n",
+                'analyze'  => "TEXTE EXISTANT À ÉVALUER :\n",
+            ][$mode] . trim($body)
             : "TEXTE EXISTANT : (vide) — écris le prompt complet.")
         . (trim($instruction) !== '' ? "\n\nCONSIGNE DE MODIFICATION (de l'utilisateur) :\n" . trim($instruction) : '');
 
@@ -560,7 +617,7 @@ TXT;
         }
     }
 
-    $opts = ['temperature' => 0.6, 'max_tokens' => 900, 'timeout' => 150, 'purpose' => 'ai_prompt'];
+    $opts = ['temperature' => $mode === 'analyze' ? 0.2 : 0.6, 'max_tokens' => 900, 'timeout' => 150, 'purpose' => 'ai_prompt'];
     $text = static fn (bool $withImage): array => [
         ['role' => 'system', 'content' => $system],
         ['role' => 'user', 'content' => $withImage
@@ -593,6 +650,33 @@ TXT;
     if ($out === '') {
         throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
+    $base = ['mode' => $mode, 'used_image' => $usedImage, 'image_note' => $note];
 
-    return ['body' => $out, 'used_image' => $usedImage, 'image_note' => $note];
+    if ($mode === 'analyze') {
+        $j     = llm_json($out);
+        $level = in_array($j['level'] ?? '', ['faible', 'moyen', 'bon'], true) ? (string) $j['level'] : 'moyen';
+        $miss  = [];
+        foreach ((array) ($j['missing'] ?? []) as $m) {
+            if (is_scalar($m) && trim((string) $m) !== '' && count($miss) < 8) {
+                $miss[] = mb_substr(trim((string) $m), 0, 160);
+            }
+        }
+        return $base + ['body' => $body, 'analysis' => [
+            'level'   => $level,
+            'summary' => mb_substr(trim((string) ($j['summary'] ?? '')), 0, 400),
+            'missing' => $miss,
+        ]];
+    }
+
+    if ($mode === 'complete') {
+        // ajout à la fin, jamais de réécriture : le texte de l'utilisateur reste intact
+        $add = preg_match('/^\W*rien\W*$/iu', $out) ? '' : llm_strip_known_lines($body, $out);
+        return $base + [
+            'body'    => $add === '' ? $body : rtrim($body) . "\n\n" . $add,
+            'added'   => $add,
+            'nothing' => $add === '',
+        ];
+    }
+
+    return $base + ['body' => $out];
 }

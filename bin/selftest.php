@@ -499,6 +499,13 @@ try {
     $check(export_filename('Week-end à Lisbonne !', 'md', '2026-11-08') === 'week-end-a-lisbonne-2026-11-08.md'
         && export_filename('???', 'txt', '2026-11-08') === 'conversation-2026-11-08.txt', 'nom de fichier propre à partir du titre');
     $check(export_bubbles(['content' => 'Un. Deux.', 'split_points' => '[4]']) === ['Un.', 'Deux.'], 'page imprimable : découpage en bulles');
+    // bouton IA des prompts : bon mode selon le type, jamais de réécriture d'un prompt système
+    $check(llm_prompt_mode('image', '', '', '') === 'create' && llm_prompt_mode('system', '', 'ton froid', '') === 'create', 'IA prompt : vide → création (consigne comprise)');
+    $check(llm_prompt_mode('image', 'x', '', '') === 'optimize' && llm_prompt_mode('video', 'x', '', 'optimize') === 'optimize', 'IA prompt : image ou vidéo remplie → optimisation');
+    $check(llm_prompt_mode('system', 'x', '', 'optimize') === 'complete' && llm_prompt_mode('other', 'x', '', '') === 'complete', 'IA prompt : système / autre rempli → complément seulement, jamais réécrit');
+    $check(llm_prompt_mode('system', 'x', '', 'analyze') === 'analyze' && llm_prompt_mode('system', 'x', 'ton froid', '') === 'instruct', 'IA prompt : analyse et consigne explicites');
+    $check(llm_strip_known_lines("Tu es Camille.\nTu tutoies.", "tu tutoies.\nTu as les yeux verts.") === 'Tu as les yeux verts.', 'IA prompt : un complément ne répète pas les lignes existantes');
+
     // historique des prompts : lignes + / −, 10 dernières modifications seulement
     $check(line_diff_counts("a\nb\nc", "a\nB\nc\nd") === ['added' => 2, 'removed' => 1], 'historique : lignes ajoutées et supprimées');
     $check(line_diff_counts("a\r\nb", "a\nb") === ['added' => 0, 'removed' => 0], 'historique : fins de ligne Windows ignorées');

@@ -324,6 +324,8 @@ $token    = csrf_token();
                 </div>
                 <div class="pe-history-list" data-pe-history-list></div>
             </div>
+            <!-- analyse IA du prompt : niveau de détail, ce qui manque, action proposée -->
+            <div class="pe-analysis" data-pe-analysis hidden aria-live="polite"></div>
             <?php if (llm_ready()): ?>
                 <!-- assistance IA : une consigne en texte libre, le modèle des Réglages › IA corrige le prompt -->
                 <div class="pe-assist" data-pe-assist hidden>

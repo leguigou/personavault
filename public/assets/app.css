@@ -4206,3 +4206,46 @@ html[data-mode="light"] .pe-diff-line.is-add { color: #047857; }
 html[data-mode="light"] .pe-diff-line.is-del { color: #b91c1c; }
 .pe-diff-skip { padding: 2px 10px; color: var(--muted-2); font-style: italic; }
 .pe-hist-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 10px; }
+
+/* bouton IA unique : menu de choix (créer, analyser, optimiser / compléter, consigne) */
+.pe-meta { position: relative; }
+.pe-ai-menu {
+    position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 5;
+    width: min(330px, calc(100vw - 40px));
+    display: flex; flex-direction: column; gap: 2px; padding: 6px;
+    border-radius: 18px; border: 1px solid var(--border);
+    background: var(--elev, #0e0e18);
+    box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .7);
+    animation: sheet-up .16s ease-out both;
+}
+.pe-ai-menu button {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    width: 100%; padding: 10px 12px; border: 0; border-radius: 12px;
+    background: transparent; color: var(--text); text-align: left; cursor: pointer;
+    font: inherit;
+}
+.pe-ai-menu button:hover, .pe-ai-menu button:focus-visible { background: rgba(var(--ink), .07); outline: none; }
+.pe-ai-menu strong { font-size: 14px; font-weight: 650; }
+.pe-ai-menu small { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+/* résultat de l'analyse */
+.pe-analysis {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 12px 14px; border-radius: 16px;
+    border: 1px solid rgba(var(--acc), .35); background: rgba(var(--acc), .06);
+    font-size: 13.5px; line-height: 1.5;
+    max-height: 38dvh; overflow: auto;
+}
+.pe-analysis[hidden] { display: none; }
+.pe-analysis p { margin: 0; }
+.pe-analysis ul { margin: 0; padding-left: 18px; color: var(--muted); }
+.pe-analysis-head { display: flex; align-items: center; justify-content: space-between; }
+.pe-analysis-tools { display: flex; justify-content: flex-end; }
+.pe-level { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.pe-level.is-bon { color: #34d399; background: rgba(52, 211, 153, .15); }
+.pe-level.is-moyen { color: #fbbf24; background: rgba(251, 191, 36, .15); }
+.pe-level.is-faible { color: #f87171; background: rgba(248, 113, 113, .15); }
+html[data-mode="light"] .pe-level.is-bon { color: #047857; }
+html[data-mode="light"] .pe-level.is-moyen { color: #b45309; }
+html[data-mode="light"] .pe-level.is-faible { color: #b91c1c; }
+.prompt-editor.is-history .pe-analysis { display: none; }

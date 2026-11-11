@@ -221,10 +221,19 @@ est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le 
 
 ### Prompts : assistance IA et historique
 
-Dans l'éditeur de prompt, le bouton IA rédige un prompt vide à partir de la fiche et de la photo
-principale. Si le prompt est déjà écrit, il ouvre une barre d'assistance : une consigne libre
-(« cheveux plus courts », « tenue de soirée »…) que le modèle des Réglages › IA applique au texte,
-sans toucher au reste (bouton « Annuler » pour revenir au texte d'avant). Le bouton horloge montre
+Dans l'éditeur de prompt, un seul bouton IA ouvre un menu qui dépend du prompt (modèle des
+Réglages › IA) :
+
+- prompt vide : **Créer à partir de la fiche** (description, attributs, autres prompts, photo
+  principale) ou **Créer avec une consigne** ;
+- prompt image, négatif ou vidéo rempli : **Analyser** (niveau de détail, éléments manquants, rien
+  n'est modifié), **Optimiser pour la génération** (réécrit pour les générateurs en gardant tous les
+  détails), **Modifier avec une consigne** ;
+- prompt système ou autre rempli : **Analyser**, **Compléter sans écraser** (le modèle ne renvoie que
+  les informations manquantes, que l'app ajoute à la fin : le texte existant n'est jamais réécrit),
+  **Modifier avec une consigne** (« cheveux plus courts », « ton plus froid »…).
+
+Bouton « Annuler » pour revenir au texte d'avant une proposition. Le bouton horloge montre
 les 10 dernières modifications enregistrées (table `prompt_versions`, migration v7) avec le nombre
 de lignes ajoutées en vert et supprimées en rouge, le détail ligne à ligne, et de quoi reprendre
 l'avant ou l'après dans l'éditeur.
