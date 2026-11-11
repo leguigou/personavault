@@ -398,56 +398,6 @@ function llm_json(?string $raw): array
     return $data;
 }
 
-/** Demande au modèle de compléter une fiche à partir des prompts fournis. */
-function llm_complete_persona(array $persona, array $prompts): array
-{
-    $existingKeys = [];
-    foreach (json_list($persona['meta'] ?? '[]') as $row) {
-        if (is_array($row) && !empty($row['k'])) {
-            $existingKeys[] = (string) $row['k'];
-        }
-    }
-
-    $promptText = '';
-    foreach ($prompts as $p) {
-        $kind  = (string) ($p['kind'] ?? 'image');
-        $title = trim((string) ($p['title'] ?? ''));
-        $promptText .= '[' . strtoupper($kind) . ($title !== '' ? ' — ' . $title : '') . "]\n" . trim((string) $p['body']) . "\n\n";
-    }
-
-    $system = <<<TXT
-Tu complètes des fiches de persona (personnages récurrents pour la génération d'images et d'agents conversationnels).
-On te donne le nom, l'accroche, la description, les tags et les attributs déjà saisis, ainsi que les PROMPTS existants.
-Les prompts sont la source de vérité : déduis-en ce qui manque (apparence, style, univers, âge, métier, morphologie, garde-robe, palette, éclairage, caméra, modèle de génération, seeds…).
-N'invente rien qui contredise l'existant. Sois concis et factuel, en français (les valeurs techniques restent telles quelles).
-Réponds UNIQUEMENT avec un objet JSON de cette forme :
-{"tagline": "…", "description": "…", "tags": ["…"], "meta": [{"k": "Âge", "v": "29"}]}
-- tagline : une ligne max, 90 caractères.
-- description : 1 à 3 phrases.
-- tags : 3 à 6 tags en minuscules, sans #.
-- meta : 3 à 6 attributs au format clé/valeur, clés courtes et en français.
-Ne remplis un champ texte que s'il apporte une information : si l'existant est déjà complet, renvoie une chaîne vide.
-N'ajoute pas d'attribut déjà présent dans la fiche.
-TXT;
-
-    $user = json_encode([
-        'nom'         => $persona['name'],
-        'accroche'    => $persona['tagline'],
-        'description' => $persona['description'],
-        'tags'        => json_list($persona['tags'] ?? '[]'),
-        'attributs'   => json_list($persona['meta'] ?? '[]'),
-        'deja_presents' => $existingKeys,
-        'prompts'     => $promptText,
-    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
-    $raw = llm_chat([
-        ['role' => 'system', 'content' => $system],
-        ['role' => 'user', 'content' => (string) $user],
-    ], true);
-
-    return llm_json($raw);
-}
-
 /**
  * Fournisseurs connus pour lesquels on sait que l'API n'accepte pas d'image :
  * on n'envoie pas la photo (évite un aller-retour en erreur).

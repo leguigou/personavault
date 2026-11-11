@@ -5,13 +5,15 @@ $isAuth = is_logged();
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $isFav = $currentPath === '/' && ($_GET['fav'] ?? '') === '1';
 $isArch = $currentPath === '/' && ($_GET['arch'] ?? '') === '1';
-$isNew = $currentPath === '/p/new';
+$isNew = $currentPath === '/p/new' || $currentPath === '/p/assist';
 $isSettings = $currentPath === '/settings' || str_starts_with($currentPath, '/settings/');
 // Bibliothèque : l'accueil et les fiches persona, pas les Réglages ni la création
 $isLib = !$isFav && !$isArch && !$isNew && !$isSettings
     && !str_starts_with($currentPath, '/chat') && !str_starts_with($currentPath, '/memories');
 $isChat = str_starts_with($currentPath, '/chat') || str_starts_with($currentPath, '/memories');
 $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
+// assistant de création : plein écran comme une discussion
+$isAssist = (bool) preg_match('#^/p/(?:[a-z0-9-]+/)?assist$#', $currentPath);
 ?>
 <!doctype html>
 <?php $__ui = ui_style(); ?>
@@ -47,7 +49,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
     <link rel="stylesheet" href="<?= e(asset_url('app.css')) ?>">
     <script>try{document.documentElement.dataset.view=localStorage.getItem("pv_view")==="list"?"list":"grid";}catch(e){}</script>
 </head>
-<body class="<?= $isAuth ? 'is-auth' : 'is-guest' ?> <?= $isChatRoom ? 'chat-room' : '' ?>">
+<body class="<?= $isAuth ? 'is-auth' : 'is-guest' ?> <?= $isChatRoom ? 'chat-room' : '' ?> <?= $isAssist ? 'assist-room' : '' ?>">
 <div class="aurora" aria-hidden="true">
     <span class="orb orb-1"></span>
     <span class="orb orb-2"></span>
@@ -88,7 +90,7 @@ $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
 </header>
 <?php endif; ?>
 
-<main class="page <?= $isChatRoom ? 'page-chat' : '' ?>">
+<main class="page <?= $isChatRoom ? 'page-chat' : '' ?> <?= $isAssist ? 'page-assist' : '' ?>">
     <?php foreach ($flashes as $f): ?>
         <div class="flash flash-<?= e($f['type']) ?>" role="status">
             <span><?= e($f['message']) ?></span>

@@ -219,32 +219,47 @@ est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le 
   libre pendant l'échange ; si la page est fermée avant, l'extraction se fait la fois suivante, sans perte) ;
 - modèle : local (rien ne sort) ou distant (les derniers messages sont envoyés au fournisseur).
 
-### Prompts : atelier IA et historique
+### Créer ou compléter un persona avec l'IA
 
-L'éditeur de prompt a trois onglets : **Texte**, **Atelier IA** et **Historique**. On ouvre aussi
-l'atelier directement depuis l'étincelle de chaque carte de prompt. L'atelier utilise le modèle des
-Réglages › IA ; il indique ce modèle et s'il lit la photo principale (couverture, sinon première photo).
+Sur la page de création, **Créer avec l'IA** (`/p/assist`) ouvre un assistant en conversation
+(modèle des Réglages › IA) :
 
-- **Prompt vide** : « Créer à partir de la fiche » (description, attributs, autres prompts, photo),
-  avec des idées de départ selon le type (portrait studio, plan en pied, base complète…) et une
-  consigne libre facultative.
-- **Bilan** (rien n'est modifié) : note sur 100, critères vérifiés un par un selon le type (visage,
-  cheveux, lumière, cadrage… pour une image ; identité, voix, règles, exemples… pour un prompt
-  système), contradictions avec la fiche ou les autres prompts, idées de retouches. Chaque critère
-  manquant a son bouton « Ajouter ».
-- **Améliorer** : image, négatif, vidéo → « Optimiser pour la génération » (réécriture qui garde
-  tous les détails) et « 3 variantes de scène » (même personne, autres lieux et lumières) ; système
-  et autre → « Compléter sans écraser » : le modèle ne renvoie que les ajouts, l'app les place à la
-  fin, le texte existant n'est jamais réécrit (forcé côté serveur, `llm_prompt_mode()`).
-- **Retouches rapides** et **consigne libre** (« cheveux plus courts », « ton plus froid »…).
-- **Revue** : toute proposition s'affiche d'abord en différences mot à mot (ajouts en vert,
-  retraits en rouge, compte des mots) avec Appliquer, Réessayer ou Refuser ; une demande en cours
-  peut être arrêtée. Après application, « ↶ Annuler » revient au texte d'avant ; rien n'est
-  enregistré tant qu'on n'appuie pas sur « Enregistrer ».
+- on décrit son idée en quelques mots ; l'assistant tient la fiche à jour et pose **une question à la
+  fois** (prénom, âge, métier, apparence, style visuel, personnalité, façon de parler, relation,
+  limites), avec trois réponses toutes prêtes ;
+- **Suggérer pour moi** : il invente lui-même une réponse cohérente quand l'inspiration manque ;
+- en haut, la **fiche en cours** : jauge et liste de ce qui est rempli ou manquant ;
+- **Créer** (à tout moment) : l'IA complète ce qui manque et rédige la fiche avec son **prompt
+  système** et son **prompt image** ; tout reste modifiable ensuite.
 
-L'onglet Historique montre les 10 dernières modifications enregistrées (table `prompt_versions`,
-migration v7), avec les lignes ajoutées en vert et supprimées en rouge, le détail ligne à ligne, et
-de quoi reprendre l'avant ou l'après dans l'éditeur.
+La conversation est gardée dans l'onglet du navigateur : un rechargement ne la perd pas.
+
+Sur une fiche existante, le bouton **Compléter** ouvre le même assistant (`/p/{slug}/assist`) : il
+repère ce qui manque (par exemple l'absence de prompt système) et pose les questions
+correspondantes. À l'application, **rien n'est écrasé** : seuls les champs vides sont remplis, les
+attributs et tags manquants ajoutés, et le prompt système ou image créé seulement s'il n'en existe
+pas (`src/assist.php`).
+
+### Prompts : l'IA dans l'éditeur, et l'historique
+
+L'éditeur de prompt est pensé pour le mobile : le texte prend l'écran, l'IA est toujours en bas
+(comme la saisie d'une discussion).
+
+- **Actions du moment**, sur une ligne : prompt vide → *Créer depuis la fiche* et idées de départ ;
+  prompt rempli → *Bilan*, *Optimiser* (image, négatif, vidéo) ou *Compléter* (système, autre),
+  *3 variantes* (image, vidéo), suggestions du bilan et retouches rapides.
+- **Consigne libre** : « cheveux plus courts », « ton plus froid »…
+- **Propositions dans le texte** : ajouts en vert, retraits barrés, puis *Refuser*, *Réessayer* ou
+  *Appliquer* ; *↶ Annuler* après application. Rien n'est enregistré sans *Enregistrer*.
+- **Bilan** (feuille du bas) : note sur 100, critères vérifiés un par un selon le type, avec
+  *+ Ajouter* sur ce qui manque, et contradictions avec la fiche.
+- *Compléter* ne réécrit jamais un prompt système ou autre : le modèle ne renvoie que les ajouts,
+  l'app les place à la fin (règle choisie côté serveur, `llm_prompt_mode()`).
+- Menu **⋯** : copier, historique, modèle utilisé, supprimer.
+
+**Historique** : les 10 dernières modifications enregistrées de chaque prompt (table
+`prompt_versions`, migration v7), lignes ajoutées en vert et supprimées en rouge ; reprendre une
+version passe par la même revue qu'une proposition.
 
 ### Journal des échanges
 

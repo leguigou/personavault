@@ -104,7 +104,7 @@ require $routes . 'auth.php';
 
 require_login();
 
-foreach (['chat', 'conversation', 'backup', 'memories', 'settings', 'library', 'persona', 'gallery', 'export'] as $route) {
+foreach (['chat', 'conversation', 'backup', 'memories', 'settings', 'assist', 'library', 'persona', 'gallery', 'export'] as $route) {
     require $routes . $route . '.php';
 }
 

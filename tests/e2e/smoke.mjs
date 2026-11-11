@@ -82,7 +82,7 @@ const media = (homeHtml.match(/src="(\/media\/[^"]+)"/) || [])[1] || '/media/abs
 for (const u of ['/', '/?fav=1', '/?arch=1', '/?q=lis', '/?tag=romance', '/p/new', '/p/camille-lefebvre',
     '/p/camille-lefebvre/edit', '/p/inexistant', '/chat', '/chat/1', '/chat/1/status', '/chat/1/messages?before=10',
     '/chat/1/search?q=lisb', '/chat/1/search?q=pasteis%20tage', '/chat/999', '/chat/models', '/memories',
-    '/memories?q=train', '/settings', '/settings/logs', '/prompts/1/history', '/export.json', '/backup/export.zip', '/nope', '/photos/1', '/assets/app.js']) {
+    '/memories?q=train', '/settings', '/settings/logs', '/p/assist', '/p/smoke-test/assist', '/prompts/1/history', '/export.json', '/backup/export.zip', '/nope', '/photos/1', '/assets/app.js']) {
     const body = await record('GET ' + u, await http(u));
     // quelques vérifications de contenu, au-delà du statut
     if (u === '/') expect(body.includes('Camille Lefebvre') && body.includes('Hugo Bernard'), 'la bibliothèque liste les personas');
