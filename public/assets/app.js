@@ -429,26 +429,42 @@
         copyText(target.value ?? target.textContent ?? "", btn);
     });
 
-    /* ------------------------------------- éditeur de prompt (grande fenêtre, piste G)
-       Trois onglets : le texte ; l'atelier IA (créer, bilan, optimiser / compléter,
-       retouches, variantes — toute proposition passe par une revue avant d'être appliquée) ;
-       l'historique des 10 dernières modifications enregistrées. */
+    /* ------------------------------------- éditeur de prompt (v3, mobile d'abord)
+       Le texte prend l'écran. L'IA est toujours en bas (actions du moment + consigne) ;
+       ses propositions s'affichent dans le texte (ajouts en vert, retraits barrés) avec
+       Refuser / Réessayer / Appliquer. Bilan, variantes, historique et options : une seule
+       feuille qui monte du bas. */
     const pe = document.getElementById("prompt-editor");
     if (pe) {
         const form = pe.querySelector("[data-pe-form]");
         const title = form.querySelector("[name=title]");
         const body = form.querySelector("[name=body]");
-        const count = pe.querySelector("[data-pe-count]");
+        const kindSel = form.querySelector("[data-pe-kind]");
         const heading = pe.querySelector("[data-pe-heading]");
-        const delBtn = pe.querySelector("[data-pe-delete]");
-        const undoBtn = pe.querySelector("[data-pe-undo]");
-        const tabs = [...pe.querySelectorAll("[data-pe-tab]")];
-        const panes = [...pe.querySelectorAll("[data-pe-pane]")];
+        const banner = pe.querySelector("[data-pe-banner]");
+        const diffview = pe.querySelector("[data-pe-diffview]");
+        const actions = pe.querySelector("[data-pe-actions]");
+        const decide = pe.querySelector("[data-pe-decide]");
+        const ai = pe.querySelector("[data-pe-ai]");
+        const chips = pe.querySelector("[data-pe-chips]");
+        const ask = pe.querySelector("[data-pe-ask]");
+        const sendBtn = pe.querySelector("[data-pe-send]");
+        const stopBtn = pe.querySelector("[data-pe-stop]");
+        const busyEl = pe.querySelector("[data-pe-busy]");
+        const sheet = pe.querySelector("[data-pe-sheet]");
+        const sheetBack = pe.querySelector("[data-pe-sheet-back]");
+        const sheetBody = pe.querySelector("[data-pe-sheet-body]");
+        const sheetTitle = pe.querySelector("[data-pe-sheet-title]");
         const VISUAL = ["image", "negative", "video"];
         let current = null; // identifiant du prompt modifié (null : nouveau)
         let initial = "";
         let beforeAi = null; // texte avant la dernière proposition appliquée (annuler)
-        const kindNow = () => form.querySelector("[name=kind]:checked")?.value || "image";
+        let analysis = null; // { data, text }
+        let pending = null; // proposition en revue { text, mode, instruction }
+        let lastReq = null; // pour « Réessayer »
+        let ctrl = null;
+        const kindNow = () => kindSel.value || "image";
+        const isVisual = () => VISUAL.includes(kindNow());
         const snapshot = () => [title.value, body.value, kindNow()].join("\u0001");
         const el = (tag, cls, text) => {
             const n = document.createElement(tag);
@@ -456,31 +472,14 @@
             if (text !== undefined) n.textContent = text;
             return n;
         };
-
-        /* ---- onglets */
-        let tab = "text";
-        const setTab = (name) => {
-            if (!pe.querySelector('[data-pe-tab="' + name + '"]')) name = "text";
-            tab = name;
-            tabs.forEach((t) => t.setAttribute("aria-selected", t.dataset.peTab === name ? "true" : "false"));
-            panes.forEach((p) => (p.hidden = p.dataset.pePane !== name));
-            pe.dataset.tab = name;
-            if (name === "history") loadHistory();
-            if (name === "studio") refreshStudio();
-        };
-        tabs.forEach((t) => t.addEventListener("click", () => setTab(t.dataset.peTab)));
-        // le texte est obligatoire : on revient dessus avant que le navigateur ne le réclame
-        form.addEventListener("submit", () => tab !== "text" && setTab("text"), true);
-        form.querySelector('[type="submit"]')?.addEventListener("click", () => tab !== "text" && setTab("text"));
-
-        const paint = () => {
-            form.querySelectorAll(".pe-kind").forEach((l) => l.classList.toggle("is-on", l.querySelector("input").checked));
-            const n = [...body.value].length;
-            count.textContent = tr("prompt.chars", n) + (snapshot() !== initial ? " · " + tr("prompt.modified") : "");
-            if (tab === "studio") refreshStudio();
+        const button = (cls, text, onClick) => {
+            const b = el("button", cls, text);
+            b.type = "button";
+            if (onClick) b.addEventListener("click", onClick);
+            return b;
         };
 
-        /* ---- différences mot à mot (revue) et ligne à ligne (historique) */
+        /* ---- différences mot à mot (propositions) et ligne à ligne (historique) */
         const lcs = (a, b) => {
             const n = a.length, m = b.length;
             const L = new Uint32Array((n + 1) * (m + 1));
@@ -502,40 +501,336 @@
         const tokens = (s) => s.replace(/\r\n?/g, "\n").match(/\n|[^\S\n]+|[^\s,;.!?:]+|[,;.!?:]/g) || [];
         const wordDiff = (a, b) => {
             const ta = tokens(a), tb = tokens(b);
-            if (ta.length * tb.length > 2500000) {
-                return [["-", a], ["+", b]]; // texte énorme : remplacement global
-            }
-            return lcs(ta, tb);
+            return ta.length * tb.length > 2500000 ? [["-", a], ["+", b]] : lcs(ta, tb);
         };
         const isWord = (t) => /\S/.test(t) && !/^[,;.!?:]$/.test(t);
-        const diffStats = (ops) => ({
-            add: ops.filter(([o, t]) => o === "+" && isWord(t)).length,
-            del: ops.filter(([o, t]) => o === "-" && isWord(t)).length,
-        });
-        const renderWordDiff = (ops) => {
-            const box = el("div", "st-diff");
-            // regroupe les jetons consécutifs de même nature ; replie les longs passages inchangés
+        const renderDiff = (ops) => {
+            const frag = document.createDocumentFragment();
             const runs = [];
             ops.forEach(([o, t]) => {
                 const last = runs[runs.length - 1];
-                if (last && last.o === o) last.t.push(t);
-                else runs.push({ o, t: [t] });
+                if (last && last.o === o) last.t += t;
+                else runs.push({ o, t });
             });
-            runs.forEach((r, k) => {
-                let text = r.t.join("");
-                if (r.o === "=" && r.t.length > 46) {
-                    const head = k === 0 ? "" : r.t.slice(0, 14).join("");
-                    const tail = k === runs.length - 1 ? "" : r.t.slice(-14).join("");
-                    box.append(el("span", "is-same", head), el("span", "st-diff-skip", " … "), el("span", "is-same", tail));
-                    return;
-                }
-                box.appendChild(el("span", r.o === "+" ? "is-add" : r.o === "-" ? "is-del" : "is-same", text));
-            });
-            return box;
+            runs.forEach((r) => frag.appendChild(el("span", r.o === "+" ? "is-add" : r.o === "-" ? "is-del" : "", r.t)));
+            return frag;
         };
 
-        /* ---- historique (onglet) */
-        const histList = pe.querySelector("[data-pe-history-list]");
+        /* ---- feuille du bas (une seule, contenus variables) */
+        const openSheet = (label, nodes) => {
+            sheetTitle.textContent = label;
+            sheetBody.replaceChildren(...nodes);
+            sheet.hidden = false;
+            sheetBack.hidden = false;
+            sheetBody.scrollTop = 0;
+            requestAnimationFrame(() => sheet.classList.add("is-on"));
+        };
+        const closeSheet = () => {
+            sheet.classList.remove("is-on");
+            sheet.hidden = true;
+            sheetBack.hidden = true;
+        };
+        sheetBack.addEventListener("click", closeSheet);
+        // tirer la poignée vers le bas pour fermer
+        (() => {
+            let y0 = null;
+            const grab = pe.querySelector("[data-pe-sheet-grab]");
+            grab.addEventListener("pointerdown", (e) => { y0 = e.clientY; grab.setPointerCapture(e.pointerId); });
+            grab.addEventListener("pointermove", (e) => {
+                if (y0 === null) return;
+                sheet.style.transform = "translateY(" + Math.max(0, e.clientY - y0) + "px)";
+            });
+            const end = (e) => {
+                if (y0 === null) return;
+                const dy = e.clientY - y0;
+                y0 = null;
+                sheet.style.transform = "";
+                if (dy > 80) closeSheet();
+            };
+            grab.addEventListener("pointerup", end);
+            grab.addEventListener("pointercancel", end);
+        })();
+        pe.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !sheet.hidden) {
+                e.stopPropagation();
+                closeSheet();
+            }
+        }, true);
+
+        /* ---- état général */
+        const paint = () => {
+            pe.querySelector(".pe-head")?.setAttribute("data-kind", kindNow());
+            kindSel.dataset.kind = kindNow();
+            if (ai) paintAi();
+        };
+        const setBusy = (on, mode) => {
+            pe.classList.toggle("is-ai-busy", on);
+            if (!ai) return;
+            busyEl.hidden = !on;
+            ask.hidden = on;
+            sendBtn.hidden = on;
+            stopBtn.hidden = !on;
+            body.readOnly = on;
+            if (on) {
+                const labels = {
+                    analyze: tr("studio.busy_analyze"),
+                    variants: tr("studio.busy_variants"),
+                    complete: tr("studio.busy_complete"),
+                    optimize: tr("studio.busy_optimize"),
+                    instruct: tr("studio.busy_instruct"),
+                };
+                busyEl.textContent = labels[mode] || tr("studio.busy_create");
+            }
+            chips.querySelectorAll("button").forEach((b) => (b.disabled = on));
+        };
+
+        /* ---- actions du moment (une seule ligne qui défile) */
+        const CHIPS = {
+            image: () => tr("studio.chips_image"),
+            video: () => tr("studio.chips_video"),
+            negative: () => tr("studio.chips_negative"),
+            system: () => tr("studio.chips_system"),
+            other: () => tr("studio.chips_other"),
+        };
+        const STARTERS = {
+            image: () => tr("studio.start_image"),
+            video: () => tr("studio.start_video"),
+            negative: () => tr("studio.start_negative"),
+            system: () => tr("studio.start_system"),
+            other: () => tr("studio.start_other"),
+        };
+        const split = (s) => s.split("|").map((x) => x.trim()).filter(Boolean);
+        const chip = (label, onClick, cls = "") => button("pe-chip " + cls, label.replace(/^\+/, ""), onClick);
+        const paintAi = () => {
+            const empty = !body.value.trim();
+            const kind = kindNow();
+            const visual = isVisual();
+            ask.placeholder = empty ? ask.dataset.phEmpty : ask.dataset.phFilled;
+            const list = [];
+            if (beforeAi !== null) list.push(chip(tr("studio.undo"), undo, "is-undo"));
+            if (empty) {
+                list.push(chip(tr("studio.create"), () => run("create", ""), "is-ai"));
+                split((STARTERS[kind] || STARTERS.other)()).forEach((c) => list.push(chip(c, () => run("create", c))));
+            } else {
+                list.push(chip(tr("studio.bilan"), () => (analysis && analysis.text === body.value ? showBilan() : run("analyze", "")), "is-ai"));
+                list.push(visual ? chip(tr("studio.optimize"), () => run("optimize", "")) : chip(tr("studio.complete"), () => run("complete", "")));
+                if (visual && kind !== "negative") list.push(chip(tr("studio.variants"), () => run("variants", "")));
+                const sugg = analysis && analysis.text === body.value ? analysis.data.suggestions || [] : [];
+                sugg.forEach((c) => list.push(chip(c, () => run(visual ? "instruct" : "complete", c), "is-sugg")));
+                split((CHIPS[kind] || CHIPS.other)()).forEach((c) =>
+                    list.push(chip(c, () => run(c.startsWith("+") ? (visual ? "optimize" : "complete") : "instruct", c.replace(/^\+/, "")), c.startsWith("+") ? "is-add" : ""))
+                );
+            }
+            const sig = list.map((b) => b.className + b.textContent).join("|");
+            if (chips.dataset.sig !== sig) {
+                chips.dataset.sig = sig;
+                chips.replaceChildren(...list);
+            }
+        };
+
+        /* ---- appel à l'IA */
+        async function run(mode, instruction = "") {
+            if (!ai || pe.classList.contains("is-ai-busy")) return;
+            closeSheet();
+            lastReq = { mode, instruction };
+            ctrl = new AbortController();
+            setBusy(true, mode);
+            try {
+                const fd = new FormData();
+                fd.append("_token", form.querySelector("[name=_token]").value);
+                fd.append("kind", kindNow());
+                fd.append("title", title.value);
+                fd.append("body", body.value);
+                fd.append("instruction", instruction);
+                fd.append("mode", mode);
+                if (current) fd.append("prompt_id", current);
+                const res = await fetch(ai.dataset.peAi, { method: "POST", body: fd, signal: ctrl.signal, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("prompt.ai_failed"));
+                setBusy(false);
+                if (data.image_note) toast({ title: tr("studio.note"), text: data.image_note });
+                if (data.mode === "analyze") {
+                    analysis = { data: data.analysis, text: body.value };
+                    paintAi();
+                    return showBilan();
+                }
+                if (data.mode === "variants") return showVariants(data.variants || []);
+                if (data.mode === "complete" && data.nothing) return toast(tr("prompt.ai_nothing"));
+                propose(data.body, data.mode, instruction);
+            } catch (err) {
+                setBusy(false);
+                if (err.name === "AbortError") return toast(tr("studio.stopped"));
+                toast({ title: tr("prompt.ai_failed"), text: err.message }, true);
+            } finally {
+                ctrl = null;
+            }
+        }
+        stopBtn?.addEventListener("click", () => ctrl?.abort());
+        const sendAsk = () => {
+            const v = ask.value.trim();
+            if (!body.value.trim()) return run("create", v);
+            if (!v) return ask.focus();
+            ask.value = "";
+            run("instruct", v);
+        };
+        sendBtn?.addEventListener("click", sendAsk);
+        ask?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.isComposing) {
+                e.preventDefault();
+                sendAsk();
+            }
+        });
+
+        /* ---- proposition : dans le texte, puis décider */
+        const MODE_TITLE = {
+            create: () => tr("studio.p_create"),
+            optimize: () => tr("studio.p_optimize"),
+            complete: () => tr("studio.p_complete"),
+            instruct: () => tr("studio.p_instruct"),
+            variants: () => tr("studio.p_variant"),
+            history: () => tr("studio.p_history"),
+        };
+        function propose(text, mode, instruction = "") {
+            pending = { text, mode, instruction };
+            const old = body.value;
+            const base = old.replace(/\s+$/, "");
+            let add = 0, del = 0;
+            diffview.replaceChildren();
+            if (!old.trim()) {
+                diffview.appendChild(el("span", "is-add", text));
+                add = (text.match(/\S+/g) || []).length;
+            } else if (mode === "complete" && text.startsWith(base)) {
+                // complément : le texte existant estompé, puis l'ajout en vert
+                const added = text.slice(base.length).replace(/^\s+/, "");
+                diffview.append(el("span", "is-kept", base + "\n\n"), el("span", "is-add", added));
+                add = (added.match(/\S+/g) || []).length;
+            } else {
+                const ops = wordDiff(old, text);
+                add = ops.filter(([o, t]) => o === "+" && isWord(t)).length;
+                del = ops.filter(([o, t]) => o === "-" && isWord(t)).length;
+                diffview.appendChild(renderDiff(ops));
+            }
+            banner.replaceChildren(
+                el("span", "pe-banner-ico", "✦"),
+                el("strong", "", (MODE_TITLE[mode] || MODE_TITLE.instruct)()),
+                el("span", "pe-banner-stats", "+" + add + (del ? " −" + del : ""))
+            );
+            if (instruction) banner.appendChild(el("small", "", "« " + instruction + " »"));
+            if (mode === "complete") banner.appendChild(el("small", "is-safe", tr("studio.p_safe")));
+            pe.classList.add("is-proposing");
+            banner.hidden = false;
+            diffview.hidden = false;
+            body.hidden = true;
+            actions.hidden = true;
+            decide.hidden = false;
+            diffview.scrollTop = 0;
+            decide.querySelector("[data-pe-apply]").focus({ preventScroll: true });
+        }
+        const endProposal = () => {
+            pending = null;
+            pe.classList.remove("is-proposing");
+            banner.hidden = true;
+            diffview.hidden = true;
+            body.hidden = false;
+            actions.hidden = false;
+            decide.hidden = true;
+            paint();
+        };
+        decide.querySelector("[data-pe-refuse]").addEventListener("click", endProposal);
+        decide.querySelector("[data-pe-retry]").addEventListener("click", () => {
+            const r = lastReq;
+            endProposal();
+            if (r && r.mode !== "history") run(r.mode, r.instruction);
+        });
+        decide.querySelector("[data-pe-apply]").addEventListener("click", () => {
+            if (!pending) return;
+            beforeAi = body.value;
+            body.value = pending.text;
+            endProposal();
+            body.classList.remove("is-flash");
+            void body.offsetWidth;
+            body.classList.add("is-flash");
+            toast(tr("studio.applied"));
+        });
+        const undo = () => {
+            if (beforeAi === null) return;
+            body.value = beforeAi;
+            beforeAi = null;
+            paint();
+        };
+
+        /* ---- bilan */
+        function showBilan() {
+            const a = analysis?.data;
+            if (!a) return;
+            const visual = isVisual();
+            const nodes = [];
+            const head = el("div", "pe-score");
+            const ringEl = el("div", "pe-ring is-" + a.level);
+            ringEl.style.setProperty("--p", String(a.score));
+            ringEl.appendChild(el("strong", "", String(a.score)));
+            ringEl.setAttribute("role", "img");
+            ringEl.setAttribute("aria-label", tr("studio.score_label", { n: a.score }));
+            const txt = el("div", "pe-score-txt");
+            txt.append(
+                el("b", "pe-level is-" + a.level, a.level === "bon" ? tr("prompt.level_good") : a.level === "faible" ? tr("prompt.level_low") : tr("prompt.level_mid")),
+                el("p", "", a.summary || "")
+            );
+            head.append(ringEl, txt);
+            nodes.push(head);
+            const ul = el("ul", "pe-crits");
+            (a.criteria || []).forEach((c) => {
+                const li = el("li", "is-" + c.status);
+                const dot = el("span", "pe-dot");
+                dot.title = c.status === "ok" ? tr("studio.crit_ok") : c.status === "partial" ? tr("studio.crit_partial") : tr("studio.crit_missing");
+                const t = el("div", "pe-crit-txt");
+                t.append(el("span", "", c.label));
+                if (c.note) t.append(el("small", "", c.note));
+                li.append(dot, t);
+                if (c.status !== "ok") {
+                    li.appendChild(button("pe-crit-add", tr("studio.crit_add"), () =>
+                        run(visual ? "optimize" : "complete", tr("studio.focus", { label: c.label, note: c.note || "" }).replace(/\s*:\s*$/, ""))
+                    ));
+                }
+                ul.appendChild(li);
+            });
+            nodes.push(ul);
+            if (a.conflicts && a.conflicts.length) {
+                const w = el("div", "pe-conflicts");
+                w.appendChild(el("strong", "", tr("studio.conflicts")));
+                const l = el("ul");
+                a.conflicts.forEach((x) => l.appendChild(el("li", "", x)));
+                w.appendChild(l);
+                nodes.push(w);
+            }
+            const foot = el("div", "pe-sheet-foot");
+            foot.append(
+                button("btn btn-ghost", tr("studio.reanalyze"), () => run("analyze", "")),
+                button("btn btn-primary", visual ? tr("studio.fix_visual") : tr("studio.fix_textual"), () => run(visual ? "optimize" : "complete", ""))
+            );
+            nodes.push(foot);
+            openSheet(tr("studio.bilan"), nodes);
+        }
+
+        /* ---- variantes */
+        function showVariants(vars) {
+            const nodes = [el("p", "pe-sheet-lead", tr("studio.v_pick"))];
+            vars.forEach((v, i) => {
+                const b = button("pe-variant", "", () => {
+                    closeSheet();
+                    lastReq = { mode: "variants", instruction: "" };
+                    propose(v.prompt, "variants");
+                });
+                b.append(el("span", "pe-v-n", String(i + 1)), el("strong", "", v.title || tr("studio.v_default", { n: i + 1 })), el("small", "", v.prompt));
+                nodes.push(b);
+            });
+            const foot = el("div", "pe-sheet-foot");
+            foot.append(button("btn btn-ghost", tr("studio.p_retry"), () => run("variants", "")));
+            nodes.push(foot);
+            openSheet(tr("studio.v_title"), nodes);
+        }
+
+        /* ---- historique et options (menu ⋯) */
         const lineView = (ops) => {
             const box = el("div", "pe-diff");
             const keep = ops.map((o, i) => o[0] !== "=" || ops.slice(Math.max(0, i - 2), i + 3).some((x) => x[0] !== "="));
@@ -552,30 +847,17 @@
             flush();
             return box;
         };
-        const restore = (text) => {
-            beforeAi = body.value;
-            undoBtn.hidden = false;
-            body.value = text;
-            setTab("text");
-            paint();
-            toast(tr("prompt.history_restored"));
-        };
-        let histFor = null;
-        const loadHistory = async () => {
-            if (!histList) return;
-            if (!current) {
-                histList.replaceChildren(el("p", "hint", tr("prompt.history_new")));
-                return;
-            }
-            if (histFor === current) return;
-            histList.replaceChildren(el("p", "hint", tr("prompt.history_loading")));
+        async function showHistory() {
+            const list = el("div", "pe-hist-list");
+            openSheet(tr("studio.history"), [el("p", "pe-sheet-lead", tr("studio.history_lead")), list]);
+            if (!current) return void list.appendChild(el("p", "hint", tr("prompt.history_new")));
+            list.appendChild(el("p", "hint", tr("prompt.history_loading")));
             try {
                 const res = await fetch("/prompts/" + current + "/history", { headers: { "X-Requested-With": "XMLHttpRequest" } });
                 const data = await res.json();
                 if (!res.ok || !data.ok) throw new Error();
-                histFor = current;
-                histList.replaceChildren();
-                if (!data.versions.length) return void histList.appendChild(el("p", "hint", tr("prompt.history_empty")));
+                list.replaceChildren();
+                if (!data.versions.length) return void list.appendChild(el("p", "hint", tr("prompt.history_empty")));
                 data.versions.forEach((v) => {
                     const item = el("details", "pe-hist");
                     const sum = el("summary");
@@ -592,410 +874,44 @@
                         item.dataset.built = "1";
                         item.appendChild(lineView(v.diff));
                         const tools = el("div", "pe-hist-tools");
-                        const before = el("button", "btn btn-ghost btn-sm", tr("prompt.history_take_old"));
-                        before.type = "button";
-                        before.addEventListener("click", () => restore(v.old_body));
-                        const after = el("button", "btn btn-ghost btn-sm", tr("prompt.history_take_new"));
-                        after.type = "button";
-                        after.addEventListener("click", () => restore(v.new_body));
-                        tools.append(before, after);
+                        // reprendre une version passe par la même revue qu'une proposition
+                        const take = (text) => {
+                            closeSheet();
+                            lastReq = { mode: "history", instruction: "" };
+                            propose(text, "history");
+                        };
+                        tools.append(
+                            button("btn btn-ghost btn-sm", tr("prompt.history_take_old"), () => take(v.old_body)),
+                            button("btn btn-ghost btn-sm", tr("prompt.history_take_new"), () => take(v.new_body))
+                        );
                         item.appendChild(tools);
                     });
-                    histList.appendChild(item);
+                    list.appendChild(item);
                 });
             } catch {
-                histList.replaceChildren(el("p", "hint", tr("prompt.history_failed")));
+                list.replaceChildren(el("p", "hint", tr("prompt.history_failed")));
             }
-        };
-
-        /* ---- atelier IA */
-        const st = pe.querySelector('[data-pe-pane="studio"]');
-        const q = (s) => st?.querySelector(s);
-        const S = st && {
-            empty: q("[data-st-empty]"),
-            filled: q("[data-st-filled]"),
-            starters: q("[data-st-starters]"),
-            chips: q("[data-st-chips]"),
-            current: q("[data-st-current]"),
-            bilanEmpty: q("[data-st-bilan-empty]"),
-            bilan: q("[data-st-bilan-result]"),
-            busy: q("[data-st-busy]"),
-            busyText: q("[data-st-busy-text]"),
-            proposal: q("[data-st-proposal]"),
-            input: q("[data-st-input]"),
-            send: q("[data-st-send]"),
-            scroll: q("[data-st-scroll]"),
-        };
-        let analysis = null; // { data, text } : bilan et texte analysé
-        let pending = null; // proposition en revue
-        let lastReq = null; // pour « Réessayer »
-        let ctrl = null;
-        const isVisual = () => VISUAL.includes(kindNow());
-        const CHIPS = {
-            image: () => tr("studio.chips_image"),
-            video: () => tr("studio.chips_video"),
-            negative: () => tr("studio.chips_negative"),
-            system: () => tr("studio.chips_system"),
-            other: () => tr("studio.chips_other"),
-        };
-        const STARTERS = {
-            image: () => tr("studio.start_image"),
-            video: () => tr("studio.start_video"),
-            negative: () => tr("studio.start_negative"),
-            system: () => tr("studio.start_system"),
-            other: () => tr("studio.start_other"),
-        };
-        const split = (s) => s.split("|").map((x) => x.trim()).filter(Boolean);
-        const chipsFor = (kind) => split((CHIPS[kind] || CHIPS.other)());
-        const startersFor = (kind) => split((STARTERS[kind] || STARTERS.other)());
-        const chip = (label, onClick, cls = "") => {
-            const b = el("button", "st-chip " + cls, label.replace(/^\+/, ""));
-            b.type = "button";
-            b.addEventListener("click", onClick);
+        }
+        const menuItem = (icon, label, onClick, cls = "") => {
+            const b = button("pe-menu-item " + cls, "", onClick);
+            b.append(el("span", "pe-menu-ico", icon), el("span", "", label));
             return b;
         };
-        // une retouche commençant par « + » complète (sans réécrire), sinon c'est une consigne
-        const runChip = (label) => {
-            const text = label.replace(/^\+/, "");
-            if (!body.value.trim()) return run("create", text);
-            if (label.startsWith("+")) return run(isVisual() ? "optimize" : "complete", text);
-            run("instruct", text);
-        };
-        const refreshStudio = () => {
-            if (!st) return;
-            const empty = !body.value.trim();
-            const visual = isVisual();
-            S.empty.hidden = empty === false || !!pending;
-            S.filled.hidden = empty || !!pending;
-            S.input.placeholder = empty ? S.input.dataset.phEmpty : S.input.dataset.phFilled;
-            st.querySelectorAll("[data-st-visual]").forEach((b) => (b.hidden = !visual));
-            st.querySelectorAll("[data-st-textual]").forEach((b) => (b.hidden = visual));
-            st.querySelectorAll("[data-st-scenic]").forEach((b) => (b.hidden = !visual || kindNow() === "negative"));
-            const kind = kindNow();
-            if (S.starters.dataset.kind !== kind) {
-                S.starters.dataset.kind = kind;
-                S.starters.replaceChildren(...startersFor(kind).map((c) => chip(c, () => run("create", c))));
-            }
-            const sugg = analysis && analysis.text === body.value ? analysis.data.suggestions || [] : [];
-            const sig = kind + "|" + sugg.join("|");
-            if (S.chips.dataset.sig !== sig) {
-                S.chips.dataset.sig = sig;
-                S.chips.replaceChildren(
-                    ...sugg.map((c) => chip(c, () => run(visual ? "instruct" : "complete", c), "is-sugg")),
-                    ...chipsFor(kind).map((c) => chip(c, () => runChip(c), c.startsWith("+") ? "is-add" : ""))
-                );
-            }
-            S.current.textContent = body.value.trim().slice(0, 400);
-            S.bilan.classList.toggle("is-stale", !!analysis && analysis.text !== body.value);
-        };
-        S?.current.addEventListener("click", () => setTab("text"));
-
-        const busyLabel = (mode) =>
-            ({
-                analyze: tr("studio.busy_analyze"),
-                variants: tr("studio.busy_variants"),
-                complete: tr("studio.busy_complete"),
-                optimize: tr("studio.busy_optimize"),
-                instruct: tr("studio.busy_instruct"),
-            })[mode] || tr("studio.busy_create");
-        const setBusy = (on, mode) => {
-            pe.classList.toggle("is-ai-busy", on);
-            S.busy.hidden = !on;
-            if (on) {
-                S.busyText.textContent = busyLabel(mode) + (st.dataset.vision === "1" && mode !== "complete" ? " " + tr("studio.busy_photo") : "");
-                S.proposal.hidden = true;
-                S.empty.hidden = true;
-                S.filled.hidden = true;
-            }
-            st.querySelectorAll("[data-st-run], .st-chip, [data-st-send]").forEach((b) => (b.disabled = on));
-            if (!on) refreshStudio();
-        };
-        q("[data-st-stop]")?.addEventListener("click", () => ctrl?.abort());
-
-        async function run(mode, instruction = "") {
-            if (!st || pe.classList.contains("is-ai-busy")) return;
-            lastReq = { mode, instruction };
-            ctrl = new AbortController();
-            setBusy(true, mode);
-            S.scroll.scrollTop = 0;
-            try {
-                const fd = new FormData();
-                fd.append("_token", form.querySelector("[name=_token]").value);
-                fd.append("kind", kindNow());
-                fd.append("title", title.value);
-                fd.append("body", body.value);
-                fd.append("instruction", instruction);
-                fd.append("mode", mode);
-                if (current) fd.append("prompt_id", current);
-                const res = await fetch(st.dataset.endpoint, {
-                    method: "POST",
-                    body: fd,
-                    signal: ctrl.signal,
-                    headers: { "X-Requested-With": "XMLHttpRequest" },
-                });
-                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
-                if (!res.ok || !data.ok) throw new Error(data.error || tr("prompt.ai_failed"));
-                setBusy(false);
-                if (data.image_note) toast({ title: tr("studio.note"), text: data.image_note });
-                if (data.mode === "analyze") return renderBilan(data.analysis);
-                if (data.mode === "variants") return renderVariants(data.variants || []);
-                if (data.mode === "complete" && data.nothing) return toast(tr("prompt.ai_nothing"));
-                renderProposal(data.body, data.mode, instruction);
-            } catch (err) {
-                setBusy(false);
-                if (err.name === "AbortError") return toast(tr("studio.stopped"));
-                toast({ title: tr("prompt.ai_failed"), text: err.message }, true);
-            } finally {
-                ctrl = null;
-            }
-        }
-        st?.addEventListener("click", (e) => {
-            const b = e.target.closest("[data-st-run]");
-            if (b && !b.disabled) run(b.dataset.stRun, "");
+        pe.querySelector("[data-pe-more]").addEventListener("click", () => {
+            const items = [
+                menuItem("⧉", tr("studio.menu_copy"), (e) => {
+                    copyText(body.value, e.currentTarget);
+                    setTimeout(closeSheet, 500);
+                }),
+                menuItem("⟲", tr("studio.history"), showHistory),
+            ];
+            if (ai) items.push(el("p", "pe-menu-note", tr("studio.menu_model", { model: ai.dataset.model }) + " · " + (ai.dataset.vision === "1" ? tr("studio.menu_vision_on") : tr("studio.menu_vision_off"))));
+            if (current) items.push(menuItem("🗑", tr("studio.menu_delete"), deletePrompt, "is-danger"));
+            openSheet(tr("studio.menu"), items);
         });
-        const sendInput = () => {
-            const v = S.input.value.trim();
-            if (!body.value.trim()) return run("create", v);
-            if (!v) return S.input.focus();
-            run("instruct", v);
-            S.input.value = "";
-        };
-        S?.send.addEventListener("click", sendInput);
-        S?.input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.isComposing) {
-                e.preventDefault();
-                sendInput();
-            }
-        });
-
-        /* bilan : anneau de score, critères (avec « Ajouter » sur ce qui manque), contradictions */
-        const ring = (score, level) => {
-            const r = 26, c = 2 * Math.PI * r;
-            const wrap = el("div", "st-ring is-" + level);
-            wrap.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="' + r + '" class="st-ring-bg"/><circle cx="32" cy="32" r="' + r + '" class="st-ring-val" stroke-dasharray="' + (c * score) / 100 + " " + c + '"/></svg>';
-            wrap.appendChild(el("strong", "", String(score)));
-            wrap.setAttribute("role", "img");
-            wrap.setAttribute("aria-label", tr("studio.score_label", { n: score }));
-            return wrap;
-        };
-        function renderBilan(a) {
-            if (!a) return;
-            analysis = { data: a, text: body.value };
-            S.bilanEmpty.hidden = true;
-            const box = S.bilan;
-            box.replaceChildren();
-            const head = el("div", "st-bilan-head");
-            const txt = el("div", "st-bilan-txt");
-            txt.append(
-                el("span", "st-level is-" + a.level, a.level === "bon" ? tr("prompt.level_good") : a.level === "faible" ? tr("prompt.level_low") : tr("prompt.level_mid")),
-                el("p", "", a.summary || "")
-            );
-            head.append(ring(a.score, a.level), txt);
-            box.appendChild(head);
-            box.appendChild(el("p", "st-stale-note", tr("studio.stale")));
-            const crits = el("ul", "st-crits");
-            const visual = isVisual();
-            (a.criteria || []).forEach((c) => {
-                const li = el("li", "st-crit is-" + c.status);
-                const dot = el("span", "st-dot");
-                dot.title = c.status === "ok" ? tr("studio.crit_ok") : c.status === "partial" ? tr("studio.crit_partial") : tr("studio.crit_missing");
-                const t = el("div", "st-crit-txt");
-                t.append(el("strong", "", c.label));
-                if (c.note) t.append(el("small", "", c.note));
-                li.append(dot, t);
-                if (c.status !== "ok") {
-                    const add = el("button", "st-crit-add", tr("studio.crit_add"));
-                    add.type = "button";
-                    add.addEventListener("click", () =>
-                        run(visual ? "optimize" : "complete", tr("studio.focus", { label: c.label, note: c.note || "" }).replace(/\s*:\s*$/, ""))
-                    );
-                    li.appendChild(add);
-                }
-                crits.appendChild(li);
-            });
-            box.appendChild(crits);
-            if (a.conflicts && a.conflicts.length) {
-                const w = el("div", "st-conflicts");
-                w.appendChild(el("strong", "", tr("studio.conflicts")));
-                const ul = el("ul");
-                a.conflicts.forEach((x) => ul.appendChild(el("li", "", x)));
-                w.appendChild(ul);
-                box.appendChild(w);
-            }
-            const row = el("div", "st-bilan-tools");
-            const again = el("button", "btn btn-ghost btn-sm", tr("studio.reanalyze"));
-            again.type = "button";
-            again.dataset.stRun = "analyze";
-            const go = el("button", "btn btn-primary btn-sm", visual ? tr("studio.fix_visual") : tr("studio.fix_textual"));
-            go.type = "button";
-            go.dataset.stRun = visual ? "optimize" : "complete";
-            row.append(again, go);
-            box.appendChild(row);
-            box.hidden = false;
-            refreshStudio();
-        }
-
-        /* revue d'une proposition : avant → après, mot à mot */
-        const MODE_TITLE = {
-            create: () => tr("studio.p_create"),
-            optimize: () => tr("studio.p_optimize"),
-            complete: () => tr("studio.p_complete"),
-            instruct: () => tr("studio.p_instruct"),
-            variants: () => tr("studio.p_variant"),
-        };
-        function renderProposal(text, mode, instruction, back) {
-            pending = { text, mode };
-            const box = S.proposal;
-            box.replaceChildren();
-            const ops = wordDiff(body.value, text);
-            const { add, del } = diffStats(ops);
-            const head = el("div", "st-p-head");
-            const h = el("h3", "", (MODE_TITLE[mode] || MODE_TITLE.instruct)());
-            const stats = el("span", "st-p-stats");
-            stats.append(el("b", "is-add", "+" + add), el("b", "is-del", "−" + del));
-            stats.title = tr("studio.p_stats", { add, del });
-            head.append(h, stats);
-            box.appendChild(head);
-            if (instruction) box.appendChild(el("p", "st-p-instr", "« " + instruction + " »"));
-            if (mode === "complete") box.appendChild(el("p", "st-p-safe", tr("studio.p_safe")));
-            const base = body.value.replace(/\s+$/, "");
-            if (mode === "complete" && base && text.startsWith(base)) {
-                // complément : le texte existant, replié et estompé, puis l'ajout en vert
-                const d = el("div", "st-diff");
-                d.append(el("div", "st-diff-kept", base), el("span", "is-add", text.slice(base.length).replace(/^\s+/, "")));
-                box.appendChild(d);
-            } else {
-                box.appendChild(body.value.trim() ? renderWordDiff(ops) : el("div", "st-diff st-diff-new", text));
-            }
-            const tools = el("div", "st-p-tools");
-            const no = el("button", "btn btn-ghost btn-sm", back ? tr("studio.p_back") : tr("studio.p_refuse"));
-            no.type = "button";
-            no.addEventListener("click", () => (back ? back() : closeProposal()));
-            const again = el("button", "btn btn-ghost btn-sm", tr("studio.p_retry"));
-            again.type = "button";
-            again.addEventListener("click", () => {
-                closeProposal();
-                if (lastReq) run(lastReq.mode, lastReq.instruction);
-            });
-            const ok = el("button", "btn btn-primary btn-sm", tr("studio.p_accept"));
-            ok.type = "button";
-            ok.addEventListener("click", () => {
-                beforeAi = body.value;
-                body.value = text;
-                undoBtn.hidden = false;
-                closeProposal();
-                setTab("text");
-                paint();
-                body.classList.remove("is-flash");
-                void body.offsetWidth;
-                body.classList.add("is-flash");
-                toast(tr("studio.applied"));
-            });
-            tools.append(no, again, ok);
-            box.appendChild(tools);
-            box.hidden = false;
-            S.empty.hidden = true;
-            S.filled.hidden = true;
-            S.scroll.scrollTop = 0;
-            ok.focus({ preventScroll: true });
-        }
-        function closeProposal() {
-            pending = null;
-            S.proposal.hidden = true;
-            S.proposal.replaceChildren();
-            refreshStudio();
-        }
-        function renderVariants(vars) {
-            pending = { variants: true };
-            const box = S.proposal;
-            box.replaceChildren();
-            const head = el("div", "st-p-head");
-            head.append(el("h3", "", tr("studio.v_title")), el("span", "st-p-stats", tr("studio.v_pick")));
-            box.appendChild(head);
-            const grid = el("div", "st-variants");
-            vars.forEach((v, i) => {
-                const card = el("button", "st-variant");
-                card.type = "button";
-                card.append(el("span", "st-v-n", String(i + 1)), el("strong", "", v.title || tr("studio.v_default", { n: i + 1 })), el("small", "", v.prompt));
-                card.addEventListener("click", () => renderProposal(v.prompt, "variants", "", () => renderVariants(vars)));
-                grid.appendChild(card);
-            });
-            box.appendChild(grid);
-            const tools = el("div", "st-p-tools");
-            const no = el("button", "btn btn-ghost btn-sm", tr("studio.p_refuse"));
-            no.type = "button";
-            no.addEventListener("click", closeProposal);
-            const again = el("button", "btn btn-ghost btn-sm", tr("studio.p_retry"));
-            again.type = "button";
-            again.addEventListener("click", () => {
-                closeProposal();
-                run("variants", "");
-            });
-            tools.append(no, again);
-            box.appendChild(tools);
-            box.hidden = false;
-            S.empty.hidden = true;
-            S.filled.hidden = true;
-        }
-
-        undoBtn?.addEventListener("click", () => {
-            if (beforeAi === null) return;
-            body.value = beforeAi;
-            beforeAi = null;
-            undoBtn.hidden = true;
-            setTab("text");
-            paint();
-        });
-
-        /* ---- ouverture */
-        const open = (card, startTab = "text") => {
-            ctrl?.abort();
-            current = card ? card.dataset.promptId : null;
-            form.action = current ? "/prompts/" + current : pe.dataset.newAction;
-            title.value = card ? card.dataset.promptTitle || "" : "";
-            body.value = card ? card.querySelector(".prompt-body").textContent : "";
-            const kind = card ? card.dataset.promptKind : "image";
-            form.querySelectorAll("[name=kind]").forEach((r) => (r.checked = r.value === kind));
-            heading.textContent = current ? pe.dataset.labelEdit : pe.dataset.labelNew;
-            delBtn.hidden = !current;
-            beforeAi = null;
-            undoBtn.hidden = true;
-            analysis = null;
-            pending = null;
-            histFor = null;
-            if (st) {
-                S.bilan.hidden = true;
-                S.bilan.replaceChildren();
-                S.bilanEmpty.hidden = false;
-                S.proposal.hidden = true;
-                S.proposal.replaceChildren();
-                S.busy.hidden = true;
-                S.input.value = "";
-                S.chips.dataset.sig = "";
-            }
-            pe.classList.remove("is-ai-busy");
-            initial = snapshot();
-            setTab(startTab);
-            paint();
-            modalOpen(pe);
-            // au doigt, le clavier ne s'ouvre pas tout seul : on lit d'abord ; à la souris, on écrit
-            if (tab === "text" && (!matchMedia("(pointer: coarse)").matches || !current)) body.focus({ preventScroll: true });
-        };
-        document.addEventListener("click", (e) => {
-            const edit = e.target.closest("[data-prompt-edit]");
-            if (edit && !pe.contains(edit)) {
-                if (window.getSelection && String(getSelection()).length > 0 && edit.tagName === "PRE") return; // sélection de texte
-                open(edit.closest("[data-prompt-id]"), edit.hasAttribute("data-prompt-studio") ? "studio" : "text");
-                return;
-            }
-            if (e.target.closest("[data-prompt-new]")) open(null);
-        });
-        form.addEventListener("input", paint);
-        form.addEventListener("change", paint);
-        pe.querySelector("[data-pe-copy]").addEventListener("click", (e) => copyText(body.value, e.currentTarget));
-
-        delBtn.addEventListener("click", () => {
+        function deletePrompt() {
             if (!current) return;
+            closeSheet();
             const f = document.createElement("form");
             f.method = "post";
             f.action = "/prompts/" + current + "/delete";
@@ -1009,7 +925,46 @@
             document.body.appendChild(f);
             if (f.requestSubmit) f.requestSubmit();
             else f.submit();
+        }
+
+        /* ---- ouverture */
+        const open = (card, withAi = false) => {
+            ctrl?.abort();
+            current = card ? card.dataset.promptId : null;
+            form.action = current ? "/prompts/" + current : pe.dataset.newAction;
+            title.value = card ? card.dataset.promptTitle || "" : "";
+            body.value = card ? card.querySelector(".prompt-body").textContent : "";
+            kindSel.value = card ? card.dataset.promptKind : "image";
+            heading.textContent = current ? pe.dataset.labelEdit : pe.dataset.labelNew;
+            beforeAi = null;
+            analysis = null;
+            setBusy(false);
+            endProposal();
+            closeSheet();
+            if (ask) ask.value = "";
+            initial = snapshot();
+            paint();
+            modalOpen(pe);
+            if (withAi && ask) ask.focus({ preventScroll: true });
+            // au doigt, le clavier ne s'ouvre pas tout seul : on lit d'abord ; à la souris, on écrit
+            else if (!matchMedia("(pointer: coarse)").matches || !current) body.focus({ preventScroll: true });
+        };
+        document.addEventListener("click", (e) => {
+            const edit = e.target.closest("[data-prompt-edit]");
+            if (edit && !pe.contains(edit)) {
+                if (window.getSelection && String(getSelection()).length > 0 && edit.tagName === "PRE") return; // sélection de texte
+                open(edit.closest("[data-prompt-id]"), edit.hasAttribute("data-prompt-studio"));
+                return;
+            }
+            if (e.target.closest("[data-prompt-new]")) open(null);
         });
+        form.addEventListener("input", (e) => {
+            if (e.target === ask) return;
+            paint();
+        });
+        kindSel.addEventListener("change", paint);
+        // fermer pendant une proposition : on la referme d'abord
+        form.addEventListener("submit", () => pending && endProposal(), true);
     }
 
     /* ------------------------- zones de texte qui s'adaptent au contenu */
