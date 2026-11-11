@@ -219,6 +219,33 @@ est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le 
   libre pendant l'échange ; si la page est fermée avant, l'extraction se fait la fois suivante, sans perte) ;
 - modèle : local (rien ne sort) ou distant (les derniers messages sont envoyés au fournisseur).
 
+### Prompts : atelier IA et historique
+
+L'éditeur de prompt a trois onglets : **Texte**, **Atelier IA** et **Historique**. On ouvre aussi
+l'atelier directement depuis l'étincelle de chaque carte de prompt. L'atelier utilise le modèle des
+Réglages › IA ; il indique ce modèle et s'il lit la photo principale (couverture, sinon première photo).
+
+- **Prompt vide** : « Créer à partir de la fiche » (description, attributs, autres prompts, photo),
+  avec des idées de départ selon le type (portrait studio, plan en pied, base complète…) et une
+  consigne libre facultative.
+- **Bilan** (rien n'est modifié) : note sur 100, critères vérifiés un par un selon le type (visage,
+  cheveux, lumière, cadrage… pour une image ; identité, voix, règles, exemples… pour un prompt
+  système), contradictions avec la fiche ou les autres prompts, idées de retouches. Chaque critère
+  manquant a son bouton « Ajouter ».
+- **Améliorer** : image, négatif, vidéo → « Optimiser pour la génération » (réécriture qui garde
+  tous les détails) et « 3 variantes de scène » (même personne, autres lieux et lumières) ; système
+  et autre → « Compléter sans écraser » : le modèle ne renvoie que les ajouts, l'app les place à la
+  fin, le texte existant n'est jamais réécrit (forcé côté serveur, `llm_prompt_mode()`).
+- **Retouches rapides** et **consigne libre** (« cheveux plus courts », « ton plus froid »…).
+- **Revue** : toute proposition s'affiche d'abord en différences mot à mot (ajouts en vert,
+  retraits en rouge, compte des mots) avec Appliquer, Réessayer ou Refuser ; une demande en cours
+  peut être arrêtée. Après application, « ↶ Annuler » revient au texte d'avant ; rien n'est
+  enregistré tant qu'on n'appuie pas sur « Enregistrer ».
+
+L'onglet Historique montre les 10 dernières modifications enregistrées (table `prompt_versions`,
+migration v7), avec les lignes ajoutées en vert et supprimées en rouge, le détail ligne à ligne, et
+de quoi reprendre l'avant ou l'après dans l'éditeur.
+
 ### Journal des échanges
 
 Réglages › Discussion › **Journal des échanges** (`/settings/logs`) : les 20 derniers appels aux

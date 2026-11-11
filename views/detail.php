@@ -286,6 +286,9 @@ $token    = csrf_token();
                     <?php endif; ?>
                     <div class="prompt-tools">
                         <button type="button" class="icon-tool" data-copy="#body-<?= (int) $pr['id'] ?>" aria-label="<?= e(t('persona.prompt_copy')) ?>" title="<?= e(t('persona.prompt_copy')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+                        <?php if (llm_ready()): ?>
+                            <button type="button" class="icon-tool is-ai-soft" data-prompt-edit data-prompt-studio aria-label="<?= e(t('persona.prompt_studio_open')) ?>" title="<?= e(t('persona.prompt_studio_open')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg></button>
+                        <?php endif; ?>
                         <button type="button" class="icon-tool" data-prompt-edit aria-label="<?= e(t('persona.prompt_edit')) ?>" title="<?= e(t('persona.prompt_edit')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
                     </div>
                 </header>
@@ -314,15 +317,115 @@ $token    = csrf_token();
                     </label>
                 <?php endforeach; ?>
             </div>
+            <?php
+            // atelier IA : modèle des Réglages › IA ; lit-il la photo principale ?
+            $aiOn  = llm_ready();
+            $aiCfg = llm_config();
+            $cover = (string) ($persona['avatar'] ?? '') !== '' ? (string) $persona['avatar'] : (string) ($photos[0]['file'] ?? '');
+            $aiEye = $cover !== '' && !llm_provider_without_vision((string) $aiCfg['provider'], (string) $aiCfg['model']);
+            ?>
+            <!-- onglets : le texte, l'atelier IA, l'historique des modifications -->
+            <div class="pe-tabs" role="tablist" aria-label="<?= e(t('persona.prompt_tabs')) ?>">
+                <button type="button" role="tab" class="pe-tab" data-pe-tab="text" aria-selected="true"><?= e(t('persona.prompt_tab_text')) ?></button>
+                <?php if ($aiOn): ?>
+                    <button type="button" role="tab" class="pe-tab is-ai" data-pe-tab="studio" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg><?= e(t('persona.prompt_tab_studio')) ?></button>
+                <?php endif; ?>
+                <button type="button" role="tab" class="pe-tab" data-pe-tab="history" aria-selected="false"><?= e(t('persona.prompt_tab_history')) ?></button>
+            </div>
+
             <label class="sr-only" for="pe-body"><?= e(t('persona.prompt_body')) ?></label>
-            <textarea id="pe-body" class="pe-body" name="body" required placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>"></textarea>
+            <textarea id="pe-body" class="pe-body" name="body" required data-pe-pane="text" placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>"></textarea>
+
+            <?php if ($aiOn): ?>
+                <!-- atelier IA : créer, faire le bilan, optimiser / compléter, retouches, variantes ;
+                     toute proposition passe par une revue (différences mot à mot) avant d'être appliquée -->
+                <div class="pe-pane st" data-pe-pane="studio" hidden
+                     data-endpoint="/p/<?= e($persona['slug']) ?>/ai-prompt" data-vision="<?= $aiEye ? '1' : '0' ?>">
+                    <div class="st-context">
+                        <span class="st-model" title="<?= e(t('persona.studio_model_title')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg><span><?= e((string) $aiCfg['model']) ?></span></span>
+                        <?php if ($aiEye): ?>
+                            <span class="st-vision is-on" title="<?= e(t('persona.studio_vision_on_title')) ?>">
+                                <img src="<?= e(media_url($cover)) ?>" alt=""><?= e(t('persona.studio_vision_on')) ?>
+                            </span>
+                        <?php else: ?>
+                            <span class="st-vision" title="<?= e(t('persona.studio_vision_off_title')) ?>"><?= e(t('persona.studio_vision_off')) ?></span>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="st-scroll" data-st-scroll>
+                        <!-- prompt vide : création guidée -->
+                        <section class="st-card st-hero" data-st-empty hidden>
+                            <div class="st-hero-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg></div>
+                            <h3><?= e(t('persona.studio_create_title')) ?></h3>
+                            <p><?= e(t('persona.studio_create_text')) ?></p>
+                            <button type="button" class="btn btn-primary st-cta" data-st-run="create"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg><?= e(t('persona.studio_create_go')) ?></button>
+                            <div class="st-chips" data-st-starters></div>
+                        </section>
+
+                        <!-- prompt rempli : aperçu, bilan, retouches -->
+                        <div data-st-filled hidden>
+                            <button type="button" class="st-current" data-st-current title="<?= e(t('persona.studio_current_title')) ?>"></button>
+
+                            <section class="st-card st-review-card" data-st-bilan>
+                                <div class="st-bilan-empty" data-st-bilan-empty>
+                                    <div>
+                                        <h3><?= e(t('persona.studio_bilan_title')) ?></h3>
+                                        <p><?= e(t('persona.studio_bilan_text')) ?></p>
+                                    </div>
+                                    <button type="button" class="btn btn-ghost btn-sm" data-st-run="analyze"><?= e(t('persona.studio_bilan_go')) ?></button>
+                                </div>
+                                <div class="st-bilan" data-st-bilan-result hidden></div>
+                            </section>
+
+                            <section class="st-card">
+                                <h3 class="st-h"><?= e(t('persona.studio_actions_title')) ?></h3>
+                                <div class="st-actions">
+                                    <button type="button" class="st-action" data-st-run="optimize" data-st-visual>
+                                        <strong><?= e(t('persona.studio_optimize')) ?></strong><small><?= e(t('persona.studio_optimize_hint')) ?></small>
+                                    </button>
+                                    <button type="button" class="st-action" data-st-run="complete" data-st-textual>
+                                        <strong><?= e(t('persona.studio_complete')) ?></strong><small><?= e(t('persona.studio_complete_hint')) ?></small>
+                                    </button>
+                                    <button type="button" class="st-action" data-st-run="variants" data-st-scenic>
+                                        <strong><?= e(t('persona.studio_variants')) ?></strong><small><?= e(t('persona.studio_variants_hint')) ?></small>
+                                    </button>
+                                </div>
+                                <h3 class="st-h"><?= e(t('persona.studio_chips_title')) ?></h3>
+                                <div class="st-chips" data-st-chips></div>
+                            </section>
+                        </div>
+
+                        <!-- travail en cours -->
+                        <section class="st-card st-busy" data-st-busy hidden aria-live="polite">
+                            <div class="st-shimmer" aria-hidden="true"><i></i><i></i><i></i></div>
+                            <p data-st-busy-text></p>
+                            <button type="button" class="btn btn-ghost btn-sm" data-st-stop><?= e(t('persona.studio_stop')) ?></button>
+                        </section>
+
+                        <!-- revue d'une proposition : différences, puis appliquer ou non -->
+                        <section class="st-card st-proposal" data-st-proposal hidden aria-live="polite"></section>
+                    </div>
+
+                    <!-- consigne libre -->
+                    <div class="st-compose">
+                        <label class="sr-only" for="st-input"><?= e(t('persona.prompt_assist_label')) ?></label>
+                        <input id="st-input" class="st-input" data-st-input maxlength="1000" autocomplete="off" form="pe-noform"
+                               data-ph-empty="<?= e(t('persona.studio_input_empty')) ?>" data-ph-filled="<?= e(t('persona.studio_input_filled')) ?>">
+                        <button type="button" class="st-send" data-st-send aria-label="<?= e(t('persona.prompt_assist_go')) ?>" title="<?= e(t('persona.prompt_assist_go')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M12.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- historique : 10 dernières modifications (lignes ajoutées / supprimées) -->
+            <div class="pe-pane pe-history" data-pe-pane="history" hidden>
+                <p class="pe-history-intro"><?= e(t('persona.prompt_history_title')) ?></p>
+                <div class="pe-history-list" data-pe-history-list></div>
+            </div>
+
             <div class="pe-meta">
                 <span class="pe-count" data-pe-count aria-live="polite"></span>
+                <button type="button" class="pe-undo" data-pe-undo hidden title="<?= e(t('persona.studio_undo_title')) ?>"><?= e(t('persona.studio_undo')) ?></button>
                 <div class="pe-tools">
-                    <?php if (llm_ready()): ?>
-                        <!-- IA : rédige le prompt (vide) ou le complète, à partir de la fiche et de la photo principale -->
-                        <button type="button" class="icon-tool is-ai" data-pe-ai="/p/<?= e($persona['slug']) ?>/ai-prompt" aria-label="<?= e(t('persona.prompt_ai')) ?>" title="<?= e(t('persona.prompt_ai')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="currentColor"/></svg></button>
-                    <?php endif; ?>
                     <button type="button" class="icon-tool" data-pe-copy aria-label="<?= e(t('persona.prompt_copy')) ?>" title="<?= e(t('persona.prompt_copy')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
                     <button type="button" class="icon-tool is-danger" data-pe-delete aria-label="<?= e(t('persona.prompt_delete')) ?>" title="<?= e(t('persona.prompt_delete')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
                 </div>

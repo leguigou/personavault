@@ -28,6 +28,7 @@
 200 text/html  GET /memories?q=train
 200 text/html  GET /settings
 200 text/html  GET /settings/logs
+200 application/json  GET /prompts/1/history
 200 application/json  GET /export.json
 200 application/zip  GET /backup/export.zip
 404 text/html  GET /nope

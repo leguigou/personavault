@@ -33,6 +33,27 @@ if ($p0 === 'photos' && isset($parts[1]) && $method === 'POST') {
     back('/');
 }
 
+/* historique d'un prompt (JSON) : 10 dernières modifications, avec le détail ligne à ligne */
+if ($p0 === 'prompts' && isset($parts[1]) && ($parts[2] ?? '') === 'history' && $method === 'GET') {
+    header('Content-Type: application/json; charset=utf-8');
+    $out = [];
+    foreach (prompt_versions((int) $parts[1]) as $v) {
+        $d     = local_dt((string) $v['created_at']);
+        $out[] = [
+            'id'       => (int) $v['id'],
+            'when'     => rel_time((string) $v['created_at']),
+            'at'       => $d ? $d->format('Y-m-d H:i') : '',
+            'added'    => (int) $v['added'],
+            'removed'  => (int) $v['removed'],
+            'old_body' => (string) $v['old_body'],
+            'new_body' => (string) $v['new_body'],
+            'diff'     => line_diff((string) $v['old_body'], (string) $v['new_body']),
+        ];
+    }
+    echo json_encode(['ok' => true, 'versions' => $out], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($p0 === 'prompts' && isset($parts[1]) && $method === 'POST') {
     csrf_check();
     $id   = (int) $parts[1];
@@ -45,6 +66,8 @@ if ($p0 === 'prompts' && isset($parts[1]) && $method === 'POST') {
         } else {
             $body = trim((string) ($_POST['body'] ?? ''));
             if ($body !== '') {
+                // historique : l'ancien texte et le nouveau (10 dernières modifications)
+                prompt_version_record($id, (string) $prompt['body'], $body);
                 db()->prepare('UPDATE prompts SET title=?, kind=?, body=? WHERE id=?')
                     ->execute([
                         trim((string) ($_POST['title'] ?? '')),
