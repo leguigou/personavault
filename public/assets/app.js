@@ -1077,8 +1077,10 @@
         const typing = (on) => {
             thread.querySelector(".as-typing")?.remove();
             if (on) {
-                const t = el("div", "as-msg is-assistant as-typing");
-                t.append(el("i"), el("i"), el("i"));
+                const t = el("div", "as-msg is-assistant as-typing typing");
+                const dots = el("div", "bubble");
+                dots.append(el("i"), el("i"), el("i"));
+                t.append(dots);
                 t.setAttribute("aria-label", tr("assist.thinking"));
                 thread.appendChild(t);
                 scrollEnd();
@@ -2529,6 +2531,48 @@
         const scroll = chat.querySelector("[data-scroll]");
         const sendBtn = form.querySelector(".chat-send");
         const avatarHTML = chat.querySelector(".chat-avatar")?.innerHTML || "";
+
+        /* *action* en italique, **texte** en gras : mise en forme à l'affichage seulement.
+           Les astérisques restent dans le texte (cachés) : textContent est inchangé, donc la
+           copie, la modification, la recherche et les exports voient le message d'origine. */
+        const EMPH = /(\*\*)([^*\n]+?)\*\*|(\*)([^*\n]+?)\*/g;
+        const emphasize = (b) => {
+            if (!b.textContent.includes("*")) return;
+            b.normalize();
+            [...b.childNodes].forEach((n) => {
+                if (n.nodeType !== 3 || !n.data.includes("*")) return;
+                const txt = n.data;
+                EMPH.lastIndex = 0;
+                let m, last = 0;
+                const frag = document.createDocumentFragment();
+                while ((m = EMPH.exec(txt))) {
+                    const mark = m[1] || m[3];
+                    const inner = m[2] ?? m[4];
+                    if (!inner.trim()) continue;
+                    if (m.index > last) frag.append(txt.slice(last, m.index));
+                    const w = document.createElement(mark === "**" ? "strong" : "em");
+                    w.className = "md-emph";
+                    const open = document.createElement("span");
+                    open.className = "md-mark";
+                    open.textContent = mark;
+                    const close = open.cloneNode(true);
+                    w.append(open, inner, close);
+                    frag.append(w);
+                    last = m.index + m[0].length;
+                }
+                if (!last) return;
+                if (last < txt.length) frag.append(txt.slice(last));
+                n.replaceWith(frag);
+            });
+        };
+        const emphasizeIn = (root) => root.querySelectorAll?.(".msg-bot .bubble, .msg-user .bubble").forEach(emphasize);
+        emphasizeIn(scroll);
+        // nouveaux messages, réponses en direct, versions régénérées : remis en forme au fil de l'eau
+        let emphRaf = 0;
+        new MutationObserver(() => {
+            if (emphRaf) return;
+            emphRaf = requestAnimationFrame(() => { emphRaf = 0; emphasizeIn(scroll); });
+        }).observe(scroll, { childList: true, subtree: true, characterData: true });
         const endpoint = chat.dataset.send;
         const token = chat.dataset.token;
         let busy = false;
@@ -4266,7 +4310,8 @@
                 busy = false;
                 setStreaming(false);
                 syncSend();
-                input.focus();
+                // sur téléphone, redonner le focus ouvrirait le clavier à chaque réponse
+                if (!matchMedia("(pointer: coarse)").matches) input.focus({ preventScroll: true });
             }
         };
 
