@@ -3051,7 +3051,17 @@ html.kb-open .chat-room .chat-composer { padding-bottom: 10px; }
 }
 
 /* déconnexion : dans les réglages sur mobile, plus à côté de l'engrenage */
-.settings-logout { display: flex; justify-content: center; margin: 18px 0 8px; }
+.settings-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-logout { display: flex; margin: 0; }
+.settings-logout-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: rgba(var(--ink), .05);
+    color: var(--muted);
+}
+.settings-logout-btn:hover, .settings-logout-btn:focus-visible { color: #f87171; border-color: rgba(248, 113, 113, .45); background: rgba(248, 113, 113, .1); }
 @media (min-width: 900px) {
     .settings-logout { display: none; }
 }

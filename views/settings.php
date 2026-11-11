@@ -25,7 +25,16 @@ $facts = facts_settings();
 
 <section class="form-wrap settings-page">
     <header class="form-head settings-head">
-        <h1><?= e(t('nav.settings')) ?></h1>
+        <div class="settings-title">
+            <h1><?= e(t('nav.settings')) ?></h1>
+            <!-- déconnexion (mobile) : icône à droite du titre ; sur ordinateur, elle est dans la barre du haut -->
+            <form method="post" action="/logout" class="settings-logout" data-confirm="<?= e(t('logout.confirm')) ?>" data-confirm-title="<?= e(t('logout.title')) ?>" data-confirm-ok="<?= e(t('nav.logout')) ?>">
+                <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+                <button class="icon-btn settings-logout-btn" type="submit" aria-label="<?= e(t('nav.logout')) ?>" title="<?= e(t('nav.logout')) ?>">
+                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                </button>
+            </form>
+        </div>
         <p class="form-sub"><?= e(t('settings.subtitle')) ?></p>
     </header>
 
@@ -748,8 +757,4 @@ $facts = facts_settings();
             <?= $html ?></template>
     <?php endforeach; ?>
 
-    <form method="post" action="/logout" class="settings-logout" data-confirm="<?= e(t('logout.confirm')) ?>" data-confirm-title="<?= e(t('logout.title')) ?>" data-confirm-ok="<?= e(t('nav.logout')) ?>">
-        <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-        <button class="btn btn-ghost" type="submit"><?= e(t('nav.logout')) ?></button>
-    </form>
 </section>
