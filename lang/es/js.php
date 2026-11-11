@@ -125,6 +125,8 @@ return [
     'js.lms.unreachable'          => 'LM Studio inaccesible',
     'js.lms.already_loaded_timer' => 'ya cargado',
     'js.lms.already_loaded'       => 'Ya cargado',
+    'js.lms.purged' => ['one' => 'Memoria liberada: {n} modelo descargado —', 'other' => 'Memoria liberada: {n} modelos descargados —'],
+    'js.lms.purge_failed' => 'No se pudo descargar: {models}. La carga puede quedarse sin memoria.',
     'js.lms.request_failed'       => 'No se pudo enviar la solicitud.',
     'js.lms.load_failed'          => 'Error de carga',
     'js.lms.load_error'           => 'No se pudo cargar: {message}',

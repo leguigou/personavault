@@ -2630,7 +2630,8 @@
             const li = stepsEl && stepsEl.querySelector('[data-step="' + name + '"]');
             if (li) li.dataset.state = state;
         };
-        const resetSteps = () => ["server", "request", "loading", "ready"].forEach((n) => setStep(n, ""));
+        const resetSteps = () => ["server", "purge", "request", "loading", "ready"].forEach((n) => setStep(n, ""));
+        const purgedEl = document.querySelector("[data-lms-purged]");
         const errBox = document.querySelector("[data-lms-error]");
         const showLoadError = (hint, detail) => {
             if (!errBox) return;
@@ -2682,17 +2683,9 @@
             }
             setStep("server", "done");
 
-            if (st.is_loaded) {
-                setStep("request", "done");
-                setStep("loading", "done");
-                setStep("ready", "done");
-                if (timerEl) timerEl.textContent = tr("lms.already_loaded_timer");
-                done(tr("lms.already_loaded"));
-                return;
-            }
-
-            // 2. demande de chargement
-            setStep("request", "active");
+            // 2. libérer la mémoire (le serveur décharge les autres modèles) puis 3. demande de chargement
+            if (purgedEl) purgedEl.hidden = true;
+            setStep("purge", "active");
             let asked = null;
             try {
                 const fd = new FormData();
@@ -2702,15 +2695,36 @@
             } catch (e) {
                 asked = { ok: false, error: tr("lms.request_failed") };
             }
+            const purged = (asked && asked.purged) || [];
+            const purgeFailed = (asked && asked.purge_failed) || [];
+            if (asked && asked.ok) {
+                setStep("purge", purgeFailed.length ? "fail" : "done");
+                if (purgedEl && (purged.length || purgeFailed.length)) {
+                    purgedEl.textContent = purgeFailed.length
+                        ? tr("lms.purge_failed", { models: purgeFailed.join(", ") })
+                        : tr("lms.purged", purged.length) + " " + purged.join(", ");
+                    purgedEl.hidden = false;
+                }
+            }
             if (!asked || !asked.ok) {
+                // modèle introuvable : rien n'a été déchargé (étape laissée neutre)
+                setStep("purge", asked && asked.kind === "not_found" ? "" : "fail");
                 setStep("request", "fail");
                 done(tr("lms.load_failed"));
                 showLoadError((asked && asked.error) || tr("lms.unknown_error"), "");
                 return;
             }
             setStep("request", "done");
+            if (asked.already) {
+                setStep("loading", "done");
+                setStep("ready", "done");
+                if (timerEl) timerEl.textContent = tr("lms.already_loaded_timer");
+                done(tr("lms.already_loaded"));
+                loadStatus();
+                return;
+            }
 
-            // 3. chargement en cours -> 4. prêt
+            // 4. chargement en cours -> 5. prêt
             setStep("loading", "active");
             const deadline = Date.now() + 180000;
             for (;;) {

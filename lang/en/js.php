@@ -125,6 +125,8 @@ return [
     'js.lms.unreachable'          => 'LM Studio unreachable',
     'js.lms.already_loaded_timer' => 'already loaded',
     'js.lms.already_loaded'       => 'Already loaded',
+    'js.lms.purged' => ['one' => 'Memory freed: {n} model unloaded —', 'other' => 'Memory freed: {n} models unloaded —'],
+    'js.lms.purge_failed' => 'Could not unload: {models}. Loading may run short of memory.',
     'js.lms.request_failed'       => 'Request failed.',
     'js.lms.load_failed'          => 'Loading failed',
     'js.lms.load_error'           => 'Could not load: {message}',

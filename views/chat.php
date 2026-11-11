@@ -254,11 +254,13 @@ $fmt   = fn (float $n): string => fmt_number($n);
         <div class="lms-progress" data-lms-progress hidden>
             <ol class="lms-steps" data-lms-steps>
                 <li data-step="server"><span class="n">1</span><span><?= e(t('chat.lms.step_server')) ?></span></li>
-                <li data-step="request"><span class="n">2</span><span><?= e(t('chat.lms.step_request')) ?></span></li>
-                <li data-step="loading"><span class="n">3</span><span><?= e(t('chat.lms.step_loading')) ?></span></li>
-                <li data-step="ready"><span class="n">4</span><span><?= e(t('chat.lms.step_ready')) ?></span></li>
+                <li data-step="purge"><span class="n">2</span><span><?= e(t('chat.lms.step_purge')) ?></span></li>
+                <li data-step="request"><span class="n">3</span><span><?= e(t('chat.lms.step_request')) ?></span></li>
+                <li data-step="loading"><span class="n">4</span><span><?= e(t('chat.lms.step_loading')) ?></span></li>
+                <li data-step="ready"><span class="n">5</span><span><?= e(t('chat.lms.step_ready')) ?></span></li>
             </ol>
             <p class="lms-timer" data-lms-timer><?= e(t('chat.lms.timer_zero')) ?></p>
+            <p class="hint lms-purged" data-lms-purged hidden></p>
         </div>
         <!-- échec du chargement : explication claire + message brut de LM Studio -->
         <div class="lms-error" data-lms-error role="alert" hidden>

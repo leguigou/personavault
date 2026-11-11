@@ -125,6 +125,8 @@ return [
     'js.lms.unreachable'          => 'LM Studio injoignable',
     'js.lms.already_loaded_timer' => 'déjà chargé',
     'js.lms.already_loaded'       => 'Déjà chargé',
+    'js.lms.purged' => ['one' => 'Mémoire libérée : {n} modèle déchargé —', 'other' => 'Mémoire libérée : {n} modèles déchargés —'],
+    'js.lms.purge_failed' => 'Impossible de décharger : {models}. Le chargement peut manquer de mémoire.',
     'js.lms.request_failed'       => 'Requête impossible.',
     'js.lms.load_failed'          => 'Échec du chargement',
     'js.lms.load_error'           => 'Chargement impossible : {message}',

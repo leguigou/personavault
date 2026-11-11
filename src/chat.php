@@ -663,6 +663,27 @@ function lms_unload(string $instanceId): bool
 }
 
 /**
+ * Libère la mémoire avant un chargement : décharge tous les modèles sauf $keep (s'il est déjà
+ * chargé, on le garde : inutile de le recharger).
+ * @return array{unloaded: array<int,string>, failed: array<int,string>}
+ */
+function lms_purge_except(string $keep): array
+{
+    $done = ['unloaded' => [], 'failed' => []];
+    foreach (lms_loaded_models() as $m) {
+        if ($keep !== '' && ($m['model'] === $keep || $m['id'] === $keep)) {
+            continue;
+        }
+        if (lms_unload($m['id'])) {
+            $done['unloaded'][] = $m['id'];
+        } else {
+            $done['failed'][] = $m['id'];
+        }
+    }
+    return $done;
+}
+
+/**
  * Vide la mémoire du serveur local (tous les modèles chargés).
  * @return array<int,string> instances déchargées
  */

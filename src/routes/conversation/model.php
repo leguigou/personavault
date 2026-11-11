@@ -69,10 +69,19 @@ if ($action === 'load' && $method === 'POST') {
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    // 1. libérer la mémoire : les autres modèles chargés sont déchargés avant le chargement
+    $purge = lms_purge_except($model);
+
     $ids   = array_column($st['loaded'], 'id');
     $keys  = array_column($st['loaded'], 'key');
     if (in_array($model, $ids, true) || in_array($model, $keys, true)) {
-        echo json_encode(['ok' => true, 'already' => true, 'model' => $model], JSON_UNESCAPED_UNICODE);
+        echo json_encode([
+            'ok'      => true,
+            'already' => true,
+            'model'   => $model,
+            'purged'  => $purge['unloaded'],
+            'purge_failed' => $purge['failed'],
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -81,6 +90,8 @@ if ($action === 'load' && $method === 'POST') {
     echo json_encode([
         'ok'      => $ok,
         'started' => $ok,
+        'purged'  => $purge['unloaded'],
+        'purge_failed' => $purge['failed'],
         'model'   => $model,
         'ctx'     => $ctx,
         'error'   => $ok ? null : t('error.lms.load_failed'),
