@@ -706,6 +706,86 @@ function lms_make_room_for(string $model, ?array $status = null): array
     return $st['loaded'] ? lms_purge_except($model)['unloaded'] : [];
 }
 
+/**
+ * Charge un modèle et attend la fin (fenêtre de contexte imposée). $onTick est appelé
+ * toutes les ~2 s pendant l'attente (ping SSE derrière un proxy).
+ */
+function lms_load_sync(string $model, int $contextLength, ?callable $onTick = null): bool
+{
+    if ($model === '') {
+        return false;
+    }
+    $ch = curl_init(lms_root() . '/api/v1/models/load');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 300,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode(['model' => $model, 'context_length' => max(2048, $contextLength)], JSON_UNESCAPED_UNICODE),
+    ]);
+    if ($onTick) {
+        $last = microtime(true);
+        curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+        curl_setopt($ch, CURLOPT_XFERINFOFUNCTION, static function () use ($onTick, &$last): int {
+            if (microtime(true) - $last >= 2.0) {
+                $last = microtime(true);
+                $onTick();
+            }
+            return 0;
+        });
+    }
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return $raw !== false && $code >= 200 && $code < 300;
+}
+
+/**
+ * Fait correspondre la mémoire de la conversation à celle du modèle dans LM Studio.
+ * - Modèle pas encore chargé : on le charge NOUS-MÊMES avec la fenêtre du persona. Sinon
+ *   LM Studio le chargerait à la première requête avec sa taille par défaut (souvent plus
+ *   petite) et couperait en silence une partie de l'historique.
+ * - Modèle déjà chargé avec une fenêtre plus petite : on réduit le budget de la conversation
+ *   à cette taille, pour que l'app choisisse elle-même les messages gardés (les plus récents).
+ * @return array{conv:array, loaded:bool, ctx:int}
+ */
+function chat_fit_context(array $conv, ?callable $onLoading = null, ?callable $onTick = null): array
+{
+    $cfg = chat_llm_config_for($conv);
+    $out = ['conv' => $conv, 'loaded' => false, 'ctx' => 0];
+    if ((string) $cfg['provider'] !== 'lmstudio' || (string) $cfg['model'] === '') {
+        return $out;
+    }
+    $st = lms_status();
+    if (empty($st['reachable'])) {
+        return $out;
+    }
+    $model  = (string) $cfg['model'];
+    $window = max(2048, (int) ($conv['context_window'] ?? 8192));
+    foreach ($st['loaded'] as $l) {
+        if ($l['key'] === $model || $l['id'] === $model) {
+            $ctx = (int) $l['ctx'];
+            if ($ctx > 0 && $ctx < $window) {
+                $out['conv']['context_window'] = max(1024, $ctx);
+            }
+            $out['ctx'] = $ctx;
+            return $out;
+        }
+    }
+    // pas chargé : n'en garder qu'un en mémoire (réglage), puis charger avec la bonne fenêtre
+    if (setting('lms_single_model', '1') === '1' && $st['loaded']) {
+        lms_purge_except($model);
+    }
+    if ($onLoading) {
+        $onLoading();
+    }
+    lms_touch_activity();
+    $out['loaded'] = lms_load_sync($model, $window, $onTick);
+    $out['ctx']    = $out['loaded'] ? $window : 0;
+    return $out;
+}
+
 /** Note l'heure d'utilisation de LM Studio (réponse, chargement…) : base du déchargement après inactivité. */
 function lms_touch_activity(): void
 {
@@ -1585,7 +1665,8 @@ function lms_status(): array
                 $loaded[] = [
                     'id'  => $id,
                     'key' => (string) ($m['key'] ?? $id),
-                    'ctx' => (int) ($m['loaded_context_length'] ?? 0),
+                    // API v1 : la taille réelle de la fenêtre est dans la config de l'instance
+                    'ctx' => (int) ($inst['config']['context_length'] ?? $m['loaded_context_length'] ?? 0),
                 ];
             }
         }

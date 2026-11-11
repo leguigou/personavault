@@ -3484,6 +3484,8 @@
                                 if (!live) live = startLiveBubble();
                                 streamed += evt.delta;
                                 paintStream();
+                            } else if (evt.phase === "loading") {
+                                if (!live) loadingLabel(tr("lms.loading"));
                             } else if (evt.phase === "memory") {
                                 if (!live) loadingLabel(tr("chat.memory_phase"));
                             } else if (evt.start) {
