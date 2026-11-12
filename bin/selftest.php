@@ -599,6 +599,11 @@ try {
     $__d = assist_merge(['name' => 'Inès', 'looks' => 'brune', 'meta' => [['k' => 'Âge', 'v' => '29']]], ['name' => '', 'tagline' => 'Photographe', 'meta' => [['k' => 'Ville', 'v' => 'Marseille']], 'tags' => ['#Photo', 'photo']]);
     $check($__d['name'] === 'Inès' && $__d['looks'] === 'brune' && $__d['tagline'] === 'Photographe' && count($__d['meta']) === 2 && $__d['tags'] === ['photo'],
         'assistant : un champ oublié par le modèle n’efface pas la fiche en cours');
+    $__longHistory = str_repeat('Un souvenir marquant. ', 14);
+    $__shortHistory = assist_clean(['history' => $__longHistory])['history'];
+    $check(mb_strlen($__shortHistory) <= 200 && str_ends_with($__shortHistory, '…')
+        && str_starts_with($__longHistory, mb_substr($__shortHistory, 0, -1) . ' '),
+        'assistant : un attribut trop long est raccourci à la fin d’un mot');
     $__pg = assist_progress(['name' => 'A', 'tagline' => 'B', 'description' => str_repeat('x', 50)], [['kind' => 'system']]);
     $__sys = array_values(array_filter($__pg['items'], static fn ($i) => $i['key'] === 'system'))[0];
     $check($__pg['percent'] === 29 && $__sys['done'] === true, 'assistant : avancement et prompt système existant reconnus');

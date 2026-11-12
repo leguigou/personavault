@@ -986,6 +986,7 @@
         const review = asRoot.querySelector("[data-as-review]");
         const reviewForm = asRoot.querySelector("[data-as-review-form]");
         const reviewFields = asRoot.querySelector("[data-as-review-fields]");
+        const reviewScroll = asRoot.querySelector("[data-as-review-scroll]");
         const reviewBack = asRoot.querySelector("[data-as-review-back]");
         const reviewSave = asRoot.querySelector("[data-as-review-save]");
         const reviewError = asRoot.querySelector("[data-as-review-error]");
@@ -1142,20 +1143,21 @@
                     draft: state.draft, history: state.history, action, answer: text,
                     pending_canon: state.pendingCanon || null,
                 });
+                if (JSON.stringify(state.draft) !== JSON.stringify(r.draft)) state.review = null;
                 state.draft = r.draft;
                 state.progress = r.progress;
-                state.choices = r.choices || [];
+                if (!r.review) state.choices = r.choices || [];
                 state.pendingCanon = r.pending_canon || null;
-                state.review = null;
                 const said = [r.reply, r.question].filter(Boolean).join("\n\n");
-                state.history.push({ role: "assistant", content: said });
+                if (said) state.history.push({ role: "assistant", content: said });
                 setBusy(false);
                 if (r.source && r.source.label) pushMsg({ role: "assistant", text: r.source.label, kind: "source", url: r.source.url || "" });
                 if (r.reply) pushMsg({ role: "assistant", text: r.reply, kind: "note" });
-                pushMsg({ role: "assistant", text: r.question });
+                if (r.question) pushMsg({ role: "assistant", text: r.question });
                 paintFiche();
                 paintChips();
                 save();
+                if (r.review) await openReview();
             } catch (err) {
                 setBusy(false);
                 toast({ title: tr("assist.failed"), text: err.message }, true);
@@ -1218,7 +1220,7 @@
             reviewFields.replaceChildren(...rows);
             reviewError.hidden = true;
             review.showModal();
-            reviewFields.scrollTop = 0;
+            reviewScroll.scrollTop = 0;
         }
         reviewForm.addEventListener("input", (event) => {
             const { name, value } = event.target;
