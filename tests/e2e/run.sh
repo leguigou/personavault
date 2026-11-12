@@ -8,12 +8,14 @@
 #   tests/e2e/run.sh --compare ref.txt   compare au résultat enregistré : idéal avant/après un refactoring
 #   tests/e2e/run.sh --update-expected   met à jour tests/e2e/expected.txt après un changement voulu
 #
-# Ports : E2E_PORT (18091) pour l'app, E2E_LLM_PORT (18235) pour le faux modèle.
+# Ports : E2E_PORT (18091) pour l'app, E2E_PEER_PORT pour le second worker,
+# E2E_LLM_PORT (18235) pour le faux modèle.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 PORT="${E2E_PORT:-18091}"
+PEER_PORT="${E2E_PEER_PORT:-$((PORT + 1))}"
 LLM_PORT="${E2E_LLM_PORT:-18235}"
 MODE="${1:-}"
 REF="${2:-}"
@@ -44,18 +46,20 @@ mkdir -p "$WORK/storage/uploads"
 php "$HERE/seed.php" "$WORK" "$LLM_PORT"
 node "$HERE/fake-llm.mjs" "$LLM_PORT" & PIDS+=($!)
 (cd "$WORK" && exec php -S "127.0.0.1:$PORT" -t public public/index.php) > "$WORK/server.log" 2>&1 & PIDS+=($!)
+(cd "$WORK" && exec php -S "127.0.0.1:$PEER_PORT" -t public public/index.php) > "$WORK/peer.log" 2>&1 & PIDS+=($!)
 for _ in $(seq 1 50); do
-    curl -s -o /dev/null "http://127.0.0.1:$PORT/login" && break
+    curl -s -o /dev/null "http://127.0.0.1:$PORT/login" &&
+        curl -s -o /dev/null "http://127.0.0.1:$PEER_PORT/login" && break
     sleep 0.1
 done
 
 # --- parcours
 RESULT="$WORK/result.txt"
 SMOKE=0
-node "$HERE/smoke.mjs" "http://127.0.0.1:$PORT" "$LLM_PORT" "$RESULT" || SMOKE=$?
+node "$HERE/smoke.mjs" "http://127.0.0.1:$PORT" "$LLM_PORT" "$RESULT" "http://127.0.0.1:$PEER_PORT" || SMOKE=$?
 
 # aucune erreur ni avertissement PHP (vérifié même si le parcours a échoué)
-if grep -E "PHP (Fatal|Warning|Notice|Deprecated|Parse)" "$WORK/server.log"; then
+if grep -E "PHP (Fatal|Warning|Notice|Deprecated|Parse)" "$WORK/server.log" "$WORK/peer.log"; then
     echo "ÉCHEC : avertissements ou erreurs PHP pendant le parcours (ci-dessus)."
     exit 1
 fi
@@ -63,6 +67,7 @@ if [ "$SMOKE" -ne 0 ]; then
     echo "ÉCHEC du parcours (détails ci-dessus)."
     exit "$SMOKE"
 fi
+php "$HERE/followup.php" "$WORK"
 
 # statut + type de contenu + libellé (sans l'empreinte)
 statuses() { awk '{ $3 = ""; print }' "$1"; }
@@ -85,7 +90,7 @@ case "$MODE" in
         echo "tests/e2e/expected.txt mis à jour."
         ;;
     *)
-        if diff -u "$HERE/expected.txt" <(statuses "$RESULT"); then
+        if diff -u --strip-trailing-cr "$HERE/expected.txt" <(statuses "$RESULT"); then
             echo "OK : toutes les routes répondent comme attendu."
         else
             echo "ÉCART de statut ou de type de contenu (ci-dessus)."

@@ -6,6 +6,7 @@ declare(strict_types=1);
  *   GET  /p/assist          nouveau persona
  *   GET  /p/{slug}/assist   compléter une fiche existante
  *   POST /assist/turn       un tour de conversation (JSON)
+ *   POST /assist/preview    préparer la fiche et ses prompts pour relecture (JSON)
  *   POST /assist/create     créer la fiche, ou l'appliquer sans rien écraser (JSON)
  */
 
@@ -47,15 +48,17 @@ if ($method === 'GET' && preg_match('#^/p/(?:([a-z0-9-]+)/)?assist$#', $path, $m
     exit;
 }
 
-if ($method === 'POST' && ($path === '/assist/turn' || $path === '/assist/create')) {
+if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/preview', '/assist/create'], true)) {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
-    session_write_close(); // appel long : ne bloque pas les autres requêtes
-    @set_time_limit(300); // personnage existant : recherche en ligne + deux appels au modèle
-    if (!llm_ready()) {
-        http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => t('error.ai.configure_settings')], JSON_UNESCAPED_UNICODE);
-        exit;
+    if ($path !== '/assist/create') {
+        session_write_close(); // appel long : ne bloque pas les autres requêtes
+        @set_time_limit(300); // personnage existant : recherche en ligne + deux appels au modèle
+        if (!llm_ready()) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => t('error.ai.configure_settings')], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
     }
     try {
         [$persona, $prompts] = $assistTarget(trim((string) ($_POST['slug'] ?? '')));
@@ -65,12 +68,21 @@ if ($method === 'POST' && ($path === '/assist/turn' || $path === '/assist/create
             $history = json_decode((string) ($_POST['history'] ?? '[]'), true);
             $action  = (string) ($_POST['action'] ?? 'reply');
             $action  = in_array($action, ['start', 'reply', 'suggest'], true) ? $action : 'reply';
-            $res     = assist_turn($draft, is_array($history) ? $history : [], $action, (string) ($_POST['answer'] ?? ''), $persona, $prompts);
+            $pending = assist_canon_ref(json_decode((string) ($_POST['pending_canon'] ?? 'null'), true));
+            $res     = assist_turn($draft, is_array($history) ? $history : [], $action, (string) ($_POST['answer'] ?? ''), $persona, $prompts, $pending);
             echo json_encode(['ok' => true] + $res, JSON_UNESCAPED_UNICODE);
             exit;
         }
-        $final = assist_finalize($draft, $persona, $prompts);
-        session_start(); // rouverte pour le message affiché sur la fiche
+        if ($path === '/assist/preview') {
+            $final = assist_finalize($draft, $persona, $prompts);
+            echo json_encode(['ok' => true, 'fields' => assist_review_fields($final, $persona, $prompts)], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $fields = json_decode((string) ($_POST['fields'] ?? ''), true);
+        if (!is_array($fields) || $fields === []) {
+            throw new RuntimeException(t('assist.error.no_review'));
+        }
+        $final = assist_review_final($fields, $persona);
         if ($persona) {
             $changes = assist_apply($persona, $prompts, $final);
             flash('ok', $changes

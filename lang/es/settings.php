@@ -196,7 +196,7 @@ return [
     'settings.backup.count_photos'   => ['one' => '{n} foto', 'other' => '{n} fotos'],
     'settings.backup.count_prompts'  => ['one' => '{n} prompt', 'other' => '{n} prompts'],
     'settings.backup.count_conversations' => ['one' => '{n} conversación', 'other' => '{n} conversaciones'],
-    'settings.backup.include_conversations' => 'Incluir las conversaciones, los mensajes y los recuerdos',
+    'settings.backup.include_conversations' => 'Incluir las conversaciones, los archivos adjuntos y los recuerdos',
     'settings.backup.download'  => 'Descargar la copia de seguridad',
     'settings.backup.last'      => 'Última copia: {date}',
     'settings.backup.size_mb'   => '{size} MB',
@@ -208,7 +208,7 @@ return [
     'settings.backup.import_confirm_ok' => 'Importar',
     'settings.backup.choose_file' => 'Elegir un archivo ZIP',
     'settings.backup.import_submit' => 'Importar el archivo',
-    'settings.backup.tip'       => 'Consejo: guarda el ZIP fuera del servidor (disco externo, nube). Contiene todo lo necesario para empezar de cero.',
+    'settings.backup.tip'       => 'Guarda una copia del ZIP fuera del servidor, en un disco externo o en la nube.',
 
     // --- burbujas de información (botón «i»): etiqueta del botón, título de la ventana, contenido
     'settings.info.ia_model_label'    => 'modelo de las fichas',

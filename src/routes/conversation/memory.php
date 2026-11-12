@@ -11,7 +11,14 @@ if ($action === 'compress' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
+    $chatLock = chat_require_write_lock($cid);
     try {
+        $conv = chat_conv_effective($cid);
+        if ($conv === null) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'error' => t('notfound.title')]);
+            exit;
+        }
         $cres = chat_compress($cid, $conv, !empty($_POST['force']));
         $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
         $stmt->execute([$cid]);

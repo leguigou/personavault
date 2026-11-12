@@ -12,13 +12,26 @@ if ($action === 'stream' && $method === 'POST') {
     session_write_close(); // le flux peut durer plusieurs minutes : on libère la session
     $regen = ((string) ($_POST['regen'] ?? '')) === '1';
     $text  = trim((string) ($_POST['message'] ?? ''));
-    $hasImage = upload_present($_FILES['image'] ?? null);
+    $hasImage = !$regen && upload_present($_FILES['image'] ?? null);
     if (!$regen && $text === '' && !$hasImage) {
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => t('error.message.empty_send')]);
         exit;
     }
+
+    $chatLock = chat_require_write_lock($cid);
+    // Relire la conversation sous verrou : un autre flux a pu finir depuis le routage.
+    $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
+    $stmt->execute([$cid]);
+    $current = $stmt->fetch();
+    if (!$current) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => t('notfound.title')]);
+        exit;
+    }
+    $conv = chat_with_persona($current, $persona);
 
     ignore_user_abort(true);
     while (ob_get_level() > 0) {
@@ -33,18 +46,15 @@ if ($action === 'stream' && $method === 'POST') {
         echo 'data: ' . json_encode($payload, JSON_UNESCAPED_UNICODE) . "\n\n";
         flush();
     };
-
-    $regenMid = (int) ($_POST['regen_mid'] ?? 0);
+    $ping = static function (): bool {
+        echo ": ping\n\n";
+        flush();
+        return connection_aborted() !== 0;
+    };
 
     if ($regen) {
-        // on rejoue le dernier message de l'utilisateur (ou celui qu'on vient de modifier)
-        if ($regenMid > 0) {
-            $ust = db()->prepare("SELECT id, content FROM messages WHERE conversation_id = ? AND role = 'user' AND id = ?");
-            $ust->execute([$cid, $regenMid]);
-        } else {
-            $ust = db()->prepare("SELECT id, content FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
-            $ust->execute([$cid]);
-        }
+        $ust = db()->prepare("SELECT id, content, image FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
+        $ust->execute([$cid]);
         $lastUser = $ust->fetch();
         if (!$lastUser) {
             $sse(['error' => t('error.message.nothing_to_regen'), 'kind' => 'regen']);
@@ -52,15 +62,21 @@ if ($action === 'stream' && $method === 'POST') {
         }
         $text      = (string) $lastUser['content'];
         $userMsgId = (int) $lastUser['id'];
-        // photo jointe à ce message : relue en base (le message n'est pas toujours dans
-        // l'historique envoyé, par exemple s'il a déjà été résumé dans la mémoire)
-        $imgSt = db()->prepare('SELECT image FROM messages WHERE id = ?');
-        $imgSt->execute([$userMsgId]);
-        $regenImage = (string) $imgSt->fetchColumn();
-        // l'ancienne réponse n'est pas perdue : elle devient une version (‹ 1/2 ›)
-        reply_version_archive($cid, $userMsgId);
-        db()->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ?")
-            ->execute([$cid, $userMsgId]);
+        $regenImage = (string) $lastUser['image'];
+        $stmt = db()->prepare("SELECT MAX(id) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ?");
+        $stmt->execute([$cid, $userMsgId]);
+        $previousReplyId = (int) $stmt->fetchColumn();
+        $regenMid = (int) ($_POST['regen_mid'] ?? 0);
+        $regenReply = (int) ($_POST['regen_reply'] ?? 0);
+        if (($regenMid > 0 && $regenMid !== $userMsgId) || ($regenReply > 0 && $regenReply !== $previousReplyId)) {
+            $sse(['error' => t('error.chat.reply_changed'), 'kind' => 'regen']);
+            exit;
+        }
+        $sse(['start' => true, 'regen' => true, 'user_id' => $userMsgId, 'after_id' => max($userMsgId, $previousReplyId)]);
+    }
+
+    if ($ping()) {
+        exit;
     }
 
     // modèle chargé avec la bonne taille de mémoire AVANT tout appel (compression comprise) :
@@ -71,13 +87,13 @@ if ($action === 'stream' && $method === 'POST') {
             static function () use ($sse): void {
                 $sse(['phase' => 'loading']);
             },
-            static function (): void {
-                echo ": ping\n\n";
-                flush();
-            }
+            $ping
         )['conv'];
     } catch (Throwable $e) {
         // jamais bloquant : la requête de discussion dira elle-même ce qui ne va pas
+    }
+    if ($ping()) {
+        exit;
     }
 
     if (!$regen) {
@@ -88,10 +104,7 @@ if ($action === 'stream' && $method === 'POST') {
                 // la compression peut prendre du temps : on le dit à l'interface, et des
                 // commentaires SSE réguliers gardent la connexion vivante derrière un proxy
                 $sse(['phase' => 'memory']);
-                $cres = chat_compress($cid, $conv, false, static function (): void {
-                    echo ": ping\n\n";
-                    flush();
-                });
+                $cres = chat_compress($cid, $conv, false, $ping);
                 if (($cres['ok'] ?? false) && ($cres['compressed'] ?? 0) > 0) {
                     $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
                     $stmt->execute([$cid]);
@@ -122,7 +135,7 @@ if ($action === 'stream' && $method === 'POST') {
         if ($regenImage !== '') {
             $imageBase = $regenImage;
         }
-        $history = array_values(array_filter($history, static fn (array $m): bool => (int) $m['id'] !== $userMsgId));
+        $history = array_values(array_filter($history, static fn (array $m): bool => (int) $m['id'] < $userMsgId));
     }
 
     $imageDataUrl = $imageBase !== '' ? media_data_url($imageBase) : '';
@@ -138,6 +151,13 @@ if ($action === 'stream' && $method === 'POST') {
     }
     $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision);
 
+    if ($ping()) {
+        if (!$regen && $imageBase !== '') {
+            release_media($imageBase);
+        }
+        exit;
+    }
+
     if (!$regen) {
         $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image) VALUES (?, "user", ?, ?)');
         $ins->execute([$cid, $text, $imageBase]);
@@ -148,8 +168,6 @@ if ($action === 'stream' && $method === 'POST') {
             'content' => $text,
             'image'   => $imageBase,
         ]]);
-    } else {
-        $sse(['start' => true, 'regen' => true]);
     }
 
     $mode    = ((string) ($_POST['fallback'] ?? '')) === '1' ? 'fallback' : 'auto';
@@ -159,13 +177,12 @@ if ($action === 'stream' && $method === 'POST') {
     // qu'après une écriture : on envoie un commentaire SSE (ignoré par le client) toutes
     // les 2 s, y compris pendant que le modèle « réfléchit » sans rien émettre.
     $lastPing    = microtime(true);
-    $shouldAbort = static function () use (&$lastPing): bool {
+    $shouldAbort = static function () use (&$lastPing, $ping): bool {
         if (microtime(true) - $lastPing >= 2.0) {
             $lastPing = microtime(true);
-            echo ": ping\n\n";
-            flush();
+            return $ping();
         }
-        return connection_aborted() === 1;
+        return connection_aborted() !== 0;
     };
 
     $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort): array {
@@ -198,33 +215,24 @@ if ($action === 'stream' && $method === 'POST') {
             // rien n'a été produit : on retire le message pour permettre un nouvel essai propre
             db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$userMsgId]);
         }
-        if ($regen) {
-            // rien d'enregistré : la réponse précédente revient (visible au rechargement)
-            reply_version_restore_last($cid, $userMsgId);
-        }
-        $sse(['error' => public_error($e), 'kind' => $kind, 'partial' => $sentAny]);
+        $sse([
+            'error' => public_error($e),
+            'kind' => $kind,
+            'partial' => $sentAny,
+            'kept_user' => !$regen && ($sentAny || $imageBase !== ''),
+        ]);
         exit;
     }
 
-    // génération interrompue par l'utilisateur : le client garde à l'écran le texte
-    // déjà reçu, on enregistre donc ce partiel (et rien si rien n'a été produit)
-    if (!empty($res['aborted'])) {
-        $partial = trim((string) $res['content']);
-        if ($partial !== '') {
-            db()->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms)
-                               VALUES (?, "assistant", ?, ?, 0, 0, ?)')
-                ->execute([$cid, $partial, (string) $res['model'], (int) $res['ms']]);
-            if ($regen) {
-                reply_version_register($cid, $userMsgId, (int) db()->lastInsertId());
-            }
-            db()->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
-        } elseif ($regen) {
-            reply_version_restore_last($cid, $userMsgId);
+    $aborted = !empty($res['aborted']);
+    if ($aborted) {
+        $res['content'] = trim((string) $res['content']);
+        if ($res['content'] === '') {
+            exit;
         }
-        exit;
     }
 
-    $splitPoints = (string) setting('chat_split_enabled', '1') === '1'
+    $splitPoints = !$aborted && (string) setting('chat_split_enabled', '1') === '1'
         ? chat_split_points(
             (string) $res['content'],
             (int) setting('chat_split_words', '50'),
@@ -232,24 +240,52 @@ if ($action === 'stream' && $method === 'POST') {
         )
         : [];
 
-    $stmt = db()->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points)
-                               VALUES (?, "assistant", ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([
-        $cid,
-        $res['content'],
-        $res['model'],
-        (int) $res['prompt_tokens'],
-        (int) $res['completion_tokens'],
-        (int) $res['ms'],
-        $splitPoints ? json_encode($splitPoints) : '',
-    ]);
-    $assistantId = (int) db()->lastInsertId();
-    $versions    = null;
-    if ($regen) {
-        reply_version_register($cid, $userMsgId, $assistantId);
-        $stv = db()->prepare('SELECT * FROM messages WHERE id = ?');
-        $stv->execute([$assistantId]);
-        $versions = reply_versions_info($cid, (array) $stv->fetch());
+    try {
+        [$assistantId, $versions, $notice] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv): array {
+            if ($regen) {
+                // L'ancienne réponse reste visible jusqu'à la validation de la transaction.
+                reply_version_archive($cid, $userMsgId);
+                $pdo->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ?")
+                    ->execute([$cid, $userMsgId]);
+            }
+
+            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points)
+                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?)')
+                ->execute([
+                    $cid, $res['content'], $res['model'], (int) $res['prompt_tokens'], (int) $res['completion_tokens'],
+                    (int) $res['ms'], $splitPoints ? json_encode($splitPoints) : '',
+                ]);
+            $assistantId = (int) $pdo->lastInsertId();
+            $versions = null;
+            if ($regen) {
+                reply_version_register($cid, $userMsgId, $assistantId);
+                $stv = $pdo->prepare('SELECT * FROM messages WHERE id = ?');
+                $stv->execute([$assistantId]);
+                $versions = reply_versions_info($cid, $stv->fetch());
+            }
+
+            $notice = null;
+            if ($aborted) {
+                $pdo->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
+            } else {
+                if (!empty($res['notice'])) {
+                    $pdo->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "notice", ?)')
+                        ->execute([$cid, $res['notice']]);
+                    $notice = ['id' => (int) $pdo->lastInsertId(), 'role' => 'notice', 'content' => $res['notice']];
+                }
+                // Ne jamais écraser le modèle choisi par un modèle de secours.
+                $storedModel = $res['provider'] === 'chat' ? (string) $res['model'] : (string) $conv['model'];
+                $pdo->prepare('UPDATE conversations SET model = ?, provider = ?, updated_at = datetime("now") WHERE id = ?')
+                    ->execute([$storedModel, $res['provider'], $cid]);
+            }
+            return [$assistantId, $versions, $notice];
+        });
+    } catch (Throwable $e) {
+        $sse(['error' => public_error($e), 'kind' => 'error', 'kept_user' => !$regen]);
+        exit;
+    }
+    if ($aborted) {
+        exit;
     }
 
     $out = [
@@ -271,17 +307,11 @@ if ($action === 'stream' && $method === 'POST') {
         ],
     ];
 
-    if (!empty($res['notice'])) {
-        $stmt = db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "notice", ?)');
-        $stmt->execute([$cid, $res['notice']]);
-        $out['notice'] = ['id' => (int) db()->lastInsertId(), 'role' => 'notice', 'content' => $res['notice']];
+    if ($notice !== null) {
+        $out['notice'] = $notice;
     }
 
-    // ne jamais écraser le modèle choisi par un modèle de secours
-    $storedModel = $res['provider'] === 'chat' ? (string) $res['model'] : (string) $conv['model'];
-    db()->prepare('UPDATE conversations SET model = ?, provider = ?, updated_at = datetime("now") WHERE id = ?')
-        ->execute([$storedModel, $res['provider'], $cid]);
-
+    fclose($chatLock);
     $sse($out);
     exit;
 }

@@ -73,6 +73,8 @@ return [
     'error.message.not_found'     => 'Mensaje no encontrado.',
     'error.message.not_yours'     => 'Solo puedes modificar tus propios mensajes.',
     'error.message.empty_send'    => 'Mensaje vacío.',
+    'error.chat.generation_in_progress' => 'Ya se está generando una respuesta en esta conversación. Inténtalo de nuevo en un momento.',
+    'error.chat.reply_changed' => 'La conversación ha cambiado. Recarga la página antes de regenerar.',
     'error.message.nothing_to_regen' => 'No hay ningún mensaje que regenerar.',
 
     // --- errores: modelos (LM Studio, modelo remoto)
@@ -111,6 +113,9 @@ return [
     'error.backup.not_a_backup'   => 'Este archivo no es una copia de seguridad de PersonaVault (falta manifest.json).',
     'error.backup.item'           => '{item}: {error}',
     'error.backup.invalid_persona' => 'ficha no válida',
+    'error.backup.invalid_chat_data' => 'datos de conversación no válidos',
+    'error.backup.chat_persona_missing' => 'no se pudo vincular la conversación o el recuerdo a una ficha de este archivo',
+    'error.backup.chat_media_missing' => 'archivo adjunto ausente o ilegible ({file})',
     'error.backup.avatar_skipped' => 'retrato omitido ({error})',
     'error.backup.photo_skipped'  => '{file} omitida ({error})',
 
@@ -221,6 +226,8 @@ return [
     'labels.backup_readme.photos' => 'galería',
     'labels.backup_readme.avatar' => 'retrato',
     'labels.backup_readme.conversations_json' => 'conversaciones, mensajes y recuerdos',
+    'labels.backup_readme.chat_media' => 'archivos adjuntos de las conversaciones',
+    'flash.backup.chats_imported' => 'Se restauraron conversaciones ({conversations}), mensajes ({messages}) y recuerdos ({memories}).',
     'labels.backup_readme.restore' => 'Restauración',
     'labels.backup_readme.restore_how' => 'Ajustes → Copia de seguridad → Restaurar, eligiendo este archivo ZIP.',
     'labels.backup_readme.restore_slug' => 'Los personas importados reciben un slug único si el suyo ya existe:',
@@ -274,7 +281,9 @@ return [
     'assist.flash.applied' => 'Añadido a la ficha: {fields}. No se ha cambiado nada de lo que existía.',
     'logs.purpose.assist' => 'Asistente de creación',
     'assist.canon.question' => '¿Quieres ajustar algo: versión de la obra, momento de la historia, relación contigo?',
-    'assist.canon.found' => 'Información encontrada en Wikipedia: {title}',
+    'assist.canon.choose_version' => '¿Qué versión de {name} quieres interpretar?',
+    'assist.canon.found' => 'Referencia consultada: {title}. La IA puede haber deducido algunos detalles de la ficha.',
+    'assist.error.no_review' => 'Abre la ficha para revisarla antes de guardarla.',
     'assist.canon.memory' => 'No se encontró ninguna página en línea: ficha rellenada con lo que la IA sabe de {name}. Revísala.',
     'assist.meta.source' => 'Personaje original',
     'assist.meta.source_url' => 'Referencia',

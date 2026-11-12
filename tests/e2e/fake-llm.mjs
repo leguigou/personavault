@@ -3,6 +3,7 @@
 import http from 'node:http';
 
 const port = Number(process.argv[2] || 18235);
+let nextStream = '';
 // assistant de création : fiche de test (personnage existant « Sherlock Holmes »)
 const sherlock = { name: 'Sherlock Holmes', tagline: 'Détective consultant au 221B Baker Street', description: 'Détective génial et excentrique de Londres.',
     tags: ['detective', 'londres'], meta: [{ k: 'Œuvre', v: 'Arthur Conan Doyle' }, { k: 'Âge', v: '35' }, { k: 'Ville', v: 'Londres' }],
@@ -11,7 +12,9 @@ const sherlock = { name: 'Sherlock Holmes', tagline: 'Détective consultant au 2
 const assist = (sys, user) => {
     if (/Tu remplis la fiche d'un PERSONA tiré d'un personnage EXISTANT/.test(sys)) {
         const ok = /RÉFÉRENCE \(Sherlock Holmes, https:\/\/fr\.wikipedia\.org\/wiki\/Sherlock_Holmes\)/.test(user);
-        return JSON.stringify({ found: ok, draft: sherlock, reply: 'J’ai retrouvé Sherlock Holmes.', question: 'Version livre ou série ?', choices: ['Les romans', 'La série'] });
+        const novels = /DERNIÈRE DEMANDE DE L'UTILISATEUR : Les romans/.test(user);
+        const draft = novels ? { ...sherlock, meta: [...sherlock.meta, { k: 'Version', v: 'Les romans' }] } : sherlock;
+        return JSON.stringify({ found: ok, draft, reply: 'J’ai retrouvé Sherlock Holmes.', question: 'Quelle relation avec toi ?', choices: ['Un client'] });
     }
     if (/Tu finalises la fiche/.test(sys)) {
         return JSON.stringify({ draft: sherlock, system_prompt: 'Tu es Sherlock Holmes, de Conan Doyle.', image_prompt: 'portrait of Sherlock Holmes' });
@@ -19,7 +22,7 @@ const assist = (sys, user) => {
     if (/aide à créer la fiche d'un PERSONA/.test(sys)) {
         const known = /sherlock/i.test(user.split('RÉPONSE DE L\'UTILISATEUR')[1] || '');
         return JSON.stringify({ draft: {}, reply: '', question: 'Quel est son prénom ?', choices: ['Inès'],
-            canon: known ? { name: 'Sherlock Holmes', work: 'Arthur Conan Doyle' } : null });
+            canon: known ? { name: 'Sherlock Holmes', work: 'Arthur Conan Doyle', version_choices: ['Les romans', 'La série'] } : null });
     }
     return null;
 };
@@ -38,6 +41,14 @@ const reply = (sys) => {
 http.createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
+    if (req.method === 'POST' && req.url === '/test/next-stream') {
+        nextStream = body;
+        res.statusCode = 204;
+        return res.end();
+    }
+    if (req.method === 'GET' && req.url === '/test/next-stream') {
+        return res.end(nextStream);
+    }
     if (req.method === 'GET' && req.url.endsWith('/models')) {
         res.setHeader('Content-Type', 'application/json');
         return res.end(JSON.stringify(req.url.includes('/api/')
@@ -58,7 +69,22 @@ http.createServer(async (req, res) => {
         const usage = { prompt_tokens: 100, completion_tokens: 20 };
         if (j.stream) {
             res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-            for (const w of text.split(' ')) res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: w + ' ' } }] }) + '\n\n');
+            const mode = nextStream;
+            nextStream = '';
+            const delta = (content) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + '\n\n');
+            if (mode) {
+                if (mode !== 'silent') delta('Début de la nouvelle réponse.');
+                if (mode === 'fail') {
+                    // Laisser le temps à un autre onglet de lire la réponse encore active.
+                    const timer = setTimeout(() => res.end('data: {"error":{"message":"Échec simulé"}}\n\n'), 1200);
+                    res.on('close', () => clearTimeout(timer));
+                } else {
+                    const timer = setTimeout(() => res.end('data: [DONE]\n\n'), 10000);
+                    res.on('close', () => clearTimeout(timer));
+                }
+                return;
+            }
+            for (const w of text.split(' ')) delta(w + ' ');
             res.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage }) + '\n\n');
             return res.end('data: [DONE]\n\n');
         }

@@ -66,9 +66,12 @@
 303 text/html  POST /settings/ui
 303 text/html  POST /settings/prompts
 200 application/json  POST /assist/turn (personnage existant)
+200 application/json  POST /assist/turn (version choisie)
 200 application/json  POST /assist/turn (idée libre)
+200 application/json  POST /assist/preview
 200 application/json  POST /assist/create
 200 text/html  GET /p/sherlock-holmes
+200 application/json  POST /assist/preview (compléter)
 303 text/html  POST /p/sherlock-holmes/delete
 303 text/html  POST /settings
 303 text/html  POST /settings/chat
@@ -91,5 +94,7 @@
 303 text/html  POST /p/camille-lefebvre-copie/delete
 200 image/webp  GET /media/(photo de l’original après suppression de la copie)
 303 text/html  POST /p/smoke-test/delete
+200 application/zip  GET /backup/export.zip?conv=1
+303 text/html  POST /backup/import
 303 text/html  POST /logout
 303 text/html  GET / (après déconnexion)

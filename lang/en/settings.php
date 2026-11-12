@@ -195,7 +195,7 @@ return [
     'settings.backup.count_photos'   => ['one' => '{n} photo', 'other' => '{n} photos'],
     'settings.backup.count_prompts'  => ['one' => '{n} prompt', 'other' => '{n} prompts'],
     'settings.backup.count_conversations' => ['one' => '{n} conversation', 'other' => '{n} conversations'],
-    'settings.backup.include_conversations' => 'Include conversations, messages and memories',
+    'settings.backup.include_conversations' => 'Include conversations, attachments and memories',
     'settings.backup.download'  => 'Download the backup',
     'settings.backup.last'      => 'Last backup: {date}',
     'settings.backup.size_mb'   => '{size} MB',
@@ -207,7 +207,7 @@ return [
     'settings.backup.import_confirm_ok' => 'Import',
     'settings.backup.choose_file' => 'Choose a ZIP file',
     'settings.backup.import_submit' => 'Import the archive',
-    'settings.backup.tip'       => 'Tip: keep the ZIP off the server (external drive, cloud). It contains everything you need to start over from scratch.',
+    'settings.backup.tip'       => 'Keep a copy of the ZIP off the server, on an external drive or in the cloud.',
 
     // --- info bubbles (“i” button): button label, window title, content
     'settings.info.ia_model_label'    => 'profile model',

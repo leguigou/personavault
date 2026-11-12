@@ -176,7 +176,7 @@ function assist_llm_json(string $system, string $user, int $maxTokens, float $te
  * $history : [{role: assistant|user, content}] (les derniers échanges).
  * @return array{draft:array, reply:string, question:string, choices:list<string>, progress:array}
  */
-function assist_turn(array $draft, array $history, string $action, string $answer, ?array $persona = null, array $prompts = []): array
+function assist_turn(array $draft, array $history, string $action, string $answer, ?array $persona = null, array $prompts = [], ?array $pendingCanon = null): array
 {
     $draft = assist_clean($draft);
     $isNew = $persona === null;
@@ -200,6 +200,7 @@ Champs de la fiche :
 4. Propose 3 réponses possibles (« choices »), courtes (6 mots max), variées et adaptées à CE persona.
 5. Quand tout l'essentiel est rempli, ne pose plus de question obligatoire : propose plutôt un détail optionnel et dis que la fiche peut être créée.
 6. PERSONNAGE EXISTANT : si l'utilisateur veut un persona tiré d'un personnage qui existe déjà (roman, film, série, BD, manga, anime, jeu vidéo, conte, mythologie, figure historique…), renseigne "canon" : {"name": "nom usuel du personnage", "work": "œuvre ou univers d'origine"}. Sinon "canon": null. Un simple « dans le style de » ou « inspiré de » sans personnage précis n'est pas un personnage existant.
+7. Si plusieurs adaptations ou incarnations plausibles changent sensiblement le personnage et que l'utilisateur n'a pas choisi, ajoute à "canon" un tableau "version_choices" contenant 2 ou 3 versions précises et distinctes. Si une version est déjà indiquée ou qu'une seule est pertinente, omets ce tableau.
 Réponds en français. Ne mets jamais d'informations sur l'utilisateur réel dans la fiche.
 
 Réponds UNIQUEMENT avec un objet JSON :
@@ -211,6 +212,13 @@ TXT;
         $who = ($h['role'] ?? '') === 'user' ? 'Utilisateur' : 'Assistant';
         $lines .= $who . ' : ' . mb_substr(trim((string) ($h['content'] ?? '')), 0, 600) . "\n";
     }
+    if ($pendingCanon !== null && in_array($action, ['reply', 'suggest'], true)) {
+        $res = assist_canon_fill($draft, $pendingCanon, $lines, $answer, $persona, $prompts);
+        if ($res !== null) {
+            return $res;
+        }
+    }
+
     $user = ($isNew ? "MODE : création d'un nouveau persona.\n" : "MODE : compléter une fiche existante. Pose des questions uniquement sur ce qui MANQUE (champs vides, apparence peu précise, pas de prompt système ou d'image…).\n" . assist_existing_context($persona, $prompts) . "\n")
         . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n"
         . "CONVERSATION\n" . ($lines !== '' ? $lines : "(début)\n")
@@ -222,7 +230,19 @@ TXT;
     // personnage existant (nouveau, ou différent de celui déjà retrouvé) : on va chercher
     // ses informations et on remplit toute la fiche d'un coup
     $canon = assist_canon_ref($j['canon'] ?? null);
-    if ($canon && $action === 'reply' && !assist_same_canon($draft, $canon)) {
+    if ($canon && $action === 'reply' && $canon !== $pendingCanon && !assist_same_canon($draft, $canon)) {
+        $versions = array_values(array_unique(assist_choices($j['canon']['version_choices'] ?? [])));
+        if (count($versions) >= 2) {
+            return [
+                'draft' => $draft,
+                'reply' => '',
+                'question' => t('assist.canon.choose_version', ['name' => $canon['name']]),
+                'choices' => $versions,
+                'progress' => assist_progress($draft, $prompts),
+                'source' => null,
+                'pending_canon' => $canon,
+            ];
+        }
         $res = assist_canon_fill($draft, $canon, $lines, $answer, $persona, $prompts);
         if ($res !== null) {
             return $res;
@@ -336,7 +356,7 @@ function assist_lookup(array $canon): ?array
             'format' => 'json', 'formatversion' => 2, 'utf8' => 1,
         ]));
         $hits = is_array($res['query']['search'] ?? null) ? $res['query']['search'] : [];
-        // le titre qui contient le plus de mots du nom (sinon le premier résultat)
+        // Préférer un titre qui contient le nom du personnage.
         $best = null;
         $bestScore = -1;
         foreach ($hits as $h) {
@@ -352,7 +372,7 @@ function assist_lookup(array $canon): ?array
                 [$best, $bestScore] = [$title, $score];
             }
         }
-        if ($best === null) {
+        if ($best === null || ($words && $bestScore === 0)) {
             continue;
         }
         $page = assist_http_json($api . '?' . http_build_query([
@@ -390,6 +410,7 @@ function assist_canon_fill(array $draft, array $canon, string $lines, string $an
     $system = <<<TXT
 Tu remplis la fiche d'un PERSONA tiré d'un personnage EXISTANT : {$label}.
 Remplis TOUS les champs, fidèlement à l'œuvre, à partir de la RÉFÉRENCE (si elle est fournie) et de tes connaissances. Ne contredis jamais l'œuvre ; quand elle ne dit rien (façon de parler précise, limites…), déduis-le de façon cohérente avec le personnage. Si l'utilisateur a précisé une version (livre, film, série, époque de l'histoire), suis-la.
+Si une version a été précisée, inscris-la dans les attributs. Si l'utilisateur te laisse choisir, prends une version de référence et indique laquelle. Si la dernière demande désigne un autre personnage, réponds {"found": false}.
 - name : nom tel que dans l'œuvre ; tagline : qui il ou elle est, en une ligne (90 caractères max) ; description : 2 à 4 phrases (rôle dans l'œuvre, ce qui le ou la définit) ;
 - tags : 3 à 6 mots-clés en minuscules ; meta : 4 à 8 attributs courts (Œuvre, Créateur ou auteur, Âge, Origine, Rôle ou métier, Affiliations…) ;
 - looks : apparence canonique PRÉCISE pour les images (visage, yeux, cheveux, silhouette, tenue emblématique, signes distinctifs) ; style : rendu visuel cohérent avec l'œuvre ;
@@ -469,6 +490,65 @@ TXT;
         'draft'         => $final,
         'system_prompt' => mb_substr(trim((string) ($j['system_prompt'] ?? '')), 0, 12000),
         'image_prompt'  => mb_substr(trim((string) ($j['image_prompt'] ?? '')), 0, 4000),
+    ];
+}
+
+/** Champs qui seront enregistrés et que l'utilisateur peut relire ou corriger. */
+function assist_review_fields(array $final, ?array $persona, array $prompts): array
+{
+    $d = $final['draft'];
+    $fields = array_intersect_key($d, array_flip(['name', 'tagline', 'description', 'looks', 'style', 'source', 'source_url']));
+    $fields['tags'] = implode(', ', $d['tags']);
+    $fields['meta'] = meta_to_text($d['meta']);
+    $fields['system_prompt'] = $final['system_prompt'];
+    $fields['image_prompt'] = $final['image_prompt'];
+    if ($d['source'] === '' && $d['source_url'] === '') {
+        unset($fields['source'], $fields['source_url']);
+    }
+    if ($persona === null) {
+        return $fields;
+    }
+
+    unset($fields['name']);
+    foreach (['tagline', 'description'] as $key) {
+        if (trim((string) $persona[$key]) !== '') {
+            unset($fields[$key]);
+        }
+    }
+    $existing = array_map(static fn (array $row): string => mb_strtolower((string) ($row['k'] ?? '')), array_filter(json_list($persona['meta']), 'is_array'));
+    $fields['tags'] = implode(', ', array_diff($d['tags'], json_list($persona['tags'])));
+    $fields['meta'] = meta_to_text(array_filter($d['meta'], static fn (array $row): bool => !in_array(mb_strtolower($row['k']), $existing, true)));
+    foreach ($prompts as $prompt) {
+        unset($fields[$prompt['kind'] . '_prompt']);
+    }
+    $attributeLabels = [
+        'looks' => t('assist.meta.looks'), 'style' => t('assist.meta.style'),
+        'source' => t('assist.meta.source'), 'source_url' => t('assist.meta.source_url'),
+    ];
+    foreach ($attributeLabels as $key => $label) {
+        if (in_array(mb_strtolower($label), $existing, true)) {
+            unset($fields[$key]);
+        }
+    }
+    return $fields;
+}
+
+/** Convertit la relecture en fiche à enregistrer, sans nouvel appel au modèle. */
+function assist_review_final(array $fields, ?array $persona): array
+{
+    $fields = array_map(static fn (mixed $value): string => is_string($value) ? trim($value) : '', $fields);
+    $draft = assist_clean(array_replace($fields, [
+        'name' => $persona['name'] ?? $fields['name'] ?? '',
+        'tags' => parse_tags($fields['tags'] ?? ''),
+        'meta' => parse_meta($fields['meta'] ?? ''),
+    ]));
+    if ($draft['name'] === '') {
+        throw new RuntimeException(t('assist.error.no_name'));
+    }
+    return [
+        'draft' => $draft,
+        'system_prompt' => mb_substr($fields['system_prompt'] ?? '', 0, 12000),
+        'image_prompt' => mb_substr($fields['image_prompt'] ?? '', 0, 4000),
     ];
 }
 

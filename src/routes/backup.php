@@ -38,11 +38,7 @@ if ($path === '/backup/import' && $method === 'POST') {
             throw new RuntimeException(upload_error_message((int) $archive['error']));
         }
         $res = backup_import_zip((string) $archive['tmp_name']);
-        flash('ok', t('flash.backup.imported', [
-            'personas' => t('labels.count.personas', (int) $res['personas']),
-            'photos'   => t('labels.count.photos', (int) $res['photos']),
-            'prompts'  => t('labels.count.prompts', (int) $res['prompts']),
-        ]));
+        flash('ok', backup_import_notice($res));
         if (!empty($res['errors'])) {
             flash('error', implode(' · ', array_slice($res['errors'], 0, 3)));
         }
