@@ -83,7 +83,7 @@ if ($path === '/import' && $method === 'POST') {
             throw new RuntimeException(upload_error_message((int) $file['error']));
         }
         $res = card_import_file((string) $file['tmp_name']);
-        if ((int) $res['personas'] === 0) {
+        if ((int) $res['personas'] === 0 && empty($res['memories'])) {
             throw new RuntimeException($res['errors'][0] ?? t('cards.error.nothing'));
         }
         if (!empty($res['errors'])) {
@@ -93,14 +93,12 @@ if ($path === '/import' && $method === 'POST') {
             $slug = (string) $res['slugs'][0];
             $stmt = db()->prepare('SELECT name FROM personas WHERE slug = ?');
             $stmt->execute([$slug]);
-            flash('ok', t('cards.flash.imported', ['name' => (string) $stmt->fetchColumn()]));
+            flash('ok', !empty($res['conversations']) || !empty($res['memories'])
+                ? backup_import_notice($res)
+                : t('cards.flash.imported', ['name' => (string) $stmt->fetchColumn()]));
             redirect('/p/' . rawurlencode($slug));
         }
-        flash('ok', t('flash.backup.imported', [
-            'personas' => t('labels.count.personas', (int) $res['personas']),
-            'photos'   => t('labels.count.photos', (int) $res['photos']),
-            'prompts'  => t('labels.count.prompts', (int) $res['prompts']),
-        ]));
+        flash('ok', backup_import_notice($res));
         redirect('/');
     } catch (Throwable $e) {
         flash('error', t('cards.flash.import_failed', ['error' => public_error($e)]));

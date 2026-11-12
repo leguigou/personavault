@@ -55,6 +55,7 @@ for ($i = 1; $i <= 12; $i++) {
           . str_repeat("On a marché dans l'Alfama, écouté du fado et regardé le coucher de soleil depuis le miradouro. ", 3)
         : "Réponse $i : quelle belle journée, raconte-moi la suite !"]);
 }
+$pdo->prepare('UPDATE messages SET image = ? WHERE id = ?')->execute([fetch_photos($c)[0]['file'], (int) $pdo->lastInsertId() - 1]);
 $pdo->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$ids['ines-morel'], 'Pellicule']);
 facts_add($c, 'Prend souvent le train', 'fait', 'confirme', $cid);
 

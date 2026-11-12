@@ -76,6 +76,8 @@ return [
     'error.message.not_found'     => 'Message introuvable.',
     'error.message.not_yours'     => 'Seuls tes propres messages sont modifiables.',
     'error.message.empty_send'    => 'Message vide.',
+    'error.chat.generation_in_progress' => 'Une réponse est déjà en cours dans cette discussion. Réessaie dans un instant.',
+    'error.chat.reply_changed' => 'La discussion a changé. Recharge la page avant de régénérer.',
     'error.message.nothing_to_regen' => 'Aucun message à régénérer.',
 
     // --- erreurs : modèles (LM Studio, modèle distant)
@@ -114,6 +116,9 @@ return [
     'error.backup.not_a_backup'   => 'Ce fichier n’est pas une sauvegarde PersonaVault (manifest.json manquant).',
     'error.backup.item'           => '{item} : {error}',
     'error.backup.invalid_persona' => 'fiche invalide',
+    'error.backup.invalid_chat_data' => 'données de discussion invalides',
+    'error.backup.chat_persona_missing' => 'impossible de rattacher la discussion ou le souvenir à une fiche de cette archive',
+    'error.backup.chat_media_missing' => 'pièce jointe manquante ou illisible ({file})',
     'error.backup.avatar_skipped' => 'portrait ignoré ({error})',
     'error.backup.photo_skipped'  => '{file} ignorée ({error})',
 
@@ -224,6 +229,8 @@ return [
     'labels.backup_readme.photos' => 'galerie',
     'labels.backup_readme.avatar' => 'portrait',
     'labels.backup_readme.conversations_json' => 'discussions, messages et souvenirs',
+    'labels.backup_readme.chat_media' => 'pièces jointes des conversations',
+    'flash.backup.chats_imported' => 'Discussions restaurées ({conversations}), messages ({messages}), souvenirs ({memories}).',
     'labels.backup_readme.restore' => 'Restauration',
     'labels.backup_readme.restore_how' => 'Réglages → Sauvegarde → Restaurer, en choisissant ce fichier ZIP.',
     'labels.backup_readme.restore_slug' => 'Les personas importés reçoivent un slug unique si le leur existe déjà :',
@@ -277,7 +284,9 @@ return [
     'assist.flash.applied' => 'Ajouté à la fiche : {fields}. Rien de ce qui existait n’a été modifié.',
     'logs.purpose.assist' => 'Assistant de création',
     'assist.canon.question' => 'Tu veux ajuster quelque chose : version de l’œuvre, moment de l’histoire, relation avec toi ?',
-    'assist.canon.found' => 'Infos retrouvées sur Wikipédia : {title}',
+    'assist.canon.choose_version' => 'Quelle version de {name} veux-tu incarner ?',
+    'assist.canon.found' => 'Référence consultée : {title}. L’IA peut avoir déduit certains détails de la fiche.',
+    'assist.error.no_review' => 'Ouvre la fiche à relire avant de l’enregistrer.',
     'assist.canon.memory' => 'Aucune page trouvée en ligne : fiche remplie d’après ce que l’IA sait de {name}. Relis-la.',
     'assist.meta.source' => 'Personnage d’origine',
     'assist.meta.source_url' => 'Référence',

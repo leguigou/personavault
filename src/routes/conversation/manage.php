@@ -109,6 +109,11 @@ if ($action === 'rename' && $method === 'POST') {
 
 if ($action === 'delete' && $method === 'POST') {
     csrf_check();
+    $chatLock = chat_try_lock($cid);
+    if ($chatLock === false) {
+        flash('error', t('error.chat.generation_in_progress'));
+        redirect('/chat/' . $cid);
+    }
     $stmt = db()->prepare("SELECT image FROM messages WHERE conversation_id = ? AND image <> ''");
     $stmt->execute([$cid]);
     $images = $stmt->fetchAll(PDO::FETCH_COLUMN);

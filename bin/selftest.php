@@ -112,6 +112,19 @@ try {
     $check(media_ref_count($photo1) === 2, 'photo1 référencée 2 fois (galerie + portrait)');
 
     echo "Sauvegarde\n";
+    $sourceMid = (int) db()->query('SELECT id FROM messages WHERE conversation_id = ' . $cid)->fetchColumn();
+    $pdo->prepare("INSERT INTO messages (conversation_id, role, content, split_points) VALUES (?, 'assistant', 'Premier essai.', '[8]')")->execute([$cid]);
+    $replyMid = (int) $pdo->lastInsertId();
+    reply_version_archive($cid, $sourceMid);
+    $firstVersion = (int) $pdo->lastInsertId();
+    $pdo->prepare("UPDATE messages SET content = 'Deuxième essai.' WHERE id = ?")->execute([$replyMid]);
+    reply_version_register($cid, $sourceMid, $replyMid);
+    $pdo->prepare("UPDATE messages SET content = 'Premier essai.', version_id = ? WHERE id = ?")->execute([$firstVersion, $replyMid]);
+    $pdo->prepare("UPDATE conversations SET summary = 'Résumé', last_compressed_id = ?, facts_cursor = ?, pinned = 1,
+                   model_override = 'mon-modèle', title_auto = 0 WHERE id = ?")->execute([$sourceMid, $replyMid, $cid]);
+    facts_add($pid, 'Souvenir de sauvegarde', 'preference', 'confirme', $cid);
+    $pdo->exec("INSERT INTO user_memories (content) VALUES ('Souvenir global de sauvegarde')");
+
     $zip = backup_create_zip(true);
     $za  = new ZipArchive();
     $za->open($zip['path']);
@@ -121,10 +134,12 @@ try {
     }
     $za->close();
     $check((bool) preg_grep('#^personavault-[^/]+/personas/lisa/persona\.json$#', $names), 'export avec dossier racine');
+    $check(in_array(substr($zip['name'], 0, -4) . '/conversations/media/' . $chatImg . '.webp', $names, true), 'pièce jointe incluse dans le ZIP');
 
     $res = backup_import_zip($zip['path']);
     $check($res['personas'] === 1 && $res['photos'] === 2 && $res['prompts'] === 2 && !$res['errors'],
         'import : 1 persona, 2 photos, 2 prompts (' . json_encode($res, JSON_UNESCAPED_UNICODE) . ')');
+    $check($res['conversations'] === 1 && $res['messages'] === 2 && $res['memories'] === 2, 'import : 1 conversation, 2 messages et 2 souvenirs');
     $new = db()->query("SELECT * FROM personas WHERE slug = 'lisa-2'")->fetch();
     $check(is_array($new), 'persona importé sous un nouveau slug');
     if (is_array($new)) {
@@ -136,6 +151,23 @@ try {
         sort($bodies);
         $check($bodies === ['Tu es Lisa.', 'photo, 35mm'], 'prompts importés à l’identique');
         $check(json_list($new['tags']) === ['brune', 'paris'] && $new['model'] === 'qwen', 'tags et réglages IA importés');
+
+        $copy = $pdo->query('SELECT * FROM conversations WHERE persona_id = ' . $nid)->fetch();
+        $copyMessages = fetch_messages((int) $copy['id']);
+        [$copiedUser, $copiedReply] = $copyMessages;
+        $check((int) $copy['id'] !== $cid && count(fetch_messages($cid)) === 2, 'discussion rattachée au nouveau persona, original préservé');
+        $check($mediaExists($copiedUser['image']) && $copiedUser['image'] !== $chatImg, 'pièce jointe du message restaurée avec sa miniature');
+        $check($copy['last_compressed_id'] === $copiedUser['id'] && $copy['facts_cursor'] === $copiedReply['id']
+            && chat_uses_summary($copy) && $copy['pinned'] === 1 && $copy['model_override'] === 'mon-modèle' && $copy['title_auto'] === 0,
+            'curseurs mémoire remappés et réglages de la discussion restaurés');
+        $check($copiedReply['content'] === 'Premier essai.' && $copiedReply['split_points'] === '[8]'
+            && reply_versions_info((int) $copy['id'], $copiedReply) === ['index' => 1, 'total' => 2],
+            'versions, découpage et réponse sélectionnée restaurés');
+        $memory = $pdo->query('SELECT * FROM user_memories WHERE persona_id = ' . $nid)->fetch();
+        $check($memory['source_conversation_id'] === $copy['id'] && $memory['content'] === 'Souvenir de sauvegarde'
+            && $memory['category'] === 'preference', 'souvenir rattaché au persona et à la conversation importés');
+        $check((int) $pdo->query('SELECT COUNT(*) FROM user_memories WHERE persona_id IS NULL')->fetchColumn() === 2,
+            'souvenir global restauré sans persona');
     }
 
     // archive sans dossier racine (refaite à la main) : toujours acceptée
@@ -151,7 +183,38 @@ try {
     $dst->close();
     $src->close();
     $res2 = backup_import_zip($flat);
-    $check($res2['personas'] === 1 && $res2['photos'] === 2 && $res2['prompts'] === 2, 'import d’une archive sans dossier racine');
+    $check($res2['personas'] === 1 && $res2['photos'] === 2 && $res2['prompts'] === 2 && $res2['conversations'] === 1
+        && !$res2['errors'], 'import d’une archive sans dossier racine');
+
+    // Restauration sans les données ni les fichiers d'origine.
+    $pdo->exec('DELETE FROM personas');
+    $pdo->exec('DELETE FROM user_memories');
+    foreach (glob(config('uploads') . '/*.webp') as $file) {
+        unlink($file);
+    }
+    $restored = backup_import_zip($zip['path']);
+    $check($restored['slugs'] === ['lisa'] && !$restored['errors']
+        && (int) $pdo->query('SELECT COUNT(*) FROM conversations')->fetchColumn() === 1
+        && (int) $pdo->query('SELECT COUNT(*) FROM user_memories')->fetchColumn() === 2
+        && $mediaExists((string) $pdo->query("SELECT image FROM messages WHERE role = 'user'")->fetchColumn()),
+        'restauration des fiches, discussions, souvenirs et pièces jointes sur des données vides');
+    $check(count(chat_persona_search((int) $pdo->query('SELECT id FROM personas')->fetchColumn(), 'regarde')) === 1,
+        'les messages restaurés sont indexés pour la recherche');
+
+    $oldArchive = $tmp . '/backup-v1.zip';
+    $old = new ZipArchive();
+    $old->open($oldArchive, ZipArchive::CREATE);
+    $old->addFromString('manifest.json', '{"app":"PersonaVault","format":1}');
+    $old->addFromString('personas/ancien/persona.json', '{"name":"Archive ancienne"}');
+    $old->addFromString('conversations/conversations.json', backup_json([
+        'conversations' => [['id' => 4, 'persona_id' => 77, 'title' => 'Discussion ancienne',
+            'messages' => [['role' => 'user', 'content' => 'Ancien message', 'model' => '', 'created_at' => '2024-01-01 12:00:00']]]],
+        'memories' => [['persona_id' => 77, 'content' => 'Ancien souvenir']],
+    ]));
+    $old->close();
+    $legacyBackup = backup_import_zip($oldArchive);
+    $check(!$legacyBackup['errors'] && $legacyBackup['conversations'] === 1 && $legacyBackup['messages'] === 1
+        && $legacyBackup['memories'] === 1, 'un ZIP v1 avec une seule fiche restaure aussi ses discussions et souvenirs');
 
     // trop d'entrées (limite de test : 50)
     $many = $tmp . '/many.zip';
@@ -336,6 +399,22 @@ try {
     $last  = (string) end($built['messages'])['content'];
     $check(!str_contains($first, 'Contexte réel') && str_contains($first, 'Sujet : test'), 'prompt système stable (résumé, sans l’heure)');
     $check(str_starts_with($last, '<contexte>') && str_ends_with($last, 'bonjour'), 'heure et souvenirs dans le dernier message');
+
+    $pause = [
+        ['role' => 'user', 'content' => 'Le départ est pour Lyon.', 'created_at' => gmdate('Y-m-d H:i:s', time() - 8 * 3600)],
+        ['role' => 'memory', 'content' => 'Notification interne', 'created_at' => gmdate('Y-m-d H:i:s')],
+    ];
+    $context = chat_time_context(['memory_enabled' => 1] + $conv, $pause);
+    $check(str_contains($context, 'Dernier sujet : « Le départ est pour Lyon. »')
+        && !str_contains($context, 'Sujet : test') && !str_contains($context, 'Notification interne'),
+        'après une pause, le contexte reprend le dernier échange malgré une notification plus récente');
+
+    chat_invalidate_summary($cid, $ids[7]);
+    $check(chat_uses_summary(chat_conv_effective($cid)), 'une modification après le résumé le conserve');
+    chat_invalidate_summary($cid, $ids[6]);
+    $fresh = chat_conv_effective($cid);
+    $check($fresh['summary'] === '' && (int) $fresh['last_compressed_id'] === 0
+        && count(fetch_context_messages($cid, $fresh)) === 10, 'une modification dans le résumé rétablit l’historique complet');
 
     // les derniers échanges d'abord : on remonte du plus récent sans trou ; même si la place
     // manque (fenêtre minuscule, longue consigne), les CHAT_MIN_RECENT derniers sont toujours là

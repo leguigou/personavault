@@ -1,11 +1,11 @@
 // Parcours de toutes les routes de l'app (pages, actions, erreurs, flux SSE, accès anonyme).
 // Sans dépendance : fetch de Node 18+ et un petit gestionnaire de cookies.
-// Usage : node smoke.mjs <url de l'app> <port du faux modèle> <fichier de sortie>
+// Usage : node smoke.mjs <url de l'app> <port du faux modèle> <fichier de sortie> [url du second worker]
 // Chaque ligne : statut, type de contenu, empreinte du contenu normalisé, libellé.
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const [base = 'http://127.0.0.1:18091', llmPort = '18235', out = 'smoke-result.txt'] = process.argv.slice(2);
+const [base = 'http://127.0.0.1:18091', llmPort = '18235', out = 'smoke-result.txt', peer] = process.argv.slice(2);
 
 const jar = new Map();
 const cookieHeader = () => [...jar].map(([k, v]) => k + '=' + v).join('; ');
@@ -16,12 +16,13 @@ const remember = (r) => {
         jar.set(kv.slice(0, i), kv.slice(i + 1));
     }
 };
-const http = async (path, { method = 'GET', form, anonymous = false } = {}) => {
-    const r = await fetch(base + path, {
+const http = async (path, { method = 'GET', form, anonymous = false, origin = base, signal } = {}) => {
+    const r = await fetch(origin + path, {
         method,
         redirect: 'manual',
         headers: anonymous ? {} : { cookie: cookieHeader() },
         body: form ? new URLSearchParams(form) : undefined,
+        signal,
     });
     if (!anonymous) remember(r);
     return r;
@@ -140,14 +141,28 @@ await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_fo
 // assistant de création : un personnage existant est retrouvé (faux Wikipédia) et toute la fiche remplie
 {
     const t1 = JSON.parse(await post('/assist/turn', { draft: '{}', history: '[]', action: 'reply', answer: 'Je veux Sherlock Holmes' }, '/assist/turn (personnage existant)'));
-    expect(t1.ok && t1.draft.name === 'Sherlock Holmes' && t1.draft.looks !== '' && t1.draft.source.includes('Sherlock')
-        && (t1.source?.url || '').startsWith('https://fr.wikipedia.org/wiki/Sherlock_Holmes'), 'assistant : personnage existant retrouvé, fiche remplie, source citée');
+    expect(t1.ok && t1.pending_canon?.name === 'Sherlock Holmes' && t1.draft.name === '' && t1.choices.length === 2,
+        'assistant : le choix de la version précède le remplissage de la fiche');
+    const version = JSON.parse(await post('/assist/turn', { draft: JSON.stringify(t1.draft), action: 'reply', answer: 'Les romans',
+        pending_canon: JSON.stringify(t1.pending_canon) }, '/assist/turn (version choisie)'));
+    expect(version.ok && version.draft.name === 'Sherlock Holmes' && version.draft.looks !== '' && version.draft.source.includes('Sherlock')
+        && version.draft.meta.some(({ k, v }) => k === 'Version' && v === 'Les romans')
+        && (version.source?.url || '').startsWith('https://fr.wikipedia.org/wiki/Sherlock_Holmes'), 'assistant : la version choisie et la référence sont transmises au remplissage');
     const t2 = JSON.parse(await post('/assist/turn', { draft: '{}', history: '[]', action: 'reply', answer: 'Une fleuriste' }, '/assist/turn (idée libre)'));
     expect(t2.ok && t2.source === null && t2.question !== '', 'assistant : idée libre, une question à la fois');
-    const c = JSON.parse(await post('/assist/create', { draft: JSON.stringify(t1.draft) }));
+    const preview = JSON.parse(await post('/assist/preview', { draft: JSON.stringify(version.draft) }));
+    expect(preview.ok && preview.fields.system_prompt.includes('Sherlock Holmes') && preview.fields.image_prompt.includes('Sherlock Holmes')
+        && (await http('/p/sherlock-holmes')).status === 404, 'assistant : la relecture contient les deux prompts et ne crée pas la fiche');
+    const fields = { ...preview.fields, tagline: 'Détective relu', system_prompt: 'Tu es Sherlock Holmes. Tu parles avec précision.', image_prompt: '' };
+    const c = JSON.parse(await post('/assist/create', { fields: JSON.stringify(fields) }));
     expect(c.ok && c.redirect === '/p/sherlock-holmes', 'assistant : fiche créée');
     const page = await record('GET /p/sherlock-holmes', await http('/p/sherlock-holmes'));
-    expect(page.includes('Tu es Sherlock Holmes') && page.includes('Personnage d’origine'), 'assistant : prompt système et personnage d’origine sur la fiche');
+    expect(page.includes(fields.system_prompt) && page.includes(fields.tagline) && page.includes('Personnage d’origine')
+        && !page.includes(preview.fields.image_prompt), 'assistant : les corrections de relecture et le retrait du prompt image sont enregistrés');
+    const additions = JSON.parse(await post('/assist/preview', { slug: 'sherlock-holmes' }, '/assist/preview (compléter)'));
+    expect(additions.ok && !Object.hasOwn(additions.fields, 'name') && !Object.hasOwn(additions.fields, 'description')
+        && !Object.hasOwn(additions.fields, 'system_prompt') && Object.hasOwn(additions.fields, 'image_prompt'),
+        'assistant : la relecture d’une fiche existante ne propose que les ajouts autorisés');
     await post('/p/sherlock-holmes/delete');
 }
 await post('/settings', { provider: 'deepseek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', api_key: '' });
@@ -162,11 +177,91 @@ expect(/"versions":\{"index":2,"total":2\}/.test(regen1), 'la régénération ga
 const vid = (regen1.match(/"reply":\{"id":(\d+)/) || [])[1];
 const vprev = await post('/chat/1/version', { mid: vid, dir: '-1' }, '/chat/1/version (précédente)');
 expect(vprev.includes('"index":1') && vprev.includes('"total":2'), 'on revient à la version 1/2');
+if (peer) {
+    const postChat = (action, form, options) => http('/chat/1/' + action, {
+        method: 'POST', form: { _token: csrf, ...form }, ...options,
+    });
+    const messages = async (generation = false) => (await http(
+        '/chat/1/messages?limit=10' + (generation ? '&generation=1' : ''), { origin: peer }
+    )).json();
+    const currentReply = (d) => d.messages.findLast((m) => m.role === 'assistant');
+    const modelControl = 'http://127.0.0.1:' + llmPort + '/test/next-stream';
+    const startRegen = async (mode, replyId, signal) => {
+        await fetch(modelControl, { method: 'POST', body: mode });
+        const r = await postChat('stream', { regen: '1', regen_reply: replyId }, { signal });
+        return r.body.pipeThrough(new TextDecoderStream()).getReader();
+    };
+    const readUntil = async (reader, marker) => {
+        let seen = '';
+        while (!seen.includes(marker)) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            seen += value;
+        }
+        expect(seen.includes(marker), 'le flux contient ' + marker);
+        return seen;
+    };
+    const waitForStop = async () => {
+        for (let i = 0; i < 45; i++) {
+            const d = await messages(true);
+            if (!d.generating) return d;
+            await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+        throw new Error('Le flux interrompu ne libère pas le verrou de la discussion.');
+    };
+
+    const old = currentReply(await messages(true));
+    const failing = await startRegen('fail', old.id);
+    await readUntil(failing, '"delta"');
+    expect(currentReply(await messages()).id === old.id, 'l’ancienne réponse reste visible pendant la régénération');
+    const concurrent = await postChat('stream', { message: 'Envoi concurrent' }, { origin: peer });
+    expect(concurrent.status === 409, 'un second worker refuse l’envoi concurrent');
+    await concurrent.json();
+    await readUntil(failing, '"error"');
+    const afterFailure = await waitForStop();
+    expect(!afterFailure.messages.some((m) => m.content === 'Envoi concurrent'), 'l’envoi refusé ne crée aucun message');
+    expect(JSON.stringify(currentReply(afterFailure)) === JSON.stringify(old), 'un échec après un delta préserve la version sélectionnée et son identifiant');
+
+    const silentAbort = new AbortController();
+    const silent = await startRegen('silent', old.id, silentAbort.signal);
+    await readUntil(silent, '"start"');
+    for (let i = 0; i < 50; i++) {
+        if (await (await fetch(modelControl)).text() === '') break;
+        if (i === 49) throw new Error('Le faux modèle n’a pas reçu la régénération silencieuse.');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    silentAbort.abort();
+    expect(JSON.stringify(currentReply(await waitForStop())) === JSON.stringify(old), 'un arrêt sans texte préserve la version sélectionnée');
+
+    const partialAbort = new AbortController();
+    const partial = await startRegen('partial', old.id, partialAbort.signal);
+    await readUntil(partial, '"delta"');
+    partialAbort.abort();
+    const saved = currentReply(await waitForStop());
+    expect(saved.id !== old.id && saved.content === 'Début de la nouvelle réponse.'
+        && saved.versions?.index === 3 && saved.versions?.total === 3, 'un arrêt après un delta enregistre une nouvelle version navigable (' + JSON.stringify(saved) + ')');
+
+    const stale = await postChat('stream', { regen: '1', regen_reply: old.id }, { origin: peer });
+    expect((await stale.text()).includes('"kind":"regen"'), 'un onglet périmé ne régénère pas une réponse remplacée');
+    const retry = await postChat('stream', { regen: '1', regen_reply: saved.id }, { origin: peer });
+    expect((await retry.text()).includes('"versions":{"index":4,"total":4}'), 'la génération peut reprendre après un arrêt');
+}
 await record('GET /chat/1/load-result', await http('/chat/1/load-result'));
 await post('/chat/1/model-override', { model: 'fake-model' });
 await post('/chat/1/model-override', { model: '' }, '/chat/1/model-override (retour persona)');
 await post('/chat/1/pin', { pinned: '1' });
 await post('/chat/1/pin', { pinned: '0' }, '/chat/1/pin (retirer)');
+const beforeEdit = await (await http('/chat/1')).text();
+expect(beforeEdit.includes('Sujet : Voyage'), 'un résumé existe avant la modification d’un message ancien');
+const edit = await http('/chat/1/msg-edit', {
+    method: 'POST', form: { _token: csrf, mid: '3', content: 'Correction : le train va à Lyon.' },
+});
+expect((await edit.json()).replay === true, 'un message ancien modifié peut être rejoué');
+const replay = await http('/chat/1/stream', { method: 'POST', form: { _token: csrf, regen: '1', regen_mid: '3' } });
+expect((await replay.text()).includes('"done"'), 'la réponse est régénérée après la correction');
+const afterEdit = await (await http('/chat/1')).text();
+expect(afterEdit.includes('Correction : le train va à Lyon.') && !afterEdit.includes('Sujet : Voyage')
+    && !afterEdit.includes('Réponse 12'), 'la discussion reprend sur le message corrigé sans le résumé ni la suite obsolètes');
 await post('/chat/1/msg-delete', { mid: '1' });
 await post('/settings/test');
 await post('/p/smoke-test/duplicate');
@@ -185,6 +280,18 @@ await record('GET /media/(photo de la copie)', await http('/media/' + copyMedia 
 await post('/p/camille-lefebvre-copie/delete');
 await record('GET /media/(photo de l’original après suppression de la copie)', await http('/media/' + [...mediaOf(origHtml)][0] + '.thumb.webp'));
 await post('/p/smoke-test/delete');
+const zipResponse = await http('/backup/export.zip?conv=1');
+await record('GET /backup/export.zip?conv=1', zipResponse);
+const backupForm = new FormData();
+backupForm.append('_token', csrf);
+backupForm.append('archive', await zipResponse.blob(), 'personavault.zip');
+const zipImport = await fetch(base + '/backup/import', {
+    method: 'POST', body: backupForm, redirect: 'manual', headers: { cookie: cookieHeader() },
+});
+await record('POST /backup/import', zipImport);
+const restoredSettings = await (await http('/settings')).text();
+expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \([1-9]\d*\)/.test(restoredSettings),
+    'la restauration ZIP affiche le nombre de discussions, messages et souvenirs importés');
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

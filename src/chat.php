@@ -128,11 +128,15 @@ function chat_llm_config_raw(): array
 /**
  * Messages d'une conversation, du plus ancien au plus récent.
  * $limit = 0 → tout ; sinon on prend les $limit plus récents (avant $beforeId si fourni).
+ * $dialogueOnly limite la sélection aux échanges avant d'appliquer le nombre maximal.
  */
-function fetch_messages(int $conversationId, int $limit = 0, int $beforeId = 0): array
+function fetch_messages(int $conversationId, int $limit = 0, int $beforeId = 0, bool $dialogueOnly = false): array
 {
     $sql    = 'SELECT * FROM messages WHERE conversation_id = ?';
     $params = [$conversationId];
+    if ($dialogueOnly) {
+        $sql .= " AND role IN ('user', 'assistant')";
+    }
     if ($beforeId > 0) {
         $sql .= ' AND id < ?';
         $params[] = $beforeId;
@@ -189,6 +193,13 @@ function chat_uses_summary(array $conv): bool
     return (int) ($conv['memory_enabled'] ?? 1) === 1
         && (int) ($conv['last_compressed_id'] ?? 0) > 0
         && trim((string) ($conv['summary'] ?? '')) !== '';
+}
+
+/** Un résumé automatique doit être reconstruit si un message qu'il couvre change. */
+function chat_invalidate_summary(int $cid, int $fromId): void
+{
+    db()->prepare("UPDATE conversations SET summary = '', last_compressed_id = 0, compressions = 0
+                   WHERE id = ? AND last_compressed_id >= ?")->execute([$cid, $fromId]);
 }
 
 /**
@@ -733,7 +744,7 @@ function lms_make_room_for(string $model, ?array $status = null): array
 
 /**
  * Charge un modèle et attend la fin (fenêtre de contexte imposée). $onTick est appelé
- * toutes les ~2 s pendant l'attente (ping SSE derrière un proxy).
+ * toutes les ~2 s pendant l'attente (ping SSE derrière un proxy). true annule l'attente.
  */
 function lms_load_sync(string $model, int $contextLength, ?callable $onTick = null): bool
 {
@@ -755,7 +766,7 @@ function lms_load_sync(string $model, int $contextLength, ?callable $onTick = nu
         curl_setopt($ch, CURLOPT_XFERINFOFUNCTION, static function () use ($onTick, &$last): int {
             if (microtime(true) - $last >= 2.0) {
                 $last = microtime(true);
-                $onTick();
+                return $onTick() === true ? 1 : 0;
             }
             return 0;
         });
@@ -1245,7 +1256,13 @@ function chat_time_context(array $conv, array $history): string
         . (int) $now->format('j') . ' ' . $mois[(int) $now->format('n') - 1] . ', '
         . $now->format('H\hi') . '.';
 
-    $last = $history ? end($history) : null;
+    $last = null;
+    for ($i = count($history) - 1; $i >= 0; $i--) {
+        if (in_array($history[$i]['role'], ['user', 'assistant'], true)) {
+            $last = $history[$i];
+            break;
+        }
+    }
     $gap  = 0;
     if ($last && !empty($last['created_at'])) {
         $ts  = strtotime((string) $last['created_at'] . ' UTC');
@@ -1255,9 +1272,9 @@ function chat_time_context(array $conv, array $history): string
 
     // reprise après une vraie pause : on rappelle le dernier sujet, sans le réciter
     if ($gap >= 6 * 3600) {
-        $topic = '';
-        $summary = trim((string) ($conv['summary'] ?? ''));
-        if ($summary !== '') {
+        $topic = mb_substr(trim((string) ($last['content'] ?? '')), 0, 160);
+        $summary = (int) ($conv['memory_enabled'] ?? 1) === 1 ? trim((string) ($conv['summary'] ?? '')) : '';
+        if ($topic === '' && $summary !== '') {
             foreach (preg_split('/\R/', $summary) ?: [] as $line) {
                 if (stripos($line, 'sujet') === 0) {
                     $topic = trim(preg_replace('/^sujet\s*:\s*/iu', '', $line) ?? '');
@@ -1267,9 +1284,6 @@ function chat_time_context(array $conv, array $history): string
             if ($topic === '') {
                 $topic = mb_substr($summary, 0, 160);
             }
-        }
-        if ($topic === '' && $last) {
-            $topic = mb_substr(trim((string) $last['content']), 0, 160);
         }
         if ($topic !== '') {
             $lines[] = 'La conversation reprend après une pause de ' . chat_gap_duration($gap) . '. '
@@ -1816,6 +1830,36 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
     return $res;
 }
 
+/* ------------------------------------------------- accès concurrent à une discussion */
+
+/** @return resource|false Verrou par base et par discussion. */
+function chat_try_lock(int $cid)
+{
+    $lock = fopen((string) config('db') . '.chat-' . $cid . '.lock', 'c');
+    if ($lock === false) {
+        throw new RuntimeException('Cannot open conversation lock');
+    }
+    if (!flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
+        return false;
+    }
+    // Ne pas effacer le fichier : un autre worker peut déjà l'avoir ouvert.
+    return $lock;
+}
+
+/** @return resource */
+function chat_require_write_lock(int $cid)
+{
+    $lock = chat_try_lock($cid);
+    if ($lock === false) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(409);
+        echo json_encode(['ok' => false, 'error' => t('error.chat.generation_in_progress')], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    return $lock;
+}
+
 /* ------------------------------------------------- versions d'une réponse (‹ 1/3 ›) */
 
 /** Message de l'utilisateur auquel répond la réponse $msgId (0 si aucun). */
@@ -1889,17 +1933,4 @@ function reply_version_register(int $cid, int $userMsgId, int $msgId): void
     db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points) VALUES (?, ?, ?, ?, ?)')
         ->execute([$cid, $userMsgId, (string) $m['content'], (string) $m['model'], (string) $m['split_points']]);
     db()->prepare('UPDATE messages SET version_id = ? WHERE id = ?')->execute([(int) db()->lastInsertId(), $msgId]);
-}
-
-/** La régénération a échoué sans rien produire : on remet la dernière version à l'écran. */
-function reply_version_restore_last(int $cid, int $userMsgId): void
-{
-    $st = db()->prepare('SELECT * FROM reply_versions WHERE user_message_id = ? ORDER BY id DESC LIMIT 1');
-    $st->execute([$userMsgId]);
-    $v = $st->fetch();
-    if (!$v) {
-        return;
-    }
-    db()->prepare('INSERT INTO messages (conversation_id, role, content, model, split_points, version_id) VALUES (?, "assistant", ?, ?, ?, ?)')
-        ->execute([$cid, (string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id']]);
 }

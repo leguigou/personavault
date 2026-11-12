@@ -73,6 +73,8 @@ return [
     'error.message.not_found'     => 'Message not found.',
     'error.message.not_yours'     => 'Only your own messages can be edited.',
     'error.message.empty_send'    => 'Empty message.',
+    'error.chat.generation_in_progress' => 'A reply is already being generated in this conversation. Try again shortly.',
+    'error.chat.reply_changed' => 'The conversation has changed. Reload the page before regenerating.',
     'error.message.nothing_to_regen' => 'No message to regenerate.',
 
     // --- errors: models (LM Studio, remote model)
@@ -111,6 +113,9 @@ return [
     'error.backup.not_a_backup'   => 'This file isn’t a PersonaVault backup (manifest.json missing).',
     'error.backup.item'           => '{item}: {error}',
     'error.backup.invalid_persona' => 'invalid profile',
+    'error.backup.invalid_chat_data' => 'invalid conversation data',
+    'error.backup.chat_persona_missing' => 'could not link the conversation or memory to a profile in this archive',
+    'error.backup.chat_media_missing' => 'missing or unreadable attachment ({file})',
     'error.backup.avatar_skipped' => 'portrait skipped ({error})',
     'error.backup.photo_skipped'  => '{file} skipped ({error})',
 
@@ -221,6 +226,8 @@ return [
     'labels.backup_readme.photos' => 'gallery',
     'labels.backup_readme.avatar' => 'portrait',
     'labels.backup_readme.conversations_json' => 'chats, messages and memories',
+    'labels.backup_readme.chat_media' => 'conversation attachments',
+    'flash.backup.chats_imported' => 'Restored conversations ({conversations}), messages ({messages}), memories ({memories}).',
     'labels.backup_readme.restore' => 'Restoring',
     'labels.backup_readme.restore_how' => 'Settings → Backup → Restore, then choose this ZIP file.',
     'labels.backup_readme.restore_slug' => 'Imported personas get a unique slug if theirs already exists:',
@@ -274,7 +281,9 @@ return [
     'assist.flash.applied' => 'Added to the profile: {fields}. Nothing that existed was changed.',
     'logs.purpose.assist' => 'Creation assistant',
     'assist.canon.question' => 'Want to adjust anything: version of the work, point in the story, relationship with you?',
-    'assist.canon.found' => 'Details found on Wikipedia: {title}',
+    'assist.canon.choose_version' => 'Which version of {name} do you want to portray?',
+    'assist.canon.found' => 'Reference consulted: {title}. The AI may have inferred some profile details.',
+    'assist.error.no_review' => 'Open the profile for review before saving it.',
     'assist.canon.memory' => 'No page found online: profile filled from what the AI knows about {name}. Please review it.',
     'assist.meta.source' => 'Original character',
     'assist.meta.source_url' => 'Reference',

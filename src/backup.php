@@ -11,10 +11,13 @@
  *     personas/<slug>/photos/<n>.webp
  *     personas/<slug>/avatar.webp
  *     conversations/conversations.json      (optionnel)
+ *     conversations/media/<image>.webp
  *
  * Les images sont ré-encodées à l'import (miniature régénérée), et les dossiers
  * sont créés à plat : aucune entrée du ZIP n'est extraite telle quelle.
  */
+
+require_once __DIR__ . '/backup_conversations.php';
 
 function backup_tmp_dir(): string
 {
@@ -27,7 +30,7 @@ function backup_tmp_dir(): string
 
 function backup_json(mixed $data): string
 {
-    return (string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 }
 
 /**
@@ -36,6 +39,7 @@ function backup_json(mixed $data): string
  */
 function backup_create_zip(bool $withConversations = false): array
 {
+    $pdo = db();
     $stamp = (new DateTimeImmutable('now', new DateTimeZone((string) config('timezone', 'Europe/Paris'))))
         ->format('Y-m-d-Hi');
     $root  = 'personavault-' . $stamp;
@@ -46,68 +50,53 @@ function backup_create_zip(bool $withConversations = false): array
         throw new RuntimeException(t('error.backup.create'));
     }
 
-    $stats = ['personas' => 0, 'photos' => 0, 'prompts' => 0, 'conversations' => 0, 'messages' => 0];
-
-    $personas = db()->query('SELECT * FROM personas ORDER BY id')->fetchAll();
-    foreach ($personas as $p) {
-        backup_add_persona($zip, $root, $p, $stats);
-    }
-
-    if ($withConversations) {
-        $convs = db()->query('SELECT * FROM conversations ORDER BY id')->fetchAll();
-        $out   = [];
-        foreach ($convs as $c) {
-            $stmt = db()->prepare('SELECT role, content, model, created_at FROM messages WHERE conversation_id = ? ORDER BY id');
-            $stmt->execute([(int) $c['id']]);
-            $msgs = $stmt->fetchAll();
-            $out[] = [
-                'id'            => (int) $c['id'],
-                'persona_id'    => (int) $c['persona_id'],
-                'title'         => (string) $c['title'],
-                'model'         => (string) $c['model'],
-                'temperature'   => (float) $c['temperature'],
-                'max_tokens'    => (int) $c['max_tokens'],
-                'context_window' => (int) $c['context_window'],
-                'directive'     => (string) $c['directive'],
-                'summary'       => (string) $c['summary'],
-                'created_at'    => (string) $c['created_at'],
-                'updated_at'    => (string) $c['updated_at'],
-                'messages'      => array_map(static fn (array $m): array => [
-                    'role'       => (string) $m['role'],
-                    'content'    => (string) $m['content'],
-                    'model'      => (string) $m['model'],
-                    'created_at' => (string) $m['created_at'],
-                ], $msgs),
-            ];
-            $stats['conversations']++;
-            $stats['messages'] += count($msgs);
+    $stats = ['personas' => 0, 'photos' => 0, 'prompts' => 0, 'conversations' => 0, 'messages' => 0, 'memories' => 0];
+    $closed = false;
+    try {
+        // Fiches, messages et versions proviennent du même instant de lecture SQLite.
+        $pdo->beginTransaction();
+        foreach ($pdo->query('SELECT * FROM personas ORDER BY id')->fetchAll() as $p) {
+            backup_add_persona($zip, $root, $p, $stats);
         }
+        if ($withConversations) {
+            backup_add_conversations($zip, $root, $stats);
+        }
+        $pdo->commit();
 
-        $memories = db()->query('SELECT persona_id, category, content, confidence, created_at FROM user_memories ORDER BY id')->fetchAll();
-
-        $zip->addFromString($root . '/conversations/conversations.json', backup_json([
-            'exported_at'   => (new DateTimeImmutable('now', new DateTimeZone((string) config('timezone', 'Europe/Paris'))))->format('c'),
-            'conversations' => $out,
-            'memories'      => array_map(static fn (array $m): array => [
-                'persona_id' => $m['persona_id'] !== null ? (int) $m['persona_id'] : null,
-                'category'   => (string) $m['category'],
-                'content'    => (string) $m['content'],
-                'confidence' => (string) $m['confidence'],
-                'created_at' => (string) $m['created_at'],
-            ], $memories),
-        ]));
+        $manifest = backup_json([
+            'app'        => 'PersonaVault',
+            'format'     => $withConversations ? 2 : 1,
+            'exported_at' => (new DateTimeImmutable('now', new DateTimeZone((string) config('timezone', 'Europe/Paris'))))->format('c'),
+            'options'    => ['conversations' => $withConversations],
+            'counts'     => $stats,
+        ]);
+        if (!$zip->addFromString($root . '/manifest.json', $manifest)
+            || !$zip->addFromString($root . '/README.txt', backup_readme($stats, $withConversations))) {
+            throw new RuntimeException(t('error.backup.create'));
+        }
+        $closed = @$zip->close();
+        if (!$closed) {
+            throw new RuntimeException(t('error.backup.create'));
+        }
+        if ($zip->open($tmp) !== true) {
+            throw new RuntimeException(t('error.backup.create'));
+        }
+        try {
+            backup_archive_index($zip, true);
+        } finally {
+            $zip->close();
+        }
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        if (!$closed) {
+            $zip->unchangeAll();
+            @$zip->close();
+        }
+        @unlink($tmp);
+        throw $e;
     }
-
-    $zip->addFromString($root . '/manifest.json', backup_json([
-        'app'        => 'PersonaVault',
-        'format'     => 1,
-        'exported_at' => (new DateTimeImmutable('now', new DateTimeZone((string) config('timezone', 'Europe/Paris'))))->format('c'),
-        'options'    => ['conversations' => $withConversations],
-        'counts'     => $stats,
-    ]));
-
-    $zip->addFromString($root . '/README.txt', backup_readme($stats, $withConversations));
-    $zip->close();
 
     return [
         'path'  => $tmp,
@@ -181,6 +170,7 @@ function backup_add_persona(ZipArchive $zip, string $root, array $p, array &$sta
     }
 
     $personaJson = [
+        'id'             => (int) $p['id'],
         'name'           => (string) $p['name'],
         'slug'           => $slug,
         'tagline'        => (string) $p['tagline'],
@@ -237,7 +227,10 @@ function backup_readme(array $stats, bool $withConversations): string
         . 'personas/<slug>/prompts.json   ' . t('labels.backup_readme.prompts_json') . "\n"
         . 'personas/<slug>/photos/*.webp  ' . t('labels.backup_readme.photos') . "\n"
         . 'personas/<slug>/avatar.webp    ' . t('labels.backup_readme.avatar') . "\n"
-        . ($withConversations ? 'conversations/conversations.json  ' . t('labels.backup_readme.conversations_json') . "\n" : '')
+        . ($withConversations
+            ? 'conversations/conversations.json  ' . t('labels.backup_readme.conversations_json') . "\n"
+                . 'conversations/media/*.webp       ' . t('labels.backup_readme.chat_media') . "\n"
+            : '')
         . "\n" . $restore . "\n" . str_repeat('-', mb_strlen($restore)) . "\n"
         . t('labels.backup_readme.restore_how') . "\n"
         . t('labels.backup_readme.restore_slug') . "\n"
@@ -275,15 +268,45 @@ function backup_read_entry(ZipArchive $zip, int $index): string
     return $data;
 }
 
+/** Indexe les entrées sans les extraire et applique les limites du ZIP. */
+function backup_archive_index(ZipArchive $zip, bool $checkEntrySizes = false): array
+{
+    $maxEntries = (int) config('zip_max_entries', 5000);
+    if ($zip->numFiles > $maxEntries) {
+        throw new RuntimeException(t('error.backup.too_many_files', ['count' => $zip->numFiles, 'max' => $maxEntries]));
+    }
+
+    $index = [];
+    $total = 0;
+    $maxEntry = (int) config('zip_max_entry_size', 40 * 1024 * 1024);
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $stat = $zip->statIndex($i);
+        if (!is_array($stat)) {
+            continue;
+        }
+        $size = (int) $stat['size'];
+        if ($checkEntrySizes && $size > $maxEntry) {
+            throw new RuntimeException(t('error.backup.entry_too_big_size', ['size' => human_bytes($size)]));
+        }
+        $index[(string) $stat['name']] = $i;
+        $total += $size;
+    }
+    $maxTotal = (int) config('zip_max_total', 2 * 1024 * 1024 * 1024);
+    if ($total > $maxTotal) {
+        throw new RuntimeException(t('error.backup.too_large', ['size' => human_bytes($total), 'max' => human_bytes($maxTotal)]));
+    }
+    return $index;
+}
+
 /**
- * Importe les personas d'une archive (photos ré-encodées, prompts inclus).
+ * Importe les personas d'une archive, puis les conversations et souvenirs inclus.
  *
  * Les entrées sont repérées par leur suffixe « personas/<dossier>/persona.json » : le
  * dossier racine ajouté à l'export (personavault-AAAA-MM-JJ-HHMM/) est donc géré, de même
  * qu'une archive refaite à la main sans ce dossier. Rien n'est extrait sur le disque.
  * Chaque persona est importé dans sa propre transaction.
  *
- * @return array{personas:int, photos:int, prompts:int, errors:array<string>, slugs:array<string>}
+ * @return array{personas:int, photos:int, prompts:int, conversations:int, messages:int, memories:int, errors:array<string>, slugs:array<string>}
  */
 function backup_import_zip(string $zipPath): array
 {
@@ -293,41 +316,26 @@ function backup_import_zip(string $zipPath): array
     }
 
     try {
-        $maxEntries = (int) config('zip_max_entries', 5000);
-        if ($zip->numFiles > $maxEntries) {
-            throw new RuntimeException(t('error.backup.too_many_files', ['count' => $zip->numFiles, 'max' => $maxEntries]));
-        }
-
-        $index = [];   // nom → index
-        $total = 0;
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $stat = $zip->statIndex($i);
-            if (!is_array($stat)) {
-                continue;
-            }
-            $index[(string) $stat['name']] = $i;
-            $total += (int) $stat['size'];
-        }
-        $maxTotal = (int) config('zip_max_total', 2 * 1024 * 1024 * 1024);
-        if ($total > $maxTotal) {
-            throw new RuntimeException(t('error.backup.too_large', ['size' => human_bytes($total), 'max' => human_bytes($maxTotal)]));
-        }
-        if (!array_filter(array_keys($index), static fn (string $n): bool => str_ends_with($n, 'manifest.json'))) {
+        $index = backup_archive_index($zip);
+        $manifests = array_filter(array_keys($index), static fn (string $n): bool => basename($n) === 'manifest.json');
+        if (!$manifests) {
             throw new RuntimeException(t('error.backup.not_a_backup'));
         }
 
-        $dir   = (string) config('uploads');
-        $stats = ['personas' => 0, 'photos' => 0, 'prompts' => 0, 'errors' => [], 'slugs' => []];
+        $stats = ['personas' => 0, 'photos' => 0, 'prompts' => 0, 'conversations' => 0, 'messages' => 0, 'memories' => 0, 'errors' => [], 'slugs' => []];
+        $personasByRoot = [];
 
         foreach ($index as $name => $entryIndex) {
-            if (!preg_match('#(?:^|/)personas/([^/]+)/persona\.json$#', $name, $m) || str_contains($name, '..')) {
+            if (!preg_match('#^(.*/)?personas/([^/]+)/persona\.json$#', $name, $m) || str_contains($name, '..')) {
                 continue;
             }
-            $folder = $m[1];
+            [, $root, $folder] = $m;
             $prefix = substr($name, 0, -strlen('persona.json')); // « …/personas/<dossier>/ »
+            $personasByRoot[$root][$folder] = null;
 
             try {
                 $res = backup_import_one($zip, $index, $prefix, $entryIndex);
+                $personasByRoot[$root][$folder] = ['id' => $res['id'], 'source_id' => $res['source_id']];
                 $stats['personas']++;
                 $stats['slugs'][]  = $res['slug'];
                 $stats['photos']  += $res['photos'];
@@ -340,17 +348,52 @@ function backup_import_zip(string $zipPath): array
             }
         }
 
+        foreach ($manifests as $manifest) {
+            $root = substr($manifest, 0, -strlen('manifest.json'));
+            $entry = $root . 'conversations/conversations.json';
+            if (!isset($index[$entry])) {
+                continue;
+            }
+            try {
+                $meta = json_decode(backup_read_entry($zip, $index[$manifest]), true);
+                $format = $meta['format'] ?? null;
+                if (!in_array($format, [1, 2], true)) {
+                    throw new RuntimeException(t('error.backup.invalid_chat_data'));
+                }
+                backup_restore_conversations($zip, $index, $root, $personasByRoot[$root] ?? [], $format === 1, $stats);
+            } catch (Throwable $e) {
+                $stats['errors'][] = t('error.backup.item', ['item' => $entry, 'error' => public_error($e, t('error.internal_short'))]);
+            }
+        }
         return $stats;
     } finally {
         $zip->close();
     }
 }
 
+/** Bilan affiché par les deux formulaires d'import ZIP. */
+function backup_import_notice(array $stats): string
+{
+    $notice = t('flash.backup.imported', [
+        'personas' => t('labels.count.personas', $stats['personas']),
+        'photos'   => t('labels.count.photos', $stats['photos']),
+        'prompts'  => t('labels.count.prompts', $stats['prompts']),
+    ]);
+    $conversations = $stats['conversations'] ?? 0;
+    $memories = $stats['memories'] ?? 0;
+    if ($conversations || $memories) {
+        $notice .= ' ' . t('flash.backup.chats_imported', [
+            'conversations' => $conversations, 'messages' => $stats['messages'], 'memories' => $memories,
+        ]);
+    }
+    return $notice;
+}
+
 /**
  * Importe UN persona. Les images sont décodées et écrites d'abord, puis tout est inséré
  * en une transaction ; en cas d'échec, les fichiers déjà écrits sont supprimés.
  *
- * @return array{slug:string, photos:int, prompts:int, errors:array<string>}
+ * @return array{id:int, source_id:int, slug:string, photos:int, prompts:int, errors:array<string>}
  */
 function backup_import_one(ZipArchive $zip, array $index, string $prefix, int $personaIndex): array
 {
@@ -395,7 +438,7 @@ function backup_import_one(ZipArchive $zip, array $index, string $prefix, int $p
 
     $res = backup_insert_persona($persona, $prompts, $avatar, $photos);
 
-    return ['slug' => $res['slug'], 'photos' => count($photos), 'prompts' => $res['prompts'], 'errors' => $errors];
+    return $res + ['source_id' => backup_id($persona['id'] ?? null), 'photos' => count($photos), 'errors' => $errors];
 }
 
 /**
@@ -406,7 +449,7 @@ function backup_import_one(ZipArchive $zip, array $index, string $prefix, int $p
  * Partagé par l'import de sauvegarde et l'import de fiches (src/cards.php).
  *
  * @param array $prompts liste de ['kind' => …, 'title' => …, 'body' => …]
- * @return array{slug:string, prompts:int}
+ * @return array{id:int, slug:string, prompts:int}
  */
 function backup_insert_persona(array $persona, array $prompts, string $avatar = '', array $photos = []): array
 {
@@ -446,7 +489,7 @@ function backup_insert_persona(array $persona, array $prompts, string $avatar = 
             }
         }
 
-        $slug = db_tx(static function (PDO $pdo) use ($persona, $name, $avatar, $photos, $clean, $tags, $meta): string {
+        $identity = db_tx(static function (PDO $pdo) use ($persona, $name, $avatar, $photos, $clean, $tags, $meta): array {
             $slug = unique_slug($name, null);
             $stmt = $pdo->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta, favorite, archived, model, temperature, max_tokens, context_window, directive, created_at, updated_at)
                                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime("now"),datetime("now"))');
@@ -476,7 +519,7 @@ function backup_insert_persona(array $persona, array $prompts, string $avatar = 
             foreach ($clean as [$kind, $title, $body]) {
                 $ins->execute([$pid, $kind, $title, $body]);
             }
-            return $slug;
+            return ['id' => $pid, 'slug' => $slug];
         });
     } catch (Throwable $e) {
         foreach ($written as $base) {
@@ -485,5 +528,5 @@ function backup_insert_persona(array $persona, array $prompts, string $avatar = 
         throw $e;
     }
 
-    return ['slug' => $slug, 'prompts' => count($clean)];
+    return $identity + ['prompts' => count($clean)];
 }

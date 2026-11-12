@@ -26,7 +26,7 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
             </button>
             <button type="button" class="as-create" data-as-create>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span><?= e($isNew ? t('assist.create') : t('assist.apply')) ?></span>
+                <span><?= e(t('assist.review')) ?></span>
             </button>
         <?php endif; ?>
     </header>
@@ -74,5 +74,22 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
                 <div class="as-final-dots" aria-hidden="true"><i></i><i></i><i></i></div>
             </div>
         </div>
+
+        <dialog class="as-review" data-as-review aria-labelledby="as-review-title">
+            <form class="as-review-form" data-as-review-form>
+                <header>
+                    <h2 id="as-review-title"><?= e(t('assist.review_title')) ?></h2>
+                    <?php if (!$isNew): ?><p><?= e(t('assist.fiche_note_complete')) ?></p><?php endif; ?>
+                </header>
+                <fieldset class="as-review-fields" data-as-review-fields></fieldset>
+                <footer>
+                    <p class="as-review-error" data-as-review-error role="alert" hidden></p>
+                    <div class="as-review-actions">
+                        <button type="button" class="btn btn-ghost" data-as-review-back><?= e(t('assist.review_back')) ?></button>
+                        <button type="submit" class="btn btn-primary" data-as-review-save><?= e($isNew ? t('assist.create') : t('assist.apply')) ?></button>
+                    </div>
+                </footer>
+            </form>
+        </dialog>
     <?php endif; ?>
 </section>

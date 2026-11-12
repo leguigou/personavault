@@ -1060,8 +1060,13 @@ function store_gd_image(GdImage $img, string $prefix = 'p'): string
     if (!is_dir($dir)) {
         mkdir($dir, 0700, true);
     }
-    save_webp($img, $dir . '/' . $base . '.webp', 1800, 88, (int) config('media_max_bytes', 500 * 1024));
-    save_webp($img, $dir . '/' . $base . '.thumb.webp', 700, 84);
+    try {
+        save_webp($img, $dir . '/' . $base . '.webp', 1800, 88, (int) config('media_max_bytes', 500 * 1024));
+        save_webp($img, $dir . '/' . $base . '.thumb.webp', 700, 84);
+    } catch (Throwable $e) {
+        delete_media($base);
+        throw $e;
+    }
     return $base;
 }
 

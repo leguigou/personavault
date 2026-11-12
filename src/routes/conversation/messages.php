@@ -58,6 +58,7 @@ if ($action === 'msg-edit' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
+    $chatLock = chat_require_write_lock($cid);
     $mid     = (int) ($_POST['mid'] ?? 0);
     $content = trim((string) ($_POST['content'] ?? ''));
     if ($content === '') {
@@ -92,11 +93,11 @@ if ($action === 'msg-edit' && $method === 'POST') {
         $st->execute([$cid, $mid]);
         $images = $st->fetchAll(PDO::FETCH_COLUMN);
         $pdo->prepare('DELETE FROM messages WHERE conversation_id = ? AND id > ?')->execute([$cid, $mid]);
-        // les curseurs de mémoire ne peuvent plus pointer au-delà du message édité
+        chat_invalidate_summary($cid, $mid);
+        // Le prochain passage peut relire le message édité.
         $pdo->prepare('UPDATE conversations
-                              SET last_compressed_id = MIN(last_compressed_id, ?),
-                                  facts_cursor = MIN(facts_cursor, ?)
-                            WHERE id = ?')->execute([$mid, $mid, $cid]);
+                              SET facts_cursor = MIN(facts_cursor, ?)
+                            WHERE id = ?')->execute([$mid - 1, $cid]);
         return $images;
     });
     release_media(...array_map('strval', $images));
@@ -117,6 +118,7 @@ if ($action === 'version' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close();
+    $chatLock = chat_require_write_lock($cid);
     $mid = (int) ($_POST['mid'] ?? 0);
     $dir = (int) ($_POST['dir'] ?? 0) < 0 ? -1 : 1;
 
@@ -135,8 +137,13 @@ if ($action === 'version' && $method === 'POST') {
     $st = db()->prepare('SELECT * FROM reply_versions WHERE id = ?');
     $st->execute([$ids[$pos]]);
     $v = $st->fetch();
-    db()->prepare('UPDATE messages SET content = ?, model = ?, split_points = ?, version_id = ? WHERE id = ?')
-        ->execute([(string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id'], $mid]);
+    if ((int) $v['id'] !== (int) $msg['version_id']) {
+        db_tx(static function (PDO $pdo) use ($cid, $mid, $v): void {
+            $pdo->prepare('UPDATE messages SET content = ?, model = ?, split_points = ?, version_id = ? WHERE id = ?')
+                ->execute([(string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id'], $mid]);
+            chat_invalidate_summary($cid, $mid);
+        });
+    }
 
     echo json_encode([
         'ok'           => true,
@@ -152,6 +159,7 @@ if ($action === 'msg-delete' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
+    $chatLock = chat_require_write_lock($cid);
 
     $mid  = (int) ($_POST['mid'] ?? 0);
     $stmt = db()->prepare('SELECT * FROM messages WHERE id = ? AND conversation_id = ?');
@@ -178,11 +186,9 @@ if ($action === 'msg-delete' && $method === 'POST') {
             . " AND id IN (" . $in . ") AND image <> ''")->fetchAll(PDO::FETCH_COLUMN);
         $pdo->exec('DELETE FROM messages WHERE conversation_id = ' . (int) $cid . ' AND id IN (' . $in . ')');
 
-        // le curseur de mémoire ne doit pas pointer sur un message supprimé
         $min = min($ids);
-        $pdo->prepare('UPDATE conversations SET last_compressed_id = COALESCE((SELECT MAX(id) FROM messages WHERE conversation_id = ? AND id < ?), 0) WHERE id = ? AND last_compressed_id >= ?')
-            ->execute([$cid, $min, $cid, $min]);
-        // même logique pour le curseur des souvenirs durables
+        chat_invalidate_summary($cid, $min);
+        // Le curseur des souvenirs durables ne doit pas pointer sur un message supprimé.
         $pdo->prepare('UPDATE conversations SET facts_cursor = COALESCE((SELECT MAX(id) FROM messages WHERE conversation_id = ? AND id < ?), 0) WHERE id = ? AND facts_cursor >= ?')
             ->execute([$cid, $min, $cid, $min]);
         return $images;
@@ -199,6 +205,15 @@ if ($action === 'messages' && $method === 'GET') {
     header('Content-Type: application/json; charset=utf-8');
     $before = max(0, (int) ($_GET['before'] ?? 0));
     $limit  = min(100, max(10, (int) ($_GET['limit'] ?? 50)));
+    $afterGeneration = isset($_GET['generation']);
+    if ($afterGeneration) {
+        header('Cache-Control: no-store');
+        $chatLock = chat_try_lock($cid);
+        if ($chatLock === false) {
+            echo json_encode(['ok' => true, 'generating' => true]);
+            exit;
+        }
+    }
     $rows   = fetch_messages($cid, $limit, $before);
     $oldest = $rows ? (int) $rows[0]['id'] : 0;
     $left   = $oldest > 0
@@ -213,6 +228,7 @@ if ($action === 'messages' && $method === 'GET') {
             'content'  => (string) $m['content'],
             'image'    => (string) ($m['image'] ?? ''),
             'split_points' => json_list($m['split_points'] ?? '[]'),
+            ...($afterGeneration ? ['versions' => reply_versions_info($cid, $m)] : []),
             'at'       => gmdate('Y-m-d\\TH:i:s\\Z', (int) strtotime((string) $m['created_at'] . ' UTC')),
         ], $rows),
         'left'     => $left,

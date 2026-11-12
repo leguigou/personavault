@@ -100,9 +100,8 @@ $sent  = 0;
 foreach ($convs as $conv) {
     $cid = (int) $conv['id'];
 
-    $stmt = db()->prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1');
-    $stmt->execute([$cid]);
-    $last = $stmt->fetch();
+    $history = fetch_messages($cid, CHAT_MIN_RECENT, 0, true);
+    $last = end($history);
     if (!$last) {
         $verbose && $say("#{$cid} : aucun message");
         continue;
@@ -135,8 +134,8 @@ foreach ($convs as $conv) {
     $prompts = $stmt->fetchAll();
 
     $conv    = chat_with_persona($conv, $persona);
-    $history = fetch_messages($cid);
-    $facts   = facts_relevant((int) $persona['id'], (string) $last['content'], 5);
+    $factsOn = (int) $conv['memory_enabled'] === 1 && (int) $conv['facts_enabled'] === 1;
+    $facts   = $factsOn ? facts_relevant((int) $persona['id'], (string) $last['content'], 5) : [];
 
     $system = chat_system_prompt($persona, $prompts, $conv, $facts)
         . "\n\n" . chat_time_context($conv, $history)
@@ -147,10 +146,9 @@ foreach ($convs as $conv) {
         );
 
     $messages = [['role' => 'system', 'content' => $system]];
-    foreach (array_slice($history, -6) as $m) {
-        if (in_array((string) $m['role'], ['user', 'assistant'], true)) {
-            $messages[] = ['role' => (string) $m['role'], 'content' => (string) $m['content']];
-        }
+    foreach ($history as $m) {
+        $content = trim((string) $m['content'] . ($m['image'] !== '' ? ' [photo jointe]' : ''));
+        $messages[] = ['role' => (string) $m['role'], 'content' => $content];
     }
     $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
 
@@ -183,18 +181,33 @@ foreach ($convs as $conv) {
         continue;
     }
 
-    $pdo = db();
-    $pdo->beginTransaction();
+    $chatLock = chat_try_lock($cid);
+    if ($chatLock === false) {
+        continue;
+    }
     try {
+        // Les échanges récents ou le réglage peuvent avoir changé pendant la génération.
+        $stmt = db()->prepare("SELECT 1 FROM conversations WHERE id = ? AND auto_followup = 1
+                                AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'chat_followup_enabled' AND value <> '1')");
+        $stmt->execute([$cid]);
+        if (!$stmt->fetchColumn() || fetch_messages($cid, CHAT_MIN_RECENT, 0, true) !== $history) {
+            continue;
+        }
+        $pdo = db();
+        $pdo->beginTransaction();
         $ins = $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model) VALUES (?, "assistant", ?, ?)');
         $ins->execute([$cid, $text, (string) ($res['model'] ?? '')]);
         $pdo->prepare('UPDATE conversations SET last_followup_at = datetime("now"), unread = 1, updated_at = datetime("now") WHERE id = ?')
             ->execute([$cid]);
         $pdo->commit();
     } catch (Throwable $e) {
-        $pdo->rollBack();
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
         $say("#{$cid} : écriture impossible (" . $e->getMessage() . ')');
         continue;
+    } finally {
+        fclose($chatLock);
     }
 
     $say("#{$cid} ({$persona['name']}) relance envoyée après " . chat_gap_duration($gap) . ' : ' . mb_substr($text, 0, 90));

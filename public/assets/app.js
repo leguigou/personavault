@@ -983,6 +983,12 @@
         const input = asRoot.querySelector("[data-as-input]");
         const sendBtn = asRoot.querySelector("[data-as-send]");
         const finalEl = asRoot.querySelector("[data-as-final]");
+        const review = asRoot.querySelector("[data-as-review]");
+        const reviewForm = asRoot.querySelector("[data-as-review-form]");
+        const reviewFields = asRoot.querySelector("[data-as-review-fields]");
+        const reviewBack = asRoot.querySelector("[data-as-review-back]");
+        const reviewSave = asRoot.querySelector("[data-as-review-save]");
+        const reviewError = asRoot.querySelector("[data-as-review-error]");
         const el = (tag, cls, text) => {
             const n = document.createElement(tag);
             if (cls) n.className = cls;
@@ -1097,10 +1103,11 @@
             sug.type = "button";
             sug.addEventListener("click", suggest);
             list.unshift(sug);
-            if (state.history.length > 1) {
+            asRoot.querySelector("[data-as-create]").disabled = Boolean(state.pendingCanon);
+            if (state.history.length > 1 && !state.pendingCanon) {
                 const now = el("button", "as-chip is-now", isNew ? tr("assist.create_now") : tr("assist.apply_now"));
                 now.type = "button";
-                now.addEventListener("click", create);
+                now.addEventListener("click", openReview);
                 list.push(now);
             }
             chipsEl.replaceChildren(...list);
@@ -1129,10 +1136,15 @@
             if (busy) return;
             setBusy(true);
             try {
-                const r = await post("/assist/turn", { draft: state.draft, history: state.history, action, answer: text });
+                const r = await post("/assist/turn", {
+                    draft: state.draft, history: state.history, action, answer: text,
+                    pending_canon: state.pendingCanon || null,
+                });
                 state.draft = r.draft;
                 state.progress = r.progress;
                 state.choices = r.choices || [];
+                state.pendingCanon = r.pending_canon || null;
+                state.review = null;
                 const said = [r.reply, r.question].filter(Boolean).join("\n\n");
                 state.history.push({ role: "assistant", content: said });
                 setBusy(false);
@@ -1163,21 +1175,74 @@
             pushMsg({ role: "user", text: tr("assist.suggest_said"), kind: "suggest" });
             turn("suggest");
         }
-        async function create() {
+        const reviewLabels = new Map([
+            ...FIELDS.filter(([key]) => key !== "source"),
+            ["source", tr("assist.f.source")], ["source_url", tr("assist.f.source_url")],
+            ["system_prompt", tr("assist.f.system_prompt")], ["image_prompt", tr("assist.f.image_prompt")],
+        ]);
+        async function openReview() {
+            if (busy || state.pendingCanon) return;
+            if (!state.review) {
+                busy = true;
+                finalEl.hidden = false;
+                try {
+                    const r = await post("/assist/preview", { draft: state.draft });
+                    state.review = r.fields;
+                    save();
+                } catch (err) {
+                    toast({ title: tr("assist.failed"), text: err.message }, true);
+                    return;
+                } finally {
+                    busy = false;
+                    finalEl.hidden = true;
+                }
+            }
+            const rows = [];
+            for (const [key, label] of reviewLabels) {
+                if (!Object.hasOwn(state.review, key)) continue;
+                const field = el("label", "as-review-field");
+                const multiline = ["description", "looks", "meta", "system_prompt", "image_prompt"].includes(key);
+                const control = el(multiline ? "textarea" : "input", "input");
+                if (multiline) control.rows = key.endsWith("_prompt") ? 6 : 3;
+                control.name = key;
+                control.value = state.review[key];
+                control.required = key === "name";
+                if (key === "meta") control.placeholder = tr("assist.meta_example");
+                field.append(el("span", "", label), control);
+                rows.push(field);
+            }
+            reviewFields.replaceChildren(...rows);
+            reviewError.hidden = true;
+            review.showModal();
+            reviewFields.scrollTop = 0;
+        }
+        reviewForm.addEventListener("input", (event) => {
+            const { name, value } = event.target;
+            if (Object.hasOwn(state.review, name)) {
+                state.review[name] = value;
+                save();
+            }
+        });
+        reviewBack.addEventListener("click", () => review.close());
+        review.addEventListener("cancel", (event) => { if (busy) event.preventDefault(); });
+        reviewForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
             if (busy) return;
             busy = true;
-            finalEl.hidden = false;
+            reviewFields.disabled = reviewBack.disabled = reviewSave.disabled = true;
+            reviewError.hidden = true;
             try {
-                const r = await post("/assist/create", { draft: state.draft });
+                const r = await post("/assist/create", { fields: state.review });
                 try { sessionStorage.removeItem(KEY); } catch {}
                 window.location.href = r.redirect;
             } catch (err) {
                 busy = false;
-                finalEl.hidden = true;
-                toast({ title: tr("assist.failed"), text: err.message }, true);
+                reviewFields.disabled = reviewBack.disabled = reviewSave.disabled = false;
+                reviewError.textContent = err.message;
+                reviewError.hidden = false;
             }
-        }
-        asRoot.querySelector("[data-as-create]")?.addEventListener("click", create);
+        });
+        asRoot.querySelector("[data-as-create]")?.addEventListener("click", openReview);
         asRoot.querySelector("[data-as-restart]")?.addEventListener("click", async () => {
             if (busy) return;
             if (state.history.length > 1 && !(await pvModal.confirm(tr("assist.restart_confirm"), { ok: tr("assist.restart_ok") }))) return;
@@ -3521,9 +3586,11 @@
         /* --- bascule manuelle vers DeepSeek --- */
         const fbModal = document.getElementById("fb-modal");
         let lastText = "";
+        let retryFallback = null;
 
-        const askFallback = (text, msg, kind) => {
+        const askFallback = (text, msg, kind, retry) => {
             lastText = text;
+            retryFallback = retry;
             if (!fbModal) {
                 notice(tr("common.error", { message: msg }));
                 return;
@@ -3558,12 +3625,7 @@
 
         fbModal?.querySelector("[data-fb-use]")?.addEventListener("click", () => {
             fbModal.hidden = true;
-            const t = lastText;
-            if (t) {
-                input.value = "";
-                grow();
-                send(t, "fallback", true);
-            }
+            retryFallback?.();
         });
 
         document.addEventListener("keydown", (e) => {
@@ -3814,14 +3876,13 @@
         };
 
         const regenerate = () => {
+            if (busy) return;
             const bots = [...scroll.querySelectorAll(".msg-bot")];
             const last = bots[bots.length - 1];
             if (!last) return;
             if (last.querySelector(".bubble")?.textContent === "") return;
-            last.remove();
             scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
-            paintVersions();
-            send(null, "auto", false, true);
+            send(null, "auto", false, true, null, Number(last.dataset.msgId));
         };
 
         scroll.addEventListener("click", (e) => {
@@ -3940,24 +4001,34 @@
         });
         attachPreview?.querySelector("[data-attach-remove]")?.addEventListener("click", clearAttach);
 
-        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null) => {
-            const text = regen ? "" : (overrideText || input.value.trim());
+        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null) => {
+            const text = regen ? "" : (overrideText ?? input.value.trim());
             if (!regen && text === "" && !pendingFile) return;
             if (busy) return;
 
+            const tryFallback = () => {
+                if (busy) return;
+                if (!regen && input.value.trim() === text) {
+                    input.value = "";
+                    grow();
+                }
+                send(text, "fallback", echo, regen, regenMid, regenReply);
+            };
             busy = true;
             syncSend();
             setStreaming(true);
-            if (!overrideText && !regen) {
+            if (overrideText === null && !regen) {
                 input.value = "";
                 grow();
             }
 
             let userEl = null;
-            // pas de réponse du tout : le serveur n'a pas gardé le message (sauf photo jointe),
-            // on retire donc sa bulle de l'écran pour ne pas afficher un message fantôme
-            const dropGhost = (el) => {
-                if (el && !el.querySelector(".bubble-img")) el.remove();
+            const restoreDraft = () => {
+                userEl?.remove();
+                if (!regen && !input.value) {
+                    input.value = text;
+                    grow();
+                }
             };
             if (!regen) {
                 clearIntro();
@@ -3969,12 +4040,10 @@
             if (mode === "auto" && lastStatus && lastStatus.reachable === false) {
                 document.getElementById("chat-typing")?.remove();
                 setStreaming(false);
-                dropGhost(userEl);
-                askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down");
+                restoreDraft();
+                askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down", tryFallback);
                 busy = false;
                 syncSend();
-                input.value = text;
-                grow();
                 return;
             }
 
@@ -3987,16 +4056,27 @@
             let cuts = [];
             let bubbleEls = [];
             let splitTimer = null;
+            let userId = 0;
+            let afterId = 0;
+
+            const clearLive = () => {
+                clearTimeout(splitTimer);
+                splitTimer = null;
+                [live, ...bubbleEls].forEach((b) => b?.closest(".msg")?.remove());
+            };
 
             /* fin de réponse : les bulles affichées pendant l'arrivée du texte (un bloc par bulle)
                sont remplacées par UN message, comme après un rechargement. Sinon seule la première
                bulle portait l'identifiant : supprimer, régénérer ou voir la date ne marchait pas
                sur les autres, et elles restaient à l'écran après suppression du message. */
             const settleLive = (reply) => {
-                clearTimeout(splitTimer);
-                splitTimer = null;
-                const wraps = [...new Set([live, ...bubbleEls].filter(Boolean).map((b) => b.closest(".msg")).filter(Boolean))];
-                if (!wraps.length || !reply || !reply.id) return null;
+                clearLive();
+                if (regen) {
+                    scroll.querySelectorAll(".msg-bot[data-msg-id]").forEach((el) => {
+                        const id = Number(el.dataset.msgId);
+                        if (id > userId && id <= afterId) el.remove();
+                    });
+                }
                 const fresh = renderMsg({
                     id: reply.id,
                     role: "assistant",
@@ -4004,9 +4084,30 @@
                     split_points: reply.split_points || [],
                     at: reply.at || new Date().toISOString(),
                 });
-                wraps[0].replaceWith(fresh);
-                wraps.slice(1).forEach((w) => w.remove());
-                return fresh;
+                if (reply.versions) {
+                    fresh.dataset.ver = String(reply.versions.index);
+                    fresh.dataset.vers = String(reply.versions.total);
+                }
+                scroll.appendChild(fresh);
+                paintVersions();
+            };
+
+            // Après une coupure, retrouver la réponse de ce tour par ses identifiants.
+            const recoverReply = async () => {
+                const url = endpoint.replace(/\/send$/, "/messages") + "?limit=10&generation=1";
+                for (let i = 0; i < 12; i++) {
+                    const d = await fetch(url, { signal: AbortSignal.timeout(1000) }).then((r) => r.json()).catch(() => null);
+                    if (d?.ok && !d.generating) {
+                        for (const msg of d.messages) {
+                            if (msg.id <= userId) continue;
+                            if (msg.role === "user") break;
+                            if (msg.role === "assistant" && msg.id > afterId) return msg;
+                        }
+                        return null;
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 400));
+                }
+                return null;
             };
 
             const countWords = (s) => (s.trim() === "" ? 0 : s.trim().split(/\s+/).length);
@@ -4114,10 +4215,11 @@
                 if (mode === "fallback") fd.append("fallback", "1");
                 if (regen) fd.append("regen", "1");
                 if (regen && regenMid) fd.append("regen_mid", String(regenMid));
-                if (pendingFile) {
-                    const file = (await pendingShrink?.catch(() => null)) || pendingFile;
+                if (regen && regenReply) fd.append("regen_reply", String(regenReply));
+                const attachment = regen ? null : pendingFile;
+                if (attachment) {
+                    const file = (await pendingShrink?.catch(() => null)) || attachment;
                     fd.append("image", file, file.name || "photo.jpg");
-                    clearAttach();
                 }
 
                 const res = await fetch(streamUrl, {
@@ -4143,11 +4245,11 @@
                     const reader = res.body.getReader();
                     const dec = new TextDecoder();
                     let buf = "";
-                    let finalId = null;
-                    let finalVersions = null;
                     let finalReply = null;
+                    let finalNotice = null;
                     let failed = "";
                     let failedKind = "error";
+                    let keptUser = false;
 
                     for (;;) {
                         const { value, done } = await reader.read();
@@ -4180,6 +4282,9 @@
                             } else if (evt.phase === "memory") {
                                 if (!live) loadingLabel(tr("chat.memory_phase"));
                             } else if (evt.start) {
+                                userId = Number(evt.user?.id || evt.user_id);
+                                afterId = Number(evt.after_id || userId);
+                                if (attachment && attachment === pendingFile) clearAttach();
                                 if (evt.user && userEl) {
                                     userEl.dataset.msgId = evt.user.id;
                                     if (evt.user.image) {
@@ -4192,73 +4297,33 @@
                                     }
                                 }
                             } else if (evt.done) {
-                                finalId = (evt.reply && evt.reply.id) || null;
-                                finalVersions = (evt.reply && evt.reply.versions) || null;
                                 finalReply = evt.reply || null;
-
-                                // réponse finie : la bulle « suivante » programmée pendant l'arrivée
-                                // du texte ne doit plus apparaître (sinon bulle fantôme qui répète la fin)
-                                if (splitTimer) {
-                                    clearTimeout(splitTimer);
-                                    splitTimer = null;
-                                }
-
-                                // les coupes officielles viennent du serveur (stockées en base)
-                                const pts = Array.isArray(evt.reply && evt.reply.split_points)
-                                    ? evt.reply.split_points
-                                    : [];
-                                if (pts.length && live) {
-                                    const cps = Array.from(streamed);
-                                    const units = pts
-                                        .map((n) => cps.slice(0, Number(n)).join("").length)
-                                        .filter((n) => n > 0 && n < streamed.length);
-                                    if (units.length) {
-                                        cuts = units;
-                                        while (bubbleEls.length < cuts.length + 1) {
-                                            bubbleEls.push(startLiveBubble());
-                                        }
-                                        paintParts();
-                                    }
-                                }
-
-                                if (evt.notice) notice(evt.notice.content);
+                                finalNotice = evt.notice || null;
                             } else if (evt.error) {
                                 failed = evt.error;
                                 failedKind = evt.kind || "error";
+                                keptUser = evt.kept_user === true;
                             }
                         }
                     }
 
                     document.getElementById("chat-typing")?.remove();
-                    if (live) {
-                        const settled = settleLive(finalReply);
-                        if (!settled) {
-                            if (finalId) live.parentElement.dataset.msgId = finalId;
-                            live.closest(".msg")?.setAttribute("data-at", new Date().toISOString());
-                            live.parentElement.removeAttribute("data-live");
-                        }
-                        const liveMsg = settled || live.closest(".msg");
-                        if (liveMsg && finalVersions) {
-                            liveMsg.dataset.ver = String(finalVersions.index);
-                            liveMsg.dataset.vers = String(finalVersions.total);
-                        }
-                        paintVersions();
-                    }
-
                     if (failed) {
-                        if (!live) {
-                            clearInterval(probe);
-                            dropGhost(userEl);
-                            askFallback(text, failed, failedKind);
-                            busy = false;
-                            setStreaming(false);
-                            syncSend();
-                            return;
+                        clearLive();
+                        if (!keptUser) restoreDraft();
+                        if (mode === "auto" && !streamed && !keptUser && ["down", "not_loaded", "no_model", "error"].includes(failedKind)) {
+                            askFallback(text, failed, failedKind, tryFallback);
+                        } else {
+                            notice(tr("chat.interrupted", { message: failed }));
                         }
-                        notice(tr("chat.interrupted", { message: failed }));
-                    } else if (!live) {
+                        scrollBottom();
+                        return;
+                    }
+                    if (!finalReply) {
                         throw new Error(tr("chat.empty_reply"));
                     }
+                    settleLive(finalReply);
+                    if (finalNotice) notice(finalNotice.content);
                 }
 
                 scrollBottom();
@@ -4273,30 +4338,13 @@
                     .then(() => autoTitle());
             } catch (err) {
                 document.getElementById("chat-typing")?.remove();
-                if (err.name === "AbortError") {
-                    if (live) live.parentElement.removeAttribute("data-live");
-                    notice(tr("chat.aborted"));
-                    // réponse arrêtée : le serveur enregistre le début reçu ; on récupère son
-                    // identifiant pour que le message se comporte comme les autres
-                    if (live && streamed.trim() !== "") {
-                        const wanted = streamed.trim();
-                        const url = endpoint.replace(/\/send$/, "/messages") + "?limit=10";
-                        (async () => {
-                            for (let i = 0; i < 6; i++) {
-                                await new Promise((r) => setTimeout(r, 400));
-                                const d = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } }).then((r) => r.json()).catch(() => null);
-                                const last = d && d.ok ? [...d.messages].reverse().find((m) => m.role === "assistant") : null;
-                                if (last && String(last.content).trim() === wanted && !scroll.querySelector('[data-msg-id="' + last.id + '"]')) {
-                                    settleLive(last);
-                                    paintVersions();
-                                    return;
-                                }
-                            }
-                        })();
-                    }
-                } else {
-                    notice(tr("common.error", { message: err.message }));
-                }
+                clearInterval(probe);
+                clearTimeout(splitTimer);
+                const reply = userId ? await recoverReply() : null;
+                if (reply) settleLive(reply);
+                else clearLive();
+                if (!userId) restoreDraft();
+                notice(err.name === "AbortError" ? tr("chat.aborted") : tr("common.error", { message: err.message }));
                 scrollBottom();
             } finally {
                 [live, ...bubbleEls].filter(Boolean).forEach((b) => {
