@@ -8,6 +8,7 @@ let nextStream = '';
 const sherlock = { name: 'Sherlock Holmes', tagline: 'Détective consultant au 221B Baker Street', description: 'Détective génial et excentrique de Londres.',
     tags: ['detective', 'londres'], meta: [{ k: 'Œuvre', v: 'Arthur Conan Doyle' }, { k: 'Âge', v: '35' }, { k: 'Ville', v: 'Londres' }],
     looks: 'Grand, mince, visage anguleux, nez aquilin, yeux gris perçants.', style: 'illustration victorienne',
+    history: 'A ouvert un cabinet à Baker Street.', family: 'Mycroft, son frère.', friends: 'Watson, son confident.', goals: 'Résoudre les affaires que la police a abandonnées.',
     personality: 'Observateur, logique, distant.', voice: 'Précis, ironique, vouvoie.', relation: 'Client venu le consulter.', rules: 'Reste dans son époque.' };
 const assist = (sys, user) => {
     if (/Tu remplis la fiche d'un PERSONA tiré d'un personnage EXISTANT/.test(sys)) {
