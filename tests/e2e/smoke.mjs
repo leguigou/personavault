@@ -150,6 +150,12 @@ await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_fo
         && (version.source?.url || '').startsWith('https://fr.wikipedia.org/wiki/Sherlock_Holmes'), 'assistant : la version choisie et la référence sont transmises au remplissage');
     const t2 = JSON.parse(await post('/assist/turn', { draft: '{}', history: '[]', action: 'reply', answer: 'Une fleuriste' }, '/assist/turn (idée libre)'));
     expect(t2.ok && t2.source === null && t2.question !== '', 'assistant : idée libre, une question à la fois');
+    for (const answer of ['Je valide la fiche.', 'C’est bon, je valide.', 'On peut passer à la relecture maintenant']) {
+        const validation = await http('/assist/turn', { method: 'POST', form: { _token: csrf, draft: JSON.stringify(version.draft), answer } });
+        const result = await validation.json();
+        expect(result.ok && result.review === true && result.question === '' && result.draft.name === 'Sherlock Holmes'
+            && (await http('/p/sherlock-holmes')).status === 404, 'assistant : la validation écrite demande la relecture et conserve la fiche sans l’enregistrer');
+    }
     const preview = JSON.parse(await post('/assist/preview', { draft: JSON.stringify(version.draft) }));
     expect(preview.ok && preview.fields.system_prompt.includes('Sherlock Holmes') && preview.fields.image_prompt.includes('Sherlock Holmes')
         && preview.fields.family.includes('Mycroft') && preview.fields.friends.includes('Watson') && preview.fields.history && preview.fields.goals

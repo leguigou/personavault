@@ -21,6 +21,9 @@ const assist = (sys, user) => {
         return JSON.stringify({ draft: sherlock, system_prompt: 'Tu es Sherlock Holmes, de Conan Doyle.', image_prompt: 'portrait of Sherlock Holmes' });
     }
     if (/aide à créer la fiche d'un PERSONA/.test(sys)) {
+        if (/On peut passer à la relecture maintenant/.test(user)) {
+            return JSON.stringify({ draft: { tagline: 'Détective prêt à relire' }, review: true });
+        }
         const known = /sherlock/i.test(user.split('RÉPONSE DE L\'UTILISATEUR')[1] || '');
         return JSON.stringify({ draft: {}, reply: '', question: 'Quel est son prénom ?', choices: ['Inès'],
             canon: known ? { name: 'Sherlock Holmes', work: 'Arthur Conan Doyle', version_choices: ['Les romans', 'La série'] } : null });

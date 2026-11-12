@@ -4420,25 +4420,28 @@ html[data-mode="light"] .as-chip.is-suggest { color: #a21caf; }
 }
 .as-review::backdrop { background: rgba(4, 4, 9, .7); }
 .kb-open .as-review { inset-block: 12px auto; margin-block: 0; }
-.as-review-form { display: flex; flex-direction: column; max-height: calc(var(--app-h, 100dvh) - 26px); }
-.as-review-form header, .as-review-form footer { flex: 0 0 auto; padding: 14px 18px; }
+.as-review-form { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: calc(var(--app-h, 100dvh) - 26px); }
+.as-review-form header, .as-review-form footer { padding: 12px 16px; background: var(--elev, #0e0e18); }
 .as-review-form h2 { margin: 0; font-size: 18px; }
+.as-review-form h2:focus { outline: none; }
 .as-review-form header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.as-review-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; border-block: 1px solid rgba(var(--ink), .12); }
 .as-review-fields {
     display: grid;
     gap: 12px;
     min-width: 0;
-    min-height: 0;
     margin: 0;
     padding: 14px 18px;
-    overflow: auto;
-    overscroll-behavior: contain;
     border: 0;
-    border-block: 1px solid rgba(var(--ink), .12);
 }
 .as-review-field { display: grid; gap: 5px; font-size: 13px; font-weight: 600; }
 .as-review-field .input { width: 100%; font-weight: 400; }
 .as-review-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.as-review-actions .btn { min-height: 44px; }
+@media (max-width: 600px) {
+    .as-review-actions .btn-ghost { flex: 1 1 10rem; }
+    .as-review-field textarea.input { field-sizing: content; min-height: 5.5em; resize: none; }
+}
 .as-review-error { color: var(--danger); margin: 0 0 10px; font-size: 13px; }
 
 /* entrée « Créer avec l'IA » sur la page de création : une ligne discrète, au second plan */

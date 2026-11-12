@@ -21,7 +21,7 @@ const ASSIST_TEXT_FIELDS = [
     'family'      => 200,
     'friends'     => 200,
     'goals'       => 200,
-    'personality' => 900,
+    'personality' => 200,
     'voice'       => 600,
     'relation'    => 500,
     'rules'       => 600,
@@ -29,13 +29,21 @@ const ASSIST_TEXT_FIELDS = [
     'source_url'  => 300, // page de référence consultée (http/https seulement)
 ];
 
+const ASSIST_BACKGROUND_FIELDS = ['history', 'family', 'friends', 'goals', 'personality'];
+
 /** Fiche en cours nettoyée (types, longueurs, listes bornées). */
 function assist_clean(array $d): array
 {
     $out = [];
     foreach (ASSIST_TEXT_FIELDS as $k => $max) {
         $v       = $d[$k] ?? '';
-        $out[$k] = is_scalar($v) ? mb_substr(trim((string) $v), 0, $max) : '';
+        $v       = is_scalar($v) ? trim((string) $v) : '';
+        $out[$k] = mb_substr($v, 0, $max);
+        if (mb_strlen($v) > $max && in_array($k, ASSIST_BACKGROUND_FIELDS, true)) {
+            $short = mb_substr($v, 0, $max - 1);
+            $space = mb_strrpos($short, ' ');
+            $out[$k] = rtrim($space === false ? $short : mb_substr($short, 0, $space), ',;:') . '…';
+        }
     }
     $tags = [];
     foreach ((array) ($d['tags'] ?? []) as $t) {
@@ -196,6 +204,19 @@ function assist_turn(array $draft, array $history, string $action, string $answe
 {
     $draft = assist_clean($draft);
     $isNew = $persona === null;
+    // Les formulations directes ouvrent la relecture sans refaire analyser le brouillon.
+    if ($action === 'reply' && $pendingCanon === null && preg_match(
+        '~^(?:(?:ok|oui|c[’\x27]est bon)[,.! ]+)?(?:je valide(?: (?:la|cette) fiche)?'
+        . '|(?:tu peux |on peut |je veux )?(?:valider?|enregistrer?|cr[ée]er?|appliquer?|relire) (?:la|cette) fiche'
+        . '|(?:i approve|save|review|create) (?:the|this) (?:profile|card)'
+        . '|(?:apruebo|guardar|revisar|crear) (?:la|esta) ficha)[.! ]*$~iu',
+        trim($answer)
+    )) {
+        return [
+            'draft' => $draft, 'reply' => '', 'question' => '', 'choices' => [],
+            'progress' => assist_progress($draft, $prompts), 'review' => true,
+        ];
+    }
 
     $system = <<<TXT
 Tu es un assistant chaleureux et efficace qui aide à créer la fiche d'un PERSONA : un personnage récurrent pour la génération d'images et pour un agent conversationnel qui l'incarnera.
@@ -206,7 +227,7 @@ Champs de la fiche :
 - tags : 3 à 6 mots-clés en minuscules ; meta : attributs clé/valeur courts (Âge, Métier, Ville, Origine, Taille…) ;
 - looks : apparence physique PRÉCISE pour qu'on la reconnaisse sur les images (visage, yeux, cheveux, peau, silhouette, style vestimentaire, signes distinctifs) ;
 - style : rendu visuel voulu (photo réaliste, manga, illustration, 3D…) ;
-- history : un événement marquant et sa conséquence aujourd'hui ; family : proches et liens familiaux ; friends : amis, alliés ou personnes qu'il fréquente, avec la nature des liens ; goals : un désir actuel et ce qui peut l'en empêcher ; personality : traits, valeurs et une tension qui le rend humain. Maximum 200 caractères par champ. Place ces éléments dans leurs champs dédiés.
+- history : un événement marquant et sa conséquence aujourd'hui ; family : proches et liens familiaux ; friends : amis, alliés ou personnes qu'il fréquente, avec la nature des liens ; goals : un désir actuel et ce qui peut l'en empêcher ; personality : traits, valeurs et une tension qui le rend humain. Une phrase courte par champ, de moins de 170 caractères. Place ces éléments dans leurs champs dédiés.
 - voice : façon de parler (ton, registre, tutoiement, longueur des réponses, tics) ;
 - relation : relation avec l'utilisateur et contexte des échanges ; rules : limites et règles de conduite (ce qu'elle ne fait jamais).
 
@@ -219,10 +240,11 @@ Champs de la fiche :
 6. PERSONNAGE EXISTANT : si l'utilisateur veut un persona tiré d'un personnage qui existe déjà (roman, film, série, BD, manga, anime, jeu vidéo, conte, mythologie, figure historique…), renseigne "canon" : {"name": "nom usuel du personnage", "work": "œuvre ou univers d'origine"}. Sinon "canon": null. Un simple « dans le style de » ou « inspiré de » sans personnage précis n'est pas un personnage existant.
 7. Si plusieurs adaptations ou incarnations plausibles changent sensiblement le personnage et que l'utilisateur n'a pas choisi, ajoute à "canon" un tableau "version_choices" contenant 2 ou 3 versions précises et distinctes. Si une version est déjà indiquée ou qu'une seule est pertinente, omets ce tableau.
 8. Si la fiche en cours contient une source, respecte la version choisie et laisse les faits biographiques incertains ouverts, sauf si l'utilisateur demande une adaptation libre.
+9. Si la dernière réponse demande explicitement de valider, créer, appliquer ou relire la fiche, mets "review": true, avec "question": "" et "choices": []. Applique d'abord les éventuelles corrections de cette réponse. Un simple oui à une question de contenu, une hésitation ou une validation partielle ne suffit pas : mets alors "review": false.
 Réponds en français. Ne mets jamais d'informations sur l'utilisateur réel dans la fiche.
 
 Réponds UNIQUEMENT avec un objet JSON :
-{"draft": {la fiche complète à jour, mêmes champs}, "reply": "une phrase : ce que tu as compris ou inventé (vide au tout premier message)", "question": "ta question suivante", "choices": ["…", "…", "…"], "canon": null}
+{"draft": {la fiche complète à jour, mêmes champs}, "reply": "une phrase : ce que tu as compris ou inventé (vide au tout premier message)", "question": "ta question suivante", "choices": ["…", "…", "…"], "canon": null, "review": false}
 TXT;
 
     $lines = '';
@@ -269,19 +291,21 @@ TXT;
 
     $newDraft = is_array($j['draft'] ?? null) ? $j['draft'] : [];
     $merged   = assist_merge($draft, $newDraft);
+    $review   = $action === 'reply' && $pendingCanon === null && ($j['review'] ?? false) === true;
     $choices  = assist_choices($j['choices'] ?? []);
     $question = mb_substr(trim((string) ($j['question'] ?? '')), 0, 400);
-    if ($question === '') {
+    if ($question === '' && !$review) {
         throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
     }
 
     return [
         'draft'    => $merged,
         'reply'    => mb_substr(trim((string) ($j['reply'] ?? '')), 0, 400),
-        'question' => $question,
-        'choices'  => $choices,
+        'question' => $review ? '' : $question,
+        'choices'  => $review ? [] : $choices,
         'progress' => assist_progress($merged, $prompts),
         'source'   => null,
+        'review'   => $review,
     ];
 }
 
@@ -432,7 +456,7 @@ Si une version a été précisée, inscris-la dans les attributs. Si l'utilisate
 - name : nom tel que dans l'œuvre ; tagline : qui il ou elle est, en une ligne (90 caractères max) ; description : 2 ou 3 phrases pour situer son rôle et le moment choisi, sans portrait détaillé ;
 - tags : 3 à 6 mots-clés en minuscules ; meta : 4 à 8 attributs courts (Œuvre, Créateur ou auteur, Âge, Origine, Rôle ou métier, Affiliations…) ;
 - looks : apparence canonique PRÉCISE pour les images (visage, yeux, cheveux, silhouette, tenue emblématique, signes distinctifs) ; style : rendu visuel cohérent avec l'œuvre ;
-- history : événement marquant déjà vécu à cette époque ; family : liens familiaux ; friends : amis ou alliés ; goals : ce qu'il veut à ce moment de l'œuvre ; personality : traits, valeurs et contradictions. Maximum 200 caractères par champ. Garde les faits incertains vides, sauf demande explicite d'adaptation libre ;
+- history : événement marquant déjà vécu à cette époque ; family : liens familiaux ; friends : amis ou alliés ; goals : ce qu'il veut à ce moment de l'œuvre ; personality : traits, valeurs et contradictions. Une phrase courte par champ, de moins de 170 caractères. Garde les faits incertains vides, sauf demande explicite d'adaptation libre ;
 - voice : façon de parler, expressions et tics typiques ;
 - relation : par défaut, l'utilisateur est quelqu'un qu'il ou elle rencontre dans son univers ; rules : rester dans le personnage, ne pas connaître ce qui est hors de son univers, limites cohérentes avec lui ou elle.
 Si tu ne connais pas ce personnage et que la référence ne le décrit pas, n'invente rien : réponds {"found": false}.
@@ -518,7 +542,6 @@ function assist_review_fields(array $final, ?array $persona, array $prompts): ar
     $d = $final['draft'];
     $attributeLabels = assist_profile_labels();
     $fields = array_intersect_key($d, array_flip(['name', 'tagline', 'description']) + $attributeLabels);
-    $fields['personality'] = mb_substr($fields['personality'], 0, 200);
     $fields['tags'] = implode(', ', $d['tags']);
     $dedicated = [];
     foreach ($attributeLabels as $key => $label) {

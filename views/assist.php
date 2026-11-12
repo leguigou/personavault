@@ -78,10 +78,12 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
         <dialog class="as-review" data-as-review aria-labelledby="as-review-title">
             <form class="as-review-form" data-as-review-form>
                 <header>
-                    <h2 id="as-review-title"><?= e(t('assist.review_title')) ?></h2>
+                    <h2 id="as-review-title" tabindex="-1" autofocus><?= e(t('assist.review_title')) ?></h2>
                     <?php if (!$isNew): ?><p><?= e(t('assist.fiche_note_complete')) ?></p><?php endif; ?>
                 </header>
-                <fieldset class="as-review-fields" data-as-review-fields></fieldset>
+                <div class="as-review-scroll" data-as-review-scroll>
+                    <fieldset class="as-review-fields" data-as-review-fields></fieldset>
+                </div>
                 <footer>
                     <p class="as-review-error" data-as-review-error role="alert" hidden></p>
                     <div class="as-review-actions">
