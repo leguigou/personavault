@@ -4410,23 +4410,25 @@ html[data-mode="light"] .as-chip.is-suggest { color: #a21caf; }
 
 .as-review {
     width: min(680px, calc(100% - 24px));
-    max-height: calc(100dvh - 24px);
+    max-height: calc(var(--app-h, 100dvh) - 24px);
     padding: 0;
     overflow: hidden;
     border: 1px solid rgba(var(--ink), .16);
     border-radius: 18px;
-    background: var(--elev);
+    background: var(--elev, #0e0e18);
     color: var(--text);
 }
 .as-review::backdrop { background: rgba(4, 4, 9, .7); }
-.as-review-form { display: flex; flex-direction: column; max-height: calc(100dvh - 26px); }
-.as-review-form header, .as-review-form footer { padding: 14px 18px; }
+.kb-open .as-review { inset-block: 12px auto; margin-block: 0; }
+.as-review-form { display: flex; flex-direction: column; max-height: calc(var(--app-h, 100dvh) - 26px); }
+.as-review-form header, .as-review-form footer { flex: 0 0 auto; padding: 14px 18px; }
 .as-review-form h2 { margin: 0; font-size: 18px; }
 .as-review-form header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
 .as-review-fields {
     display: grid;
     gap: 12px;
     min-width: 0;
+    min-height: 0;
     margin: 0;
     padding: 14px 18px;
     overflow: auto;

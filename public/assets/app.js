@@ -1011,6 +1011,8 @@
         const FIELDS = [
             ["source", tr("assist.f.source")], ["name", tr("assist.f.name")], ["tagline", tr("assist.f.tagline")],
             ["description", tr("assist.f.description")], ["meta", tr("assist.f.meta")], ["looks", tr("assist.f.looks")],
+            ["history", tr("assist.f.history")], ["family", tr("assist.f.family")],
+            ["friends", tr("assist.f.friends")], ["goals", tr("assist.f.goals")],
             ["style", tr("assist.f.style")], ["personality", tr("assist.f.personality")], ["voice", tr("assist.f.voice")],
             ["relation", tr("assist.f.relation")], ["rules", tr("assist.f.rules")], ["tags", tr("assist.f.tags")],
         ];
@@ -1201,12 +1203,14 @@
             for (const [key, label] of reviewLabels) {
                 if (!Object.hasOwn(state.review, key)) continue;
                 const field = el("label", "as-review-field");
-                const multiline = ["description", "looks", "meta", "system_prompt", "image_prompt"].includes(key);
+                const profileField = ["history", "family", "friends", "goals", "personality"].includes(key);
+                const multiline = profileField || ["description", "meta", "system_prompt", "image_prompt"].includes(key);
                 const control = el(multiline ? "textarea" : "input", "input");
                 if (multiline) control.rows = key.endsWith("_prompt") ? 6 : 3;
                 control.name = key;
                 control.value = state.review[key];
                 control.required = key === "name";
+                if (profileField) control.maxLength = 200;
                 if (key === "meta") control.placeholder = tr("assist.meta_example");
                 field.append(el("span", "", label), control);
                 rows.push(field);

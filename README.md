@@ -231,8 +231,8 @@ Sur la page de création, **Créer avec l'IA** (`/p/assist`) ouvre un assistant 
 (modèle des Réglages › IA) :
 
 - on décrit son idée en quelques mots ; l'assistant tient la fiche à jour et pose **une question à la
-  fois** (prénom, âge, métier, apparence, style visuel, personnalité, façon de parler, relation,
-  limites), avec trois réponses toutes prêtes ;
+  fois** (identité, histoire, famille et amis, envies, personnalité, façon de parler et apparence),
+  avec trois réponses toutes prêtes ;
 - **Suggérer pour moi** : il invente lui-même une réponse cohérente quand l'inspiration manque ;
 - **personnage existant** (héros ou héroïne de livre, film, série, BD, jeu…) : il suffit de le nommer.
   S'il repère plusieurs versions plausibles, l'assistant te demande laquelle incarner avant de remplir
@@ -245,6 +245,8 @@ Sur la page de création, **Créer avec l'IA** (`/p/assist`) ouvre un assistant 
   un toucher ouvre l'**aperçu** de tout ce qui est déjà rédigé ;
 - **Relire la fiche** : l'IA complète ce qui manque et prépare le **prompt système** et le **prompt
   image**. Tu peux modifier la fiche et les prompts avant de cliquer sur **Créer** ou revenir à la discussion.
+  L'histoire, les proches, les envies et la personnalité sont des attributs lus en discussion. Le prompt
+  système guide les réactions du persona et le prompt image décrit son apparence.
 
 La conversation est gardée dans l'onglet du navigateur : un rechargement ne la perd pas. Sur mobile,
 l'assistant est en plein écran (ni en-tête ni barre du bas) : la saisie reste toujours visible.

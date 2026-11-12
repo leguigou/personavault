@@ -601,7 +601,7 @@ try {
         'assistant : un champ oublié par le modèle n’efface pas la fiche en cours');
     $__pg = assist_progress(['name' => 'A', 'tagline' => 'B', 'description' => str_repeat('x', 50)], [['kind' => 'system']]);
     $__sys = array_values(array_filter($__pg['items'], static fn ($i) => $i['key'] === 'system'))[0];
-    $check($__pg['percent'] === 33 && $__sys['done'] === true, 'assistant : avancement et prompt système existant reconnus');
+    $check($__pg['percent'] === 29 && $__sys['done'] === true, 'assistant : avancement et prompt système existant reconnus');
     $check(unique_slug('Assist') !== 'assist' && unique_slug('new') !== 'new', 'assistant : /p/assist et /p/new restent réservés');
     // personnage existant : référence nettoyée, lien de source limité au web, pas de nouvelle recherche pour le même
     $__cn = assist_canon_ref(['name' => '  Sherlock Holmes ', 'work' => 'Conan Doyle']);
@@ -616,13 +616,18 @@ try {
     $__zid = (int) db()->lastInsertId();
     db()->prepare('INSERT INTO prompts (persona_id, title, kind, body) VALUES (?,?,?,?)')->execute([$__zid, 'Mon système', 'system', 'Texte à moi']);
     $__z  = db()->query('SELECT * FROM personas WHERE id = ' . $__zid)->fetch();
-    $__ch = assist_apply($__z, fetch_prompts($__zid), ['draft' => assist_clean(['tagline' => 'Autre accroche', 'description' => 'Une description', 'meta' => [['k' => 'Âge', 'v' => '22'], ['k' => 'Ville', 'v' => 'Lyon']]]), 'system_prompt' => 'Nouveau système', 'image_prompt' => 'portrait']);
+    $__ch = assist_apply($__z, fetch_prompts($__zid), ['draft' => assist_clean(['tagline' => 'Autre accroche', 'description' => 'Une description',
+        'looks' => 'Cheveux noirs', 'family' => 'Son frère Jules', 'meta' => [['k' => 'Âge', 'v' => '22'], ['k' => 'Ville', 'v' => 'Lyon']]]),
+        'system_prompt' => 'Nouveau système', 'image_prompt' => 'portrait']);
     $__z  = db()->query('SELECT * FROM personas WHERE id = ' . $__zid)->fetch();
     $__pk = array_map(static fn ($p) => $p['kind'] . ':' . $p['body'], fetch_prompts($__zid));
     $check($__z['tagline'] === 'Ma propre accroche' && $__z['description'] === 'Une description'
-        && json_list($__z['meta'])[0]['v'] === '40' && count(json_list($__z['meta'])) === 2
+        && json_list($__z['meta'])[0]['v'] === '40' && count(json_list($__z['meta'])) === 3
         && $__pk === ['system:Texte à moi', 'image:portrait'] && $__ch !== [],
         'assistant : fiche existante complétée sans rien écraser (accroche, âge et prompt système gardés)');
+    $__context = chat_system_prompt($__z, fetch_prompts($__zid), []);
+    $check(assist_from_persona($__z)['family'] === 'Son frère Jules' && str_contains($__context, 'Son frère Jules')
+        && !str_contains($__context, 'Cheveux noirs'), 'assistant : l’entourage rejoint le contexte de discussion et le portrait reste visuel');
     db()->prepare('DELETE FROM personas WHERE id = ?')->execute([$__zid]);
 
     // historique des prompts : lignes + / −, 10 dernières modifications seulement

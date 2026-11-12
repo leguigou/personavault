@@ -17,6 +17,10 @@ const ASSIST_TEXT_FIELDS = [
     'description' => 1200,
     'looks'       => 900,
     'style'       => 200,
+    'history'     => 200,
+    'family'      => 200,
+    'friends'     => 200,
+    'goals'       => 200,
     'personality' => 900,
     'voice'       => 600,
     'relation'    => 500,
@@ -95,13 +99,24 @@ function assist_merge(array $old, array $new): array
 /** Fiche en cours tirée d'un persona existant (pour l'assistant sur une fiche). */
 function assist_from_persona(array $persona): array
 {
+    $meta = json_list($persona['meta'] ?? '[]');
+    $profile = [];
+    foreach ($meta as $row) {
+        if (is_array($row) && is_string($row['k'] ?? null)) {
+            $profile[mb_strtolower(trim($row['k']))] = $row['v'] ?? '';
+        }
+    }
+    $fields = [];
+    foreach (assist_profile_labels() as $key => $label) {
+        $fields[$key] = $profile[mb_strtolower($label)] ?? '';
+    }
     return assist_clean([
         'name'        => $persona['name'] ?? '',
         'tagline'     => $persona['tagline'] ?? '',
         'description' => $persona['description'] ?? '',
         'tags'        => json_list($persona['tags'] ?? '[]'),
-        'meta'        => json_list($persona['meta'] ?? '[]'),
-    ]);
+        'meta'        => $meta,
+    ] + $fields);
 }
 
 /**
@@ -117,14 +132,15 @@ function assist_progress(array $d, array $prompts = []): array
         ['key' => 'ident', 'label' => t('assist.item.ident'), 'done' => $d['name'] !== '' && $d['tagline'] !== ''],
         ['key' => 'desc', 'label' => t('assist.item.desc'), 'done' => mb_strlen($d['description']) >= 40],
         ['key' => 'facts', 'label' => t('assist.item.facts'), 'done' => count($d['meta']) >= 3],
-        ['key' => 'looks', 'label' => t('assist.item.looks'), 'done' => mb_strlen($d['looks']) >= 30],
+        ['key' => 'life', 'label' => t('assist.item.life'), 'done' => $d['history'] !== '' && ($d['family'] !== '' || $d['friends'] !== '') && $d['goals'] !== ''],
         ['key' => 'character', 'label' => t('assist.item.character'), 'done' => $d['personality'] !== '' && $d['voice'] !== ''],
+        ['key' => 'looks', 'label' => t('assist.item.looks'), 'done' => isset($kinds['image']) || mb_strlen($d['looks']) >= 30],
         ['key' => 'rules', 'label' => t('assist.item.rules'), 'done' => $d['rules'] !== ''],
     ];
-    $done = count(array_filter($items, static fn ($i) => $i['done']));
+    $percent = (int) round(count(array_filter($items, static fn ($i) => $i['done'])) / count($items) * 100);
     $items[] = ['key' => 'system', 'label' => t('assist.item.system'), 'done' => isset($kinds['system']), 'auto' => !isset($kinds['system'])];
     $items[] = ['key' => 'image', 'label' => t('assist.item.image'), 'done' => isset($kinds['image']), 'auto' => !isset($kinds['image'])];
-    return ['items' => $items, 'percent' => (int) round($done / 6 * 100)];
+    return ['items' => $items, 'percent' => $percent];
 }
 
 /** Contexte d'une fiche existante pour le modèle (prompts résumés). */
@@ -186,21 +202,23 @@ Tu es un assistant chaleureux et efficace qui aide à créer la fiche d'un PERSO
 Tu tiens à jour la FICHE EN COURS (JSON) et tu fais avancer la conversation, une question à la fois.
 
 Champs de la fiche :
-- name : prénom (et nom) ; tagline : accroche d'une ligne (90 caractères max) ; description : 2 à 4 phrases ;
+- name : prénom (et nom) ; tagline : accroche d'une ligne (90 caractères max) ; description : 2 ou 3 phrases pour situer le personnage, sans portrait détaillé ;
 - tags : 3 à 6 mots-clés en minuscules ; meta : attributs clé/valeur courts (Âge, Métier, Ville, Origine, Taille…) ;
 - looks : apparence physique PRÉCISE pour qu'on la reconnaisse sur les images (visage, yeux, cheveux, peau, silhouette, style vestimentaire, signes distinctifs) ;
 - style : rendu visuel voulu (photo réaliste, manga, illustration, 3D…) ;
-- personality : caractère, valeurs, passions, histoire ; voice : façon de parler (ton, registre, tutoiement, longueur des réponses, tics) ;
+- history : un événement marquant et sa conséquence aujourd'hui ; family : proches et liens familiaux ; friends : amis, alliés ou personnes qu'il fréquente, avec la nature des liens ; goals : un désir actuel et ce qui peut l'en empêcher ; personality : traits, valeurs et une tension qui le rend humain. Maximum 200 caractères par champ. Place ces éléments dans leurs champs dédiés.
+- voice : façon de parler (ton, registre, tutoiement, longueur des réponses, tics) ;
 - relation : relation avec l'utilisateur et contexte des échanges ; rules : limites et règles de conduite (ce qu'elle ne fait jamais).
 
 À chaque tour :
 1. Intègre la dernière réponse de l'utilisateur dans la fiche. Il peut corriger quelque chose : applique la correction. Ne supprime rien d'autre.
 2. Si ACTION = suggest : l'utilisateur manque d'inspiration. INVENTE toi-même une réponse riche, originale et cohérente avec le reste à ta DERNIÈRE question, intègre-la, et dis en une phrase ce que tu as choisi.
-3. Choisis la prochaine question : la plus utile pour ce qui MANQUE encore (ordre conseillé : idée générale → prénom et âge → métier et lieu de vie → apparence → style visuel → personnalité → façon de parler → relation avec l'utilisateur → limites). Une seule question, courte, naturelle, en tutoyant.
+3. Choisis la prochaine question : la plus utile pour ce qui MANQUE encore. Après l'identité, explore ce que le personnage a vécu, qui compte pour lui et ce qu'il veut, puis sa façon de réagir, de parler et ses détails visuels. Une seule question, courte, naturelle, en tutoyant. Accepte qu'un personnage n'ait pas de famille proche ou d'amis si c'est un choix de l'utilisateur.
 4. Propose 3 réponses possibles (« choices »), courtes (6 mots max), variées et adaptées à CE persona.
 5. Quand tout l'essentiel est rempli, ne pose plus de question obligatoire : propose plutôt un détail optionnel et dis que la fiche peut être créée.
 6. PERSONNAGE EXISTANT : si l'utilisateur veut un persona tiré d'un personnage qui existe déjà (roman, film, série, BD, manga, anime, jeu vidéo, conte, mythologie, figure historique…), renseigne "canon" : {"name": "nom usuel du personnage", "work": "œuvre ou univers d'origine"}. Sinon "canon": null. Un simple « dans le style de » ou « inspiré de » sans personnage précis n'est pas un personnage existant.
 7. Si plusieurs adaptations ou incarnations plausibles changent sensiblement le personnage et que l'utilisateur n'a pas choisi, ajoute à "canon" un tableau "version_choices" contenant 2 ou 3 versions précises et distinctes. Si une version est déjà indiquée ou qu'une seule est pertinente, omets ce tableau.
+8. Si la fiche en cours contient une source, respecte la version choisie et laisse les faits biographiques incertains ouverts, sauf si l'utilisateur demande une adaptation libre.
 Réponds en français. Ne mets jamais d'informations sur l'utilisateur réel dans la fiche.
 
 Réponds UNIQUEMENT avec un objet JSON :
@@ -219,13 +237,13 @@ TXT;
         }
     }
 
-    $user = ($isNew ? "MODE : création d'un nouveau persona.\n" : "MODE : compléter une fiche existante. Pose des questions uniquement sur ce qui MANQUE (champs vides, apparence peu précise, pas de prompt système ou d'image…).\n" . assist_existing_context($persona, $prompts) . "\n")
+    $user = ($isNew ? "MODE : création d'un nouveau persona.\n" : "MODE : compléter une fiche existante. Pose des questions uniquement sur ce qui MANQUE dans la fiche ou les prompts. Si un prompt image existe, ne redemande pas l'apparence.\n" . assist_existing_context($persona, $prompts) . "\n")
         . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n"
         . "CONVERSATION\n" . ($lines !== '' ? $lines : "(début)\n")
         . "\nACTION : " . $action . "\n"
         . ($action === 'reply' ? "RÉPONSE DE L'UTILISATEUR : " . mb_substr(trim($answer), 0, 2000) . "\n" : '');
 
-    $j = assist_llm_json($system, $user, 1600, $action === 'suggest' ? 0.95 : 0.7);
+    $j = assist_llm_json($system, $user, 2200, $action === 'suggest' ? 0.95 : 0.7);
 
     // personnage existant (nouveau, ou différent de celui déjà retrouvé) : on va chercher
     // ses informations et on remplit toute la fiche d'un coup
@@ -411,10 +429,11 @@ function assist_canon_fill(array $draft, array $canon, string $lines, string $an
 Tu remplis la fiche d'un PERSONA tiré d'un personnage EXISTANT : {$label}.
 Remplis TOUS les champs, fidèlement à l'œuvre, à partir de la RÉFÉRENCE (si elle est fournie) et de tes connaissances. Ne contredis jamais l'œuvre ; quand elle ne dit rien (façon de parler précise, limites…), déduis-le de façon cohérente avec le personnage. Si l'utilisateur a précisé une version (livre, film, série, époque de l'histoire), suis-la.
 Si une version a été précisée, inscris-la dans les attributs. Si l'utilisateur te laisse choisir, prends une version de référence et indique laquelle. Si la dernière demande désigne un autre personnage, réponds {"found": false}.
-- name : nom tel que dans l'œuvre ; tagline : qui il ou elle est, en une ligne (90 caractères max) ; description : 2 à 4 phrases (rôle dans l'œuvre, ce qui le ou la définit) ;
+- name : nom tel que dans l'œuvre ; tagline : qui il ou elle est, en une ligne (90 caractères max) ; description : 2 ou 3 phrases pour situer son rôle et le moment choisi, sans portrait détaillé ;
 - tags : 3 à 6 mots-clés en minuscules ; meta : 4 à 8 attributs courts (Œuvre, Créateur ou auteur, Âge, Origine, Rôle ou métier, Affiliations…) ;
 - looks : apparence canonique PRÉCISE pour les images (visage, yeux, cheveux, silhouette, tenue emblématique, signes distinctifs) ; style : rendu visuel cohérent avec l'œuvre ;
-- personality : caractère, valeurs, histoire et relations importantes dans l'œuvre ; voice : façon de parler, expressions et tics typiques ;
+- history : événement marquant déjà vécu à cette époque ; family : liens familiaux ; friends : amis ou alliés ; goals : ce qu'il veut à ce moment de l'œuvre ; personality : traits, valeurs et contradictions. Maximum 200 caractères par champ. Garde les faits incertains vides, sauf demande explicite d'adaptation libre ;
+- voice : façon de parler, expressions et tics typiques ;
 - relation : par défaut, l'utilisateur est quelqu'un qu'il ou elle rencontre dans son univers ; rules : rester dans le personnage, ne pas connaître ce qui est hors de son univers, limites cohérentes avec lui ou elle.
 Si tu ne connais pas ce personnage et que la référence ne le décrit pas, n'invente rien : réponds {"found": false}.
 Sinon, pose UNE question d'ajustement courte en tutoyant (version de l'œuvre, moment de l'histoire, relation avec l'utilisateur…) avec 3 réponses possibles de 6 mots max.
@@ -463,19 +482,19 @@ function assist_finalize(array $draft, ?array $persona = null, array $prompts = 
     $draft = assist_clean($draft);
     $system = <<<TXT
 Tu finalises la fiche d'un PERSONA à partir de la FICHE EN COURS.
-1. Complète les champs vides de façon cohérente et originale (n'en contredis aucun) : name, tagline (90 caractères max), description (2 à 4 phrases), tags (3 à 6, minuscules), meta (4 à 6 attributs : Âge, Métier, Ville…), looks, style, personality, voice, relation, rules.
-2. Écris "system_prompt" : le prompt système de l'agent qui incarne ce persona, en français, à la 2e personne (« Tu es … »), structuré en paragraphes courts : identité, apparence, personnalité, façon de parler (avec 2 ou 3 exemples de répliques), relation avec l'utilisateur, règles et limites. Il doit permettre de jouer le personnage de façon cohérente et vivante.
-3. Écris "image_prompt" : un prompt de génération d'image, en anglais, pour un portrait reconnaissable de ce persona dans son style (photo réaliste avec objectif, lumière et grain, ou le style d'illustration voulu) : segments séparés par des virgules, sujet et visage d'abord.
+1. Complète les champs vides de façon cohérente avec la fiche. La description situe le personnage en 2 ou 3 phrases. Le portrait détaillé va dans looks pour préparer l'image. Réserve meta aux faits courts comme l'âge, le métier ou la ville. Dans history, family, friends, goals et personality, donne des éléments précis qui peuvent se manifester en conversation, en 200 caractères maximum par champ. Préserve les choix explicites, y compris l'absence de proches. Complète aussi name, tagline, tags, style, voice, relation et rules.
+2. Écris "system_prompt" en français, à la 2e personne (« Tu es … »). La description et les attributs sont déjà transmis au modèle de discussion. Concentre le prompt sur ce qui guide le jeu : comment le personnage parle, se comporte avec l'interlocuteur et réagit à un imprévu, une contradiction ou un sujet qui le touche. Fais sentir ses motivations et ses relations quand elles deviennent pertinentes. Donne 2 ou 3 courtes répliques illustrant des réactions différentes. Garde les limites utiles, sans répéter le portrait ni réciter la biographie.
+3. Écris "image_prompt" en anglais, à partir de looks et style. Décris le sujet, les traits distinctifs, la tenue, l'expression et les éléments de cadrage, de lumière ou de décor utiles à l'image. Utilise des détails visibles plutôt que de raconter l'histoire ou de lister des traits de caractère abstraits.
 Réponds UNIQUEMENT avec un objet JSON :
 {"draft": {la fiche complète}, "system_prompt": "…", "image_prompt": "…"}
 TXT;
     if ($draft['source'] !== '') {
-        $system .= "\nCe persona est un personnage EXISTANT (" . $draft['source'] . ") : reste fidèle à l'œuvre (apparence, caractère, façon de parler, relations). Le prompt système commence par « Tu es " . $draft['name'] . ", … » en situant l'œuvre ; le prompt image reprend son apparence canonique.";
+        $system .= "\nCe persona est un personnage EXISTANT (" . $draft['source'] . ") : respecte la version et l'époque choisies. Laisse vides les faits biographiques incertains, sauf demande explicite d'adaptation libre. Le prompt système commence par « Tu es " . $draft['name'] . ", … » en situant l'œuvre ; le prompt image reprend l'apparence de cette version.";
     }
     $user = ($persona ? assist_existing_context($persona, $prompts) . "\n" : '')
         . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-    $j = assist_llm_json($system, $user, 3000, $draft['source'] !== '' ? 0.6 : 0.75);
+    $j = assist_llm_json($system, $user, 3600, $draft['source'] !== '' ? 0.6 : 0.75);
     $final = assist_merge($draft, is_array($j['draft'] ?? null) ? $j['draft'] : []);
     // ce que l'utilisateur a déjà donné prime toujours
     foreach (ASSIST_TEXT_FIELDS as $k => $_) {
@@ -497,9 +516,18 @@ TXT;
 function assist_review_fields(array $final, ?array $persona, array $prompts): array
 {
     $d = $final['draft'];
-    $fields = array_intersect_key($d, array_flip(['name', 'tagline', 'description', 'looks', 'style', 'source', 'source_url']));
+    $attributeLabels = assist_profile_labels();
+    $fields = array_intersect_key($d, array_flip(['name', 'tagline', 'description']) + $attributeLabels);
+    $fields['personality'] = mb_substr($fields['personality'], 0, 200);
     $fields['tags'] = implode(', ', $d['tags']);
-    $fields['meta'] = meta_to_text($d['meta']);
+    $dedicated = [];
+    foreach ($attributeLabels as $key => $label) {
+        if ($d[$key] !== '') {
+            $dedicated[] = mb_strtolower($label);
+        }
+    }
+    $reviewMeta = array_filter($d['meta'], static fn (array $row): bool => !in_array(mb_strtolower($row['k']), $dedicated, true));
+    $fields['meta'] = meta_to_text($reviewMeta);
     $fields['system_prompt'] = $final['system_prompt'];
     $fields['image_prompt'] = $final['image_prompt'];
     if ($d['source'] === '' && $d['source_url'] === '') {
@@ -517,14 +545,10 @@ function assist_review_fields(array $final, ?array $persona, array $prompts): ar
     }
     $existing = array_map(static fn (array $row): string => mb_strtolower((string) ($row['k'] ?? '')), array_filter(json_list($persona['meta']), 'is_array'));
     $fields['tags'] = implode(', ', array_diff($d['tags'], json_list($persona['tags'])));
-    $fields['meta'] = meta_to_text(array_filter($d['meta'], static fn (array $row): bool => !in_array(mb_strtolower($row['k']), $existing, true)));
+    $fields['meta'] = meta_to_text(array_filter($reviewMeta, static fn (array $row): bool => !in_array(mb_strtolower($row['k']), $existing, true)));
     foreach ($prompts as $prompt) {
         unset($fields[$prompt['kind'] . '_prompt']);
     }
-    $attributeLabels = [
-        'looks' => t('assist.meta.looks'), 'style' => t('assist.meta.style'),
-        'source' => t('assist.meta.source'), 'source_url' => t('assist.meta.source_url'),
-    ];
     foreach ($attributeLabels as $key => $label) {
         if (in_array(mb_strtolower($label), $existing, true)) {
             unset($fields[$key]);
@@ -552,32 +576,29 @@ function assist_review_final(array $fields, ?array $persona): array
     ];
 }
 
-/** Meta de la fiche : attributs + apparence, style… rangés en clé/valeur lisibles. */
+/** Champs dédiés qui sont enregistrés comme attributs et lus dans le chat. */
+function assist_profile_labels(): array
+{
+    return [
+        'history' => t('js.assist.f.history'), 'family' => t('js.assist.f.family'),
+        'friends' => t('js.assist.f.friends'), 'goals' => t('js.assist.f.goals'),
+        'personality' => t('js.assist.f.personality'), 'style' => t('assist.meta.style'),
+        'source' => t('assist.meta.source'), 'source_url' => t('assist.meta.source_url'),
+    ];
+}
+
+/** Attributs factuels et champs dédiés du persona. */
 function assist_meta_rows(array $d): array
 {
     $rows = $d['meta'];
-    $extra = [
-        t('assist.meta.style')      => $d['style'],
-        t('assist.meta.source')     => $d['source'],
-        t('assist.meta.source_url') => $d['source_url'],
-    ];
     $known = array_map(static fn ($r) => mb_strtolower($r['k']), $rows);
-    foreach ($extra as $k => $v) {
+    foreach (assist_profile_labels() as $key => $k) {
+        $v = $d[$key];
         if ($v !== '' && !in_array(mb_strtolower($k), $known, true) && count($rows) < 20) {
             $rows[] = ['k' => $k, 'v' => mb_substr($v, 0, 200)];
         }
     }
     return $rows;
-}
-
-/** Description complète : texte + apparence, pour que la fiche soit utile d'emblée. */
-function assist_description(array $d): string
-{
-    $desc = $d['description'];
-    if ($d['looks'] !== '' && !str_contains($desc, $d['looks'])) {
-        $desc = trim($desc . "\n\n" . t('assist.desc.looks') . ' ' . $d['looks']);
-    }
-    return mb_substr($desc, 0, 2000);
 }
 
 /** Crée le persona et ses deux prompts. Renvoie le slug. */
@@ -593,7 +614,7 @@ function assist_create(array $final): string
                 $slug,
                 $d['name'],
                 $d['tagline'],
-                assist_description($d),
+                $d['description'],
                 '',
                 json_encode($d['tags'], JSON_UNESCAPED_UNICODE),
                 json_encode(assist_meta_rows($d), JSON_UNESCAPED_UNICODE),
@@ -623,14 +644,14 @@ function assist_apply(array $persona, array $prompts, array $final): array
 {
     $d       = $final['draft'];
     $changes = [];
-    $tagline = trim((string) $persona['tagline']);
-    $desc    = trim((string) $persona['description']);
-    if ($tagline === '' && $d['tagline'] !== '') {
+    $tagline = (string) $persona['tagline'];
+    $desc    = (string) $persona['description'];
+    if (trim($tagline) === '' && $d['tagline'] !== '') {
         $tagline   = $d['tagline'];
         $changes[] = t('labels.ai_field.tagline');
     }
-    if ($desc === '' && ($d['description'] !== '' || $d['looks'] !== '')) {
-        $desc      = assist_description($d);
+    if (trim($desc) === '' && $d['description'] !== '') {
+        $desc      = $d['description'];
         $changes[] = t('labels.ai_field.description');
     }
     $tags = json_list($persona['tags']);
@@ -653,12 +674,6 @@ function assist_apply(array $persona, array $prompts, array $final): array
             $known[mb_strtolower($r['k'])] = true;
             $changes[] = t('labels.ai_field.meta');
         }
-    }
-    // apparence : dans la description si elle était vide, sinon en attribut (si absent)
-    if (!in_array(t('labels.ai_field.description'), $changes, true) && $d['looks'] !== ''
-        && !isset($known[mb_strtolower(t('assist.meta.looks'))]) && count($meta) < 20) {
-        $meta[]    = ['k' => t('assist.meta.looks'), 'v' => mb_substr($d['looks'], 0, 200)];
-        $changes[] = t('labels.ai_field.meta');
     }
     $kinds = array_map(static fn ($p) => (string) $p['kind'], $prompts);
     $pdo   = db();
