@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 7);
+define('PV_SCHEMA_VERSION', 8);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -200,6 +200,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 7) {
             migrate_v7($pdo);
+        }
+        if ($version < 8) {
+            migrate_v8($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -453,6 +456,15 @@ function migrate_v7(PDO $pdo): void
         removed    INTEGER NOT NULL DEFAULT 0
     )");
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt ON prompt_versions(prompt_id, id)');
+}
+
+/** v8 : une réaction par message, conservée avec la version de la réponse. */
+function migrate_v8(PDO $pdo): void
+{
+    add_column_if_missing($pdo, 'messages', 'reaction', "TEXT NOT NULL DEFAULT ''");
+    add_column_if_missing($pdo, 'messages', 'reaction_pending', "TEXT NOT NULL DEFAULT ''");
+    add_column_if_missing($pdo, 'messages', 'reaction_reply', 'INTEGER NOT NULL DEFAULT 0');
+    add_column_if_missing($pdo, 'reply_versions', 'reaction', "TEXT NOT NULL DEFAULT ''");
 }
 
 /** v6 : journal des échanges avec les modèles (20 derniers appels). */
@@ -1273,6 +1285,7 @@ require_once __DIR__ . '/llm_log.php';
 require_once __DIR__ . '/assist.php';
 require_once __DIR__ . '/prompts.php';
 require_once __DIR__ . '/prompt_history.php';
+require_once __DIR__ . '/reactions.php';
 require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/facts.php';
 require_once __DIR__ . '/backup.php';

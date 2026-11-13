@@ -36,6 +36,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
              data-facts-idle="<?= (int) $__facts['idle'] ?>"
              data-status="/chat/<?= (int) $conv['id'] ?>/status"
              data-token="<?= e($token) ?>"
+             data-reactions="<?= e(json_encode(chat_reaction_options(), JSON_UNESCAPED_UNICODE)) ?>"
              data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) === 1 && chat_title_mode() !== 'off' ? 1 : 0 ?>"
              data-split="<?= (string) setting('chat_split_enabled', '1') === '1' ? '1' : '0' ?>"
              data-split-words="<?= (int) setting('chat_split_words', '50') ?>"
@@ -121,7 +122,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
                 <?php elseif ($role === 'notice'): ?>
                     <div class="msg-notice" data-msg-id="<?= (int) $m['id'] ?>"><?= e((string) $m['content']) ?></div>
                 <?php else: ?>
-                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>"<?php if (($replyVersions['mid'] ?? 0) === (int) $m['id']): ?> data-ver="<?= (int) $replyVersions['index'] ?>" data-vers="<?= (int) $replyVersions['total'] ?>"<?php endif; ?>>
+                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-version-id="<?= (int) $m['version_id'] ?>" data-reaction="<?= e(chat_reaction_key($m['reaction'], $role)) ?>"<?php if ($m['reaction_reply']): ?> data-reaction-reply="1"<?php endif; ?> data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>"<?php if (($replyVersions['mid'] ?? 0) === (int) $m['id']): ?> data-ver="<?= (int) $replyVersions['index'] ?>" data-vers="<?= (int) $replyVersions['total'] ?>"<?php endif; ?>>
                         <?php if ($role !== 'user'): ?>
                             <span class="msg-avatar">
                                 <?php if ($persona['avatar']): ?>

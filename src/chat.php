@@ -372,11 +372,17 @@ function chat_compress_payload(array $toSummarize, array $conv): array
             continue;
         }
         $who = $role === 'user' ? 'Utilisateur' : 'Personnage';
-        $transcript .= $who . ' : ' . mb_substr(trim((string) $m['content']), 0, 1400) . "\n\n";
+        $reaction = $role === 'assistant' && in_array($m['reaction'] ?? '', CHAT_AFFECTIONATE_REACTIONS, true)
+            ? "\nRéaction de l’utilisateur : " . chat_reaction_description($m) : '';
+        $transcript .= $who . ' : ' . mb_substr(trim((string) $m['content']), 0, 1400) . $reaction . "\n\n";
         $kept++;
     }
 
     $system = engine_prompt('memory');
+    if (str_contains($transcript, 'Réaction de l’utilisateur : ')) {
+        $system .= ' Une réaction affectueuse peut signaler un moment partagé à conserver si le texte le justifie. '
+            . 'Ne déduis aucun fait ni type de relation à partir d’une réaction seule.';
+    }
 
     $user = "Résumé précédent :\n" . (trim((string) $conv['summary']) !== '' ? $conv['summary'] : '(aucun)')
         . "\n\nNouveaux messages :\n" . $transcript;
@@ -1137,7 +1143,7 @@ function chat_has_recall_cue(string $message): bool
  * Extraits pertinents tirés des AUTRES conversations du même persona.
  * @return array<int, array>
  */
-function chat_recall_snippets(int $personaId, string $userMessage, int $excludeCid, int $limit = 3): array
+function chat_recall_snippets(int $personaId, string $userMessage, int $excludeCid, int $limit = 3, int $compressedThrough = 0): array
 {
     if (!chat_has_recall_cue($userMessage)) {
         return [];
@@ -1168,28 +1174,35 @@ function chat_recall_snippets(int $personaId, string $userMessage, int $excludeC
         return [];
     }
     $limit = max(1, $limit);
+    $scope = 'c.id <> ?';
+    $scopeParams = [$excludeCid];
+    if ($compressedThrough > 0) {
+        $marked = implode(', ', array_fill(0, count(CHAT_AFFECTIONATE_REACTIONS), '?'));
+        $scope = "($scope OR (m.id <= ? AND m.role = 'assistant' AND m.reaction IN ($marked)))";
+        $scopeParams = [...$scopeParams, $compressedThrough, ...CHAT_AFFECTIONATE_REACTIONS];
+    }
 
     // index plein texte : n'importe lequel des mots-clés, les plus PERTINENTS d'abord (bm25)
     try {
         $stmt = db()->prepare(
-            "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, c.title
+            "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, m.reaction, c.title
                FROM messages_fts f
                JOIN messages m ON m.id = f.rowid
                JOIN conversations c ON c.id = m.conversation_id
-              WHERE messages_fts MATCH ? AND c.persona_id = ? AND m.role IN ('user', 'assistant') AND c.id <> ?
+              WHERE messages_fts MATCH ? AND c.persona_id = ? AND m.role IN ('user', 'assistant') AND $scope
               ORDER BY bm25(messages_fts) LIMIT " . $limit
         );
-        $stmt->execute([fts_query($kw, 'OR'), $personaId, $excludeCid]);
+        $stmt->execute([fts_query($kw, 'OR'), $personaId, ...$scopeParams]);
         return $stmt->fetchAll();
     } catch (Throwable $e) {
         error_log('PersonaVault rappel FTS : ' . $e->getMessage());
     }
 
     // repli : sous-chaînes, les plus récentes d'abord
-    $sql    = "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, c.title
+    $sql    = "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, m.reaction, c.title
                FROM messages m JOIN conversations c ON c.id = m.conversation_id
-               WHERE c.persona_id = ? AND m.role IN ('user', 'assistant') AND c.id <> ?";
-    $params = [$personaId, $excludeCid];
+               WHERE c.persona_id = ? AND m.role IN ('user', 'assistant') AND $scope";
+    $params = [$personaId, ...$scopeParams];
     $like   = [];
     foreach (array_slice($kw, 0, 4) as $w) {
         $like[]   = "m.content LIKE ? ESCAPE '\\'";
@@ -1589,7 +1602,7 @@ function chat_auto_title(int $cid): ?string
  *                            lui est renvoyée (sinon « décris-la » dans le message suivant ne
  *                            pouvait rien donner : seul le texte des anciens messages partait)
  */
-function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false): array
+function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null): array
 {
     // 1) Partie STABLE en tête : consignes, fiche, consigne de jeu, résumé.
     //    Elle ne change qu'à la compression : LM Studio / llama.cpp réutilisent alors
@@ -1599,7 +1612,13 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     // 2) Partie VARIABLE (heure, souvenirs, rappels) : jointe au DERNIER message,
     //    pour ne pas invalider le cache de tout ce qui précède.
     $factsOn = (int) ($conv['memory_enabled'] ?? 1) === 1 && (int) ($conv['facts_enabled'] ?? 1) === 1;
-    $context = [chat_time_context($conv, $history)];
+    $context = [chat_time_context($conv, $history), chat_reaction_instructions($canReact)];
+    if ($reactionTarget !== null) {
+        $context[] = "L’utilisateur vient de réagir à un de tes messages, peut-être plus ancien que le dernier échange. "
+            . "Réponds brièvement en personnage à ce geste précis et au sujet de ce message. "
+            . "Pour 👍, reste dans le registre du simple accord. Voici le message visé :\n"
+            . chat_reaction_context($reactionTarget);
+    }
 
     $facts     = $factsOn ? facts_relevant((int) $persona['id'], $userMessage, 5) : [];
     $factsText = facts_format($facts);
@@ -1609,7 +1628,8 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
 
     // rappel d'échanges d'autres conversations avec le même persona
     try {
-        $recall = $factsOn ? chat_recall_snippets((int) $persona['id'], $userMessage, (int) $conv['id'], 3) : [];
+        $recall = $factsOn ? chat_recall_snippets((int) $persona['id'], $userMessage, (int) $conv['id'], 3,
+            chat_uses_summary($conv) ? (int) $conv['last_compressed_id'] : 0) : [];
     } catch (Throwable $e) {
         $recall = [];
     }
@@ -1617,10 +1637,13 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $lines = [];
         foreach ($recall as $r) {
             $who = (string) $r['role'] === 'user' ? 'Utilisateur' : 'Toi';
-            $lines[] = '- (' . chat_llm_date((string) $r['created_at']) . ', autre conversation) ' . $who . ' : '
-                . mb_substr(trim((string) $r['content']), 0, 320);
+            $reaction = $r['role'] === 'assistant' && in_array($r['reaction'] ?? '', CHAT_AFFECTIONATE_REACTIONS, true)
+                ? ' (réaction de l’utilisateur : ' . chat_reaction_description($r) . ')' : '';
+            $where = (int) $r['conversation_id'] === (int) $conv['id'] ? 'moment marqué dans cette conversation' : 'autre conversation';
+            $lines[] = '- (' . chat_llm_date((string) $r['created_at']) . ', ' . $where . ') ' . $who . ' : '
+                . mb_substr(trim((string) $r['content']), 0, 320) . $reaction;
         }
-        $context[] = "Extraits d'autres conversations que tu as eues avec cette personne "
+        $context[] = "Extraits d’échanges passés avec cette personne "
             . "(sers-t'en comme de souvenirs, ne les cite pas mot pour mot, ne les mentionne pas comme "
             . "des « extraits ») :\n" . implode("\n", $lines);
     }
@@ -1674,7 +1697,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $messages = [['role' => 'system', 'content' => $system]];
     $messages = array_merge($messages, $kept);
 
-    $text = $userMessage !== '' ? $userMessage : ($imageDataUrl ? 'Regarde cette photo.' : '');
+    $text = $reactionTarget !== null ? '[Réaction à ton message]' : ($userMessage !== '' ? $userMessage : ($imageDataUrl ? 'Regarde cette photo.' : ''));
     $text = $contextBlock . "\n\n" . $text;
 
     if ($imageDataUrl !== null && $imageDataUrl !== '') {
@@ -1917,7 +1940,7 @@ function reply_versions_info(int $cid, array $msg): ?array
  */
 function reply_version_archive(int $cid, int $userMsgId): void
 {
-    $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ? ORDER BY id");
+    $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ? ORDER BY id");
     $st->execute([$cid, $userMsgId]);
     $rows = $st->fetchAll();
     if (!$rows || (int) $rows[0]['version_id'] > 0) {
@@ -1927,12 +1950,13 @@ function reply_version_archive(int $cid, int $userMsgId): void
     if ($content === '') {
         return;
     }
-    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)')
+    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at, reaction)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)')
         ->execute([
             $cid, $userMsgId, $content, (string) $rows[0]['model'],
             count($rows) === 1 ? (string) $rows[0]['split_points'] : '',
             (string) $rows[0]['created_at'],
+            count($rows) === 1 ? (string) $rows[0]['reaction'] : '',
         ]);
 }
 

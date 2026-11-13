@@ -4,6 +4,20 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
+    'chat.emoji.like' => 'Agreed',
+    'chat.emoji.heart' => 'Affection',
+    'chat.emoji.laugh' => 'That made me laugh',
+    'chat.emoji.hug' => 'A hug',
+    'chat.emoji.dislike' => 'Disagree',
+    'chat.emoji.angry' => 'Angry',
+    'chat.emoji.tender' => 'Tenderness',
+    'chat.emoji.kiss' => 'A kiss',
+    'chat.emoji.love' => 'In love or admiring',
+    'chat.emoji.celebrate' => 'Worth celebrating',
+    'chat.emoji.smile' => 'Smile',
+    'chat.emoji.surprise' => 'Surprise',
+    'chat.emoji.sad' => 'Sadness',
+
     // --- shared by both screens
     'chat.unread'                   => 'New message',
 

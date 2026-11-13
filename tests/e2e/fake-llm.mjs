@@ -68,6 +68,7 @@ http.createServer(async (req, res) => {
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ error: "'response_format.type' must be 'json_schema' or 'text'" }));
         }
+        const last = String(j.messages?.at(-1)?.content ?? '');
         const text = assist(String(j.messages?.[0]?.content ?? ''), String(j.messages?.[1]?.content ?? ''))
             ?? reply(String(j.messages?.[0]?.content ?? ''));
         const usage = { prompt_tokens: 100, completion_tokens: 20 };
@@ -76,7 +77,13 @@ http.createServer(async (req, res) => {
             const mode = nextStream;
             nextStream = '';
             const delta = (content) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + '\n\n');
-            if (mode) {
+            if (last.endsWith('[Réaction à ton message]')) {
+                const target = last.match(/Message du personnage : "Réponse (\d+)/)?.[1];
+                const tone = last.includes('😡 — colère') ? 'colère' : last.includes('👍 — accord') ? 'accord simple' : 'autre';
+                delta(`Réaction à la réponse ${target} (${tone}).`);
+            } else if (last.endsWith('Merci, tu as été adorable avec moi.')) {
+                for (const part of ['Ça me touche. ', '⟦re', 'action:', 'heart', '⟧']) delta(part);
+            } else if (mode) {
                 if (mode !== 'silent') delta('Début de la nouvelle réponse.');
                 if (mode === 'fail') {
                     // Laisser le temps à un autre onglet de lire la réponse encore active.
@@ -87,8 +94,9 @@ http.createServer(async (req, res) => {
                     res.on('close', () => clearTimeout(timer));
                 }
                 return;
+            } else {
+                for (const w of text.split(' ')) delta(w + ' ');
             }
-            for (const w of text.split(' ')) delta(w + ' ');
             res.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage }) + '\n\n');
             return res.end('data: [DONE]\n\n');
         }

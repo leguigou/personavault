@@ -2809,6 +2809,8 @@
             const wrap = document.createElement("div");
             wrap.className = "msg msg-" + (m.role === "user" ? "user" : "bot");
             wrap.dataset.msgId = m.id;
+            wrap.dataset.versionId = m.version_id || "0";
+            if (m.reaction_reply) wrap.dataset.reactionReply = "1";
             if (m.at) wrap.dataset.at = m.at;
             if (m.role !== "user") {
                 const av = document.createElement("span");
@@ -2848,6 +2850,7 @@
                 b.textContent = m.content;
                 wrap.appendChild(b);
             }
+            paintReaction(wrap, m.reaction);
             return wrap;
         };
 
@@ -3680,6 +3683,7 @@
         const editUrl   = endpoint.replace(/\/send$/, "/msg-edit");
 
         const ICONS = {
+            react: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="12.5" r="7.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.5 14a3.4 3.4 0 0 0 6 0M8 10.5h.01m5 0h.01M19 3v6m-3-3h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
             regen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
             edit:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
             del:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9.5 7V5h5v2M7.5 7l.8 12h7.4l.8-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -3697,6 +3701,166 @@
             b.innerHTML = icon;
             return b;
         };
+
+        const reactions = JSON.parse(chat.dataset.reactions || "{}");
+        const reactionUrl = endpoint.replace(/\/send$/, "/react");
+        const reactionQueue = new Map();
+        const picker = document.createElement("div");
+        picker.id = "message-reactions";
+        picker.className = "reaction-picker";
+        picker.hidden = true;
+        picker.setAttribute("role", "group");
+        picker.setAttribute("aria-label", tr("chat.reactions"));
+        document.body.appendChild(picker);
+        let reactionAnchor = null;
+        let reactionMessage = null;
+
+        const closeReactions = (restoreFocus = false) => {
+            picker.hidden = true;
+            reactionAnchor?.setAttribute("aria-expanded", "false");
+            if (restoreFocus) reactionAnchor?.focus({ preventScroll: true });
+            reactionAnchor = null;
+            reactionMessage = null;
+        };
+
+        const reactionTrigger = (button) => {
+            button.dataset.react = "1";
+            button.setAttribute("aria-expanded", "false");
+            button.setAttribute("aria-controls", picker.id);
+            return button;
+        };
+
+        const paintReaction = (msg, key) => {
+            msg.dataset.reaction = reactions[key] ? key : "";
+            msg.querySelector(".msg-reaction-row")?.remove();
+            const bot = msg.classList.contains("msg-bot");
+            if (bot && msg.dataset.msgId && !msg.querySelector(".msg-reaction-trigger")) {
+                const trigger = reactionTrigger(toolBtn("react", ICONS.react, tr("chat.react")));
+                trigger.classList.add("msg-reaction-trigger");
+                msg.appendChild(trigger);
+            }
+            if (!msg.dataset.reaction) return;
+            const row = document.createElement("div");
+            row.className = "msg-reaction-row";
+            const chip = document.createElement(bot ? "button" : "span");
+            chip.className = "msg-reaction-chip";
+            if (bot) {
+                chip.type = "button";
+                reactionTrigger(chip);
+            } else {
+                chip.setAttribute("role", "img");
+            }
+            const emotion = reactions[key].label;
+            const label = bot ? tr("chat.reaction_you", { emotion })
+                : tr("chat.reaction_persona", { name: chat.dataset.name, emotion });
+            chip.title = label;
+            chip.setAttribute("aria-label", label);
+            const emoji = document.createElement("span");
+            emoji.textContent = reactions[key].emoji;
+            emoji.setAttribute("aria-hidden", "true");
+            chip.appendChild(emoji);
+            if (!bot && avatarHTML) {
+                const avatar = document.createElement("span");
+                avatar.className = "reaction-avatar";
+                avatar.setAttribute("aria-hidden", "true");
+                avatar.innerHTML = avatarHTML;
+                chip.appendChild(avatar);
+            }
+            row.appendChild(chip);
+            msg.insertBefore(row, msg.querySelector(".msg-tools, .msg-versions"));
+        };
+        scroll.querySelectorAll(".msg[data-msg-id]").forEach((msg) => paintReaction(msg, msg.dataset.reaction));
+        const paintUserReaction = ({ id, reaction }) => {
+            const msg = scroll.querySelector('.msg-user[data-msg-id="' + Number(id) + '"]');
+            if (msg) paintReaction(msg, reaction);
+        };
+
+        const positionReactions = () => {
+            if (picker.hidden) return;
+            const bounds = scroll.getBoundingClientRect();
+            const anchor = reactionAnchor.getBoundingClientRect();
+            if (!reactionMessage.isConnected || !reactionAnchor.isConnected || anchor.bottom < bounds.top || anchor.top > bounds.bottom) {
+                closeReactions();
+                return;
+            }
+            const left = reactionMessage.querySelector(".bubble")?.getBoundingClientRect().left ?? anchor.left;
+            const { width, height } = picker.getBoundingClientRect();
+            picker.style.left = Math.max(8, Math.min(left, document.documentElement.clientWidth - width - 8)) + "px";
+            const above = anchor.top - height - 8;
+            picker.style.top = Math.max(8, Math.min(above >= bounds.top ? above : anchor.bottom + 8, window.innerHeight - height - 8)) + "px";
+        };
+
+        const openReactions = (msg, anchor, expanded = false) => {
+            reactionMessage = msg;
+            reactionAnchor = anchor;
+            anchor.setAttribute("aria-expanded", "true");
+            const entries = Object.entries(reactions);
+            picker.replaceChildren();
+            picker.classList.toggle("is-expanded", expanded);
+            for (const [key, { emoji, label }] of expanded ? entries : entries.slice(0, 6)) {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.textContent = emoji;
+                option.dataset.reactionOption = key;
+                option.title = label;
+                option.setAttribute("aria-label", option.title);
+                option.setAttribute("aria-pressed", String(msg.dataset.reaction === key));
+                picker.appendChild(option);
+            }
+            if (!expanded) {
+                const more = toolBtn("more-reactions", '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>', tr("chat.more_reactions"));
+                picker.appendChild(more);
+            }
+            picker.hidden = false;
+            positionReactions();
+            (picker.querySelector('[aria-pressed="true"]') || picker.firstElementChild)?.focus({ preventScroll: true });
+        };
+
+        const saveReaction = async (msg, key) => {
+            if (msg.dataset.reacting || msg.dataset.switching) return;
+            msg.dataset.reacting = "1";
+            const mid = msg.dataset.msgId;
+            const version = msg.dataset.versionId || "0";
+            const wanted = msg.dataset.reaction === key ? "" : key;
+            try {
+                const body = new URLSearchParams({ _token: token, mid, version_id: version, reaction: wanted });
+                const response = await fetch(reactionUrl, { method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await response.json();
+                if (!data.ok) throw new Error(data.error || tr("chat.reaction_error"));
+                const focused = msg.querySelector(".msg-reaction-chip") === document.activeElement;
+                paintReaction(msg, data.reaction);
+                if (focused) (msg.querySelector(".msg-reaction-chip") || msg.querySelector(".msg-reaction-trigger"))?.focus({ preventScroll: true });
+                if (!data.reaction) reactionQueue.delete(mid);
+                if (data.reply) {
+                    reactionQueue.set(mid, { mid, version, key: data.reaction, revision: data.revision });
+                    sendQueuedReaction();
+                }
+            } catch (err) {
+                notice(err.message || tr("chat.reaction_error"));
+            } finally {
+                delete msg.dataset.reacting;
+            }
+        };
+
+        picker.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const option = event.target.closest("[data-reaction-option]");
+            if (option && reactionMessage) {
+                const msg = reactionMessage;
+                closeReactions(true);
+                saveReaction(msg, option.dataset.reactionOption);
+            } else if (event.target.closest("[data-more-reactions]")) {
+                openReactions(reactionMessage, reactionAnchor, true);
+            }
+        });
+        document.addEventListener("click", (event) => {
+            if (!picker.contains(event.target) && !event.target.closest("[data-react]")) closeReactions();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && !picker.hidden) closeReactions(true);
+        });
+        scroll.addEventListener("scroll", positionReactions, { passive: true });
+        window.addEventListener("resize", positionReactions);
 
         /* date et heure d'un message, dans la langue et le fuseau du téléphone :
            « Aujourd'hui à 14:05 », « Hier à 21:10 », « 8 nov. à 09:30 » (année si différente) */
@@ -3722,8 +3886,7 @@
         const buildTools = (el) => {
             if (!el.dataset.msgId) return null;
             const isBot = el.classList.contains("msg-bot");
-            const bots = [...scroll.querySelectorAll(".msg-bot")];
-            const isLastBot = isBot && bots[bots.length - 1] === el;
+            const isLastBot = isBot && lastReply() === el;
 
             const tools = document.createElement("div");
             tools.className = "msg-tools";
@@ -3737,6 +3900,7 @@
                 tools.appendChild(t);
             }
 
+            if (isBot) tools.appendChild(reactionTrigger(toolBtn("react", ICONS.react, tr("chat.react"))));
             if (isLastBot) tools.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
             // seuls mes messages sont modifiables : ceux du personnage se régénèrent ou se suppriment
             if (!isBot) tools.appendChild(toolBtn("edit", ICONS.edit, tr("chat.edit")));
@@ -3756,10 +3920,13 @@
 
         /* ‹ 1/3 › sous la dernière réponse : passer d'une version régénérée à l'autre */
         const versionUrl = endpoint.replace(/\/send$/, "/version");
+        const lastReply = () => {
+            const message = [...scroll.querySelectorAll(".msg[data-msg-id]:not([data-reaction-reply])")].at(-1);
+            return message?.classList.contains("msg-bot") ? message : null;
+        };
         const paintVersions = () => {
             scroll.querySelectorAll(".msg-versions").forEach((n) => n.remove());
-            const bots = [...scroll.querySelectorAll(".msg-bot")];
-            const last = bots[bots.length - 1];
+            const last = lastReply();
             const total = Number(last?.dataset.vers || 0);
             const idx = Number(last?.dataset.ver || 0);
             if (!last || total < 2 || !last.dataset.msgId) return;
@@ -3788,7 +3955,7 @@
         };
 
         const switchVersion = async (el, dir) => {
-            if (busy || el.dataset.switching === "1") return;
+            if (busy || el.dataset.switching === "1" || el.dataset.reacting) return;
             el.dataset.switching = "1";
             try {
                 const fd = new FormData();
@@ -3803,6 +3970,8 @@
                     role: "assistant",
                     content: d.content,
                     split_points: d.split_points || [],
+                    version_id: d.version_id,
+                    reaction: d.reaction,
                     at: el.dataset.at,
                 });
                 fresh.dataset.ver = String(d.versions.index);
@@ -3920,8 +4089,7 @@
 
         const regenerate = () => {
             if (busy) return;
-            const bots = [...scroll.querySelectorAll(".msg-bot")];
-            const last = bots[bots.length - 1];
+            const last = lastReply();
             if (!last) return;
             if (last.querySelector(".bubble")?.textContent === "") return;
             scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
@@ -3929,6 +4097,18 @@
         };
 
         scroll.addEventListener("click", (e) => {
+            const react = e.target.closest("[data-react]");
+            if (react) {
+                const msg = react.closest(".msg-bot");
+                if (!msg || msg.dataset.reacting) return;
+                if (reactionAnchor === react) {
+                    closeReactions(true);
+                } else {
+                    closeReactions();
+                    openReactions(msg, react);
+                }
+                return;
+            }
             const del = e.target.closest("[data-del]");
             if (del) {
                 e.stopPropagation();
@@ -4044,23 +4224,30 @@
         });
         attachPreview?.querySelector("[data-attach-remove]")?.addEventListener("click", clearAttach);
 
-        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null) => {
-            const text = regen ? "" : (overrideText ?? input.value.trim());
-            if (!regen && text === "" && !pendingFile) return;
+        const sendQueuedReaction = () => {
+            if (busy || !reactionQueue.size) return;
+            const reaction = reactionQueue.values().next().value;
+            reactionQueue.delete(reaction.mid);
+            send(null, "auto", false, false, null, null, reaction);
+        };
+
+        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, reaction = null) => {
+            const text = regen || reaction ? "" : (overrideText ?? input.value.trim());
+            if (!regen && !reaction && text === "" && !pendingFile) return;
             if (busy) return;
 
             const tryFallback = () => {
                 if (busy) return;
-                if (!regen && input.value.trim() === text) {
+                if (!regen && !reaction && input.value.trim() === text) {
                     input.value = "";
                     grow();
                 }
-                send(text, "fallback", echo, regen, regenMid, regenReply);
+                send(text, "fallback", echo, regen, regenMid, regenReply, reaction);
             };
             busy = true;
             syncSend();
             setStreaming(true);
-            if (overrideText === null && !regen) {
+            if (overrideText === null && !regen && !reaction) {
                 input.value = "";
                 grow();
             }
@@ -4068,19 +4255,19 @@
             let userEl = null;
             const restoreDraft = () => {
                 userEl?.remove();
-                if (!regen && !input.value) {
+                if (!regen && !reaction && !input.value) {
                     input.value = text;
                     grow();
                 }
             };
-            if (!regen) {
+            if (!regen && !reaction) {
                 clearIntro();
                 if (echo) userEl = bubble(text, "user");
                 scrollBottom(true, true);
             }
             typing();
 
-            if (mode === "auto" && lastStatus && lastStatus.reachable === false) {
+            if (!reaction && mode === "auto" && lastStatus && lastStatus.reachable === false) {
                 document.getElementById("chat-typing")?.remove();
                 setStreaming(false);
                 restoreDraft();
@@ -4115,16 +4302,14 @@
             const settleLive = (reply) => {
                 clearLive();
                 if (regen) {
-                    scroll.querySelectorAll(".msg-bot[data-msg-id]").forEach((el) => {
+                    scroll.querySelectorAll(".msg-bot[data-msg-id]:not([data-reaction-reply])").forEach((el) => {
                         const id = Number(el.dataset.msgId);
                         if (id > userId && id <= afterId) el.remove();
                     });
                 }
                 const fresh = renderMsg({
-                    id: reply.id,
+                    ...reply,
                     role: "assistant",
-                    content: reply.content,
-                    split_points: reply.split_points || [],
                     at: reply.at || new Date().toISOString(),
                 });
                 if (reply.versions) {
@@ -4142,9 +4327,14 @@
                     const d = await fetch(url, { signal: AbortSignal.timeout(1000) }).then((r) => r.json()).catch(() => null);
                     if (d?.ok && !d.generating) {
                         for (const msg of d.messages) {
+                            if (reaction) {
+                                if (msg.id > afterId && msg.reaction_reply) return msg;
+                                continue;
+                            }
+                            if (msg.id === userId && msg.reaction) paintUserReaction(msg);
                             if (msg.id <= userId) continue;
                             if (msg.role === "user") break;
-                            if (msg.role === "assistant" && msg.id > afterId) return msg;
+                            if (msg.role === "assistant" && !msg.reaction_reply && msg.id > afterId) return msg;
                         }
                         return null;
                     }
@@ -4259,18 +4449,31 @@
                 if (regen) fd.append("regen", "1");
                 if (regen && regenMid) fd.append("regen_mid", String(regenMid));
                 if (regen && regenReply) fd.append("regen_reply", String(regenReply));
-                const attachment = regen ? null : pendingFile;
+                if (reaction) {
+                    fd.append("reaction_mid", reaction.mid);
+                    fd.append("reaction_version", reaction.version);
+                    fd.append("reaction_revision", reaction.revision);
+                    fd.append("reaction", reaction.key);
+                }
+                const attachment = regen || reaction ? null : pendingFile;
                 if (attachment) {
                     const file = (await pendingShrink?.catch(() => null)) || attachment;
                     fd.append("image", file, file.name || "photo.jpg");
                 }
 
-                const res = await fetch(streamUrl, {
+                const request = {
                     method: "POST",
                     body: fd,
                     headers: { "Accept": "text/event-stream", "X-Requested-With": "XMLHttpRequest" },
                     signal: controller.signal,
-                });
+                };
+                let res = await fetch(streamUrl, request);
+                // Un autre onglet peut encore avoir le verrou de cette discussion.
+                for (let attempt = 0; reaction && res.status === 409 && attempt < 8; attempt++) {
+                    await res.body?.cancel();
+                    await new Promise((resolve) => setTimeout(resolve, 750));
+                    res = await fetch(streamUrl, request);
+                }
 
                 const isSSE = res.ok && res.body && (res.headers.get("content-type") || "").includes("text/event-stream");
 
@@ -4293,6 +4496,7 @@
                     let failed = "";
                     let failedKind = "error";
                     let keptUser = false;
+                    let skipped = false;
 
                     for (;;) {
                         const { value, done } = await reader.read();
@@ -4325,7 +4529,7 @@
                             } else if (evt.phase === "memory") {
                                 if (!live) loadingLabel(tr("chat.memory_phase"));
                             } else if (evt.start) {
-                                userId = Number(evt.user?.id || evt.user_id);
+                                userId = Number(evt.user?.id || evt.user_id || 0);
                                 afterId = Number(evt.after_id || userId);
                                 if (attachment && attachment === pendingFile) clearAttach();
                                 if (evt.user && userEl) {
@@ -4342,6 +4546,8 @@
                             } else if (evt.done) {
                                 finalReply = evt.reply || null;
                                 finalNotice = evt.notice || null;
+                                skipped = evt.skipped === true;
+                                if (evt.user_reaction) paintUserReaction(evt.user_reaction);
                             } else if (evt.error) {
                                 failed = evt.error;
                                 failedKind = evt.kind || "error";
@@ -4351,6 +4557,10 @@
                     }
 
                     document.getElementById("chat-typing")?.remove();
+                    if (skipped) {
+                        clearLive();
+                        return;
+                    }
                     if (failed) {
                         clearLive();
                         if (!keptUser) restoreDraft();
@@ -4370,20 +4580,22 @@
                 }
 
                 scrollBottom();
-                compressMemory()
-                    .then((d) => {
-                        if (d && d.compressed > 0) {
-                            notice(tr("chat.memory_updated", d.compressed));
-                            scrollBottom();
-                        }
-                    })
-                    .then(() => scheduleFacts())
-                    .then(() => autoTitle());
+                if (!reaction) {
+                    compressMemory()
+                        .then((d) => {
+                            if (d && d.compressed > 0) {
+                                notice(tr("chat.memory_updated", d.compressed));
+                                scrollBottom();
+                            }
+                        })
+                        .then(() => scheduleFacts())
+                        .then(() => autoTitle());
+                }
             } catch (err) {
                 document.getElementById("chat-typing")?.remove();
                 clearInterval(probe);
                 clearTimeout(splitTimer);
-                const reply = userId ? await recoverReply() : null;
+                const reply = userId || afterId ? await recoverReply() : null;
                 if (reply) settleLive(reply);
                 else clearLive();
                 if (!userId) restoreDraft();
@@ -4402,7 +4614,8 @@
                 setStreaming(false);
                 syncSend();
                 // sur téléphone, redonner le focus ouvrirait le clavier à chaque réponse
-                if (!matchMedia("(pointer: coarse)").matches) input.focus({ preventScroll: true });
+                if (!reaction && !matchMedia("(pointer: coarse)").matches) input.focus({ preventScroll: true });
+                sendQueuedReaction();
             }
         };
 

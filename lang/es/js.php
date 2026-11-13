@@ -4,6 +4,13 @@
  * Las claves js.modal.*, js.unsaved.* y js.chat.jump están en common.php.
  */
 return [
+    'js.chat.react' => 'Reaccionar al mensaje',
+    'js.chat.reactions' => 'Reacciones',
+    'js.chat.more_reactions' => 'Más reacciones',
+    'js.chat.reaction_you' => 'Tú · {emotion}',
+    'js.chat.reaction_persona' => '{name} · {emotion}',
+    'js.chat.reaction_error' => 'No se pudo guardar la reacción.',
+
     // común
     'js.common.error'         => 'Error: {message}',
     'js.common.unreadable'    => 'Respuesta ilegible.',

@@ -217,6 +217,8 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 ]);
                 $mid = backup_insert_row($pdo, 'messages', $fields + [
                     'conversation_id' => $cid, 'image' => $media[backup_str($message['image'] ?? '')] ?? '',
+                    'reaction' => chat_reaction_key($message['reaction'] ?? '', $fields['role']),
+                    'reaction_reply' => $fields['role'] === 'assistant' && !empty($message['reaction_reply']) ? 1 : 0,
                 ]);
                 if ($sourceId) {
                     $messageIds[$sourceId] = $mid;
@@ -238,7 +240,10 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                     throw new RuntimeException(t('error.backup.invalid_chat_data'));
                 }
                 $fields = backup_fields($version, ['content' => '', 'model' => '', 'split_points' => '', 'created_at' => $now]);
-                $vid = backup_insert_row($pdo, 'reply_versions', $fields + ['conversation_id' => $cid, 'user_message_id' => $userId]);
+                $vid = backup_insert_row($pdo, 'reply_versions', $fields + [
+                    'conversation_id' => $cid, 'user_message_id' => $userId,
+                    'reaction' => chat_reaction_key($version['reaction'] ?? '', 'assistant'),
+                ]);
                 $versions[$sourceId] = ['id' => $vid, 'user_id' => $userId];
             }
 

@@ -53,6 +53,47 @@ if ($action === 'search' && $method === 'GET') {
     exit;
 }
 
+/* --- ajouter, remplacer ou retirer une réaction à un message du personnage --- */
+if ($action === 'react' && $method === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    csrf_check_json();
+    session_write_close();
+    $mid = (int) ($_POST['mid'] ?? 0);
+    $version = (int) ($_POST['version_id'] ?? 0);
+    $requested = $_POST['reaction'] ?? null;
+    $reaction = chat_reaction_key($requested, 'assistant');
+    if ($reaction === '' && $requested !== '') {
+        http_response_code(400);
+        echo json_encode(['ok' => false]);
+        exit;
+    }
+
+    $result = db_tx(static function (PDO $pdo) use ($cid, $mid, $version, $reaction): ?array {
+        $stmt = $pdo->prepare("SELECT reaction, version_id FROM messages WHERE id = ? AND conversation_id = ? AND role = 'assistant'");
+        $stmt->execute([$mid, $cid]);
+        $message = $stmt->fetch();
+        if (!$message || (int) $message['version_id'] !== $version) {
+            return null;
+        }
+        $changed = $message['reaction'] !== $reaction;
+        $revision = $changed && $reaction !== '' ? bin2hex(random_bytes(8)) : '';
+        if ($changed) {
+            $pdo->prepare('UPDATE messages SET reaction = ?, reaction_pending = ? WHERE id = ?')
+                ->execute([$reaction, $revision, $mid]);
+            if ($version > 0) {
+                $pdo->prepare('UPDATE reply_versions SET reaction = ? WHERE id = ?')->execute([$reaction, $version]);
+            }
+        }
+        return ['ok' => true, 'reaction' => $reaction, 'reply' => $revision !== '', 'revision' => $revision];
+    });
+    if ($result === null) {
+        http_response_code(409);
+        $result = ['ok' => false, 'error' => t('error.chat.reply_changed')];
+    }
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /* --- modifier un message --- */
 if ($action === 'msg-edit' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
@@ -85,7 +126,7 @@ if ($action === 'msg-edit' && $method === 'POST') {
     // modifier SON message invalide la suite : on la supprime et on rejoue la réponse.
     // Tout ou rien : modification, suppression de la suite et curseurs mémoire.
     $images = db_tx(static function (PDO $pdo) use ($cid, $mid, $content): array {
-        $pdo->prepare('UPDATE messages SET content = ?, split_points = "" WHERE id = ?')
+        $pdo->prepare('UPDATE messages SET content = ?, split_points = "", reaction = "" WHERE id = ?')
             ->execute([$content, $mid]);
         // les réponses gardées répondaient à l'ancien texte : elles ne valent plus
         $pdo->prepare('DELETE FROM reply_versions WHERE user_message_id = ?')->execute([$mid]);
@@ -139,8 +180,8 @@ if ($action === 'version' && $method === 'POST') {
     $v = $st->fetch();
     if ((int) $v['id'] !== (int) $msg['version_id']) {
         db_tx(static function (PDO $pdo) use ($cid, $mid, $v): void {
-            $pdo->prepare('UPDATE messages SET content = ?, model = ?, split_points = ?, version_id = ? WHERE id = ?')
-                ->execute([(string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id'], $mid]);
+            $pdo->prepare("UPDATE messages SET content = ?, model = ?, split_points = ?, version_id = ?, reaction = ?, reaction_pending = '' WHERE id = ?")
+                ->execute([(string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id'], (string) $v['reaction'], $mid]);
             chat_invalidate_summary($cid, $mid);
         });
     }
@@ -149,6 +190,8 @@ if ($action === 'version' && $method === 'POST') {
         'ok'           => true,
         'content'      => (string) $v['content'],
         'split_points' => json_list($v['split_points'] ?: '[]'),
+        'version_id'   => (int) $v['id'],
+        'reaction'     => chat_reaction_key($v['reaction'], 'assistant'),
         'versions'     => ['index' => $pos + 1, 'total' => count($ids)],
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -173,10 +216,11 @@ if ($action === 'msg-delete' && $method === 'POST') {
 
     $ids = [$mid];
     if ((string) $msg['role'] === 'user') {
-        $stmt = db()->prepare("SELECT id FROM messages WHERE conversation_id = ? AND id > ? AND role = 'assistant' ORDER BY id ASC LIMIT 1");
+        $stmt = db()->prepare("SELECT id, role FROM messages WHERE conversation_id = ? AND id > ?
+                               AND role IN ('user', 'assistant') AND reaction_reply = 0 ORDER BY id ASC LIMIT 1");
         $stmt->execute([$cid, $mid]);
-        if ($next = $stmt->fetchColumn()) {
-            $ids[] = (int) $next;
+        if (($next = $stmt->fetch()) && $next['role'] === 'assistant') {
+            $ids[] = (int) $next['id'];
         }
     }
 
@@ -228,6 +272,9 @@ if ($action === 'messages' && $method === 'GET') {
             'content'  => (string) $m['content'],
             'image'    => (string) ($m['image'] ?? ''),
             'split_points' => json_list($m['split_points'] ?? '[]'),
+            'version_id' => (int) $m['version_id'],
+            'reaction'   => chat_reaction_key($m['reaction'], (string) $m['role']),
+            'reaction_reply' => (bool) $m['reaction_reply'],
             ...($afterGeneration ? ['versions' => reply_versions_info($cid, $m)] : []),
             'at'       => gmdate('Y-m-d\\TH:i:s\\Z', (int) strtotime((string) $m['created_at'] . ' UTC')),
         ], $rows),
@@ -247,7 +294,7 @@ if ($action === '' && $method === 'GET') {
     // ‹ 1/3 › : seulement sous la dernière réponse (celle qu'on peut régénérer)
     $replyVersions = null;
     for ($i = count($messages) - 1; $i >= 0; $i--) {
-        if ((string) $messages[$i]['role'] === 'assistant') {
+        if ($messages[$i]['role'] === 'assistant' && !$messages[$i]['reaction_reply']) {
             $info = reply_versions_info($cid, $messages[$i]);
             $replyVersions = $info ? ['mid' => (int) $messages[$i]['id']] + $info : null;
             break;

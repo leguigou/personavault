@@ -11,9 +11,11 @@ if ($action === 'stream' && $method === 'POST') {
     csrf_check_json();
     session_write_close(); // le flux peut durer plusieurs minutes : on libère la session
     $regen = ((string) ($_POST['regen'] ?? '')) === '1';
+    $reactionMid = $regen ? 0 : max(0, (int) ($_POST['reaction_mid'] ?? 0));
+    $reactionOnly = $reactionMid > 0;
     $text  = trim((string) ($_POST['message'] ?? ''));
-    $hasImage = !$regen && upload_present($_FILES['image'] ?? null);
-    if (!$regen && $text === '' && !$hasImage) {
+    $hasImage = !$regen && !$reactionOnly && upload_present($_FILES['image'] ?? null);
+    if (!$regen && !$reactionOnly && $text === '' && !$hasImage) {
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => t('error.message.empty_send')]);
@@ -52,6 +54,25 @@ if ($action === 'stream' && $method === 'POST') {
         return connection_aborted() !== 0;
     };
 
+    $reactionTarget = null;
+    $userMsgId = 0;
+    if ($reactionOnly) {
+        $stmt = db()->prepare("SELECT id, role, content, reaction, reaction_pending FROM messages
+                                WHERE conversation_id = ? AND id = ? AND role = 'assistant'
+                                  AND version_id = ? AND reaction_pending = ? AND reaction_pending <> '' AND reaction = ?");
+        $revision = $_POST['reaction_revision'] ?? '';
+        $stmt->execute([$cid, $reactionMid, (int) ($_POST['reaction_version'] ?? 0),
+            is_string($revision) ? $revision : '', chat_reaction_key($_POST['reaction'] ?? '', 'assistant')]);
+        $reactionTarget = $stmt->fetch() ?: null;
+        if ($reactionTarget === null) {
+            $sse(['done' => true, 'skipped' => true]);
+            exit;
+        }
+        $text = '';
+        $afterId = (int) db()->query('SELECT MAX(id) FROM messages WHERE conversation_id = ' . $cid)->fetchColumn();
+        $sse(['start' => true, 'after_id' => $afterId]);
+    }
+
     if ($regen) {
         $ust = db()->prepare("SELECT id, content, image FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
         $ust->execute([$cid]);
@@ -63,7 +84,7 @@ if ($action === 'stream' && $method === 'POST') {
         $text      = (string) $lastUser['content'];
         $userMsgId = (int) $lastUser['id'];
         $regenImage = (string) $lastUser['image'];
-        $stmt = db()->prepare("SELECT MAX(id) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ?");
+        $stmt = db()->prepare("SELECT MAX(id) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?");
         $stmt->execute([$cid, $userMsgId]);
         $previousReplyId = (int) $stmt->fetchColumn();
         $regenMid = (int) ($_POST['regen_mid'] ?? 0);
@@ -96,7 +117,7 @@ if ($action === 'stream' && $method === 'POST') {
         exit;
     }
 
-    if (!$regen) {
+    if (!$regen && !$reactionOnly) {
         try {
             $mem = chat_memory_stats($cid, $conv);
             // même critère que chat_compress : les messages pas encore résumés
@@ -149,7 +170,8 @@ if ($action === 'stream' && $method === 'POST') {
             break;
         }
     }
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision);
+    $canReact = !$regen && !$reactionOnly && chat_can_react($cid);
+    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget);
 
     if ($ping()) {
         if (!$regen && $imageBase !== '') {
@@ -158,7 +180,7 @@ if ($action === 'stream' && $method === 'POST') {
         exit;
     }
 
-    if (!$regen) {
+    if (!$regen && !$reactionOnly) {
         $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image) VALUES (?, "user", ?, ?)');
         $ins->execute([$cid, $text, $imageBase]);
         $userMsgId = (int) db()->lastInsertId();
@@ -185,17 +207,28 @@ if ($action === 'stream' && $method === 'POST') {
         return connection_aborted() !== 0;
     };
 
-    $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort): array {
-        return chat_reply_stream(
+    $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort, $canReact): array {
+        $filtered = new ChatReactionStream($canReact);
+        $res = chat_reply_stream(
             $built['messages'],
             $conv,
-            static function (string $delta) use ($sse, &$sentAny): void {
+            static function (string $delta) use ($sse, &$sentAny, $filtered): void {
+                $delta = $filtered->push($delta);
+                if ($delta === '') {
+                    return;
+                }
                 $sentAny = true;
                 $sse(['delta' => $delta]);
             },
             $mode,
             $shouldAbort
         );
+        $res['reaction'] = $filtered->reaction((string) $res['content']);
+        $res['content'] = trim($filtered->content);
+        if ($res['content'] === '' && empty($res['aborted'])) {
+            throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
+        }
+        return $res;
     };
 
     try {
@@ -211,7 +244,7 @@ if ($action === 'stream' && $method === 'POST') {
         }
     } catch (Throwable $e) {
         $kind = $e instanceof LlmUnavailable ? $e->kind : 'error';
-        if (!$sentAny && !$regen && $imageBase === '') {
+        if (!$sentAny && !$regen && !$reactionOnly && $imageBase === '') {
             // rien n'a été produit : on retire le message pour permettre un nouvel essai propre
             db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$userMsgId]);
         }
@@ -219,7 +252,7 @@ if ($action === 'stream' && $method === 'POST') {
             'error' => public_error($e),
             'kind' => $kind,
             'partial' => $sentAny,
-            'kept_user' => !$regen && ($sentAny || $imageBase !== ''),
+            'kept_user' => !$regen && !$reactionOnly && ($sentAny || $imageBase !== ''),
         ]);
         exit;
     }
@@ -241,33 +274,50 @@ if ($action === 'stream' && $method === 'POST') {
         : [];
 
     try {
-        [$assistantId, $versions, $notice] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv): array {
+        [$assistantId, $versions, $notice, $versionId] = db_tx(static function (PDO $pdo) use ($cid, $regen, $reactionOnly, $userMsgId, $res, $splitPoints, $aborted, $conv, $reactionTarget): array {
+            if ($reactionOnly) {
+                $active = $pdo->prepare('SELECT 1 FROM messages WHERE id = ? AND reaction_pending = ?');
+                $active->execute([$reactionTarget['id'], $reactionTarget['reaction_pending']]);
+                if (!$active->fetchColumn()) {
+                    return [0, null, null, 0];
+                }
+            }
             if ($regen) {
                 // L'ancienne réponse reste visible jusqu'à la validation de la transaction.
                 reply_version_archive($cid, $userMsgId);
-                $pdo->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND id > ?")
+                $pdo->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?")
                     ->execute([$cid, $userMsgId]);
             }
 
-            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points)
-                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?)')
+            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points, reaction_reply)
+                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?, ?)')
                 ->execute([
                     $cid, $res['content'], $res['model'], (int) $res['prompt_tokens'], (int) $res['completion_tokens'],
-                    (int) $res['ms'], $splitPoints ? json_encode($splitPoints) : '',
+                    (int) $res['ms'], $splitPoints ? json_encode($splitPoints) : '', $reactionOnly ? 1 : 0,
                 ]);
             $assistantId = (int) $pdo->lastInsertId();
             $versions = null;
+            $versionId = 0;
             if ($regen) {
                 reply_version_register($cid, $userMsgId, $assistantId);
                 $stv = $pdo->prepare('SELECT * FROM messages WHERE id = ?');
                 $stv->execute([$assistantId]);
-                $versions = reply_versions_info($cid, $stv->fetch());
+                $versioned = $stv->fetch();
+                $versions = reply_versions_info($cid, $versioned);
+                $versionId = (int) $versioned['version_id'];
             }
 
             $notice = null;
             if ($aborted) {
                 $pdo->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
             } else {
+                if ($res['reaction'] !== '') {
+                    $pdo->prepare("UPDATE messages SET reaction = ? WHERE id = ? AND role = 'user'")
+                        ->execute([$res['reaction'], $userMsgId]);
+                }
+                if ($reactionOnly) {
+                    $pdo->prepare("UPDATE messages SET reaction_pending = '' WHERE id = ?")->execute([$reactionTarget['id']]);
+                }
                 if (!empty($res['notice'])) {
                     $pdo->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "notice", ?)')
                         ->execute([$cid, $res['notice']]);
@@ -278,10 +328,14 @@ if ($action === 'stream' && $method === 'POST') {
                 $pdo->prepare('UPDATE conversations SET model = ?, provider = ?, updated_at = datetime("now") WHERE id = ?')
                     ->execute([$storedModel, $res['provider'], $cid]);
             }
-            return [$assistantId, $versions, $notice];
+            return [$assistantId, $versions, $notice, $versionId];
         });
     } catch (Throwable $e) {
-        $sse(['error' => public_error($e), 'kind' => 'error', 'kept_user' => !$regen]);
+        $sse(['error' => public_error($e), 'kind' => 'error', 'kept_user' => !$regen && !$reactionOnly]);
+        exit;
+    }
+    if ($assistantId === 0) {
+        $sse(['done' => true, 'skipped' => true]);
         exit;
     }
     if ($aborted) {
@@ -297,7 +351,10 @@ if ($action === 'stream' && $method === 'POST') {
             'model'    => $res['model'],
             'split_points' => $splitPoints,
             'versions' => $versions,
+            'version_id' => $versionId,
+            'reaction_reply' => $reactionOnly,
         ],
+        'user_reaction' => $res['reaction'] !== '' ? ['id' => $userMsgId, 'reaction' => $res['reaction']] : null,
         'meta'  => [
             'model'    => $res['model'],
             'ms'       => (int) $res['ms'],
