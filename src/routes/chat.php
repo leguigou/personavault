@@ -7,6 +7,14 @@ declare(strict_types=1);
 
 /* --------------------------------------------------------------------- chat */
 
+if ($path === '/chat/unread' && $method === 'GET') {
+    session_write_close();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(['unread' => chat_has_unread()]);
+    exit;
+}
+
 if ($path === '/chat/models' && $method === 'GET') {
     session_write_close();
     header('Content-Type: application/json; charset=utf-8');

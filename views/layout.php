@@ -12,6 +12,9 @@ $isLib = !$isFav && !$isArch && !$isNew && !$isSettings
     && !str_starts_with($currentPath, '/chat') && !str_starts_with($currentPath, '/memories');
 $isChat = str_starts_with($currentPath, '/chat') || str_starts_with($currentPath, '/memories');
 $isChatRoom = (bool) preg_match('#^/chat/\d+#', $currentPath);
+$chatUnread = $isAuth && !$isChatRoom && chat_has_unread();
+$chatIcon = '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+$chatBadge = '<span class="nav-chat-dot" data-chat-unread' . ($chatUnread ? '' : ' hidden') . '><span class="sr-only">' . e(t('chat.unread')) . '</span></span>';
 // assistant de création : plein écran comme une discussion
 $isAssist = (bool) preg_match('#^/p/(?:[a-z0-9-]+/)?assist$#', $currentPath);
 ?>
@@ -67,7 +70,7 @@ $isAssist = (bool) preg_match('#^/p/(?:[a-z0-9-]+/)?assist$#', $currentPath);
 
     <nav class="topnav" aria-label="<?= e(t('nav.main')) ?>">
         <a href="/" class="<?= $isLib ? 'is-active' : '' ?>"><?= e(t('nav.library')) ?></a>
-        <a href="/chat" class="<?= $isChat ? 'is-active' : '' ?>"><?= e(t('nav.chats')) ?></a>
+        <a href="/chat" class="nav-chat-link <?= $isChat ? 'is-active' : '' ?>"><?= e(t('nav.chats')) ?><?= $chatBadge ?></a>
         <a href="/?fav=1" class="<?= $isFav ? 'is-active' : '' ?>"><?= e(t('nav.favorites')) ?></a>
         <a href="/?arch=1" class="<?= $isArch ? 'is-active' : '' ?>"><?= e(t('nav.archives')) ?></a>
     </nav>
@@ -76,6 +79,9 @@ $isAssist = (bool) preg_match('#^/p/(?:[a-z0-9-]+/)?assist$#', $currentPath);
         <a class="btn btn-primary btn-sm" href="/p/new">
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             <span class="hide-sm"><?= e(t('nav.new')) ?></span>
+        </a>
+        <a class="icon-btn nav-chat-link topbar-chat <?= $isChat ? 'is-active' : '' ?>" href="/chat" title="<?= e(t('nav.chats')) ?>"<?= $currentPath === '/chat' ? ' aria-current="page"' : '' ?>>
+            <?= $chatIcon ?><span class="sr-only"><?= e(t('nav.chats')) ?></span><?= $chatBadge ?>
         </a>
         <a class="icon-btn <?= $isSettings ? 'is-active' : '' ?>"<?= $isSettings ? ' aria-current="page"' : '' ?> href="/settings" title="<?= e(t('nav.settings')) ?>" aria-label="<?= e(t('nav.settings')) ?>">
             <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
@@ -108,7 +114,7 @@ $isAssist = (bool) preg_match('#^/p/(?:[a-z0-9-]+/)?assist$#', $currentPath);
         <span class="tab-label"><?= e(t('nav.library')) ?></span>
     </a>
     <a href="/chat" class="<?= $isChat ? 'is-active' : '' ?>"<?= $isChat ? ' aria-current="page"' : '' ?>>
-        <span class="tab-ico"><svg viewBox="0 0 24 24" class="ico"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+        <span class="tab-ico"><?= $chatIcon ?><?= $chatBadge ?></span>
         <span class="tab-label"><?= e(t('nav.chats')) ?></span>
     </a>
     <a href="/p/new" class="tab-add"<?= $isNew ? ' aria-current="page"' : '' ?> aria-label="<?= e(t('nav.new_persona')) ?>">

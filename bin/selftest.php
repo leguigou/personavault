@@ -400,6 +400,16 @@ try {
     $check(!str_contains($first, 'Contexte réel') && str_contains($first, 'Sujet : test'), 'prompt système stable (résumé, sans l’heure)');
     $check(str_starts_with($last, '<contexte>') && str_ends_with($last, 'bonjour'), 'heure et souvenirs dans le dernier message');
 
+    $profile = 'Je préfère les voyages en train.';
+    set_setting('chat_user_profile', $profile);
+    $check(!str_contains(chat_system_prompt($persona, [], $conv), $profile), 'la présentation est désactivée par défaut');
+    set_setting('chat_user_profile_enabled', '1');
+    $check(str_contains(chat_system_prompt($persona, [], $conv), $profile), 'la présentation activée est envoyée même sans mémoire');
+    set_setting('chat_user_profile_enabled', '0');
+    $check(!str_contains(chat_system_prompt($persona, [], $conv), $profile) && setting('chat_user_profile') === $profile,
+        'désactiver la présentation conserve le texte et arrête son envoi');
+    set_setting('chat_user_profile', '');
+
     $pause = [
         ['role' => 'user', 'content' => 'Le départ est pour Lyon.', 'created_at' => gmdate('Y-m-d H:i:s', time() - 8 * 3600)],
         ['role' => 'memory', 'content' => 'Notification interne', 'created_at' => gmdate('Y-m-d H:i:s')],

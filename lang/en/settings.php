@@ -3,6 +3,10 @@
  * English — Settings page (views/settings.php). Same keys as lang/fr/settings.php.
  */
 return [
+    'settings.user_profile.title' => 'About me',
+    'settings.user_profile.enable' => 'Use my introduction with all personas',
+    'settings.user_profile.label' => 'My introduction (optional)',
+    'settings.user_profile.help' => 'A few sentences about yourself and your preferences. When enabled, this text is shared with the model that replies, including remote models.',
     // --- header and tabs
     'settings.subtitle'         => 'Connections, chats and appearance — one tab per topic.',
     'settings.tabs_label'       => 'Settings sections',

@@ -3,6 +3,13 @@ declare(strict_types=1);
 
 /* Moteur de discussion avec les personas (LM Studio par défaut, repli DeepSeek). */
 
+const CHAT_USER_PROFILE_MAX = 800;
+
+function chat_has_unread(): bool
+{
+    return (bool) db()->query('SELECT EXISTS (SELECT 1 FROM conversations WHERE unread = 1)')->fetchColumn();
+}
+
 function chat_llm_config(): array
 {
     $cfg = [
@@ -968,6 +975,14 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
     $directive = trim((string) ($conv['directive'] ?? ''));
     if ($directive !== '') {
         $parts[] = 'Consigne de jeu : ' . $directive;
+    }
+
+    if (setting('chat_user_profile_enabled', '0') === '1') {
+        $profile = trim(setting('chat_user_profile', ''));
+        if ($profile !== '') {
+            $parts[] = "Présentation de ton interlocuteur, écrite par lui. Elle décrit l'utilisateur et sert de contexte pour lui répondre naturellement :\n"
+                . $profile;
+        }
     }
 
     // le résumé ne sert que si la mémoire est active (sinon l'historique complet est envoyé)

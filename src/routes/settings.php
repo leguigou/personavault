@@ -142,6 +142,13 @@ if ($path === '/settings/chat' && $method === 'POST') {
     }
 
     $previousModel = chat_llm_config_raw()['model'];
+    if (isset($_POST['chat_user_profile']) && is_string($_POST['chat_user_profile'])) {
+        $profile = mb_substr(trim($_POST['chat_user_profile']), 0, CHAT_USER_PROFILE_MAX);
+        db_tx(static function () use ($profile): void {
+            set_setting('chat_user_profile', $profile);
+            set_setting('chat_user_profile_enabled', $profile !== '' && ($_POST['chat_user_profile_enabled'] ?? '') === '1' ? '1' : '0');
+        });
+    }
     set_setting('chat_llm_provider', trim((string) ($_POST['chat_provider'] ?? 'lmstudio')));
     set_setting('chat_memory_threshold', (string) max(600, min(100000, (int) ($_POST['chat_memory_threshold'] ?? 3000))));
     set_setting('chat_memory_target', (string) max(300, min(50000, (int) ($_POST['chat_memory_target'] ?? 1600))));
