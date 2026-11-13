@@ -4,6 +4,20 @@
  * Toute clé ajoutée ici doit exister dans lang/en/chat.php et lang/es/chat.php (vérifié par bin/i18n-check.php).
  */
 return [
+    'chat.emoji.like' => 'D’accord',
+    'chat.emoji.heart' => 'Affection',
+    'chat.emoji.laugh' => 'Ça me fait rire',
+    'chat.emoji.hug' => 'Un câlin',
+    'chat.emoji.dislike' => 'Pas d’accord',
+    'chat.emoji.angry' => 'En colère',
+    'chat.emoji.tender' => 'Tendresse',
+    'chat.emoji.kiss' => 'Un bisou',
+    'chat.emoji.love' => 'Amoureux ou admiratif',
+    'chat.emoji.celebrate' => 'À célébrer',
+    'chat.emoji.smile' => 'Sourire',
+    'chat.emoji.surprise' => 'Surprise',
+    'chat.emoji.sad' => 'Tristesse',
+
     // --- commun aux deux écrans
     'chat.unread'                   => 'Nouveau message',
 

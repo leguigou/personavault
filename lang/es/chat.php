@@ -4,6 +4,20 @@
  * Mismas claves que lang/fr/chat.php (referencia). Se tutea al usuario, como en francés.
  */
 return [
+    'chat.emoji.like' => 'De acuerdo',
+    'chat.emoji.heart' => 'Afecto',
+    'chat.emoji.laugh' => 'Me hace reír',
+    'chat.emoji.hug' => 'Un abrazo',
+    'chat.emoji.dislike' => 'En desacuerdo',
+    'chat.emoji.angry' => 'Enfado',
+    'chat.emoji.tender' => 'Ternura',
+    'chat.emoji.kiss' => 'Un beso',
+    'chat.emoji.love' => 'Enamorado o admirado',
+    'chat.emoji.celebrate' => 'Para celebrar',
+    'chat.emoji.smile' => 'Sonrisa',
+    'chat.emoji.surprise' => 'Sorpresa',
+    'chat.emoji.sad' => 'Tristeza',
+
     // --- común a ambas pantallas
     'chat.unread'                   => 'Mensaje nuevo',
 

@@ -268,6 +268,51 @@ if (peer) {
     const retry = await postChat('stream', { regen: '1', regen_reply: saved.id }, { origin: peer });
     expect((await retry.text()).includes('"versions":{"index":4,"total":4}'), 'la génération peut reprendre après un arrêt');
 }
+{
+    const chat = (id, action, form) => http(`/chat/${id}/${action}`, {
+        method: 'POST', form: { _token: csrf, ...form },
+    });
+    const recent = async (id) => (await (await http(`/chat/${id}/messages?limit=50`)).json()).messages;
+    const turn = (sse) => sse.split('\n').filter((line) => line.startsWith('data: '))
+        .map((line) => JSON.parse(line.slice(6))).find((event) => event.done);
+    const react = async (mid, reaction, version_id = 0) => (await chat(1, 'react', { mid, reaction, version_id })).json();
+    const followReaction = async (mid, saved) => (await chat(1, 'stream', {
+        reaction_mid: mid, reaction: saved.reaction, reaction_revision: saved.revision,
+    })).text();
+
+    const previous = await recent(1);
+    const target = previous.find((m) => m.id === 2);
+    const wrongChat = await chat(2, 'react', { mid: target.id, reaction: 'angry' });
+    expect(wrongChat.status === 409, 'une réaction ne peut pas viser le message d’une autre discussion');
+    const angry = await react(target.id, 'angry');
+    const result = turn(await followReaction(target.id, angry));
+    const after = await recent(1);
+    expect(result?.reply?.content === 'Réaction à la réponse 2 (colère).' && result.reply.reaction_reply
+        && after.length === previous.length + 1 && after.find((m) => m.id === target.id)?.reaction === 'angry'
+        && (await recent(2)).length === 0, 'une réaction négative à un ancien message relance sa discussion sur le bon sujet');
+    expect(turn(await followReaction(target.id, angry))?.skipped, 'une même réaction ne lance qu’une réponse');
+    const like = await react(target.id, 'like');
+    expect(turn(await followReaction(target.id, like))?.reply?.content === 'Réaction à la réponse 2 (accord simple).',
+        'le pouce en haut est transmis comme un accord simple');
+    expect(!(await react(target.id, '')).reply && !(await recent(1)).find((m) => m.id === target.id)?.reaction,
+        'retirer une réaction ne déclenche pas une nouvelle réponse');
+
+    const kindness = { message: 'Merci, tu as été adorable avec moi.' };
+    const first = await (await chat(1, 'stream', kindness)).text();
+    const second = await (await chat(1, 'stream', kindness)).text();
+    const userReaction = turn(first)?.user_reaction;
+    expect(userReaction?.reaction === 'heart' && !first.includes('⟦') && !second.includes('⟦') && !turn(second)?.user_reaction
+        && (await recent(1)).find((m) => m.id === userReaction.id)?.reaction === 'heart',
+        'la réaction du personnage est enregistrée, filtrée du flux et soumise à un délai');
+    const last = turn(second)?.reply;
+    if (last) {
+        await react(last.id, 'heart');
+        const regen = turn(await (await chat(1, 'stream', { regen: '1', regen_reply: last.id })).text());
+        const old = await (await chat(1, 'version', { mid: regen?.reply?.id, dir: '-1' })).json();
+        expect(old.reaction === 'heart' && old.versions?.index === 1 && old.version_id > 0,
+            'la réaction reste associée à la version d’origine après régénération');
+    }
+}
 await record('GET /chat/1/load-result', await http('/chat/1/load-result'));
 await post('/chat/1/model-override', { model: 'fake-model' });
 await post('/chat/1/model-override', { model: '' }, '/chat/1/model-override (retour persona)');

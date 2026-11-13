@@ -113,13 +113,14 @@ try {
 
     echo "Sauvegarde\n";
     $sourceMid = (int) db()->query('SELECT id FROM messages WHERE conversation_id = ' . $cid)->fetchColumn();
-    $pdo->prepare("INSERT INTO messages (conversation_id, role, content, split_points) VALUES (?, 'assistant', 'Premier essai.', '[8]')")->execute([$cid]);
+    $pdo->prepare("UPDATE messages SET reaction = 'hug' WHERE id = ?")->execute([$sourceMid]);
+    $pdo->prepare("INSERT INTO messages (conversation_id, role, content, split_points, reaction) VALUES (?, 'assistant', 'Premier essai.', '[8]', 'heart')")->execute([$cid]);
     $replyMid = (int) $pdo->lastInsertId();
     reply_version_archive($cid, $sourceMid);
     $firstVersion = (int) $pdo->lastInsertId();
-    $pdo->prepare("UPDATE messages SET content = 'Deuxième essai.' WHERE id = ?")->execute([$replyMid]);
+    $pdo->prepare("UPDATE messages SET content = 'Deuxième essai.', reaction = '' WHERE id = ?")->execute([$replyMid]);
     reply_version_register($cid, $sourceMid, $replyMid);
-    $pdo->prepare("UPDATE messages SET content = 'Premier essai.', version_id = ? WHERE id = ?")->execute([$firstVersion, $replyMid]);
+    $pdo->prepare("UPDATE messages SET content = 'Premier essai.', version_id = ?, reaction = 'heart' WHERE id = ?")->execute([$firstVersion, $replyMid]);
     $pdo->prepare("UPDATE conversations SET summary = 'Résumé', last_compressed_id = ?, facts_cursor = ?, pinned = 1,
                    model_override = 'mon-modèle', title_auto = 0 WHERE id = ?")->execute([$sourceMid, $replyMid, $cid]);
     facts_add($pid, 'Souvenir de sauvegarde', 'preference', 'confirme', $cid);
@@ -155,6 +156,10 @@ try {
         $copy = $pdo->query('SELECT * FROM conversations WHERE persona_id = ' . $nid)->fetch();
         $copyMessages = fetch_messages((int) $copy['id']);
         [$copiedUser, $copiedReply] = $copyMessages;
+        $reaction = $pdo->prepare('SELECT reaction FROM reply_versions WHERE id = ?');
+        $reaction->execute([$copiedReply['version_id']]);
+        $check($copiedUser['reaction'] === 'hug' && $copiedReply['reaction'] === 'heart' && $reaction->fetchColumn() === 'heart',
+            'réactions des messages et de la version sélectionnée restaurées');
         $check((int) $copy['id'] !== $cid && count(fetch_messages($cid)) === 2, 'discussion rattachée au nouveau persona, original préservé');
         $check($mediaExists($copiedUser['image']) && $copiedUser['image'] !== $chatImg, 'pièce jointe du message restaurée avec sa miniature');
         $check($copy['last_compressed_id'] === $copiedUser['id'] && $copy['facts_cursor'] === $copiedReply['id']
@@ -464,6 +469,14 @@ try {
     $rec = chat_recall_snippets($pid, 'Tu te souviens du concert de jazz ?', $cid, 2);
     $check(count($rec) === 2 && str_contains((string) $rec[0]['content'], 'encore du jazz'), 'rappel : les extraits les plus pertinents d’abord');
     $check((int) db()->query("SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'jazz'")->fetchColumn() === 2, 'index cohérent avec la table');
+    $ins->execute([$cid, 'assistant', 'On a regardé les lucioles ensemble.']);
+    $marked = (int) db()->lastInsertId();
+    $pdo->prepare("UPDATE messages SET reaction = 'heart' WHERE id = ?")->execute([$marked]);
+    $remembered = chat_recall_snippets($pid, 'Tu te souviens des lucioles ?', $cid, 3, $marked);
+    $check(array_column($remembered, 'reaction') === ['heart'], 'rappel : un ancien moment marqué peut remonter dans sa propre discussion');
+    $payload = chat_compress_payload($remembered, ['summary' => '']);
+    $check(str_contains($payload['user'], '❤️') && str_contains($payload['system'], 'moment partagé'),
+        'mémoire : un cœur aide à repérer un moment partagé');
 
     echo PHP_EOL . '— fréquence des souvenirs' . PHP_EOL;
     set_setting('facts_frequency', 'every');
