@@ -2,6 +2,43 @@
 (() => {
     "use strict";
 
+    const unreadDots = document.querySelectorAll("[data-chat-unread]");
+    if (unreadDots.length) {
+        let checkingUnread = false;
+        let unreadTimer = null;
+        const updateUnreadTimer = () => {
+            if (!document.hidden && unreadDots[0].hidden) {
+                unreadTimer ??= setInterval(refreshUnread, 30000);
+            } else if (unreadTimer !== null) {
+                clearInterval(unreadTimer);
+                unreadTimer = null;
+            }
+        };
+        const refreshUnread = async () => {
+            if (document.hidden || checkingUnread) return;
+            checkingUnread = true;
+            try {
+                const res = await fetch("/chat/unread", { cache: "no-store" });
+                if (!res.ok || res.redirected) return;
+                const { unread } = await res.json();
+                if (typeof unread === "boolean") {
+                    unreadDots.forEach(dot => { dot.hidden = !unread; });
+                    updateUnreadTimer();
+                }
+            } catch {
+                // Conserver l'état affiché si la connexion est indisponible.
+            } finally {
+                checkingUnread = false;
+            }
+        };
+        window.addEventListener("pageshow", event => { if (event.persisted) refreshUnread(); });
+        document.addEventListener("visibilitychange", () => {
+            updateUnreadTimer();
+            refreshUnread();
+        });
+        updateUnreadTimer();
+    }
+
     /* ------------------------------------------ clavier mobile (chat)
        iOS ne réduit pas 100dvh quand le clavier s'ouvre : la page défile et
        l'en-tête sort de l'écran. On cale la hauteur du chat sur la zone

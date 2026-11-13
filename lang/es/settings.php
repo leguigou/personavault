@@ -4,6 +4,10 @@
  * Tuteo (« tú »), como en francés.
  */
 return [
+    'settings.user_profile.title' => 'Sobre mí',
+    'settings.user_profile.enable' => 'Usar mi presentación con todos los personajes',
+    'settings.user_profile.label' => 'Mi presentación (opcional)',
+    'settings.user_profile.help' => 'Escribe unas frases sobre ti y tus preferencias. Si activas la opción, el texto se envía al modelo que responde, incluso si es remoto.',
     // --- cabecera y pestañas
     'settings.subtitle'         => 'Conexiones, conversaciones y apariencia — una pestaña por tema.',
     'settings.tabs_label'       => 'Secciones de los ajustes',

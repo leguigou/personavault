@@ -147,6 +147,19 @@ $facts = facts_settings();
         <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
 
         <section class="settings-card">
+            <h3 class="settings-card-title"><?= e(t('settings.user_profile.title')) ?></h3>
+            <label class="check">
+                <input type="checkbox" name="chat_user_profile_enabled" value="1" <?= setting('chat_user_profile_enabled', '0') === '1' ? 'checked' : '' ?>>
+                <span><?= e(t('settings.user_profile.enable')) ?></span>
+            </label>
+            <label class="field">
+                <span><?= e(t('settings.user_profile.label')) ?></span>
+                <textarea class="input" name="chat_user_profile" rows="3" maxlength="<?= CHAT_USER_PROFILE_MAX ?>" aria-describedby="chat-user-profile-help"><?= e(setting('chat_user_profile', '')) ?></textarea>
+            </label>
+            <p class="hint" id="chat-user-profile-help"><?= e(t('settings.user_profile.help')) ?></p>
+        </section>
+
+        <section class="settings-card">
         <h3 class="settings-card-title"><?= e(t('settings.chat.connection_title')) ?> <?= $info('chat-model', t('settings.info.chat_model_label')) ?></h3>
         <div class="row2">
             <div class="field">

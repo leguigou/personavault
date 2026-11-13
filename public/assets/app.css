@@ -329,6 +329,19 @@ body::after {
 .topnav a.is-active { color: var(--text); background: rgba(var(--ink), .09); }
 
 .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.nav-chat-link { position: relative; }
+.nav-chat-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    z-index: 1;
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--bg);
+    border-radius: 50%;
+    background: #ef4444;
+}
+.tab-ico .nav-chat-dot { top: 0; right: calc(50% - 15px); }
 .logout-form { margin: 0; }
 
 .icon-btn {
@@ -2960,6 +2973,7 @@ textarea.input::-webkit-scrollbar-track { background: transparent; }
 @media (min-width: 900px) {
     .topbar { padding: 0 max(32px, calc(50vw - 558px)); }
     .topnav { display: flex; }
+    .topbar-actions .topbar-chat { display: none; }
     .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 20px; }
     .page { padding: 30px 32px 60px; }
 

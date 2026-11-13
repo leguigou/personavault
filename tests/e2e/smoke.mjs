@@ -76,6 +76,8 @@ await record('POST /login', await http('/login', { method: 'POST', form: { _toke
 
 const home = await http('/');
 const homeHtml = await home.text();
+expect(homeHtml.includes('data-chat-unread>'), 'le point de notification est visible avec une discussion non lue');
+expect((await (await http('/chat/unread')).json()).unread === true, 'le statut de notification indique un nouveau message');
 const csrf = token(homeHtml);
 const media = (homeHtml.match(/src="(\/media\/[^"]+)"/) || [])[1] || '/media/absent.webp';
 
@@ -92,6 +94,9 @@ for (const u of ['/', '/?fav=1', '/?arch=1', '/?q=lis', '/?tag=romance', '/p/new
     if (u === '/export.json') expect((JSON.parse(body).personas || []).length === 3, 'l’export JSON contient les 3 personas');
     if (u === '/chat/1') expect(body.includes('Message 11'), 'la discussion affiche ses messages');
 }
+expect((await (await http('/chat/unread')).json()).unread === false
+    && (await (await http('/')).text()).includes('data-chat-unread hidden>'),
+    'le point de notification disparaît après lecture de la dernière discussion non lue');
 await record('GET /media/(portrait)', await http(media));
 
 // --- exports (conversation, fiche) et import d'une fiche
@@ -180,9 +185,14 @@ await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_fo
 await post('/settings', { provider: 'deepseek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', api_key: '' });
 await post('/settings/chat', { chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`, chat_model: 'fake-model',
     chat_memory_threshold: '600', chat_memory_target: '300', chat_split_words: '50', chat_split_max_bubbles: '1',
-    facts_frequency: 'each', chat_title_model: 'chat' });
+    facts_frequency: 'each', chat_title_model: 'chat', chat_user_profile_enabled: '1', chat_user_profile: 'Je préfère les voyages en train.' });
+const profileSettings = await (await http('/settings')).text();
+expect(profileSettings.includes('name="chat_user_profile_enabled" value="1" checked')
+    && profileSettings.includes('Je préfère les voyages en train.'), 'la présentation globale est enregistrée et activée');
 const sse = await post('/chat/1/stream', { message: 'Bonjour, test du flux' });
 expect(sse.includes('"delta"') && sse.includes('"done"'), 'la réponse arrive en streaming jusqu’au bout');
+expect((await (await http('/settings/logs')).text()).includes('Je préfère les voyages en train.'),
+    'la présentation activée arrive dans la requête au modèle');
 // régénérer deux fois : l'ancienne réponse est gardée, on navigue entre les versions (‹ 2/2 ›)
 const regen1 = await post('/chat/1/stream', { regen: '1' }, '/chat/1/stream (régénérer)');
 expect(/"versions":\{"index":2,"total":2\}/.test(regen1), 'la régénération garde l’ancienne réponse comme version 1/2');

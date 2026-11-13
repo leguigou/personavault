@@ -6,6 +6,10 @@
  * Certains textes sur plusieurs lignes gardent l'indentation de la page (sortie HTML identique).
  */
 return [
+    'settings.user_profile.title' => 'À propos de moi',
+    'settings.user_profile.enable' => 'Utiliser ma présentation avec tous les personas',
+    'settings.user_profile.label' => 'Ma présentation (facultative)',
+    'settings.user_profile.help' => 'Quelques phrases sur toi et tes préférences. Quand l’option est activée, ce texte est transmis au modèle utilisé pour répondre, y compris s’il est distant.',
     // --- en-tête et onglets
     'settings.subtitle'         => 'Connexions, discussions et apparence — un onglet par sujet.',
     'settings.tabs_label'       => 'Sections des réglages',

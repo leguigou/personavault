@@ -56,6 +56,7 @@ for ($i = 1; $i <= 12; $i++) {
         : "Réponse $i : quelle belle journée, raconte-moi la suite !"]);
 }
 $pdo->prepare('UPDATE messages SET image = ? WHERE id = ?')->execute([fetch_photos($c)[0]['file'], (int) $pdo->lastInsertId() - 1]);
+$pdo->prepare('UPDATE conversations SET unread = 1 WHERE id = ?')->execute([$cid]);
 $pdo->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$ids['ines-morel'], 'Pellicule']);
 facts_add($c, 'Prend souvent le train', 'fait', 'confirme', $cid);
 
