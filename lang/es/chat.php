@@ -4,6 +4,8 @@
  * Mismas claves que lang/fr/chat.php (referencia). Se tutea al usuario, como en francés.
  */
 return [
+    'chat.klipy_format_disabled' => 'Este formato de KLIPY está desactivado en esta conversación.',
+    'chat.klipy_no_media' => 'KLIPY no encontró contenido para esta solicitud.',
     'chat.reasoning_inherited_level' => 'Ajuste heredado · {level}',
     'chat.klipy_formats' => 'Contenido espontáneo de KLIPY',
     'chat.klipy_inherit' => 'Usar los ajustes del personaje',

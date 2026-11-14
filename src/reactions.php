@@ -187,6 +187,7 @@ final class ChatReactionStream
     private ?string $head = '';
     private bool $skipLeadingSpace = false;
     private string $pending = '';
+    private string $mediaPending = '';
 
     public function __construct(private readonly bool $canReact)
     {
@@ -226,7 +227,29 @@ final class ChatReactionStream
                 $text = substr($text, 0, $start);
             }
         }
+        $text = $this->filterMedia($text);
         $this->content .= $text;
+        return $text;
+    }
+
+    private function filterMedia(string $delta, bool $finished = false): string
+    {
+        $text = $this->mediaPending . $delta;
+        $this->mediaPending = '';
+        $text = preg_replace('/\[\h*(?:gif|sticker|clip|vidéo|video)\b[^\]\r\n]*\](?!\()/iu', '', $text) ?? $text;
+        if (!preg_match('/\[[^\]\r\n]*$/u', $text, $tail, PREG_OFFSET_CAPTURE)) {
+            return $text;
+        }
+        [$fragment, $start] = $tail[0];
+        $prefix = strtolower(ltrim(substr($fragment, 1)));
+        foreach (['gif', 'sticker', 'clip', 'vidéo', 'video'] as $kind) {
+            if (str_starts_with($kind, $prefix) || preg_match('/^' . $kind . '\b/u', $prefix)) {
+                if (!$finished) {
+                    $this->mediaPending = $fragment;
+                }
+                return substr($text, 0, $start);
+            }
+        }
         return $text;
     }
 
@@ -248,8 +271,9 @@ final class ChatReactionStream
         $tail = $this->head ?? '';
         $this->head = null;
         if (str_starts_with(strtolower(ltrim($tail)), '[reaction')) {
-            return '';
+            $tail = '';
         }
+        $tail = $this->filterMedia($tail, true);
         $this->content .= $tail;
         return $tail;
     }

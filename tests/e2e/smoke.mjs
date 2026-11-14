@@ -578,6 +578,16 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(animated?.klipy_url === gifUrl, 'le GIF KLIPY accompagne la réponse en direct');
     expect((await (await http('/chat/1')).text()).includes(gifUrl), 'le GIF est restauré au rechargement');
     expect((await celebrate())?.klipy_url === '', 'les GIF spontanés sont espacés');
+    const requestGif = async () => (await (await submit('/chat/1/stream', { message: 'Envoie-moi un GIF avec un clin d’œil' })).text());
+    const explicit = await requestGif();
+    const explicitEvents = explicit.split('\n').filter(line => line.startsWith('data: ')).map(line => JSON.parse(line.slice(6)));
+    expect(!explicitEvents.map(event => event.delta || '').join('').includes('[G')
+        && explicitEvents.find(event => event.done)?.reply?.klipy_url === 'https://static.klipy.com/test/wink.gif',
+        'une demande explicite affiche un vrai GIF même pendant le délai, sans description dans le flux');
+    expect(/<figure class="bubble chat-klipy">\s*<img src="https:\/\/static\.klipy\.com\/test\/wink\.gif"/.test(await (await http('/chat/1')).text()),
+        'le GIF demandé est conservé dans sa propre bulle');
+    await submit('/chat/1/klipy', {});
+    expect((await requestGif()).includes('Ce format KLIPY est désactivé'), 'une demande explicite signale un format désactivé');
     const stickerChat = (await submit('/chat/1/new', {})).headers.get('location');
     await submit(stickerChat + '/klipy', {});
     expect((await celebrate(stickerChat))?.klipy_url === '', 'décocher tous les formats désactive les médias de la discussion');

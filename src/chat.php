@@ -2066,7 +2066,7 @@ function reply_version_archive(int $cid, int $userMsgId): void
             }
         }
     }
-    if (trim($content) === '') {
+    if (trim($content) === '' && $original['klipy_url'] === '') {
         return;
     }
     $first = $reactions[0] ?? '';
@@ -2082,13 +2082,13 @@ function reply_version_archive(int $cid, int $userMsgId): void
 /** Enregistre la réponse $msgId comme nouvelle version de la réponse à $userMsgId. */
 function reply_version_register(int $cid, int $userMsgId, int $msgId): void
 {
-    $st = db()->prepare('SELECT content, model, split_points FROM messages WHERE id = ?');
+    $st = db()->prepare('SELECT content, model, split_points, klipy_url FROM messages WHERE id = ?');
     $st->execute([$msgId]);
     $m = $st->fetch();
     if (!$m) {
         return;
     }
-    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points) VALUES (?, ?, ?, ?, ?)')
-        ->execute([$cid, $userMsgId, (string) $m['content'], (string) $m['model'], (string) $m['split_points']]);
+    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, klipy_url) VALUES (?, ?, ?, ?, ?, ?)')
+        ->execute([$cid, $userMsgId, $m['content'], $m['model'], $m['split_points'], $m['klipy_url']]);
     db()->prepare('UPDATE messages SET version_id = ? WHERE id = ?')->execute([(int) db()->lastInsertId(), $msgId]);
 }

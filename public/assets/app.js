@@ -2952,6 +2952,7 @@
             holder.className = "bubbles";
             if (img && content !== "") wrap.appendChild(img);
             parts.forEach((part, i) => {
+                if (m.role === "assistant" && part === "") return;
                 const item = document.createElement("div");
                 item.className = "msg-bubble";
                 item.dataset.bubbleIndex = String(i);
@@ -2970,7 +2971,7 @@
             });
             if (m.klipy_url) {
                 const figure = document.createElement("figure");
-                figure.className = "chat-klipy";
+                figure.className = "bubble chat-klipy";
                 const isClip = m.klipy_url.toLowerCase().endsWith(".mp4");
                 const media = document.createElement(isClip ? "video" : "img");
                 if (isClip) {
@@ -4855,6 +4856,7 @@
                     let buf = "";
                     let finalReply = null;
                     let finalNotice = null;
+                    let mediaNotice = "";
                     let failed = "";
                     let failedKind = "error";
                     let keptUser = false;
@@ -4903,6 +4905,7 @@
                                 finalReply = evt.reply || null;
                                 if (evt.relationship_pending) scheduleRelationship(300000);
                                 finalNotice = evt.notice || null;
+                                mediaNotice = evt.media_notice || "";
                                 skipped = evt.skipped === true;
                                 if (evt.user_reaction) paintUserReaction(evt.user_reaction);
                             } else if (evt.error) {
@@ -4934,6 +4937,7 @@
                     }
                     settleLive(finalReply);
                     if (finalNotice) notice(finalNotice.content);
+                    if (mediaNotice) notice(mediaNotice);
                 }
 
                 scrollBottom();
