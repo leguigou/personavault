@@ -62,9 +62,11 @@ return [
     // {count} est remplacé par un <span> (le JavaScript met le nombre à jour) ; {n} choisit la forme
     'chat.intro.first_message'      => 'Écris le premier message.',
     'chat.intro.starters_label' => 'Idées pour commencer',
-    'chat.intro.starter_1' => 'Salut ! Comment vas-tu ?',
-    'chat.intro.starter_2' => 'Raconte-moi ta journée.',
-    'chat.intro.starter_3' => 'Parle-moi un peu de toi.',
+    'chat.intro.starters_more' => 'Autres idées',
+    'chat.intro.starters' => 'Salut {name} ! Tu fais quoi de beau aujourd’hui ?|Qu’est-ce qui te met de bonne humeur en ce moment ?|Si tu pouvais m’emmener dans ton endroit préféré, on irait où ?'
+        . '|Salut {name} ! Qu’est-ce qui t’a fait sourire aujourd’hui ?|Tu as une petite habitude à laquelle tu tiens ?|Qu’est-ce que tu aimerais que je sache de toi ?'
+        . '|Salut {name} ! Tu as une anecdote à me raconter ?|À quoi ressemble une journée idéale pour toi ?|Qu’est-ce qui te passionne au point d’en oublier l’heure ?'
+        . '|Salut {name} ! À quoi tu pensais juste avant que j’arrive ?|Si on avait une heure devant nous, tu proposerais quoi ?|Il y a quelque chose que tu rêves d’essayer un jour ?',
     'chat.msg.photo_sent'           => 'Photo envoyée',
     'chat.composer.attach_preview'  => 'Aperçu de la photo jointe',
     'chat.composer.attach_remove'   => 'Retirer la photo',

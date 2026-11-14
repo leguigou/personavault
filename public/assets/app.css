@@ -3703,6 +3703,7 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
 /* idées de premier message (conversation vide) */
 .chat-starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; max-width: 420px; }
 .chat-starters .chip { cursor: pointer; font: inherit; font-size: 13px; }
+.chat-starters-more { border: 0; background: transparent; cursor: pointer; min-height: 36px; }
 .empty .btn { margin-top: 2px; }
 .empty-fav .empty-orb, .empty-arch .empty-orb, .empty-found .empty-orb { color: rgb(var(--acc)); }
 .empty-orb svg { color: rgb(var(--acc)); }
