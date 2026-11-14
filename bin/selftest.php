@@ -124,6 +124,8 @@ try {
     $pdo->prepare("UPDATE conversations SET summary = 'Résumé', last_compressed_id = ?, facts_cursor = ?, pinned = 1,
                    model_override = 'mon-modèle', title_auto = 0 WHERE id = ?")->execute([$sourceMid, $replyMid, $cid]);
     facts_add($pid, 'Souvenir de sauvegarde', 'preference', 'confirme', $cid);
+    facts_add($pid, 'Lisa prépare une exposition', 'projet', 'confirme', $cid, $replyMid);
+    $pdo->prepare("UPDATE conversations SET opening_questions = '[\"Ton exposition avance ?\"]' WHERE id = ?")->execute([$cid]);
     $pdo->exec("INSERT INTO user_memories (content) VALUES ('Souvenir global de sauvegarde')");
 
     $zip = backup_create_zip(true);
@@ -140,7 +142,7 @@ try {
     $res = backup_import_zip($zip['path']);
     $check($res['personas'] === 1 && $res['photos'] === 2 && $res['prompts'] === 2 && !$res['errors'],
         'import : 1 persona, 2 photos, 2 prompts (' . json_encode($res, JSON_UNESCAPED_UNICODE) . ')');
-    $check($res['conversations'] === 1 && $res['messages'] === 2 && $res['memories'] === 2, 'import : 1 conversation, 2 messages et 2 souvenirs');
+    $check($res['conversations'] === 1 && $res['messages'] === 2 && $res['memories'] === 3, 'import : 1 conversation, 2 messages et 3 souvenirs');
     $new = db()->query("SELECT * FROM personas WHERE slug = 'lisa-2'")->fetch();
     $check(is_array($new), 'persona importé sous un nouveau slug');
     if (is_array($new)) {
@@ -168,9 +170,13 @@ try {
         $check($copiedReply['content'] === 'Premier essai.' && $copiedReply['split_points'] === '[8]'
             && reply_versions_info((int) $copy['id'], $copiedReply) === ['index' => 1, 'total' => 2],
             'versions, découpage et réponse sélectionnée restaurés');
-        $memory = $pdo->query('SELECT * FROM user_memories WHERE persona_id = ' . $nid)->fetch();
+        $memory = $pdo->query("SELECT * FROM user_memories WHERE subject = 'user' AND persona_id = " . $nid)->fetch();
         $check($memory['source_conversation_id'] === $copy['id'] && $memory['content'] === 'Souvenir de sauvegarde'
             && $memory['category'] === 'preference', 'souvenir rattaché au persona et à la conversation importés');
+        $story = facts_relevant($nid, 'exposition', 1, 'story')[0] ?? [];
+        $check(($story['source_message_id'] ?? 0) === $copiedReply['id']
+            && json_list($copy['opening_questions']) === ['Ton exposition avance ?'],
+            'les souvenirs du persona sont rattachés au message importé et les questions sont restaurées');
         $check((int) $pdo->query('SELECT COUNT(*) FROM user_memories WHERE persona_id IS NULL')->fetchColumn() === 2,
             'souvenir global restauré sans persona');
     }
@@ -200,7 +206,7 @@ try {
     $restored = backup_import_zip($zip['path']);
     $check($restored['slugs'] === ['lisa'] && !$restored['errors']
         && (int) $pdo->query('SELECT COUNT(*) FROM conversations')->fetchColumn() === 1
-        && (int) $pdo->query('SELECT COUNT(*) FROM user_memories')->fetchColumn() === 2
+        && (int) $pdo->query('SELECT COUNT(*) FROM user_memories')->fetchColumn() === 3
         && $mediaExists((string) $pdo->query("SELECT image FROM messages WHERE role = 'user'")->fetchColumn()),
         'restauration des fiches, discussions, souvenirs et pièces jointes sur des données vides');
     $check(count(chat_persona_search((int) $pdo->query('SELECT id FROM personas')->fetchColumn(), 'regarde')) === 1,

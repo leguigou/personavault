@@ -6,6 +6,10 @@
  * Certains textes sur plusieurs lignes gardent l'indentation de la page (sortie HTML identique).
  */
 return [
+    'settings.look.chat_list'    => 'Présentation des discussions',
+    'settings.look.chat_threads' => 'Titres des conversations',
+    'settings.look.chat_contacts' => 'Carnet de contacts',
+    'logs.purpose.opening'       => 'Ouverture de conversation',
     'settings.user_profile.title' => 'À propos de moi',
     'settings.user_profile.enable' => 'Utiliser ma présentation avec tous les personas',
     'settings.user_profile.label' => 'Ma présentation (facultative)',

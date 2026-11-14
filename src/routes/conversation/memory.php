@@ -43,7 +43,7 @@ if ($action === 'remember' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
-    if ((int) ($conv['facts_enabled'] ?? 1) !== 1) {
+    if ((int) $conv['facts_enabled'] !== 1 || (int) $conv['memory_enabled'] !== 1) {
         echo json_encode([
             'ok'       => true,
             'added'    => [],
@@ -79,11 +79,7 @@ if ($action === 'remember' && $method === 'POST') {
     try {
         // jusqu'à 30 messages : en mode « tous les N », rien n'est sauté
         $slice = array_slice($recent, -30);
-        $res   = facts_extract($cid, (int) $persona['id'], $slice, $explicit);
-        if (($res['ok'] ?? false) && $slice) {
-            $lastId = (int) end($slice)['id'];
-            db()->prepare('UPDATE conversations SET facts_cursor = ? WHERE id = ?')->execute([$lastId, $cid]);
-        }
+        $res   = facts_extract($cid, (int) $persona['id'], $slice, $cursor, $explicit);
         $res['memories'] = chat_persona_memories((int) $persona['id']);
 
         // trace visible dans la conversation : la mémoire a bien été mise à jour.

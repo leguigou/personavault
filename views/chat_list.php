@@ -1,5 +1,5 @@
 <?php
-/** @var array $conversations @var array $personas @var bool $chatReady @var string $chatModel */
+/** @var array $conversations @var bool $contactView @var bool $chatReady @var string $chatModel */
 // « . "\n" » après un texte en fin de ligne : garde le saut de ligne qu’avalerait la balise PHP fermante.
 ?>
 <section class="lib-head">
@@ -10,10 +10,6 @@
             <span class="count"><?= count($conversations) ?></span>
         </h1>
     </div>
-    <button class="btn btn-primary btn-new" type="button" data-open-picker aria-label="<?= e(t('chat.list.new')) ?>" title="<?= e(t('chat.list.new')) ?>">
-        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-        <span class="btn-label"><?= e(t('chat.list.new')) ?></span>
-    </button>
 </section>
 
 <p class="chat-status <?= $chatReady ? '' : 'is-ko' ?>">
@@ -32,7 +28,7 @@
         </div>
         <h2><?= e(t('chat.list.empty_title')) ?></h2>
         <p><?= e(t('chat.list.empty_text')) ?></p>
-        <button class="btn btn-primary" type="button" data-open-picker><?= e(t('chat.list.pick_persona')) ?></button>
+        <a class="btn btn-primary" href="/"><?= e(t('nav.library')) ?></a>
     </div>
 <?php else: ?>
     <?php
@@ -67,9 +63,12 @@
                         </div>
                         <div class="conv-body">
                             <div class="conv-line">
-                                <strong><?php if ($pinned): ?><svg class="conv-pinned-ico" viewBox="0 0 24 24" aria-label="<?= e(t('chat.list.pinned')) ?>"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg><?php endif; ?><span data-conv-title-text><?= e((string) $c['title']) ?></span></strong>
+                                <strong><?php if ($pinned): ?><svg class="conv-pinned-ico" viewBox="0 0 24 24" aria-label="<?= e(t('chat.list.pinned')) ?>"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg><?php endif; ?><?php if ($contactView): ?><span><?= e((string) $c['persona_name']) ?></span><?php else: ?><span data-conv-title-text><?= e((string) $c['title']) ?></span><?php endif; ?></strong>
                                 <time datetime="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($when . ' UTC'))) ?>"><?= e(rel_time($when)) ?></time>
                             </div>
+                            <?php if ($contactView): ?>
+                                <span class="conv-thread-title" data-conv-title-text><?= e((string) $c['title']) ?></span>
+                            <?php endif; ?>
                             <div class="conv-line">
                                 <span class="conv-preview">
                                     <?php if ($preview === ''): ?>
@@ -122,39 +121,3 @@
         </div>
     </div>
 <?php endif; ?>
-
-<!-- popin de sélection du persona -->
-<div class="modal" id="persona-picker" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="picker-title">
-        <header class="modal-head">
-            <h2 id="picker-title"><?= e(t('chat.list.pick_persona')) ?></h2>
-            <button type="button" class="icon-btn btn-close" data-close-picker aria-label="<?= e(t('common.close')) ?>">&times;</button>
-        </header>
-
-        <input class="input" type="search" placeholder="<?= e(t('chat.list.search_persona')) ?>" data-picker-search autocomplete="off">
-
-        <div class="picker-grid">
-            <?php foreach ($personas as $p): ?>
-                <?php $hue = hue_for((string) $p['name']); ?>
-                <form method="post" action="/chat" class="picker-item" data-name="<?= e(mb_strtolower((string) $p['name'])) ?>">
-                    <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-                    <input type="hidden" name="persona_id" value="<?= (int) $p['id'] ?>">
-                    <button type="submit" style="--hue: <?= $hue ?>">
-                        <span class="picker-thumb">
-                            <?php if ($p['avatar']): ?>
-                                <img src="<?= e(media_url((string) $p['avatar'])) ?>" alt="">
-                            <?php else: ?>
-                                <span class="avatar-fallback"><span><?= e(initials((string) $p['name'])) ?></span></span>
-                            <?php endif; ?>
-                        </span>
-                        <span class="picker-name"><?= e((string) $p['name']) ?></span>
-                    </button>
-                </form>
-            <?php endforeach; ?>
-        </div>
-
-        <?php if (!$personas): ?>
-            <p class="hint"><?= e(t('chat.list.no_persona')) ?></p>
-        <?php endif; ?>
-    </div>
-</div>

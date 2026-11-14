@@ -24,13 +24,11 @@ return [
 
     // --- lista de conversaciones
     'chat.list.title'               => 'Mis conversaciones',
-    'chat.list.new'                 => 'Nueva',
     'chat.list.status_local'        => 'Chat local · {model}',
     'chat.list.model_auto'          => 'modelo automático',
     'chat.list.no_model'            => 'Ningún modelo de chat disponible',
     'chat.list.empty_title'         => 'Ninguna conversación',
     'chat.list.empty_text'          => 'Elige un persona y empieza a hablarle.',
-    'chat.list.pick_persona'        => 'Elegir un persona',
     'chat.list.no_message'          => 'Todavía no hay mensajes',
     'chat.list.pinned' => 'Fijadas',
     'chat.list.recent' => 'Recientes',
@@ -45,12 +43,9 @@ return [
     'chat.list.delete' => 'Eliminar la conversación',
     'chat.list.delete_confirm' => '¿Eliminar «{title}»? Los mensajes se borrarán definitivamente (los recuerdos del persona se conservan).',
     'chat.list.long_press_hint' => 'Consejo: mantén pulsada una conversación para fijarla o eliminarla.',
-    'chat.list.search_persona'      => 'Buscar un persona…',
-    'chat.list.no_persona'          => 'No hay ningún persona en la biblioteca. Crea una ficha primero.',
 
     // --- conversación: columna lateral y cabecera
     'chat.side.all'                 => 'Todas',
-    'chat.side.new'                 => 'Nueva conversación',
     'chat.head.back'                => 'Todas las conversaciones',
     'chat.head.open_persona'        => 'Abrir la ficha del personaje',
     'chat.head.model_state'         => 'Estado del modelo',
@@ -59,7 +54,11 @@ return [
     'chat.head.settings'            => 'Ajustes de la conversación',
 
     // --- conversación: mensajes y redacción
-    'chat.intro.first_message'      => 'Escribe el primer mensaje.',
+    'chat.intro.first_message'      => 'Puedes escribir un mensaje.',
+    'chat.intro.preparing'          => '{name} está preparando su primer mensaje…',
+    'chat.head.new'                => 'Nueva conversación con este persona',
+    'chat.intro.you'               => 'tú',
+    'chat.facts.story'             => 'Historia del personaje',
     'chat.intro.starters_label' => 'Ideas para empezar',
     'chat.intro.starters_more' => 'Más ideas',
     'chat.intro.starters' => '¡Hola, {name}! ¿Qué planes tienes hoy?|¿Qué te pone de buen humor últimamente?|Si me llevaras a tu lugar favorito, ¿adónde iríamos?'

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/* Mémoire longue : faits durables sur l'utilisateur, avec recherche FTS5. */
+/* Mémoire longue : faits sur l'utilisateur et continuité du persona, avec recherche FTS5. */
 
 /** Catégories de souvenirs : code => libellé dans la langue de l'interface. */
 function facts_categories(): array
@@ -80,7 +80,7 @@ function facts_list(?int $personaId = null, string $q = '', int $limit = 200): a
 function chat_persona_memories(int $personaId, int $limit = 20): array
 {
     $stmt = db()->prepare(
-        'SELECT id, category, content, confidence, persona_id
+        'SELECT id, category, content, confidence, persona_id, subject
          FROM user_memories
          WHERE persona_id = ? OR persona_id IS NULL
          ORDER BY updated_at DESC LIMIT ' . max(1, $limit)
@@ -89,20 +89,25 @@ function chat_persona_memories(int $personaId, int $limit = 20): array
     return $stmt->fetchAll();
 }
 
-function facts_add(int $personaId, string $content, string $category = 'fait', string $confidence = 'confirme', ?int $conversationId = null): int
+function facts_add(
+    int $personaId, string $content, string $category = 'fait', string $confidence = 'confirme',
+    ?int $conversationId = null, ?int $storyMessageId = null
+): int
 {
     $content = trim($content);
     if ($content === '') {
         return 0;
     }
-    $stmt = db()->prepare('INSERT INTO user_memories (persona_id, category, content, confidence, source_conversation_id)
-                           VALUES (?,?,?,?,?)');
+    $stmt = db()->prepare('INSERT INTO user_memories (persona_id, category, content, confidence, source_conversation_id, subject, source_message_id)
+                           VALUES (?,?,?,?,?,?,?)');
     $stmt->execute([
         $personaId > 0 ? $personaId : null,
         array_key_exists($category, facts_categories()) ? $category : 'fait',
         mb_substr($content, 0, 400),
         array_key_exists($confidence, facts_confidences()) ? $confidence : 'confirme',
         $conversationId,
+        $storyMessageId === null ? 'user' : 'story',
+        $storyMessageId,
     ]);
     return (int) db()->lastInsertId();
 }
@@ -139,7 +144,7 @@ function facts_norm(string $s): string
  * Souvenirs pertinents pour un message (FTS5), sinon les plus récents.
  * @return array<int, array>
  */
-function facts_relevant(?int $personaId, string $query, int $limit = 5): array
+function facts_relevant(?int $personaId, string $query, int $limit = 5, string $subject = 'user'): array
 {
     // mots vides (français, anglais, espagnol) ; les mots de moins de 4 lettres sont ignorés de toute façon
     $stop = ['avec', 'pour', 'dans', 'mais', 'tout', 'tous', 'elle', 'nous', 'vous', 'ils', 'elles',
@@ -179,10 +184,10 @@ function facts_relevant(?int $personaId, string $query, int $limit = 5): array
                 'SELECT m.* FROM user_memories_fts f
                  JOIN user_memories m ON m.id = f.rowid
                  WHERE user_memories_fts MATCH ?
-                   AND (m.persona_id = ? OR m.persona_id IS NULL)
+                   AND m.subject = ? AND (m.persona_id = ? OR (m.persona_id IS NULL AND m.subject = "user"))
                  ORDER BY rank LIMIT ' . max(1, $limit)
             );
-            $stmt->execute([$match, $personaId]);
+            $stmt->execute([$match, $subject, $personaId]);
             $rows = $stmt->fetchAll();
         } catch (Throwable $e) {
             $rows = [];
@@ -191,10 +196,10 @@ function facts_relevant(?int $personaId, string $query, int $limit = 5): array
 
     if (!$rows) {
         $stmt = db()->prepare(
-            'SELECT * FROM user_memories WHERE persona_id = ? OR persona_id IS NULL
-             ORDER BY updated_at DESC LIMIT ' . max(1, $limit)
+            'SELECT * FROM user_memories WHERE subject = ? AND (persona_id = ? OR (persona_id IS NULL AND subject = "user"))
+             ORDER BY updated_at DESC, id DESC LIMIT ' . max(1, $limit)
         );
-        $stmt->execute([$personaId]);
+        $stmt->execute([$subject, $personaId]);
         $rows = $stmt->fetchAll();
     }
 
@@ -213,6 +218,24 @@ function facts_format(array $rows): string
         $lines[] = '- [' . $cat . '] ' . $r['content'];
     }
     return implode("\n", $lines);
+}
+
+/** Contexte distinct pour éviter de prendre la vie fictive du persona pour des faits sur l'utilisateur. */
+function facts_context(array $rows): string
+{
+    $groups = ['user' => [], 'story' => []];
+    foreach ($rows as $row) {
+        $groups[($row['subject'] ?? 'user') === 'story' ? 'story' : 'user'][] = $row;
+    }
+    $parts = [];
+    if ($groups['user']) {
+        $parts[] = "Ce que tu sais déjà de l'utilisateur (mémoire longue, à utiliser sans le réciter) :\n" . facts_format($groups['user']);
+    }
+    if ($groups['story']) {
+        $parts[] = "Souvenirs de ta propre histoire et de vos moments partagés. Respecte la fiche du persona et ne suppose pas qu'un projet s'est réalisé :\n"
+            . facts_format($groups['story']);
+    }
+    return implode("\n\n", $parts);
 }
 
 /**
@@ -273,15 +296,17 @@ function facts_should_run(int $newMessages, bool $explicit, bool $force = false)
     };
 }
 
-function facts_extract(int $cid, int $personaId, array $messages, bool $explicit = false): array
+function facts_extract(int $cid, int $personaId, array $messages, int $cursor, bool $explicit = false): array
 {
     $transcript = '';
+    $sources = [];
     foreach ($messages as $m) {
         if (!in_array((string) $m['role'], ['user', 'assistant'], true)) {
             continue;
         }
         $who = $m['role'] === 'user' ? 'Utilisateur' : 'Personnage';
-        $transcript .= $who . ' : ' . mb_substr(trim((string) $m['content']), 0, 1200) . "\n\n";
+        $sources[] = $m;
+        $transcript .= '[' . count($sources) . '] ' . $who . ' : ' . mb_substr(trim((string) $m['content']), 0, 1200) . "\n\n";
     }
     if (trim($transcript) === '') {
         return ['ok' => true, 'added' => [], 'updated' => 0, 'removed' => 0];
@@ -290,7 +315,7 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
     $known = facts_list($personaId, '', 40);
     $knownLines = '';
     foreach ($known as $k) {
-        $knownLines .= '#' . $k['id'] . ' [' . $k['category'] . '] ' . $k['content'] . "\n";
+        $knownLines .= '#' . $k['id'] . ' [' . $k['subject'] . '/' . $k['category'] . '] ' . $k['content'] . "\n";
     }
 
     $lastUser = '';
@@ -307,6 +332,14 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
             . "note…) : tu DOIS enregistrer ce fait, même s'il ne parle pas de lui, même s'il paraît anodin. "
             . "Formule-le tel qu'il devra être rappelé plus tard.";
     }
+    $system .= "\nEn plus de memories et forget, ajoute le tableau story à l'objet JSON. "
+        . "Dans story uniquement, mémorise les événements concrets de la vie du persona, ses projets en cours et les moments partagés "
+        . "qui comptent pour la suite. Garde seulement ce qui a été clairement raconté par le persona ou confirmé par lui "
+        . "dans un message numéroté de l'échange. Ignore les salutations, les scènes hypothétiques, les plaisanteries et les simples suggestions. "
+        . "Écris à la troisième personne et distingue un projet d'un fait accompli. Ne transforme pas ces éléments en faits sur l'utilisateur. "
+        . 'Chaque entrée de story a la forme {"source":2,"category":"fait|projet|decision","content":"phrase courte","replaces":null}. '
+        . "source désigne le numéro du message du persona qui établit le souvenir. replaces désigne l'identifiant d'un souvenir story "
+        . "du même persona que la nouvelle information actualise. Omet les faits que tu as déjà sous une autre forme.";
 
     $user = "Mémoires existantes :\n" . ($knownLines !== '' ? $knownLines : '(aucune)')
         . "\nDernier message de l'utilisateur (le plus important) :\n" . ($lastUser !== '' ? $lastUser : '(aucun)')
@@ -319,7 +352,7 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
     $opts = [
         'purpose'          => 'facts',
         'temperature'      => 0.2,
-        'max_tokens'       => 700,
+        'max_tokens'       => 900,
         'timeout'          => 120,
         // le réglage « réflexion » concerne le modèle local de discussion
         'reasoning_effort' => $remote ? '' : setting('chat_reasoning_effort', 'none'),
@@ -340,6 +373,32 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
         return ['ok' => false, 'added' => [], 'updated' => 0, 'removed' => 0, 'error' => $e->getMessage()];
     }
 
+    return db_tx(static function (PDO $pdo) use ($cid, $personaId, $json, $sources, $known, $cursor): array {
+        $check = $pdo->prepare('SELECT 1 FROM conversations WHERE id = ? AND facts_cursor = ? AND memory_enabled = 1 AND facts_enabled = 1');
+        $check->execute([$cid, $cursor]);
+        $unchanged = (bool) $check->fetchColumn();
+        // Pendant l'appel au modèle, l'utilisateur peut continuer à écrire ou modifier une réponse.
+        $check = $pdo->prepare('SELECT content, version_id FROM messages WHERE conversation_id = ? AND id = ?');
+        foreach ($sources as $source) {
+            if (!$unchanged) {
+                break;
+            }
+            $check->execute([$cid, $source['id']]);
+            $row = $check->fetch();
+            $unchanged = $row && $row['content'] === $source['content'] && $row['version_id'] === $source['version_id'];
+        }
+        if (!$unchanged) {
+            return ['ok' => true, 'added' => [], 'updated' => 0, 'removed' => 0];
+        }
+        $result = facts_save_extraction($cid, $personaId, $json, $sources, $known);
+        $pdo->prepare('UPDATE conversations SET facts_cursor = ? WHERE id = ?')
+            ->execute([(int) end($sources)['id'], $cid]);
+        return $result;
+    });
+}
+
+function facts_save_extraction(int $cid, int $personaId, array $json, array $sources, array $known): array
+{
     $added   = [];
     $updated = 0;
     $removed = 0;
@@ -348,9 +407,27 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
     // seuls les souvenirs MONTRÉS au modèle (ce persona + globaux) peuvent être modifiés
     // ou oubliés : un ID inventé (ou injecté dans la conversation) est ignoré
     $knownIds = [];
+    $storyIds = [];
+    $storySeen = [];
+    $current = array_column(facts_list($personaId, '', 200), null, 'id');
     foreach ($known as $k) {
-        $seen[facts_norm((string) $k['content'])] = (int) $k['id'];
-        $knownIds[(int) $k['id']] = true;
+        $id = (int) $k['id'];
+        if (!isset($current[$id]) || $current[$id]['content'] !== $k['content'] || $current[$id]['updated_at'] !== $k['updated_at']) {
+            continue;
+        }
+        if ($k['subject'] === 'story' && (int) $k['persona_id'] === $personaId) {
+            $storyIds[$id] = true;
+        } elseif ($k['subject'] === 'user') {
+            $knownIds[$id] = true;
+        }
+    }
+    foreach ($current as $k) {
+        $norm = facts_norm((string) $k['content']);
+        if ($k['subject'] === 'story') {
+            $storySeen[$norm] = (int) $k['id'];
+        } else {
+            $seen[$norm] = (int) $k['id'];
+        }
     }
 
     $items = $json['memories'] ?? [];
@@ -394,6 +471,38 @@ function facts_extract(int $cid, int $personaId, array $messages, bool $explicit
                 $removed++;
             }
         }
+    }
+
+    $story = $json['story'] ?? [];
+    foreach (is_array($story) ? array_slice($story, 0, 5) : [] as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $sourceNo = filter_var($item['source'] ?? null, FILTER_VALIDATE_INT);
+        $source = $sourceNo > 0 ? ($sources[$sourceNo - 1] ?? null) : null;
+        $content = is_string($item['content'] ?? null) ? trim($item['content']) : '';
+        if (($source['role'] ?? '') !== 'assistant' || !empty($source['reaction_reply']) || mb_strlen($content) < 6) {
+            continue;
+        }
+        $norm = facts_norm($content);
+        if (isset($storySeen[$norm])) {
+            continue;
+        }
+        $category = is_string($item['category'] ?? null) ? $item['category'] : 'fait';
+        $replace = filter_var($item['replaces'] ?? null, FILTER_VALIDATE_INT);
+        $sourceId = (int) $source['id'];
+        if ($replace && isset($storyIds[$replace])) {
+            facts_update($replace, $content, $category, 'confirme');
+            db()->prepare('UPDATE user_memories SET source_conversation_id = ?, source_message_id = ? WHERE id = ?')
+                ->execute([$cid, $sourceId, $replace]);
+            $storySeen[$norm] = $replace;
+            unset($storyIds[$replace]);
+            $updated++;
+            continue;
+        }
+        $id = facts_add($personaId, $content, $category, 'confirme', $cid, $sourceId);
+        $storySeen[$norm] = $id;
+        $added[] = $content;
     }
 
     return ['ok' => true, 'added' => $added, 'updated' => $updated, 'removed' => $removed];

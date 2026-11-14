@@ -14,5 +14,6 @@ render('detail', [
     'persona' => $persona,
     'photos'  => $photos,
     'prompts' => $prompts,
+    'latestConversation' => chat_latest_conversation($pid),
 ]);
 exit;

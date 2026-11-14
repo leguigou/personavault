@@ -24,13 +24,11 @@ return [
 
     // --- liste des discussions
     'chat.list.title'               => 'Mes conversations',
-    'chat.list.new'                 => 'Nouvelle',
     'chat.list.status_local'        => 'Discussion locale · {model}',
     'chat.list.model_auto'          => 'modèle auto',
     'chat.list.no_model'            => 'Aucun modèle de discussion joignable',
     'chat.list.empty_title'         => 'Aucune discussion',
     'chat.list.empty_text'          => 'Choisis un persona et commence à lui parler.',
-    'chat.list.pick_persona'        => 'Choisir un persona',
     'chat.list.no_message'          => 'Pas encore de message',
     'chat.list.pinned' => 'Épinglées',
     'chat.list.recent' => 'Récentes',
@@ -45,12 +43,9 @@ return [
     'chat.list.delete' => 'Supprimer la conversation',
     'chat.list.delete_confirm' => 'Supprimer « {title} » ? Les messages seront effacés définitivement (les souvenirs du persona sont gardés).',
     'chat.list.long_press_hint' => 'Astuce : reste appuyé sur une conversation pour l\'épingler ou la supprimer.',
-    'chat.list.search_persona'      => 'Chercher un persona…',
-    'chat.list.no_persona'          => 'Aucun persona en bibliothèque. Crée une fiche d’abord.',
 
     // --- conversation : colonne latérale et en-tête
     'chat.side.all'                 => 'Toutes',
-    'chat.side.new'                 => 'Nouvelle discussion',
     'chat.head.back'                => 'Toutes les discussions',
     'chat.head.open_persona'        => 'Ouvrir la fiche du personnage',
     'chat.head.model_state'         => 'État du modèle',
@@ -60,7 +55,11 @@ return [
 
     // --- conversation : messages et composeur
     // {count} est remplacé par un <span> (le JavaScript met le nombre à jour) ; {n} choisit la forme
-    'chat.intro.first_message'      => 'Écris le premier message.',
+    'chat.intro.first_message'      => 'Tu peux écrire un message.',
+    'chat.intro.preparing'          => '{name} prépare son premier message…',
+    'chat.head.new'                => 'Nouvelle conversation avec ce persona',
+    'chat.intro.you'               => 'toi',
+    'chat.facts.story'             => 'Histoire du persona',
     'chat.intro.starters_label' => 'Idées pour commencer',
     'chat.intro.starters_more' => 'Autres idées',
     'chat.intro.starters' => 'Salut {name} ! Tu fais quoi de beau aujourd’hui ?|Qu’est-ce qui te met de bonne humeur en ce moment ?|Si tu pouvais m’emmener dans ton endroit préféré, on irait où ?'

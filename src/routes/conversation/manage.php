@@ -6,6 +6,15 @@ declare(strict_types=1);
  * Inclus par src/routes/conversation.php ($cid, $action, $conv, $persona, $personaPrompts).
  */
 
+if ($action === 'new' && $method === 'POST') {
+    csrf_check();
+    $newId = chat_create_conversation($persona);
+    if ($newId === 0) {
+        flash('error', t('flash.chat.pick_persona'));
+    }
+    redirect('/chat/' . ($newId ?: $cid));
+}
+
 /* --- modèle de cette conversation seulement (pour tester ; vide = celui du persona) --- */
 if ($action === 'model-override' && $method === 'POST') {
     $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';

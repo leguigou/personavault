@@ -68,6 +68,8 @@ if ($path === '/settings/ui' && $method === 'POST') {
     set_setting('ui_accent', in_array($accent, UI_ACCENTS, true) ? $accent : 'violet');
     $mode = (string) ($_POST['ui_mode'] ?? 'dark');
     set_setting('ui_mode', in_array($mode, UI_MODES, true) ? $mode : 'dark');
+    $chatList = (string) ($_POST['ui_chat_list'] ?? setting('ui_chat_list', 'threads'));
+    set_setting('ui_chat_list', $chatList === 'contacts' ? 'contacts' : 'threads');
     set_setting('ui_avatars', !empty($_POST['ui_avatars']) ? '1' : '0');
     // langue de l'interface : « auto » (navigateur) ou une langue installée dans lang/
     $lang = (string) ($_POST['ui_lang'] ?? 'auto');

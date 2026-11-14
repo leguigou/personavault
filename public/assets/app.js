@@ -2353,29 +2353,6 @@
         document.body.style.overflow = "";
     };
 
-    const picker = document.getElementById("persona-picker");
-    if (picker) {
-        const search = picker.querySelector("[data-picker-search]");
-        document.querySelectorAll("[data-open-picker]").forEach((b) =>
-            b.addEventListener("click", () => {
-                modalOpen(picker);
-                search?.focus();
-            })
-        );
-        picker.querySelectorAll("[data-close-picker]").forEach((b) =>
-            b.addEventListener("click", () => modalClose(picker))
-        );
-        picker.addEventListener("click", (e) => {
-            if (e.target === picker) modalClose(picker);
-        });
-        search?.addEventListener("input", () => {
-            const q = search.value.trim().toLowerCase();
-            picker.querySelectorAll(".picker-item").forEach((item) => {
-                item.hidden = q !== "" && !(item.dataset.name || "").includes(q);
-            });
-        });
-    }
-
     /* liste des discussions : appui long (mobile), clic droit ou « ⋯ » → menu d'actions */
     const convSheet = document.getElementById("conv-actions");
     // posées dans <main>, ces fenêtres passeraient sous la barre du bas : on les sort dans <body>
@@ -2706,7 +2683,6 @@
     document.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
         if (chatSheet && chatSheet.classList.contains("is-open")) setSheet(false);
-        if (picker && !picker.hidden) modalClose(picker);
         document.querySelectorAll(".modal[data-modal]:not([hidden])").forEach(modalClose);
     });
 
@@ -2762,6 +2738,7 @@
         const endpoint = chat.dataset.send;
         const token = chat.dataset.token;
         let busy = false;
+        let opening = Boolean(chat.dataset.opening);
 
         /* ---------- suivi du bas de la discussion (comme Claude)
            - en bas : la conversation suit les nouveaux messages (« collé ») ;
@@ -2846,7 +2823,10 @@
             });
         }
 
-        const clearIntro = () => chat.querySelector(".chat-intro")?.remove();
+        const clearIntro = () => {
+            chat.querySelector(".chat-intro")?.remove();
+            chat.querySelector("[data-opening-questions]")?.remove();
+        };
 
         const bubble = (text, role) => {
             const wrap = document.createElement("div");
@@ -3259,7 +3239,7 @@
                 li.dataset.fid = f.id;
                 const s = document.createElement("span");
                 s.className = "fact-txt";
-                s.textContent = f.content;
+                s.textContent = f.subject === "story" ? tr("facts.story") + " · " + f.content : f.content;
                 const b = document.createElement("button");
                 b.type = "button";
                 b.className = "fact-del";
@@ -3512,7 +3492,7 @@
                 if (!d.ok || !d.title) return;
 
                 chat.dataset.autoTitle = "0";
-                const row = document.querySelector(".chat-side-row.is-on .chat-side-name");
+                const row = document.querySelector(".chat-side-row.is-on [data-side-title]");
                 if (row) row.textContent = d.title;
                 const head = document.querySelector("#chat-settings .sheet-head h2");
                 if (head) head.textContent = d.title;
@@ -3544,7 +3524,7 @@
 
         const syncSend = () => {
             // pendant une génération le bouton reste actif : il sert à arrêter
-            sendBtn.disabled = !busy && input.value.trim() === "" && !pendingFile;
+            sendBtn.disabled = opening || (!busy && input.value.trim() === "" && !pendingFile);
         };
 
         const streamUrl = endpoint.replace(/\/send$/, "/stream");
@@ -3979,7 +3959,9 @@
             }
 
             if (isBot) tools.appendChild(reactionTrigger(toolBtn("react", ICONS.react, tr("chat.react"))));
-            if (isLastBot) tools.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
+            if (isLastBot && scroll.querySelector(".msg-user[data-msg-id]")) {
+                tools.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
+            }
             // seuls mes messages sont modifiables : ceux du personnage se régénèrent ou se suppriment
             if (!isBot) tools.appendChild(toolBtn("edit", ICONS.edit, tr("chat.edit")));
             tools.appendChild(toolBtn("del", ICONS.del, tr("chat.delete")));
@@ -3989,13 +3971,13 @@
         /* idées de premier message : remplit la zone de saisie (sans envoyer) */
         const starters = chat.querySelector("[data-starter-packs]");
         const starterButtons = starters?.querySelectorAll("[data-starter]");
-        starterButtons?.forEach((b) => {
-            b.addEventListener("click", () => {
-                input.value = b.textContent;
-                input.dispatchEvent(new Event("input", { bubbles: true }));
-                input.focus();
-                input.setSelectionRange(input.value.length, input.value.length);
-            });
+        scroll.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-starter]");
+            if (!button) return;
+            input.value = button.textContent;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
         });
         if (starters) {
             const packs = JSON.parse(starters.dataset.starterPacks);
@@ -4322,7 +4304,7 @@
         const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, reaction = null) => {
             const text = regen || reaction ? "" : (overrideText ?? input.value.trim());
             if (!regen && !reaction && text === "" && !pendingFile) return;
-            if (busy) return;
+            if (busy || opening) return;
 
             const tryFallback = () => {
                 if (busy) return;
@@ -4722,6 +4704,54 @@
             syncSend();
         });
         syncSend();
+
+        if (opening) {
+            const loadOpening = async () => {
+                const questions = scroll.querySelector("[data-opening-questions]");
+                const intro = scroll.querySelector(".chat-intro");
+                try {
+                    const fd = new FormData();
+                    fd.append("_token", token);
+                    let response = await fetch(chat.dataset.opening, { method: "POST", body: fd });
+                    // Un autre onglet peut être en train d'ouvrir le même fil.
+                    for (let attempt = 0; response.status === 409 && attempt < 15; attempt++) {
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
+                        response = await fetch(chat.dataset.opening, { method: "POST", body: fd });
+                    }
+                    const data = await response.json();
+                    if (!response.ok || !data.ok) return;
+                    const messages = data.messages || (data.message ? [data.message] : []);
+                    if (messages.length) {
+                        intro?.remove();
+                        for (const message of messages) {
+                            scroll.insertBefore(renderMsg(message), questions);
+                        }
+                    }
+                    for (const question of data.questions || []) {
+                        const button = document.createElement("button");
+                        button.type = "button";
+                        button.className = "chip";
+                        button.dataset.starter = "";
+                        button.textContent = question;
+                        questions.append(button);
+                    }
+                    questions.hidden = !questions.children.length;
+                    scrollBottom(false);
+                } catch {
+                    // Le modèle peut être indisponible, le fil reste utilisable.
+                } finally {
+                    intro?.querySelector("[data-opening-status]")?.setAttribute("hidden", "");
+                    intro?.querySelector("[data-opening-fallback]")?.removeAttribute("hidden");
+                    if (questions.hidden) {
+                        starters?.removeAttribute("hidden");
+                        intro?.querySelector("[data-starters-more]")?.removeAttribute("hidden");
+                    }
+                    opening = false;
+                    syncSend();
+                }
+            };
+            loadOpening();
+        }
     }
 
 

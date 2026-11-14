@@ -133,7 +133,8 @@ return [
     // --- memories (views/memories.php)
     'memories.eyebrow'            => 'Long-term memory',
     'memories.title'              => 'Memories',
-    'memories.intro'              => 'What the personas remember about you from one conversation to the next: preferences, projects, constraints.',
+    'memories.intro'              => 'See what personas remember about you, what happened in their own stories, and moments you shared.',
+    'persona.resume_chat'         => 'Resume conversation',
     'memories.intro_shared_html'  => [
         'one'   => '<strong>{n}</strong> shared with all personas, the rest specific to one persona.',
         'other' => '<strong>{n}</strong> shared with all personas, the rest specific to one persona.',

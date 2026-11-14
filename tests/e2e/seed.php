@@ -58,6 +58,8 @@ for ($i = 1; $i <= 12; $i++) {
 $pdo->prepare('UPDATE messages SET image = ? WHERE id = ?')->execute([fetch_photos($c)[0]['file'], (int) $pdo->lastInsertId() - 1]);
 $pdo->prepare('UPDATE conversations SET unread = 1 WHERE id = ?')->execute([$cid]);
 $pdo->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$ids['ines-morel'], 'Pellicule']);
+$pdo->prepare("INSERT INTO prompts (persona_id, title, kind, body) VALUES (?, 'Premier message', 'other', 'J’ai retrouvé une vieille pellicule.')")
+    ->execute([$ids['ines-morel']]);
 facts_add($c, 'Prend souvent le train', 'fait', 'confirme', $cid);
 
 foreach ([
