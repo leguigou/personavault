@@ -1419,7 +1419,9 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
     flex: 0 0 auto;
 }
 .chat-side-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-side-new { color: var(--muted-2); }
+.chat-side-mono img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.chat-side-name strong { display: block; overflow: hidden; text-overflow: ellipsis; }
+.chat-side-name strong ~ [data-side-title] { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 11px; }
 
 .chat-main {
     flex: 1;
@@ -1791,41 +1793,6 @@ html[data-bubble="carte"] .msg-bot .bubble { border-radius: 14px; background: rg
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .modal-head h2 { font-size: 16px; font-weight: 650; }
-
-.picker-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
-    gap: 10px;
-}
-.picker-item { margin: 0; }
-.picker-item button {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    width: 100%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-    color: var(--muted);
-    font-size: 12px;
-    text-align: center;
-}
-.picker-thumb {
-    position: relative;
-    display: block;
-    width: 100%;
-    aspect-ratio: 1;
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid var(--border-soft);
-    transition: .18s;
-}
-.picker-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.picker-thumb .avatar-fallback span { font-size: 20px; transform: none; }
-.picker-item button:hover .picker-thumb { border-color: rgba(var(--acc), .6); transform: translateY(-2px); }
-.picker-item button:hover { color: var(--text); }
-.picker-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
 .rename-row { display: flex; gap: 8px; }
 .rename-row .input { flex: 1; }
@@ -3701,9 +3668,11 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
 }
 
 /* idées de premier message (conversation vide) */
-.chat-starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; max-width: 420px; }
-.chat-starters .chip { cursor: pointer; font: inherit; font-size: 13px; }
+.chat-starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; width: min(100%, 420px); }
+.chat-starters .chip { cursor: pointer; font: inherit; font-size: 13px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .chat-starters-more { border: 0; background: transparent; cursor: pointer; min-height: 36px; }
+.chat-opening-questions { justify-content: flex-start; margin: 12px 0 0; }
+.chat-starters[hidden], .chat-starters-more[hidden] { display: none; }
 .empty .btn { margin-top: 2px; }
 .empty-fav .empty-orb, .empty-arch .empty-orb, .empty-found .empty-orb { color: rgb(var(--acc)); }
 .empty-orb svg { color: rgb(var(--acc)); }
@@ -3722,6 +3691,7 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
 .conv-item .conv-card { flex: 1; min-width: 0; }
 .conv-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .conv-line strong { flex: 1; min-width: 0; }
+.conv-thread-title { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-line time { flex: 0 0 auto; font-size: 11.5px; color: var(--muted-2); font-variant-numeric: tabular-nums; }
 .conv-body .conv-preview {
     flex: 1;

@@ -217,6 +217,51 @@ await post('/settings/chat', { chat_provider: 'lmstudio', chat_base_url: `http:/
 const profileSettings = await (await http('/settings')).text();
 expect(profileSettings.includes('name="chat_user_profile_enabled" value="1" checked')
     && profileSettings.includes('Je préfère les voyages en train.'), 'la présentation globale est enregistrée et activée');
+
+{
+    const chatPost = (path, form = {}, options = {}) => http(path, { method: 'POST', form: { _token: csrf, ...form }, ...options });
+    const details = await (await http('/p/camille-lefebvre')).text();
+    expect(details.includes('href="/chat/1" aria-labelledby="act-chat"') && !details.includes('name="persona_id"'),
+        'la fiche reprend la conversation et ne propose pas de créer un autre fil');
+    expect(!(await (await http('/chat')).text()).includes('class="conv-thread-title"'),
+        'la présentation par titre est active par défaut');
+    await chatPost('/settings/ui', { ui_chat_list: 'contacts' });
+    const contacts = await (await http('/chat')).text();
+    expect(contacts.includes('class="conv-thread-title"') && contacts.includes('Camille Lefebvre</span></strong>')
+        && !contacts.includes('data-open-picker'), 'le carnet met le nom du persona en avant et conserve le titre du fil');
+
+    const remembered = await (await chatPost('/chat/1/remember')).json();
+    expect(remembered.memories.some((memory) => memory.subject === 'story' && memory.content.includes('exposition à Lyon')),
+        'la mémoire conserve les projets du persona avec une source dans la conversation');
+    const first = await (await chatPost('/chat/2/opening')).json();
+    expect(first.message.content === 'J’ai retrouvé une vieille pellicule.' && first.questions[0].includes('photograph'),
+        'la première rencontre utilise le message importé et propose une question liée au persona');
+    const newChat = await chatPost('/chat/1/new');
+    const path = newChat.headers.get('location');
+    expect(newChat.status === 303 && /^\/chat\/\d+$/.test(path) && path !== '/chat/1',
+        'le bouton du chat crée un fil distinct avec le même persona');
+    const results = await Promise.all([
+        chatPost(path + '/opening'),
+        ...(peer ? [chatPost(path + '/opening', {}, { origin: peer })] : []),
+    ]);
+    const successful = results.find((result) => result.ok);
+    const opened = await successful.json();
+    expect(opened.message.content.includes('Lisbonne') && opened.questions[0].includes('exposition à Lyon'),
+        'le persona ouvre sur un échange précédent et propose une question qui réutilise son histoire');
+    const again = await (await chatPost(path + '/opening')).json();
+    expect(again.messages.length === 1 && again.messages[0].id === opened.message.id && again.questions.length === 1,
+        'réouvrir la même conversation garde un seul premier message et les mêmes questions');
+    const refreshed = await (await http('/p/camille-lefebvre')).text();
+    expect(refreshed.includes(`href="${path}" aria-labelledby="act-chat"`),
+        'la fiche reprend le nouveau fil lorsqu’il devient le plus récent');
+    const privateChat = (await chatPost('/chat/1/new')).headers.get('location');
+    await chatPost(privateChat + '/facts-toggle', { enabled: '0' });
+    const privateOpening = await (await chatPost(privateChat + '/opening')).json();
+    expect(!privateOpening.message.content.includes('Lisbonne') && !privateOpening.questions.some((q) => q.includes('Lyon')),
+        'une ouverture sans souvenirs ne s’appuie ni sur les anciens fils ni sur l’histoire mémorisée');
+    await chatPost('/settings/ui', { ui_chat_list: 'threads' });
+}
+
 const sse = await post('/chat/1/stream', { message: 'Bonjour, test du flux' });
 expect(sse.includes('"delta"') && sse.includes('"done"'), 'la réponse arrive en streaming jusqu’au bout');
 expect((await (await http('/settings/logs')).text()).includes('Je préfère les voyages en train.'),
@@ -310,6 +355,7 @@ if (peer) {
 
     const previous = await recent(1);
     const target = previous.find((m) => m.id === 2);
+    const otherBefore = await recent(2);
     const wrongChat = await chat(2, 'react', { mid: target.id, reaction: 'angry' });
     expect(wrongChat.status === 409, 'une réaction ne peut pas viser le message d’une autre discussion');
     const angry = await react(target.id, 'angry');
@@ -317,7 +363,8 @@ if (peer) {
     const after = await recent(1);
     expect(result?.reply?.content === 'Réaction à la réponse 2 (colère).' && result.reply.reaction_reply
         && after.length === previous.length + 1 && after.find((m) => m.id === target.id)?.reaction === 'angry'
-        && (await recent(2)).length === 0, 'une réaction négative à un ancien message relance sa discussion sur le bon sujet');
+        && JSON.stringify(await recent(2)) === JSON.stringify(otherBefore),
+        'une réaction négative à un ancien message relance sa discussion sur le bon sujet');
     expect(turn(await followReaction(target.id, angry))?.skipped, 'une même réaction ne lance qu’une réponse');
     const like = await react(target.id, 'like');
     expect(turn(await followReaction(target.id, like))?.reply?.content === 'Réaction à la réponse 2 (accord simple).',

@@ -44,7 +44,8 @@ const reply = (sys) => {
             important_facts: ['Part en train'], decisions: [], open_questions: [], context_summary: 'Discussion de test.' });
     }
     if (/mémoire durable/i.test(sys)) {
-        return JSON.stringify({ memories: [{ content: 'Aime les trains de nuit', category: 'preference', confidence: 'confirme' }], forget: [] });
+        return JSON.stringify({ memories: [{ content: 'Aime les trains de nuit', category: 'preference', confidence: 'confirme' }], forget: [],
+            story: [{ content: 'Camille prépare une exposition à Lyon', category: 'projet', source: 2 }] });
     }
     if (/titre très court/i.test(sys)) return 'Voyage en train';
     return 'Réponse de test du faux modèle. Une seconde phrase pour avoir du texte.';
@@ -78,8 +79,16 @@ http.createServer(async (req, res) => {
         }
         const system = String(j.messages?.[0]?.content ?? '');
         const last = String(j.messages?.at(-1)?.content ?? '');
-        const text = system.includes('le sujet concret des derniers échanges') && last.includes('volcans en Islande')
-            ? 'Volcans en Islande' : (assist(system, String(j.messages?.[1]?.content ?? '')) ?? reply(system));
+        let text;
+        if (system.includes('Tu ouvres une nouvelle conversation')) {
+            text = last.includes('pastéis au bord du Tage') && last.includes('Camille prépare une exposition à Lyon')
+                ? JSON.stringify({ message: 'Ça m’a fait repenser à ton voyage à Lisbonne. Tu y retournerais ?', questions: ['Et ton exposition à Lyon, elle avance ?'] })
+                : JSON.stringify({ message: 'Tu as déjà développé une pellicule argentique ?', questions: ['Tu photographies quoi en ce moment ?'] });
+        } else if (system.includes('le sujet concret des derniers échanges') && last.includes('volcans en Islande')) {
+            text = 'Volcans en Islande';
+        } else {
+            text = assist(system, String(j.messages?.[1]?.content ?? '')) ?? reply(system);
+        }
         const usage = { prompt_tokens: 100, completion_tokens: 20 };
         if (j.stream) {
             res.writeHead(200, { 'Content-Type': 'text/event-stream' });

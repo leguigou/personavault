@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 8);
+define('PV_SCHEMA_VERSION', 9);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -203,6 +203,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 8) {
             migrate_v8($pdo);
+        }
+        if ($version < 9) {
+            migrate_v9($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -465,6 +468,16 @@ function migrate_v8(PDO $pdo): void
     add_column_if_missing($pdo, 'messages', 'reaction_pending', "TEXT NOT NULL DEFAULT ''");
     add_column_if_missing($pdo, 'messages', 'reaction_reply', 'INTEGER NOT NULL DEFAULT 0');
     add_column_if_missing($pdo, 'reply_versions', 'reaction', "TEXT NOT NULL DEFAULT ''");
+}
+
+/** v9 : ouverture des discussions et souvenirs de la vie du persona. */
+function migrate_v9(PDO $pdo): void
+{
+    // Chaîne vide : ouverture à tenter. Tableau JSON : ouverture traitée et éventuelles idées de réponse.
+    add_column_if_missing($pdo, 'conversations', 'opening_questions', "TEXT NOT NULL DEFAULT ''");
+    add_column_if_missing($pdo, 'user_memories', 'subject', "TEXT NOT NULL DEFAULT 'user'");
+    add_column_if_missing($pdo, 'user_memories', 'source_message_id', 'INTEGER REFERENCES messages(id) ON DELETE CASCADE');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_mem_source_message ON user_memories(source_message_id) WHERE source_message_id IS NOT NULL');
 }
 
 /** v6 : journal des échanges avec les modèles (20 derniers appels). */
@@ -1287,6 +1300,7 @@ require_once __DIR__ . '/prompts.php';
 require_once __DIR__ . '/prompt_history.php';
 require_once __DIR__ . '/reactions.php';
 require_once __DIR__ . '/chat.php';
+require_once __DIR__ . '/chat_opening.php';
 require_once __DIR__ . '/facts.php';
 require_once __DIR__ . '/backup.php';
 require_once __DIR__ . '/cards.php';

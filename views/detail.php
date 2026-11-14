@@ -58,14 +58,21 @@ $token    = csrf_token();
 
         <!-- actions : une rangée de boutons ronds avec libellé (Discuter, Modifier, Compléter, Plus) -->
         <div class="hero-actions">
-            <form method="post" action="/chat" class="round-act">
-                <input type="hidden" name="_token" value="<?= e($token) ?>">
-                <input type="hidden" name="persona_id" value="<?= (int) $persona['id'] ?>">
-                <button class="round-btn is-main" type="submit" aria-describedby="act-chat">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-                </button>
-                <span class="round-label" id="act-chat"><?= e(t('persona.chat')) ?></span>
-            </form>
+            <?php $chatIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>'; ?>
+            <?php if ($latestConversation > 0): ?>
+                <div class="round-act">
+                    <a class="round-btn is-main" href="/chat/<?= $latestConversation ?>" aria-labelledby="act-chat"><?= $chatIcon ?></a>
+                    <span class="round-label" id="act-chat"><?= e(t('persona.resume_chat')) ?></span>
+                </div>
+            <?php elseif (!$isArch): ?>
+                <form method="post" action="/chat" class="round-act">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <input type="hidden" name="persona_id" value="<?= (int) $persona['id'] ?>">
+                    <input type="hidden" name="resume" value="1">
+                    <button class="round-btn is-main" type="submit" aria-labelledby="act-chat"><?= $chatIcon ?></button>
+                    <span class="round-label" id="act-chat"><?= e(t('persona.chat')) ?></span>
+                </form>
+            <?php endif; ?>
             <div class="round-act">
                 <a class="round-btn" href="/p/<?= e($persona['slug']) ?>/edit" aria-describedby="act-edit">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>

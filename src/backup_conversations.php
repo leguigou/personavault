@@ -160,9 +160,18 @@ function backup_restore_conversations(ZipArchive $zip, array $index, string $roo
             ]);
             $fields['category'] = isset($categories[$fields['category']]) ? $fields['category'] : 'fait';
             $fields['confidence'] = isset($confidences[$fields['confidence']]) ? $fields['confidence'] : 'confirme';
+            $source = $conversationIds[backup_id($memory['source_conversation_id'] ?? null)] ?? null;
+            $story = ($memory['subject'] ?? '') === 'story';
+            $sourceMessage = $story ? ($source['messages'][backup_id($memory['source_message_id'] ?? null)] ?? null) : null;
+            if ($story && (!$personaId || $personaId !== ($source['persona_id'] ?? null) || !$sourceMessage)) {
+                $stats['errors'][] = t('error.backup.invalid_chat_data');
+                continue;
+            }
             backup_insert_row($pdo, 'user_memories', $fields + [
                 'persona_id' => $personaId,
-                'source_conversation_id' => $conversationIds[backup_id($memory['source_conversation_id'] ?? null)] ?? null,
+                'subject' => $story ? 'story' : 'user',
+                'source_conversation_id' => $source['id'] ?? null,
+                'source_message_id' => $sourceMessage,
             ]);
             $count++;
         }
@@ -171,7 +180,7 @@ function backup_restore_conversations(ZipArchive $zip, array $index, string $roo
 }
 
 /** Les fichiers sont préparés avant la transaction, puis nettoyés si l'insertion échoue. */
-function backup_restore_chat(ZipArchive $zip, array $index, string $root, array $conversation, int $personaId, bool $legacy, array &$errors): int
+function backup_restore_chat(ZipArchive $zip, array $index, string $root, array $conversation, int $personaId, bool $legacy, array &$errors): array
 {
     $media = [];
     try {
@@ -192,17 +201,19 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
             }
         }
 
-        return db_tx(static function (PDO $pdo) use ($conversation, $personaId, $legacy, $media): int {
+        return db_tx(static function (PDO $pdo) use ($conversation, $personaId, $legacy, $media): array {
             $now = gmdate('Y-m-d H:i:s');
             $fields = backup_fields($conversation, [
                 'title' => '', 'provider' => '', 'model' => '', 'model_override' => '',
                 'temperature' => 0.85, 'max_tokens' => 400, 'context_window' => 8192, 'directive' => '',
                 'memory_enabled' => 1, 'summary' => '', 'compressions' => 0, 'facts_enabled' => 1,
                 'title_auto' => 1, 'auto_followup' => 1, 'last_followup_at' => '', 'unread' => 0, 'pinned' => 0,
+                'opening_questions' => '',
                 'created_at' => $now, 'updated_at' => $now,
             ]);
             $cid = backup_insert_row($pdo, 'conversations', $fields + ['persona_id' => $personaId]);
             $messageIds = [];
+            $assistantIds = [];
             $userIds = [];
             $selections = [];
             foreach ($conversation['messages'] as $message) {
@@ -224,6 +235,8 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                     $messageIds[$sourceId] = $mid;
                     if ($fields['role'] === 'user') {
                         $userIds[$sourceId] = $mid;
+                    } elseif ($fields['role'] === 'assistant') {
+                        $assistantIds[$sourceId] = $mid;
                     }
                 }
                 $versionId = backup_id($message['version_id'] ?? null);
@@ -260,7 +273,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 $messageIds[backup_id($conversation['facts_cursor'] ?? null)] ?? 0,
                 $cid,
             ]);
-            return $cid;
+            return ['id' => $cid, 'persona_id' => $personaId, 'messages' => $assistantIds];
         });
     } catch (Throwable $e) {
         foreach (array_filter($media) as $image) {

@@ -29,6 +29,7 @@ function llm_log_purposes(): array
         'facts'     => t('logs.purpose.facts'),
         'title'     => t('logs.purpose.title'),
         'followup'  => t('logs.purpose.followup'),
+        'opening'   => t('logs.purpose.opening'),
         'ai_prompt' => t('logs.purpose.ai_prompt'),
         'ai_fill'   => t('logs.purpose.ai_fill'),
         'directive' => t('logs.purpose.directive'),

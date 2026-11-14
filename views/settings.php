@@ -598,6 +598,21 @@ $facts = facts_settings();
             </div>
         </div>
 
+        <div class="field">
+            <span><?= e(t('settings.look.chat_list')) ?></span>
+            <div class="sel" data-sel>
+                <button type="button" class="sel-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="<?= e(t('settings.look.chat_list')) ?>">
+                    <span class="sel-value"></span>
+                    <svg class="sel-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <select name="ui_chat_list" class="sel-native">
+                    <?php foreach (['threads' => t('settings.look.chat_threads'), 'contacts' => t('settings.look.chat_contacts')] as $val => $label): ?>
+                        <option value="<?= e($val) ?>" <?= setting('ui_chat_list', 'threads') === $val ? 'selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+
         <div class="ui-preview" data-ui-preview aria-label="<?= e(t('settings.look.preview')) ?>">
             <div class="pv-msg pv-bot">
                 <span class="pv-av">L</span>

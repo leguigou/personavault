@@ -3,6 +3,10 @@
  * English — Settings page (views/settings.php). Same keys as lang/fr/settings.php.
  */
 return [
+    'settings.look.chat_list'    => 'Conversation list layout',
+    'settings.look.chat_threads' => 'Conversation titles',
+    'settings.look.chat_contacts' => 'Contact list',
+    'logs.purpose.opening'       => 'Conversation opener',
     'settings.user_profile.title' => 'About me',
     'settings.user_profile.enable' => 'Use my introduction with all personas',
     'settings.user_profile.label' => 'My introduction (optional)',

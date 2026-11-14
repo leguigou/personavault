@@ -10,6 +10,35 @@ function chat_has_unread(): bool
     return (bool) db()->query('SELECT EXISTS (SELECT 1 FROM conversations WHERE unread = 1)')->fetchColumn();
 }
 
+function chat_latest_conversation(int $personaId): int
+{
+    $stmt = db()->prepare('SELECT c.id FROM conversations c WHERE c.persona_id = ?
+        ORDER BY COALESCE((SELECT m.created_at FROM messages m
+            WHERE m.conversation_id = c.id AND m.role IN ("user", "assistant")
+            ORDER BY m.id DESC LIMIT 1), c.created_at) DESC, c.id DESC LIMIT 1');
+    $stmt->execute([$personaId]);
+    return (int) $stmt->fetchColumn();
+}
+
+function chat_create_conversation(array $persona, bool $resume = false): int
+{
+    return db_tx(static function (PDO $pdo) use ($persona, $resume): int {
+        $pid = (int) $persona['id'];
+        if ($resume && ($latest = chat_latest_conversation($pid)) > 0) {
+            return $latest;
+        }
+        $stmt = $pdo->prepare('INSERT INTO conversations (persona_id, title)
+            SELECT id, ? FROM personas WHERE id = ? AND archived = 0');
+        $stmt->execute([t('labels.chat.default_title', ['name' => $persona['name']]), $pid]);
+        return $stmt->rowCount() === 1 ? (int) $pdo->lastInsertId() : 0;
+    });
+}
+
+function chat_opening_questions(array $conv, array $messages, int $total): array
+{
+    return $total <= 1 && ($messages[0]['role'] ?? '') !== 'user' ? json_list($conv['opening_questions']) : [];
+}
+
 function chat_llm_config(): array
 {
     $cfg = [
@@ -997,9 +1026,9 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
         $parts[] = "Mémoire de la conversation (résumé des échanges plus anciens) :\n" . $summary;
     }
 
-    $factsText = facts_format($facts);
+    $factsText = facts_context($facts);
     if ($factsText !== '') {
-        $parts[] = "Ce que tu sais déjà de l'utilisateur (mémoire longue, à utiliser sans le réciter) :\n" . $factsText;
+        $parts[] = $factsText;
     }
 
     $parts[] = "Règles : reste strictement dans le personnage, ne dis jamais que tu es une IA ou un modèle. "
@@ -1648,10 +1677,11 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
             . chat_reaction_context($reactionTarget);
     }
 
-    $facts     = $factsOn ? facts_relevant((int) $persona['id'], $userMessage, 5) : [];
-    $factsText = facts_format($facts);
+    $pid = (int) $persona['id'];
+    $facts = $factsOn ? array_merge(facts_relevant($pid, $userMessage), facts_relevant($pid, $userMessage, 3, 'story')) : [];
+    $factsText = facts_context($facts);
     if ($factsText !== '') {
-        $context[] = "Ce que tu sais déjà de l'utilisateur (mémoire longue, à utiliser sans le réciter) :\n" . $factsText;
+        $context[] = $factsText;
     }
 
     // rappel d'échanges d'autres conversations avec le même persona

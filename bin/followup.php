@@ -94,7 +94,8 @@ if ((string) $fuCfg['model'] === '') {
 }
 $verbose && $say('modèle des relances : ' . $fuCfg['model'] . (!empty($st['loaded']) ? ' (déjà chargé)' : ' (modèle de base)'));
 
-$convs = db()->query('SELECT * FROM conversations WHERE auto_followup = 1 ORDER BY id')->fetchAll();
+$convs = db()->query("SELECT * FROM conversations c WHERE auto_followup = 1
+    AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user') ORDER BY id")->fetchAll();
 $sent  = 0;
 
 foreach ($convs as $conv) {
@@ -135,7 +136,10 @@ foreach ($convs as $conv) {
 
     $conv    = chat_with_persona($conv, $persona);
     $factsOn = (int) $conv['memory_enabled'] === 1 && (int) $conv['facts_enabled'] === 1;
-    $facts   = $factsOn ? facts_relevant((int) $persona['id'], (string) $last['content'], 5) : [];
+    $facts = $factsOn ? array_merge(
+        facts_relevant((int) $persona['id'], (string) $last['content']),
+        facts_relevant((int) $persona['id'], (string) $last['content'], 3, 'story')
+    ) : [];
 
     $system = chat_system_prompt($persona, $prompts, $conv, $facts)
         . "\n\n" . chat_time_context($conv, $history)

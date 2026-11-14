@@ -122,6 +122,7 @@ $token = csrf_token();
                     <span class="cat cat-<?= e((string) $r['category']) ?>"><?= e($cats[$r['category']] ?? t('memories.category_fallback')) ?></span>
                     <span class="conf conf-<?= e((string) $r['confidence']) ?>"><?= e($confs[$r['confidence']] ?? t('memories.confidence_fallback')) ?></span>
                     <span class="mem-scope"><?= e($pid > 0 ? ($names[$pid] ?? t('memories.scope_unknown')) : t('memories.scope_shared')) ?></span>
+                    <?php if ($r['subject'] === 'story'): ?><span class="mem-scope"><?= e(t('chat.facts.story')) ?></span><?php endif; ?>
                     <form method="post" action="/memories/<?= (int) $r['id'] ?>/delete" data-confirm="<?= e(t('memories.delete_confirm')) ?>">
                         <input type="hidden" name="_token" value="<?= e($token) ?>">
                         <button class="mini mini-danger" type="submit" aria-label="<?= e(t('memories.delete')) ?>">&times;</button>

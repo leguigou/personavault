@@ -4,6 +4,10 @@
  * Tuteo (« tú »), como en francés.
  */
 return [
+    'settings.look.chat_list'    => 'Presentación de las conversaciones',
+    'settings.look.chat_threads' => 'Títulos de las conversaciones',
+    'settings.look.chat_contacts' => 'Agenda de contactos',
+    'logs.purpose.opening'       => 'Inicio de conversación',
     'settings.user_profile.title' => 'Sobre mí',
     'settings.user_profile.enable' => 'Usar mi presentación con todos los personajes',
     'settings.user_profile.label' => 'Mi presentación (opcional)',

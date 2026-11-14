@@ -133,7 +133,8 @@ return [
     // --- recuerdos (views/memories.php)
     'memories.eyebrow'            => 'Memoria a largo plazo',
     'memories.title'              => 'Recuerdos',
-    'memories.intro'              => 'Lo que los personas recuerdan de ti de una conversación a otra: preferencias, proyectos, limitaciones.',
+    'memories.intro'              => 'Consulta lo que los personajes recuerdan sobre ti, los eventos de su historia y los momentos que compartieron.',
+    'persona.resume_chat'         => 'Retomar la conversación',
     'memories.intro_shared_html'  => [
         'one'   => '<strong>{n}</strong> compartido con todos los personas, el resto propio de un persona.',
         'other' => '<strong>{n}</strong> compartidos con todos los personas, el resto propio de un persona.',

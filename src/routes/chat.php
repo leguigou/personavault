@@ -33,12 +33,10 @@ if ($path === '/chat' && $method === 'GET') {
          FROM conversations c JOIN personas p ON p.id = c.persona_id
          ORDER BY c.pinned DESC, COALESCE(last_at, c.updated_at) DESC'
     );
-    $personas = db()->query('SELECT id, slug, name, tagline, avatar, tags FROM personas WHERE archived = 0 ORDER BY name')->fetchAll();
-
     render('chat_list', [
         'title'       => t('nav.chats'),
         'conversations' => $convStmt->fetchAll(),
-        'personas'    => $personas,
+        'contactView' => setting('ui_chat_list', 'threads') === 'contacts',
         'chatReady'   => chat_llm_ready(),
         'chatModel'   => chat_llm_config_raw()['model'],
     ]);
@@ -48,15 +46,13 @@ if ($path === '/chat' && $method === 'GET') {
 if ($path === '/chat' && $method === 'POST') {
     csrf_check();
     $pid = (int) ($_POST['persona_id'] ?? 0);
-    $stmt = db()->prepare('SELECT * FROM personas WHERE id = ? AND archived = 0');
+    $stmt = db()->prepare('SELECT id, name FROM personas WHERE id = ?');
     $stmt->execute([$pid]);
     $persona = $stmt->fetch();
-    if (!$persona) {
+    $cid = $persona ? chat_create_conversation($persona, !empty($_POST['resume'])) : 0;
+    if (!$cid) {
         flash('error', t('flash.chat.pick_persona'));
         redirect('/chat');
     }
-    $stmt = db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)');
-    // titre par défaut enregistré en base (affiché, jamais envoyé au modèle) : langue de l'interface
-    $stmt->execute([$pid, t('labels.chat.default_title', ['name' => $persona['name']])]);
-    redirect('/chat/' . (int) db()->lastInsertId());
+    redirect('/chat/' . $cid);
 }

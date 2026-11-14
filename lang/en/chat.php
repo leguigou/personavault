@@ -24,13 +24,11 @@ return [
 
     // --- chat list
     'chat.list.title'               => 'My conversations',
-    'chat.list.new'                 => 'New',
     'chat.list.status_local'        => 'Local chat · {model}',
     'chat.list.model_auto'          => 'auto model',
     'chat.list.no_model'            => 'No chat model reachable',
     'chat.list.empty_title'         => 'No conversations yet',
     'chat.list.empty_text'          => 'Pick a persona and start talking.',
-    'chat.list.pick_persona'        => 'Choose a persona',
     'chat.list.no_message'          => 'No messages yet',
     'chat.list.pinned' => 'Pinned',
     'chat.list.recent' => 'Recent',
@@ -45,12 +43,9 @@ return [
     'chat.list.delete' => 'Delete conversation',
     'chat.list.delete_confirm' => 'Delete “{title}”? Its messages will be permanently erased (the persona\'s memories are kept).',
     'chat.list.long_press_hint' => 'Tip: press and hold a conversation to pin or delete it.',
-    'chat.list.search_persona'      => 'Search for a persona…',
-    'chat.list.no_persona'          => 'No personas in your library. Create a profile first.',
 
     // --- conversation: sidebar and header
     'chat.side.all'                 => 'All',
-    'chat.side.new'                 => 'New conversation',
     'chat.head.back'                => 'All conversations',
     'chat.head.open_persona'        => 'Open the character’s profile',
     'chat.head.model_state'         => 'Model status',
@@ -59,7 +54,11 @@ return [
     'chat.head.settings'            => 'Conversation settings',
 
     // --- conversation: messages and composer
-    'chat.intro.first_message'      => 'Write the first message.',
+    'chat.intro.first_message'      => 'You can write a message.',
+    'chat.intro.preparing'          => '{name} is getting the conversation started…',
+    'chat.head.new'                => 'New conversation with this persona',
+    'chat.intro.you'               => 'you',
+    'chat.facts.story'             => 'Persona’s story',
     'chat.intro.starters_label' => 'Ideas to get started',
     'chat.intro.starters_more' => 'More ideas',
     'chat.intro.starters' => 'Hey {name}! What are you up to today?|What’s been putting you in a good mood lately?|If you could take me to your favorite place, where would we go?'

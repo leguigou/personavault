@@ -4,6 +4,8 @@ $hue   = hue_for((string) $persona['name']);
 $token = csrf_token();
 $model = (string) ($conv['model'] !== '' ? $conv['model'] : $chatModel);
 $fmt   = fn (float $n): string => fmt_number($n);
+$openingPending = !$messages && $conv['opening_questions'] === '';
+$questions = chat_opening_questions($conv, $messages, $totalMsgs);
 // « . "\n" » après un texte en fin de ligne : garde le saut de ligne qu’avalerait la balise PHP fermante.
 ?>
 <div class="chat-shell">
@@ -14,17 +16,20 @@ $fmt   = fn (float $n): string => fmt_number($n);
         </div>
         <?php foreach ($convs as $c): ?>
             <a class="chat-side-row <?= (int) $c['id'] === (int) $conv['id'] ? 'is-on' : '' ?>" href="/chat/<?= (int) $c['id'] ?>">
-                <span class="chat-side-mono"><?= e(initials((string) $c['persona_name'])) ?></span>
+                <span class="chat-side-mono">
+                    <?php if ($contactView && $c['persona_avatar']): ?>
+                        <img src="<?= e(media_url((string) $c['persona_avatar'])) ?>" alt="">
+                    <?php else: ?>
+                        <?= e(initials((string) $c['persona_name'])) ?>
+                    <?php endif; ?>
+                </span>
                 <span class="chat-side-name">
                     <?php if ((int) ($c['unread'] ?? 0) === 1): ?><span class="unread-dot" aria-label="<?= e(t('chat.unread')) ?>"></span><?php endif; ?>
-                    <?= e((string) $c['title']) ?>
+                    <?php if ($contactView): ?><strong><?= e((string) $c['persona_name']) ?></strong><?php endif; ?>
+                    <span data-side-title><?= e((string) $c['title']) ?></span>
                 </span>
             </a>
         <?php endforeach; ?>
-        <a class="chat-side-row chat-side-new" href="/chat">
-            <span class="chat-side-mono">+</span>
-            <span class="chat-side-name"><?= e(t('chat.side.new')) ?></span>
-        </a>
     </aside>
 
     <section class="chat-main" id="chat" data-chat
@@ -35,6 +40,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
              data-facts-timing="<?= e($__facts['frequency'] === 'off' ? 'off' : $__facts['timing']) ?>"
              data-facts-idle="<?= (int) $__facts['idle'] ?>"
              data-status="/chat/<?= (int) $conv['id'] ?>/status"
+             <?php if ($openingPending): ?>data-opening="/chat/<?= (int) $conv['id'] ?>/opening"<?php endif; ?>
              data-token="<?= e($token) ?>"
              data-reactions="<?= e(json_encode(chat_reaction_options(), JSON_UNESCAPED_UNICODE)) ?>"
              data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) === 1 && chat_title_mode() !== 'off' ? 1 : 0 ?>"
@@ -79,6 +85,14 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     aria-controls="chat-settings" title="<?= e(t('chat.head.settings')) ?>" aria-label="<?= e(t('chat.head.settings')) ?>">
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
             </button>
+            <?php if (!(int) $persona['archived']): ?>
+                <form method="post" action="/chat/<?= (int) $conv['id'] ?>/new">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <button type="submit" class="icon-btn" title="<?= e(t('chat.head.new')) ?>" aria-label="<?= e(t('chat.head.new')) ?>">
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+                    </button>
+                </form>
+            <?php endif; ?>
         </header>
 
         <div class="chat-scroll" data-scroll data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>-chat">
@@ -110,14 +124,15 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     </div>
                     <h2><?= e((string) $persona['name']) ?></h2>
                     <?php if ($persona['tagline']): ?><p><?= e((string) $persona['tagline']) ?></p><?php endif; ?>
-                    <span class="hint"><?= e(t('chat.intro.first_message')) ?></span>
+                    <span class="hint" data-opening-status role="status"<?= $openingPending ? '' : ' hidden' ?>><?= e(t('chat.intro.preparing', ['name' => $persona['name']])) ?></span>
+                    <span class="hint" data-opening-fallback<?= $openingPending ? ' hidden' : '' ?>><?= e(t('chat.intro.first_message')) ?></span>
                     <div class="chat-starters" id="chat-starters" role="group" aria-live="polite" aria-label="<?= e(t('chat.intro.starters_label')) ?>"
-                         data-starter-packs="<?= e(json_encode($packs, JSON_UNESCAPED_UNICODE)) ?>">
+                         data-starter-packs="<?= e(json_encode($packs, JSON_UNESCAPED_UNICODE)) ?>"<?= $openingPending || $questions ? ' hidden' : '' ?>>
                         <?php foreach ($packs[0] as $starter): ?>
                             <button type="button" class="chip" data-starter><?= e($starter) ?></button>
                         <?php endforeach; ?>
                     </div>
-                    <button type="button" class="chat-starters-more mini" data-starters-more aria-controls="chat-starters"><?= e(t('chat.intro.starters_more')) ?></button>
+                    <button type="button" class="chat-starters-more mini" data-starters-more aria-controls="chat-starters"<?= $openingPending || $questions ? ' hidden' : '' ?>><?= e(t('chat.intro.starters_more')) ?></button>
                 </div>
             <?php endif; ?>
 
@@ -171,6 +186,14 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     </div>
                 <?php endif; ?>
             <?php endforeach; ?>
+            <?php if ($openingPending || $questions): ?>
+                <div class="chat-starters chat-opening-questions" data-opening-questions role="group"
+                     aria-label="<?= e(t('chat.intro.starters_label')) ?>"<?= $questions ? '' : ' hidden' ?>>
+                    <?php foreach ($questions as $question): ?>
+                        <?php if (is_string($question)): ?><button type="button" class="chip" data-starter><?= e($question) ?></button><?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="attach-preview" data-attach-preview hidden>
@@ -410,7 +433,7 @@ $fmt   = fn (float $n): string => fmt_number($n);
             <ul class="fact-list" data-fact-list>
                 <?php foreach (($personaMemories ?? []) as $fm): ?>
                     <li data-fid="<?= (int) $fm['id'] ?>">
-                        <span class="fact-txt"><?= e((string) $fm['content']) ?></span>
+                        <span class="fact-txt"><?= $fm['subject'] === 'story' ? e(t('chat.facts.story') . ' · ') : '' ?><?= e((string) $fm['content']) ?></span>
                         <button type="button" class="fact-del" data-fact-del="<?= (int) $fm['id'] ?>" aria-label="<?= e(t('chat.facts.delete')) ?>">&times;</button>
                     </li>
                 <?php endforeach; ?>

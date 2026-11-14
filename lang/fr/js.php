@@ -4,6 +4,7 @@
  * Les clés js.modal.*, js.unsaved.* et js.chat.jump sont dans common.php.
  */
 return [
+    'js.facts.story' => 'Histoire du persona',
     'js.assist.review_progress' => 'Éléments essentiels renseignés dans cette proposition · {percent} %',
     'js.assist.f.work' => 'Travail ou activité',
     'js.assist.resume_questions' => 'Reprendre les questions',

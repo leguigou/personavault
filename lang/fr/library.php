@@ -134,7 +134,8 @@ return [
     // --- souvenirs (views/memories.php)
     'memories.eyebrow'            => 'Mémoire longue',
     'memories.title'              => 'Souvenirs',
-    'memories.intro'              => 'Ce que les personas retiennent de toi d’une conversation à l’autre : préférences, projets, contraintes.',
+    'memories.intro'              => 'Retrouve ce que les personas retiennent de toi, les événements de leur histoire et vos moments partagés.',
+    'persona.resume_chat'         => 'Reprendre la discussion',
     'memories.intro_shared_html'  => [
         'one'   => '<strong>{n}</strong> partagé avec tous les personas, le reste propre à un persona.',
         'other' => '<strong>{n}</strong> partagés avec tous les personas, le reste propre à un persona.',

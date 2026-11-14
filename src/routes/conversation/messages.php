@@ -6,6 +6,21 @@ declare(strict_types=1);
  * Inclus par src/routes/conversation.php ($cid, $action, $conv, $persona, $personaPrompts).
  */
 
+function chat_message_json(array $message): array
+{
+    return [
+        'id' => (int) $message['id'],
+        'role' => (string) $message['role'],
+        'content' => (string) $message['content'],
+        'image' => (string) $message['image'],
+        'split_points' => json_list($message['split_points']),
+        'version_id' => (int) $message['version_id'],
+        'reaction' => chat_reaction_key($message['reaction'], (string) $message['role']),
+        'reaction_reply' => (bool) $message['reaction_reply'],
+        'at' => gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($message['created_at'] . ' UTC')),
+    ];
+}
+
 /* --- recherche dans toutes les conversations du même persona --- */
 if ($action === 'search' && $method === 'GET') {
     session_write_close();
@@ -180,9 +195,11 @@ if ($action === 'version' && $method === 'POST') {
     $v = $st->fetch();
     if ((int) $v['id'] !== (int) $msg['version_id']) {
         db_tx(static function (PDO $pdo) use ($cid, $mid, $v): void {
+            $pdo->prepare("DELETE FROM user_memories WHERE subject = 'story' AND source_message_id = ?")->execute([$mid]);
             $pdo->prepare("UPDATE messages SET content = ?, model = ?, split_points = ?, version_id = ?, reaction = ?, reaction_pending = '' WHERE id = ?")
                 ->execute([(string) $v['content'], (string) $v['model'], (string) $v['split_points'], (int) $v['id'], (string) $v['reaction'], $mid]);
             chat_invalidate_summary($cid, $mid);
+            $pdo->prepare('UPDATE conversations SET facts_cursor = MIN(facts_cursor, ?) WHERE id = ?')->execute([$mid - 1, $cid]);
         });
     }
 
@@ -266,20 +283,52 @@ if ($action === 'messages' && $method === 'GET') {
 
     echo json_encode([
         'ok'       => true,
-        'messages' => array_map(static fn (array $m): array => [
-            'id'       => (int) $m['id'],
-            'role'     => (string) $m['role'],
-            'content'  => (string) $m['content'],
-            'image'    => (string) ($m['image'] ?? ''),
-            'split_points' => json_list($m['split_points'] ?? '[]'),
-            'version_id' => (int) $m['version_id'],
-            'reaction'   => chat_reaction_key($m['reaction'], (string) $m['role']),
-            'reaction_reply' => (bool) $m['reaction_reply'],
-            ...($afterGeneration ? ['versions' => reply_versions_info($cid, $m)] : []),
-            'at'       => gmdate('Y-m-d\\TH:i:s\\Z', (int) strtotime((string) $m['created_at'] . ' UTC')),
-        ], $rows),
+        'messages' => array_map(static fn (array $m): array => chat_message_json($m)
+            + ($afterGeneration ? ['versions' => reply_versions_info($cid, $m)] : []), $rows),
         'left'     => $left,
     ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* --- premier message et suggestions d'une discussion vide --- */
+if ($action === 'opening' && $method === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    csrf_check_json();
+    session_write_close();
+    ignore_user_abort(true);
+    $chatLock = chat_require_write_lock($cid);
+    $conv = chat_conv_effective($cid);
+    if ($conv === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false]);
+        exit;
+    }
+    $messages = fetch_messages($cid, 50);
+    if ($messages || $conv['opening_questions'] !== '') {
+        $questions = chat_opening_questions($conv, $messages, count($messages));
+        echo json_encode(['ok' => true, 'messages' => array_map('chat_message_json', $messages), 'questions' => $questions], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $opening = chat_generate_opening($persona, $personaPrompts, $conv);
+    $message = db_tx(static function (PDO $pdo) use ($cid, $opening): ?array {
+        if ($opening['content'] === '' && !$opening['questions']) {
+            return null;
+        }
+        $pdo->prepare('UPDATE conversations SET opening_questions = ? WHERE id = ?')
+            ->execute([json_encode($opening['questions'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $cid]);
+        if ($opening['content'] === '') {
+            return null;
+        }
+        $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model) VALUES (?, "assistant", ?, ?)')
+            ->execute([$cid, $opening['content'], $opening['model']]);
+        return [
+            'id' => (int) $pdo->lastInsertId(),
+            'role' => 'assistant',
+            'content' => $opening['content'],
+            'at' => gmdate('Y-m-d\TH:i:s\Z'),
+        ];
+    });
+    echo json_encode(['ok' => true, 'message' => $message, 'questions' => $opening['questions']], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -321,6 +370,7 @@ if ($action === '' && $method === 'GET') {
         'personaMemories' => chat_persona_memories((int) $persona['id'], 12),
         'olderLeft' => max(0, $total - count($messages)),
         'convs'     => $convs,
+        'contactView' => setting('ui_chat_list', 'threads') === 'contacts',
         'personaPrompts' => $personaPrompts,
         'chatReady' => chat_llm_ready(),
         'chatModel' => chat_llm_config_raw()['model'],
