@@ -9,7 +9,7 @@ return [
     'settings.chat.klipy_empty' => 'Aucune clé enregistrée',
     'settings.chat.klipy_saved' => 'Clé enregistrée',
     'settings.chat.klipy_key' => 'Clé API KLIPY',
-    'settings.chat.klipy_help' => 'Autorise les GIF spontanés pour les personas qui ont activé cette option. Seuls des mots-clés de recherche sont envoyés à KLIPY.',
+    'settings.chat.klipy_help' => 'Autorise l’envoi de médias spontanés selon les réglages de chaque discussion. Seuls des mots-clés de recherche sont envoyés à KLIPY.',
     'settings.chat.klipy_clear' => 'Effacer la clé KLIPY',
     'settings.look.chat_list'    => 'Présentation des discussions',
     'settings.look.chat_threads' => 'Titres des conversations',

@@ -2071,11 +2071,11 @@ function reply_version_archive(int $cid, int $userMsgId): void
     }
     $first = $reactions[0] ?? '';
     unset($reactions[0]);
-    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at, reaction, bubble_reactions, gif_url)
+    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at, reaction, bubble_reactions, klipy_url)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         ->execute([
             $cid, $userMsgId, $content, $original['model'], $points ? json_encode($points) : '',
-            $original['created_at'], $first, chat_encode_reactions($reactions), $original['gif_url'],
+            $original['created_at'], $first, chat_encode_reactions($reactions), $original['klipy_url'],
         ]);
 }
 

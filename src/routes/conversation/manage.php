@@ -108,6 +108,14 @@ if ($action === 'directive' && $method === 'POST') {
     redirect('/chat/' . $cid);
 }
 
+if ($action === 'klipy' && $method === 'POST') {
+    csrf_check();
+    $formats = isset($_POST['inherit']) ? -1 : klipy_format_mask($_POST['klipy_formats'] ?? []);
+    db()->prepare('UPDATE conversations SET klipy_formats = ? WHERE id = ?')->execute([$formats, $cid]);
+    flash('ok', t('flash.chat.toggles_saved'));
+    redirect('/chat/' . $cid);
+}
+
 if ($action === 'reasoning' && $method === 'POST') {
     csrf_check();
     db()->prepare('UPDATE conversations SET reasoning_effort = ? WHERE id = ?')

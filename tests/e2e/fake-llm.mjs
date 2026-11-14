@@ -69,15 +69,20 @@ http.createServer(async (req, res) => {
                 data: [{ id: 'fake-model', state: 'loaded', type: 'llm', max_context_length: 8192 }] }
             : { data: [{ id: 'fake-model' }] }));
     }
-    if (req.url.startsWith('/klipy/test-gif-key/gifs/search?')) {
+    const klipyFormat = req.url.match(/^\/klipy\/test-gif-key\/(gif|sticker|clip)s\/search\?/)?.[1];
+    if (klipyFormat) {
         const params = new URL(req.url, 'http://localhost').searchParams;
         if (params.get('q') !== 'happy dance' || params.get('content_filter') !== 'high') {
             res.statusCode = 400;
             return res.end();
         }
+        const url = (extension) => 'https://static.klipy.com/test/celebrate.' + extension;
+        const file = klipyFormat === 'clip' ? { mp4: url('mp4') }
+            : klipyFormat === 'sticker' ? { md: { webp: { url: url('webp') } } }
+            : { md: { gif: { url: url('gif') } } };
         return res.end(JSON.stringify({ data: { data: [
             { type: 'ad' },
-            { type: 'gif', file: { md: { gif: { url: 'https://static.klipy.com/test/celebrate.gif' } } } },
+            { type: klipyFormat, file },
         ] } }));
     }
     if (req.url.endsWith('/chat/completions')) {
@@ -91,8 +96,9 @@ http.createServer(async (req, res) => {
         const system = String(j.messages?.[0]?.content ?? '');
         const last = String(j.messages?.at(-1)?.content ?? '');
         let text;
-        if (system.startsWith('Choisis une réaction GIF facultative')) {
-            text = last.includes('Je fête cette réussite') ? 'celebrate' : 'none';
+        if (system.startsWith('Choisis un média KLIPY facultatif')) {
+            const format = system.match(/Formats autorisés : (gif|sticker|clip)/)?.[1];
+            text = last.includes('Je fête cette réussite') ? format + ':celebrate' : 'none';
         } else if (system.includes("Analyse l'évolution de la relation")) {
             const { etat, nouveaux_echanges: exchanges } = JSON.parse(last);
             const conflict = etat.find((entry) => entry.kind === 'conflict' && !entry.resolved && !entry.deleted);

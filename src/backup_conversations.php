@@ -252,6 +252,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
             $cid = backup_insert_row($pdo, 'conversations', $fields + [
                 'persona_id' => $personaId,
                 'reasoning_effort' => chat_reasoning_effort($conversation['reasoning_effort'] ?? ''),
+                'klipy_formats' => max(-1, min(7, (int) ($conversation['klipy_formats'] ?? -1))),
             ]);
             $messageIds = [];
             $assistantIds = [];
@@ -273,7 +274,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 $mid = backup_insert_row($pdo, 'messages', $fields + [
                     'conversation_id' => $cid, 'image' => $media[backup_str($message['image'] ?? '')] ?? '',
                     'reaction' => $first, 'bubble_reactions' => chat_encode_reactions($reactions),
-                    'gif_url' => klipy_gif_url($message['gif_url'] ?? ''),
+                    'klipy_url' => klipy_media_url($message['klipy_url'] ?? $message['gif_url'] ?? ''),
                     'reaction_reply' => $fields['role'] === 'assistant' && !empty($message['reaction_reply']) ? 1 : 0,
                 ]);
                 if ($sourceId) {
@@ -304,7 +305,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 $vid = backup_insert_row($pdo, 'reply_versions', $fields + [
                     'conversation_id' => $cid, 'user_message_id' => $userId,
                     'reaction' => $first, 'bubble_reactions' => chat_encode_reactions($reactions),
-                    'gif_url' => klipy_gif_url($version['gif_url'] ?? ''),
+                    'klipy_url' => klipy_media_url($version['klipy_url'] ?? $version['gif_url'] ?? ''),
                 ]);
                 $versions[$sourceId] = ['id' => $vid, 'user_id' => $userId];
             }
