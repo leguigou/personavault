@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 if ($path === '/login') {
     if (is_logged()) {
-        redirect('/');
+        redirect('/chat');
     }
     $error = '';
     if ($method === 'POST') {
@@ -18,7 +18,7 @@ if ($path === '/login') {
         if ($wait > 0) {
             $error = t('login.blocked', (int) ceil($wait / 60));
         } elseif (attempt_login((string) ($_POST['password'] ?? ''))) {
-            redirect('/');
+            redirect('/chat');
         } else {
             $error = t('login.wrong');
             $wait  = login_blocked_for();

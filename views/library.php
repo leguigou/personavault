@@ -28,7 +28,7 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
     </div>
 </section>
 
-<form class="searchbar" method="get" action="/" role="search" data-search
+<form class="searchbar" method="get" action="/library" role="search" data-search
       data-tags="<?= e(json_encode($tagList, JSON_UNESCAPED_UNICODE)) ?>">
     <?php if ($fav): ?><input type="hidden" name="fav" value="1"><?php endif; ?>
     <?php if ($arch): ?><input type="hidden" name="arch" value="1"><?php endif; ?>
@@ -47,7 +47,7 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
     <?php if ($tag !== ''): ?><span class="filter-pill">#<?= e($tag) ?></span><?php endif; ?>
     <?php if ($fav): ?><span class="filter-pill"><?= e(t('nav.favorites')) ?></span><?php endif; ?>
     <?php if ($arch): ?><span class="filter-pill"><?= e(t('nav.archives')) ?></span><?php endif; ?>
-    <a class="btn btn-clear" href="/">
+    <a class="btn btn-clear" href="/library">
         <svg viewBox="0 0 24 24" class="ico"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <?= e(t('library.clear_filters')), "\n" ?>
     </a>
@@ -56,9 +56,9 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
 
 <?php if ($allTags): ?>
 <div class="tagrow">
-    <a class="chip <?= $tag === '' ? 'is-on' : '' ?>" href="/?<?= http_build_query($baseQs) ?>"><?= e(t('library.tag_all')) ?></a>
+    <a class="chip <?= $tag === '' ? 'is-on' : '' ?>" href="/library?<?= http_build_query($baseQs) ?>"><?= e(t('library.tag_all')) ?></a>
     <?php foreach (array_slice($allTags, 0, 14, true) as $t => $n): ?>
-        <a class="chip <?= $tag === (string) $t ? 'is-on' : '' ?>" href="/?<?= http_build_query(array_merge($baseQs, ['tag' => $t])) ?>">
+        <a class="chip <?= $tag === (string) $t ? 'is-on' : '' ?>" href="/library?<?= http_build_query(array_merge($baseQs, ['tag' => $t])) ?>">
             <?= e((string) $t) ?><em><?= (int) $n ?></em>
         </a>
     <?php endforeach; ?>
@@ -95,9 +95,9 @@ $activeFilters = ($q !== '') || ($tag !== '') || $fav || $arch;
             default => t('library.empty_text'),
         }) ?></p>
         <?php if ($emptyKind === 'found'): ?>
-            <a class="btn btn-ghost btn-sm" href="/<?= $fav ? '?fav=1' : ($arch ? '?arch=1' : '') ?>"><?= e(t('library.empty_found_reset')) ?></a>
+            <a class="btn btn-ghost btn-sm" href="/library<?= $fav ? '?fav=1' : ($arch ? '?arch=1' : '') ?>"><?= e(t('library.empty_found_reset')) ?></a>
         <?php elseif ($emptyKind === 'fav' || $emptyKind === 'arch'): ?>
-            <a class="btn btn-ghost btn-sm" href="/"><?= e(t('library.empty_back')) ?></a>
+            <a class="btn btn-ghost btn-sm" href="/library"><?= e(t('library.empty_back')) ?></a>
         <?php endif; ?>
         <?php if ($emptyKind === 'lib'): ?>
             <a class="btn btn-primary" href="/p/new"><?= e(t('library.create')) ?></a>

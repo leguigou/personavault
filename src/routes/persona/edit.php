@@ -82,7 +82,7 @@ if ($action === 'delete' && $method === 'POST') {
     $stmt->execute([$pid]);
     release_media(...$files); // après la suppression en cascade : plus aucune référence
     flash('ok', t('flash.persona.deleted', ['name' => $persona['name']]));
-    redirect('/');
+    redirect('/library');
 }
 
 if ($action === 'favorite' && $method === 'POST') {
