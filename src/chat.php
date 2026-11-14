@@ -1485,8 +1485,8 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2, 
             while ($wi < $wordCount && $mw[0][$wi][1] < $end) {
                 $wi++;
             }
-            // une fin de phrase en toute fin de texte ne peut pas servir de coupe
-            if (trim(substr($rest, $end)) === '') {
+            // Garde les émojis et la ponctuation seuls avec le texte voisin.
+            if (!chat_split_has_text(substr($rest, 0, $end)) || !chat_split_has_text(substr($rest, $end))) {
                 continue;
             }
             $boundaries[] = ['byte' => $end, 'words' => $wi];
@@ -1525,6 +1525,12 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2, 
     }
 
     return $cuts;
+}
+
+function chat_split_has_text(string $part): bool
+{
+    $part = preg_replace('/[#*0-9]\x{FE0F}?\x{20E3}/u', '', $part) ?? $part;
+    return preg_match('/[^\s\p{P}\p{Extended_Pictographic}\p{Emoji_Component}0-9]|[0-9]/u', $part) === 1;
 }
 
 /** Mêmes coupes, exprimées en points de code (stockage / rendu PHP). */
@@ -2065,11 +2071,11 @@ function reply_version_archive(int $cid, int $userMsgId): void
     }
     $first = $reactions[0] ?? '';
     unset($reactions[0]);
-    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at, reaction, bubble_reactions)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at, reaction, bubble_reactions, gif_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         ->execute([
             $cid, $userMsgId, $content, $original['model'], $points ? json_encode($points) : '',
-            $original['created_at'], $first, chat_encode_reactions($reactions),
+            $original['created_at'], $first, chat_encode_reactions($reactions), $original['gif_url'],
         ]);
 }
 

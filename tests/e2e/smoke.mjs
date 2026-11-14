@@ -549,6 +549,27 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     await submit('/chat/1/reasoning', { reasoning_effort: '' });
     expect(await turn(1, 'medium') && await turn(2, 'none'), 'le retour à l’héritage respecte les autres personas');
 }
+{
+    const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });
+    const celebrate = async () => {
+        const response = await submit('/chat/1/stream', { message: 'Je fête cette réussite' });
+        return (await response.text()).split('\n').filter(line => line.startsWith('data: '))
+            .map(line => JSON.parse(line.slice(6))).find(event => event.done)?.reply;
+    };
+    await submit('/settings/chat', {
+        chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`,
+        chat_model: 'fake-model', klipy_api_key: 'test-gif-key',
+    });
+    await submit('/p/camille-lefebvre', { name: 'Camille Lefebvre', spontaneous_gifs: '0' });
+    expect((await celebrate())?.gif_url === '', 'le persona doit autoriser les GIF spontanés');
+    await submit('/p/camille-lefebvre', { name: 'Camille Lefebvre', spontaneous_gifs: '1' });
+    const animated = await celebrate();
+    const gifUrl = 'https://static.klipy.com/test/celebrate.gif';
+    expect(animated?.gif_url === gifUrl, 'le GIF KLIPY accompagne la réponse en direct');
+    expect((await (await http('/chat/1')).text()).includes(gifUrl), 'le GIF est restauré au rechargement');
+    expect((await celebrate())?.gif_url === '', 'les GIF spontanés sont espacés');
+    expect(!(await (await http('/settings')).text()).includes('test-gif-key'), 'la clé KLIPY reste côté serveur');
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

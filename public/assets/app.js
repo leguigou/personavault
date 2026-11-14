@@ -2931,6 +2931,19 @@
                 if (wrap.dataset.msgId && m.role === "user") prepareUserBubble(b.hidden ? img : b);
                 paintReaction(item, m.bubble_reactions?.[i] ?? (i === 0 ? m.reaction : ""), m.role === "assistant");
             });
+            if (m.gif_url) {
+                const gif = document.createElement("figure");
+                gif.className = "chat-gif";
+                const image = document.createElement("img");
+                image.alt = chat.dataset.gifAlt;
+                image.loading = "lazy";
+                image.referrerPolicy = "no-referrer";
+                image.src = m.gif_url;
+                const credit = document.createElement("figcaption");
+                credit.textContent = "Powered by KLIPY";
+                gif.append(image, credit);
+                holder.appendChild(gif);
+            }
             wrap.appendChild(holder);
             return wrap;
         };
@@ -4152,6 +4165,7 @@
                     split_points: d.split_points || [],
                     version_id: d.version_id,
                     reaction: d.reaction,
+                    gif_url: d.gif_url,
                     bubble_reactions: d.bubble_reactions,
                     at: el.dataset.at,
                 });
@@ -4650,6 +4664,9 @@
             };
 
             const countWords = (s) => (s.trim() === "" ? 0 : s.trim().split(/\s+/).length);
+            // Même règle que chat_split_has_text côté serveur.
+            const hasText = (part) => /[^\s\p{P}\p{Extended_Pictographic}\p{Emoji_Component}0-9]|[0-9]/u
+                .test(part.replace(/[#*0-9]\uFE0F?\u20E3/gu, ""));
 
             // Cherche la dernière fin de phrase avant le seuil ou la première après.
             const cutInSegment = (seg) => {
@@ -4664,7 +4681,7 @@
                 let mm;
                 while ((mm = reEnd.exec(seg))) {
                     const at = mm.index + mm[0].length;
-                    if (seg.slice(at).trim() !== "") ends.push(at); // pas de coupe en toute fin de texte
+                    if (hasText(seg.slice(0, at)) && hasText(seg.slice(at))) ends.push(at);
                 }
                 if (!ends.length) return 0;
 

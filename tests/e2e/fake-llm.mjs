@@ -69,6 +69,17 @@ http.createServer(async (req, res) => {
                 data: [{ id: 'fake-model', state: 'loaded', type: 'llm', max_context_length: 8192 }] }
             : { data: [{ id: 'fake-model' }] }));
     }
+    if (req.url.startsWith('/klipy/test-gif-key/gifs/search?')) {
+        const params = new URL(req.url, 'http://localhost').searchParams;
+        if (params.get('q') !== 'happy dance' || params.get('content_filter') !== 'high') {
+            res.statusCode = 400;
+            return res.end();
+        }
+        return res.end(JSON.stringify({ data: { data: [
+            { type: 'ad' },
+            { type: 'gif', file: { md: { gif: { url: 'https://static.klipy.com/test/celebrate.gif' } } } },
+        ] } }));
+    }
     if (req.url.endsWith('/chat/completions')) {
         const j = JSON.parse(body || '{}');
         // comme LM Studio : json_object refusé, json_schema accepté
@@ -80,7 +91,9 @@ http.createServer(async (req, res) => {
         const system = String(j.messages?.[0]?.content ?? '');
         const last = String(j.messages?.at(-1)?.content ?? '');
         let text;
-        if (system.includes("Analyse l'évolution de la relation")) {
+        if (system.startsWith('Choisis une réaction GIF facultative')) {
+            text = last.includes('Je fête cette réussite') ? 'celebrate' : 'none';
+        } else if (system.includes("Analyse l'évolution de la relation")) {
             const { etat, nouveaux_echanges: exchanges } = JSON.parse(last);
             const conflict = etat.find((entry) => entry.kind === 'conflict' && !entry.resolved && !entry.deleted);
             const entries = [];

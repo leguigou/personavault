@@ -251,6 +251,18 @@ $facts = facts_settings();
         </div>
         </section>
 
+        <section class="settings-card">
+            <label class="field">
+                <span><?= e(t('settings.chat.klipy_key')) ?></span>
+                <input class="input" type="password" name="klipy_api_key" maxlength="255" autocomplete="new-password" spellcheck="false"
+                       placeholder="<?= setting('klipy_api_key') !== '' ? e(t('settings.ia.api_key_keep')) : '' ?>">
+                <small><?= e(t('settings.chat.klipy_help')) ?></small>
+            </label>
+            <?php if (setting('klipy_api_key') !== ''): ?>
+                <label class="check"><input type="checkbox" name="klipy_api_key_clear" value="1"><span><?= e(t('settings.chat.klipy_clear')) ?></span></label>
+            <?php endif; ?>
+        </section>
+
         <details class="settings-card settings-fold">
             <summary>
                 <span class="fold-text">

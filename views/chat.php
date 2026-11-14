@@ -53,6 +53,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
              <?php if ($openingPending): ?>data-opening="/chat/<?= (int) $conv['id'] ?>/opening"<?php endif; ?>
              data-token="<?= e($token) ?>"
              data-reactions="<?= e(json_encode(chat_reaction_options(), JSON_UNESCAPED_UNICODE)) ?>"
+             data-gif-alt="<?= e(t('chat.gif_alt')) ?>"
              data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) === 1 && chat_title_mode() !== 'off' ? 1 : 0 ?>"
              data-split="<?= (string) setting('chat_split_enabled', '1') === '1' ? '1' : '0' ?>"
              data-split-words="<?= (int) setting('chat_split_words', '50') ?>"
@@ -190,6 +191,12 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                                     <div class="bubble"<?= $photoOnly ? ' hidden' : '' ?>><?= nl2br(e($part)) ?></div>
                                 </div>
                             <?php endforeach; ?>
+                            <?php if ($gif = klipy_gif_url($m['gif_url'])): ?>
+                                <figure class="chat-gif">
+                                    <img src="<?= e($gif) ?>" alt="<?= e(t('chat.gif_alt')) ?>" loading="lazy" referrerpolicy="no-referrer">
+                                    <figcaption>Powered by KLIPY</figcaption>
+                                </figure>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>
