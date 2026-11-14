@@ -93,6 +93,13 @@ $fmt   = fn (float $n): string => fmt_number($n);
             <?php endif; ?>
 
             <?php if (!$messages): ?>
+                <?php
+                $starters = array_map(static fn (string $starter): string => str_replace('{name}', (string) $persona['name'], $starter),
+                    explode('|', t('chat.intro.starters')));
+                $packs = array_chunk($starters, 3);
+                $first = ((int) $conv['id'] - 1) % count($packs);
+                $packs = array_merge(array_slice($packs, $first), array_slice($packs, 0, $first));
+                ?>
                 <div class="chat-intro">
                     <div class="chat-avatar chat-avatar-lg">
                         <?php if ($persona['avatar']): ?>
@@ -104,11 +111,13 @@ $fmt   = fn (float $n): string => fmt_number($n);
                     <h2><?= e((string) $persona['name']) ?></h2>
                     <?php if ($persona['tagline']): ?><p><?= e((string) $persona['tagline']) ?></p><?php endif; ?>
                     <span class="hint"><?= e(t('chat.intro.first_message')) ?></span>
-                    <div class="chat-starters" role="group" aria-label="<?= e(t('chat.intro.starters_label')) ?>">
-                        <?php foreach ([t('chat.intro.starter_1'), t('chat.intro.starter_2'), t('chat.intro.starter_3')] as $starter): ?>
-                            <button type="button" class="chip" data-starter="<?= e($starter) ?>"><?= e($starter) ?></button>
+                    <div class="chat-starters" id="chat-starters" role="group" aria-live="polite" aria-label="<?= e(t('chat.intro.starters_label')) ?>"
+                         data-starter-packs="<?= e(json_encode($packs, JSON_UNESCAPED_UNICODE)) ?>">
+                        <?php foreach ($packs[0] as $starter): ?>
+                            <button type="button" class="chip" data-starter><?= e($starter) ?></button>
                         <?php endforeach; ?>
                     </div>
+                    <button type="button" class="chat-starters-more mini" data-starters-more aria-controls="chat-starters"><?= e(t('chat.intro.starters_more')) ?></button>
                 </div>
             <?php endif; ?>
 

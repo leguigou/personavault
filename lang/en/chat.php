@@ -61,9 +61,11 @@ return [
     // --- conversation: messages and composer
     'chat.intro.first_message'      => 'Write the first message.',
     'chat.intro.starters_label' => 'Ideas to get started',
-    'chat.intro.starter_1' => 'Hi! How are you?',
-    'chat.intro.starter_2' => 'Tell me about your day.',
-    'chat.intro.starter_3' => 'Tell me a bit about yourself.',
+    'chat.intro.starters_more' => 'More ideas',
+    'chat.intro.starters' => 'Hey {name}! What are you up to today?|What’s been putting you in a good mood lately?|If you could take me to your favorite place, where would we go?'
+        . '|Hey {name}! What made you smile today?|Is there a little ritual you always make time for?|What’s something you’d like me to know about you?'
+        . '|Hey {name}! Got a story to tell me?|What does your ideal day look like?|What do you love doing so much that you lose track of time?'
+        . '|Hey {name}! What were you thinking about before I showed up?|If we had an hour to spare, what would you suggest?|Is there something you’ve always wanted to try?',
     'chat.msg.photo_sent'           => 'Photo sent',
     'chat.composer.attach_preview'  => 'Preview of the attached photo',
     'chat.composer.attach_remove'   => 'Remove the photo',

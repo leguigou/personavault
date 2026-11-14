@@ -61,9 +61,11 @@ return [
     // --- conversación: mensajes y redacción
     'chat.intro.first_message'      => 'Escribe el primer mensaje.',
     'chat.intro.starters_label' => 'Ideas para empezar',
-    'chat.intro.starter_1' => '¡Hola! ¿Qué tal?',
-    'chat.intro.starter_2' => 'Cuéntame tu día.',
-    'chat.intro.starter_3' => 'Háblame un poco de ti.',
+    'chat.intro.starters_more' => 'Más ideas',
+    'chat.intro.starters' => '¡Hola, {name}! ¿Qué planes tienes hoy?|¿Qué te pone de buen humor últimamente?|Si me llevaras a tu lugar favorito, ¿adónde iríamos?'
+        . '|¡Hola, {name}! ¿Qué te hizo sonreír hoy?|¿Hay algún pequeño ritual que nunca te saltas?|¿Qué te gustaría que supiera de ti?'
+        . '|¡Hola, {name}! ¿Tienes alguna anécdota que contarme?|¿Cómo sería un día ideal para ti?|¿Qué te apasiona tanto que pierdes la noción del tiempo?'
+        . '|¡Hola, {name}! ¿En qué pensabas antes de que llegara?|Si tuviéramos una hora libre, ¿qué propondrías?|¿Hay algo que siempre hayas querido probar?',
     'chat.msg.photo_sent'           => 'Foto enviada',
     'chat.composer.attach_preview'  => 'Vista previa de la foto adjunta',
     'chat.composer.attach_remove'   => 'Quitar la foto',

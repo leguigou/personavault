@@ -3987,14 +3987,24 @@
         };
 
         /* idées de premier message : remplit la zone de saisie (sans envoyer) */
-        document.querySelectorAll("[data-starter]").forEach((b) => {
+        const starters = chat.querySelector("[data-starter-packs]");
+        const starterButtons = starters?.querySelectorAll("[data-starter]");
+        starterButtons?.forEach((b) => {
             b.addEventListener("click", () => {
-                input.value = b.dataset.starter;
+                input.value = b.textContent;
                 input.dispatchEvent(new Event("input", { bubbles: true }));
                 input.focus();
                 input.setSelectionRange(input.value.length, input.value.length);
             });
         });
+        if (starters) {
+            const packs = JSON.parse(starters.dataset.starterPacks);
+            let currentPack = 0;
+            chat.querySelector("[data-starters-more]").addEventListener("click", () => {
+                currentPack = (currentPack + 1) % packs.length;
+                starterButtons.forEach((button, i) => { button.textContent = packs[currentPack][i]; });
+            });
+        }
 
         /* ‹ 1/3 › sous la dernière réponse : passer d'une version régénérée à l'autre */
         const versionUrl = endpoint.replace(/\/send$/, "/version");
