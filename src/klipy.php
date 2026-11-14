@@ -39,6 +39,35 @@ function klipy_search_media(string $format, string $mood, string $key, array $se
     if ($format !== 'clip') {
         $params['format_filter'] = $format === 'gif' ? 'gif' : 'gif,webp';
     }
+    // Une demande explicite peut chercher plus loin si la première page a déjà été vue.
+    $maxPages = $diagnostic && $seen ? 3 : 1;
+    for ($page = 1; $page <= $maxPages; $page++) {
+        $data = klipy_search_page($format, $key, $params + ['page' => $page], $diagnostic);
+        foreach ($data['data'] ?? [] as $result) {
+            if (!is_array($result) || ($result['type'] ?? $format) !== $format) {
+                continue;
+            }
+            $file = $result['file'] ?? [];
+            $url = match ($format) {
+                'clip' => $file['mp4'] ?? '',
+                'sticker' => $file['md']['webp']['url'] ?? $file['md']['gif']['url'] ?? $file['md']['png']['url']
+                    ?? $file['sm']['webp']['url'] ?? $file['sm']['gif']['url'] ?? '',
+                default => $file['md']['gif']['url'] ?? $file['sm']['gif']['url'] ?? '',
+            };
+            $url = klipy_media_url($url);
+            if ($url !== '' && !in_array($url, $seen, true)) {
+                return $url;
+            }
+        }
+        if (empty($data['has_next'])) {
+            break;
+        }
+    }
+    return '';
+}
+
+function klipy_search_page(string $format, string $key, array $params, bool $diagnostic): array
+{
     $base = (string) config('klipy_api_base', 'https://api.klipy.com/api/v1');
     $ch = curl_init(rtrim($base, '/') . '/' . rawurlencode($key) . '/' . $format . 's/search?' . http_build_query($params));
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => 4]);
@@ -54,25 +83,17 @@ function klipy_search_media(string $format, string $mood, string $key, array $se
                 default => t('settings.chat.klipy_test_unavailable'),
             });
         }
-        return '';
+        return [];
     }
-    foreach ($results as $result) {
-        if (!is_array($result) || ($result['type'] ?? $format) !== $format) {
-            continue;
-        }
-        $file = $result['file'] ?? [];
-        $url = match ($format) {
-            'clip' => $file['mp4'] ?? '',
-            'sticker' => $file['md']['webp']['url'] ?? $file['md']['gif']['url'] ?? $file['md']['png']['url']
-                ?? $file['sm']['webp']['url'] ?? $file['sm']['gif']['url'] ?? '',
-            default => $file['md']['gif']['url'] ?? $file['sm']['gif']['url'] ?? '',
-        };
-        $url = klipy_media_url($url);
-        if ($url !== '' && !in_array($url, $seen, true)) {
-            return $url;
-        }
-    }
-    return '';
+    return $data['data'];
+}
+
+function chat_seen_klipy(int $cid): array
+{
+    $stmt = db()->prepare("SELECT klipy_url FROM messages WHERE conversation_id = ? AND klipy_url <> ''
+        UNION SELECT klipy_url FROM reply_versions WHERE conversation_id = ? AND klipy_url <> ''");
+    $stmt->execute([$cid, $cid]);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
 /** Les demandes explicites utilisent des mots-clés prédéfinis, sans transmettre le message à KLIPY. */
@@ -107,7 +128,7 @@ function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $m
         if ($key === '') {
             throw new RuntimeException(t('settings.chat.klipy_test_missing'));
         }
-        $url = klipy_search_media($request[0], $request[1], $key, [], true);
+        $url = klipy_search_media($request[0], $request[1], $key, chat_seen_klipy($cid), true);
         if ($url === '') {
             throw new RuntimeException(t('chat.klipy_no_media'));
         }
@@ -142,9 +163,7 @@ function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $m
         if (!isset($formats[$format], CHAT_GIF_QUERIES[$mood])) {
             return '';
         }
-        $stmt = db()->prepare("SELECT klipy_url FROM messages WHERE conversation_id = ? AND klipy_url <> '' ORDER BY id DESC LIMIT 20");
-        $stmt->execute([$cid]);
-        return klipy_search_media($format, $mood, $key, $stmt->fetchAll(PDO::FETCH_COLUMN));
+        return klipy_search_media($format, $mood, $key, chat_seen_klipy($cid));
     } catch (Throwable) {
         return '';
     }

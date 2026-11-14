@@ -221,6 +221,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
             <button type="button" data-attach-remove aria-label="<?= e(t('chat.composer.attach_remove')) ?>">&times;</button>
         </div>
 
+        <p class="chat-queue" data-chat-queue role="status" hidden></p>
         <form class="chat-composer" data-chat-form>
             <div class="chat-field">
                 <button class="chat-attach" type="button" data-attach hidden aria-label="<?= e(t('chat.composer.attach')) ?>" title="<?= e(t('chat.composer.attach')) ?>">
@@ -231,6 +232,10 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
             </div>
             <button class="chat-send" type="submit" aria-label="<?= e(t('chat.composer.send')) ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M12.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="chat-send is-stop" type="button" data-chat-stop hidden
+                    aria-label="<?= e(t('js.chat.stop_label')) ?>" title="<?= e(t('js.chat.stop')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.4" y="6.4" width="11.2" height="11.2" rx="2.6" fill="currentColor"/></svg>
             </button>
         </form>
 

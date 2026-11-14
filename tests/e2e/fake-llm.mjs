@@ -81,14 +81,16 @@ http.createServer(async (req, res) => {
             return res.end();
         }
         const name = { 'playful wink': 'wink', 'happy dance': 'celebrate', 'friendly wave': 'hello' }[params.get('q')];
-        const url = (extension) => 'https://static.klipy.com/test/' + name + '.' + extension;
+        const page = Number(params.get('page') || 1);
+        const suffix = name === 'wink' && page === 2 ? '-second' : '';
+        const url = (extension) => 'https://static.klipy.com/test/' + name + suffix + '.' + extension;
         const file = klipyFormat === 'clip' ? { mp4: url('mp4') }
             : klipyFormat === 'sticker' ? { md: { webp: { url: url('webp') } } }
             : { md: { gif: { url: url('gif') } } };
         return res.end(JSON.stringify({ data: { data: [
             { type: 'ad' },
             { type: klipyFormat, file },
-        ] } }));
+        ], has_next: name === 'wink' && page === 1 } }));
     }
     if (req.url.endsWith('/chat/completions')) {
         const j = JSON.parse(body || '{}');

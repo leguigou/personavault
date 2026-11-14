@@ -476,6 +476,15 @@ try {
     $tags  = array_map(static fn (array $m): string => strtok((string) $m['content'], ' '), array_slice($tight['messages'], 1, -1));
     $check($tags === ['M115', 'M116', 'M117', 'M118', 'M119', 'M120'] && str_ends_with((string) end($tight['messages'])['content'], 'et maintenant ?'),
         'contexte serré : les ' . CHAT_MIN_RECENT . ' derniers messages restent (raccourcis au besoin)');
+    $limits = chat_token_budget(['context_window' => 16384, 'max_tokens' => 400]);
+    $check($limits === ['input' => 13000, 'output' => 400, 'memory' => 3000, 'history' => 8000],
+        'contexte : les budgets de référence correspondent à la fenêtre de 16 384 tokens');
+    $small = ['context_window' => 1024, 'max_tokens' => 4096, 'memory_enabled' => 0] + $conv;
+    $smallPrompt = chat_build_messages($persona, [['kind' => 'system', 'body' => str_repeat('consigne ', 250)]],
+        $small, $hist, 'Question : ' . str_repeat('mot ', 200) . 'fin de ma demande');
+    $check($smallPrompt['tokens'] <= chat_token_budget($small)['input']
+        && str_ends_with((string) end($smallPrompt['messages'])['content'], 'fin de ma demande'),
+        'contexte : une petite fenêtre garde la fin du message et respecte le budget');
 
     echo PHP_EOL . '— index plein texte des messages' . PHP_EOL;
     db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$pid, 'ailleurs']);
