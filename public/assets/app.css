@@ -813,6 +813,8 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
 .sheet-ctx-text strong { font-size: 14.5px; color: var(--text); font-weight: 650; }
 
 .sheet-form { display: flex; flex-direction: column; gap: 10px; }
+.sheet-settings-form, .klipy-options { display: grid; gap: 10px; }
+.sheet-settings-form > .form-actions { margin-top: 2px; }
 .sheet-advanced { border-top: 1px dashed var(--border); padding-top: 10px; }
 .sheet-advanced summary {
     cursor: pointer;
