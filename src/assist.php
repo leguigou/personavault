@@ -20,6 +20,7 @@ const ASSIST_TEXT_FIELDS = [
     'history'     => 200,
     'family'      => 200,
     'friends'     => 200,
+    'work'        => 200,
     'goals'       => 200,
     'personality' => 200,
     'voice'       => 600,
@@ -29,7 +30,11 @@ const ASSIST_TEXT_FIELDS = [
     'source_url'  => 300, // page de référence consultée (http/https seulement)
 ];
 
-const ASSIST_BACKGROUND_FIELDS = ['history', 'family', 'friends', 'goals', 'personality'];
+const ASSIST_BACKGROUND_FIELDS = ['history', 'family', 'friends', 'work', 'goals', 'personality'];
+
+const ASSIST_REQUIRED_FIELDS = ['name', 'work', 'history', 'family', 'friends',
+    'goals', 'personality', 'voice', 'looks', 'relation', 'rules'];
+const ASSIST_MAX_STALLED_TURNS = 3;
 
 /** Fiche en cours nettoyée (types, longueurs, listes bornées). */
 function assist_clean(array $d): array
@@ -74,8 +79,21 @@ function assist_clean(array $d): array
         $seen[mb_strtolower($k)] = true;
         $meta[] = ['k' => $k, 'v' => $v];
     }
+    foreach ($meta as &$row) {
+        if (assist_is_work_label($row['k'])) {
+            $out['work'] = $out['work'] !== '' ? $out['work'] : $row['v'];
+            $row['v'] = $out['work'];
+        }
+    }
+    unset($row);
     $out['meta'] = $meta;
     return $out;
+}
+
+function assist_is_work_label(string $label): bool
+{
+    return in_array(mb_strtolower(trim($label)), ['métier', 'metier', 'profession', 'travail', 'emploi', 'occupation',
+        'job', 'work', 'role', 'rôle', 'profesión', 'profesion', 'trabajo', 'ocupación', 'ocupacion', 'empleo', 'rol'], true);
 }
 
 /**
@@ -101,7 +119,7 @@ function assist_merge(array $old, array $new): array
             $new['meta'][] = $row;
         }
     }
-    return $new;
+    return assist_clean($new);
 }
 
 /** Fiche en cours tirée d'un persona existant (pour l'assistant sur une fiche). */
@@ -132,23 +150,62 @@ function assist_from_persona(array $persona): array
  * Les prompts système et image sont rédigés à la création (ou existent déjà sur la fiche).
  * @return array{items: list<array{key:string,label:string,done:bool,auto?:bool}>, percent:int}
  */
-function assist_progress(array $d, array $prompts = []): array
+function assist_progress(array $d, array $prompts = [], string $conflict = ''): array
 {
     $d     = assist_clean($d);
     $kinds = array_count_values(array_map(static fn ($p) => (string) $p['kind'], $prompts));
-    $items = [
-        ['key' => 'ident', 'label' => t('assist.item.ident'), 'done' => $d['name'] !== '' && $d['tagline'] !== ''],
-        ['key' => 'desc', 'label' => t('assist.item.desc'), 'done' => mb_strlen($d['description']) >= 40],
-        ['key' => 'facts', 'label' => t('assist.item.facts'), 'done' => count($d['meta']) >= 3],
-        ['key' => 'life', 'label' => t('assist.item.life'), 'done' => $d['history'] !== '' && ($d['family'] !== '' || $d['friends'] !== '') && $d['goals'] !== ''],
-        ['key' => 'character', 'label' => t('assist.item.character'), 'done' => $d['personality'] !== '' && $d['voice'] !== ''],
-        ['key' => 'looks', 'label' => t('assist.item.looks'), 'done' => isset($kinds['image']) || mb_strlen($d['looks']) >= 30],
-        ['key' => 'rules', 'label' => t('assist.item.rules'), 'done' => $d['rules'] !== ''],
-    ];
-    $percent = (int) round(count(array_filter($items, static fn ($i) => $i['done'])) / count($items) * 100);
+    if ($conflict !== '' && !in_array($conflict, ASSIST_REQUIRED_FIELDS, true)) {
+        $conflict = '';
+    }
+    $items = [];
+    $missing = [];
+    foreach (ASSIST_REQUIRED_FIELDS as $key) {
+        $covered = $d[$key] !== '' || ($key === 'looks' && isset($kinds['image']))
+            || (in_array($key, ['voice', 'relation', 'rules'], true) && isset($kinds['system']));
+        $done = $covered && $key !== $conflict;
+        $labelKey = 'js.assist.f.' . $key;
+        $items[] = ['key' => $key, 'label' => t($labelKey), 'done' => $done];
+        if (!$covered) {
+            $missing[] = $key;
+        }
+    }
+    $percent = (int) round(count(array_filter($items, static fn (array $item): bool => $item['done'])) / count($items) * 100);
     $items[] = ['key' => 'system', 'label' => t('assist.item.system'), 'done' => isset($kinds['system']), 'auto' => !isset($kinds['system'])];
     $items[] = ['key' => 'image', 'label' => t('assist.item.image'), 'done' => isset($kinds['image']), 'auto' => !isset($kinds['image'])];
-    return ['items' => $items, 'percent' => $percent];
+    return ['items' => $items, 'percent' => $percent, 'missing' => $missing];
+}
+
+/** Réévalue les brouillons repris depuis un onglet ouvert avant la mise à jour. */
+function assist_status(array $draft, ?array $persona, array $prompts, string $conflict = ''): array
+{
+    $progress = assist_progress($persona ? assist_merge(assist_from_persona($persona), $draft) : $draft, $prompts, $conflict);
+    return ['progress' => $progress, 'ready' => $progress['percent'] === 100];
+}
+
+/** Garde toute la conversation tant qu'elle tient, puis privilégie l'idée initiale et les derniers échanges. */
+function assist_history(array $history): string
+{
+    $lines = [];
+    $first = null;
+    foreach ($history as $h) {
+        if (!is_array($h) || !in_array($h['role'] ?? '', ['user', 'assistant'], true) || !is_string($h['content'] ?? null)) {
+            continue;
+        }
+        $who = $h['role'] === 'user' ? 'Utilisateur' : 'Assistant';
+        $line = $who . ' : ' . mb_substr(trim($h['content']), 0, 2000) . "\n";
+        $lines[] = $line;
+        if ($first === null && $h['role'] === 'user') {
+            $first = $line;
+        }
+    }
+    $all = implode('', $lines);
+    if (mb_strlen($all) <= 22000) {
+        return $all;
+    }
+    $recent = mb_substr($all, -19000);
+    $start = mb_strpos($recent, "\n");
+    return ($first ?? '') . "[… échanges intermédiaires omis ; voir la fiche en cours …]\n"
+        . ($start === false ? $recent : mb_substr($recent, $start + 1));
 }
 
 /** Contexte d'une fiche existante pour le modèle (prompts résumés). */
@@ -180,14 +237,22 @@ function assist_llm_json(string $system, string $user, int $maxTokens, float $te
     llm_log_context(['purpose' => 'assist']);
     $msgs = [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]];
     $opts = ['temperature' => $temperature, 'max_tokens' => $maxTokens, 'timeout' => 150, 'json' => true, 'purpose' => 'assist'];
-    try {
-        $res = llm_request($msgs, $cfg, $opts);
-    } catch (RuntimeException $e) {
-        if (!str_contains($e->getMessage(), 'response_format')) {
-            throw $e;
+    if ($cfg['provider'] === 'lmstudio') {
+        $opts['reasoning_effort'] = 'none';
+    }
+    while (true) {
+        try {
+            $res = llm_request($msgs, $cfg, $opts);
+            break;
+        } catch (RuntimeException $e) {
+            if ($e->getCode() === 400 && isset($opts['reasoning_effort']) && str_contains($e->getMessage(), 'reasoning_effort')) {
+                unset($opts['reasoning_effort']);
+            } elseif ($opts['json'] && str_contains($e->getMessage(), 'response_format')) {
+                $opts['json'] = false;
+            } else {
+                throw $e;
+            }
         }
-        $opts['json'] = false;
-        $res = llm_request($msgs, $cfg, $opts);
     }
     $out = trim((string) preg_replace('~<think>.*?</think>~s', '', (string) $res['content']));
     return llm_json($out);
@@ -197,12 +262,15 @@ function assist_llm_json(string $system, string $user, int $maxTokens, float $te
  * Un tour de conversation.
  * $action : start (premier message, rien encore), reply (réponse de l'utilisateur),
  *           suggest (l'IA invente la réponse à sa dernière question).
- * $history : [{role: assistant|user, content}] (les derniers échanges).
+ * $history : [{role: assistant|user, content}] (conversation conservée dans l'onglet).
  * @return array{draft:array, reply:string, question:string, choices:list<string>, progress:array}
  */
-function assist_turn(array $draft, array $history, string $action, string $answer, ?array $persona = null, array $prompts = [], ?array $pendingCanon = null): array
+function assist_turn(array $draft, array $history, string $action, string $answer, ?array $persona = null, array $prompts = [], ?array $pendingCanon = null, string $focus = '', int $stalls = 0): array
 {
-    $draft = assist_clean($draft);
+    $draft = $persona ? assist_merge(assist_from_persona($persona), $draft) : assist_clean($draft);
+    $progress = assist_progress($draft, $prompts);
+    $focus = in_array($focus, ASSIST_REQUIRED_FIELDS, true) ? $focus : '';
+    $stalls = max(0, min(ASSIST_MAX_STALLED_TURNS, $stalls));
     $isNew = $persona === null;
     // Les formulations directes ouvrent la relecture sans refaire analyser le brouillon.
     if ($action === 'reply' && $pendingCanon === null && preg_match(
@@ -214,7 +282,7 @@ function assist_turn(array $draft, array $history, string $action, string $answe
     )) {
         return [
             'draft' => $draft, 'reply' => '', 'question' => '', 'choices' => [],
-            'progress' => assist_progress($draft, $prompts), 'review' => true,
+            'progress' => $progress, 'review' => true, 'ready' => $progress['percent'] === 100,
         ];
     }
 
@@ -227,16 +295,16 @@ Champs de la fiche :
 - tags : 3 à 6 mots-clés en minuscules ; meta : attributs clé/valeur courts (Âge, Métier, Ville, Origine, Taille…) ;
 - looks : apparence physique PRÉCISE pour qu'on la reconnaisse sur les images (visage, yeux, cheveux, peau, silhouette, style vestimentaire, signes distinctifs) ;
 - style : rendu visuel voulu (photo réaliste, manga, illustration, 3D…) ;
-- history : un événement marquant et sa conséquence aujourd'hui ; family : proches et liens familiaux ; friends : amis, alliés ou personnes qu'il fréquente, avec la nature des liens ; goals : un désir actuel et ce qui peut l'en empêcher ; personality : traits, valeurs et une tension qui le rend humain. Une phrase courte par champ, de moins de 170 caractères. Place ces éléments dans leurs champs dédiés.
+- history : un événement marquant et sa conséquence aujourd'hui ; family : proches et liens familiaux ; friends : amis, alliés ou personnes qu'il fréquente, avec la nature des liens ; work : activité, travail, études ou rôle au quotidien ; goals : un désir actuel et ce qui peut l'en empêcher ; personality : traits, valeurs et une tension qui le rend humain. Une phrase courte par champ, de moins de 170 caractères. Place ces éléments dans leurs champs dédiés.
 - voice : façon de parler (ton, registre, tutoiement, longueur des réponses, tics) ;
 - relation : relation avec l'utilisateur et contexte des échanges ; rules : limites et règles de conduite (ce qu'elle ne fait jamais).
 
 À chaque tour :
-1. Intègre la dernière réponse de l'utilisateur dans la fiche. Il peut corriger quelque chose : applique la correction. Ne supprime rien d'autre.
-2. Si ACTION = suggest : l'utilisateur manque d'inspiration. INVENTE toi-même une réponse riche, originale et cohérente avec le reste à ta DERNIÈRE question, intègre-la, et dis en une phrase ce que tu as choisi.
-3. Choisis la prochaine question : la plus utile pour ce qui MANQUE encore. Après l'identité, explore ce que le personnage a vécu, qui compte pour lui et ce qu'il veut, puis sa façon de réagir, de parler et ses détails visuels. Une seule question, courte, naturelle, en tutoyant. Accepte qu'un personnage n'ait pas de famille proche ou d'amis si c'est un choix de l'utilisateur.
-4. Propose 3 réponses possibles (« choices »), courtes (6 mots max), variées et adaptées à CE persona.
-5. Quand tout l'essentiel est rempli, ne pose plus de question obligatoire : propose plutôt un détail optionnel et dis que la fiche peut être créée.
+1. Relis la conversation et le brouillon. Intègre dans les champs dédiés tous les faits déjà donnés, y compris dans des réponses plus anciennes. Applique les corrections explicites les plus récentes et préserve les autres choix. Déduis une accroche ou une description à partir des faits connus, sans inventer de biographie sans y être invité.
+2. Si ACTION = suggest : réponds toi-même à la question sur le champ ciblé, intègre ton choix, et explique-le brièvement. Une absence explicite (sans famille proche, sans amis, sans emploi…) est une réponse complète : consigne-la dans le champ.
+3. Pour la prochaine question, indique dans "topic" une clé du brouillon dont le contenu manquera encore APRÈS tes ajouts, et pose une seule question concrète sur ce champ, avec 3 réponses courtes et adaptées. Ne redemande pas un fait déjà donné. Si tout est renseigné, laisse "question" et "topic" vides.
+4. Compare les faits recueillis entre eux. Signale uniquement une contradiction concrète et importante que la dernière réponse n'a pas résolue. Indique sa clé dans "conflict" et pose une question brève pour la trancher. Sinon laisse "conflict" vide. Une absence choisie ou une préférence de style n'est pas une contradiction.
+5. Une fois la fiche complète, accepte les précisions libres sans lancer de nouvelle série de questions. Note dans meta les petits détails durables (ex. passe-temps, habitudes) que l'utilisateur ajoute en dehors des champs dédiés. Déduis les éléments facultatifs comme l'accroche, la description, les tags et le style à partir des choix existants.
 6. PERSONNAGE EXISTANT : si l'utilisateur veut un persona tiré d'un personnage qui existe déjà (roman, film, série, BD, manga, anime, jeu vidéo, conte, mythologie, figure historique…), renseigne "canon" : {"name": "nom usuel du personnage", "work": "œuvre ou univers d'origine"}. Sinon "canon": null. Un simple « dans le style de » ou « inspiré de » sans personnage précis n'est pas un personnage existant.
 7. Si plusieurs adaptations ou incarnations plausibles changent sensiblement le personnage et que l'utilisateur n'a pas choisi, ajoute à "canon" un tableau "version_choices" contenant 2 ou 3 versions précises et distinctes. Si une version est déjà indiquée ou qu'une seule est pertinente, omets ce tableau.
 8. Si la fiche en cours contient une source, respecte la version choisie et laisse les faits biographiques incertains ouverts, sauf si l'utilisateur demande une adaptation libre.
@@ -244,14 +312,10 @@ Champs de la fiche :
 Réponds en français. Ne mets jamais d'informations sur l'utilisateur réel dans la fiche.
 
 Réponds UNIQUEMENT avec un objet JSON :
-{"draft": {la fiche complète à jour, mêmes champs}, "reply": "une phrase : ce que tu as compris ou inventé (vide au tout premier message)", "question": "ta question suivante", "choices": ["…", "…", "…"], "canon": null, "review": false}
+{"draft": {la fiche complète à jour, mêmes champs}, "reply": "une phrase sur l’ajout", "topic": "clé du champ demandé ou vide", "conflict": "clé du champ contradictoire ou vide", "question": "une question ou vide", "choices": ["…", "…", "…"], "canon": null, "review": false}
 TXT;
 
-    $lines = '';
-    foreach (array_slice($history, -12) as $h) {
-        $who = ($h['role'] ?? '') === 'user' ? 'Utilisateur' : 'Assistant';
-        $lines .= $who . ' : ' . mb_substr(trim((string) ($h['content'] ?? '')), 0, 600) . "\n";
-    }
+    $lines = assist_history($history);
     if ($pendingCanon !== null && in_array($action, ['reply', 'suggest'], true)) {
         $res = assist_canon_fill($draft, $pendingCanon, $lines, $answer, $persona, $prompts);
         if ($res !== null) {
@@ -261,11 +325,13 @@ TXT;
 
     $user = ($isNew ? "MODE : création d'un nouveau persona.\n" : "MODE : compléter une fiche existante. Pose des questions uniquement sur ce qui MANQUE dans la fiche ou les prompts. Si un prompt image existe, ne redemande pas l'apparence.\n" . assist_existing_context($persona, $prompts) . "\n")
         . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n"
+        . 'CHAMPS ENCORE VIDES AVANT MISE À JOUR : ' . implode(', ', $progress['missing']) . "\n"
+        . ($focus !== '' ? 'CHAMP CIBLÉ PAR LA DERNIÈRE QUESTION : ' . $focus . "\n" : '')
         . "CONVERSATION\n" . ($lines !== '' ? $lines : "(début)\n")
         . "\nACTION : " . $action . "\n"
         . ($action === 'reply' ? "RÉPONSE DE L'UTILISATEUR : " . mb_substr(trim($answer), 0, 2000) . "\n" : '');
 
-    $j = assist_llm_json($system, $user, 2200, $action === 'suggest' ? 0.95 : 0.7);
+    $j = assist_llm_json($system, $user, 3000, $action === 'suggest' ? 0.7 : 0.4);
 
     // personnage existant (nouveau, ou différent de celui déjà retrouvé) : on va chercher
     // ses informations et on remplit toute la fiche d'un coup
@@ -289,24 +355,64 @@ TXT;
         }
     }
 
-    $newDraft = is_array($j['draft'] ?? null) ? $j['draft'] : [];
-    $merged   = assist_merge($draft, $newDraft);
-    $review   = $action === 'reply' && $pendingCanon === null && ($j['review'] ?? false) === true;
-    $choices  = assist_choices($j['choices'] ?? []);
-    $question = mb_substr(trim((string) ($j['question'] ?? '')), 0, 400);
-    if ($question === '' && !$review) {
-        throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
+    return assist_turn_result($draft, $j, $action, $prompts, $focus, $stalls);
+}
+
+/** Le serveur décide quand poser une question ou proposer la relecture. */
+function assist_turn_result(array $old, array $turn, string $action, array $prompts, string $focus = '', int $stalls = 0): array
+{
+    $draft = assist_merge($old, is_array($turn['draft'] ?? null) ? $turn['draft'] : []);
+    $previous = assist_progress($old, $prompts);
+    $conflict = $turn['conflict'] ?? '';
+    $question = is_string($turn['question'] ?? null) ? mb_substr(trim($turn['question']), 0, 400) : '';
+    if (!in_array($conflict, ASSIST_REQUIRED_FIELDS, true) || $question === '') {
+        $conflict = '';
+    }
+    $progress = assist_progress($draft, $prompts, $conflict);
+    $missing = $progress['missing'];
+    $ready = $missing === [] && $conflict === '';
+    $review = $action === 'reply' && ($turn['review'] ?? false) === true;
+    $advanced = array_diff($previous['missing'], $missing) !== [];
+    $stalls = $action === 'start' || $advanced || $ready ? 0 : $stalls + 1;
+    $paused = !$ready && !$review && $stalls >= ASSIST_MAX_STALLED_TURNS;
+    $reply = is_string($turn['reply'] ?? null) ? mb_substr(trim($turn['reply']), 0, 400) : '';
+    $choices = [];
+    $topic = '';
+
+    if ($ready || $review || $paused) {
+        $question = '';
+        if ($ready && ($previous['percent'] < 100 || $focus !== '')) {
+            $reply = t('assist.turn.ready');
+        } elseif ($paused && $stalls === ASSIST_MAX_STALLED_TURNS) {
+            $reply = t('assist.turn.paused');
+        }
+    } elseif ($conflict !== '') {
+        $topic = $conflict;
+        $choices = assist_choices($turn['choices'] ?? []);
+    } else {
+        $suggested = $turn['topic'] ?? '';
+        if ($question !== '' && in_array($suggested, $missing, true) && $suggested !== $focus) {
+            $topic = $suggested;
+            $choices = assist_choices($turn['choices'] ?? []);
+        } else {
+            $topic = array_values(array_diff($missing, [$focus]))[0] ?? $missing[0];
+            $question = assist_missing_question($topic);
+        }
     }
 
-    return [
-        'draft'    => $merged,
-        'reply'    => mb_substr(trim((string) ($j['reply'] ?? '')), 0, 400),
-        'question' => $review ? '' : $question,
-        'choices'  => $review ? [] : $choices,
-        'progress' => assist_progress($merged, $prompts),
-        'source'   => null,
-        'review'   => $review,
-    ];
+    return compact('draft', 'reply', 'question', 'choices', 'progress', 'review', 'ready', 'topic', 'conflict', 'stalls', 'paused')
+        + ['source' => null];
+}
+
+function assist_missing_question(string $key): string
+{
+    return match ($key) {
+        'name' => t('assist.ask.name'),
+        'work' => t('assist.ask.work'), 'history' => t('assist.ask.history'), 'family' => t('assist.ask.family'),
+        'friends' => t('assist.ask.friends'), 'goals' => t('assist.ask.goals'), 'personality' => t('assist.ask.personality'),
+        'voice' => t('assist.ask.voice'), 'looks' => t('assist.ask.looks'), 'relation' => t('assist.ask.relation'),
+        'rules' => t('assist.ask.rules'),
+    };
 }
 
 /** Choix proposés par le modèle : 3 au plus, courts. */
@@ -456,13 +562,12 @@ Si une version a été précisée, inscris-la dans les attributs. Si l'utilisate
 - name : nom tel que dans l'œuvre ; tagline : qui il ou elle est, en une ligne (90 caractères max) ; description : 2 ou 3 phrases pour situer son rôle et le moment choisi, sans portrait détaillé ;
 - tags : 3 à 6 mots-clés en minuscules ; meta : 4 à 8 attributs courts (Œuvre, Créateur ou auteur, Âge, Origine, Rôle ou métier, Affiliations…) ;
 - looks : apparence canonique PRÉCISE pour les images (visage, yeux, cheveux, silhouette, tenue emblématique, signes distinctifs) ; style : rendu visuel cohérent avec l'œuvre ;
-- history : événement marquant déjà vécu à cette époque ; family : liens familiaux ; friends : amis ou alliés ; goals : ce qu'il veut à ce moment de l'œuvre ; personality : traits, valeurs et contradictions. Une phrase courte par champ, de moins de 170 caractères. Garde les faits incertains vides, sauf demande explicite d'adaptation libre ;
+- history : événement marquant déjà vécu à cette époque ; family : liens familiaux ; friends : amis ou alliés ; work : métier, activité ou rôle à cette époque ; goals : ce qu'il veut ; personality : traits, valeurs et contradictions. Une phrase courte par champ, de moins de 170 caractères. Garde les faits incertains vides, sauf demande explicite d'adaptation libre ;
 - voice : façon de parler, expressions et tics typiques ;
 - relation : par défaut, l'utilisateur est quelqu'un qu'il ou elle rencontre dans son univers ; rules : rester dans le personnage, ne pas connaître ce qui est hors de son univers, limites cohérentes avec lui ou elle.
 Si tu ne connais pas ce personnage et que la référence ne le décrit pas, n'invente rien : réponds {"found": false}.
-Sinon, pose UNE question d'ajustement courte en tutoyant (version de l'œuvre, moment de l'histoire, relation avec l'utilisateur…) avec 3 réponses possibles de 6 mots max.
 Réponds en français, UNIQUEMENT avec un objet JSON :
-{"found": true, "draft": {la fiche complète}, "reply": "une phrase : ce que tu as retrouvé et rempli", "question": "…", "choices": ["…", "…", "…"]}
+{"found": true, "draft": {la fiche complète}, "reply": "une phrase : ce que tu as retrouvé et rempli"}
 TXT;
     $user = ($persona ? "MODE : compléter une fiche existante (ne rien contredire).\n" . assist_existing_context($persona, $prompts) . "\n" : '')
         . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n"
@@ -479,21 +584,11 @@ TXT;
     $new               = $j['draft'];
     $new['source']     = $label;
     $new['source_url'] = $ref['url'] ?? '';
-    $merged            = assist_merge($draft, $new);
-    $question          = mb_substr(trim((string) ($j['question'] ?? '')), 0, 400);
-    if ($question === '') {
-        $question = t('assist.canon.question');
-    }
-    return [
-        'draft'    => $merged,
-        'reply'    => mb_substr(trim((string) ($j['reply'] ?? '')), 0, 400),
-        'question' => $question,
-        'choices'  => assist_choices($j['choices'] ?? []),
-        'progress' => assist_progress($merged, $prompts),
-        'source'   => $ref
+    $result = assist_turn_result($draft, ['draft' => $new, 'reply' => $j['reply'] ?? ''], 'start', $prompts);
+    $result['source'] = $ref
             ? ['label' => t('assist.canon.found', ['title' => $ref['title']]), 'url' => $ref['url']]
-            : ['label' => t('assist.canon.memory', ['name' => $canon['name']]), 'url' => ''],
-    ];
+            : ['label' => t('assist.canon.memory', ['name' => $canon['name']]), 'url' => ''];
+    return $result;
 }
 
 /**
@@ -501,28 +596,30 @@ TXT;
  * le prompt système et le prompt image.
  * @return array{draft:array, system_prompt:string, image_prompt:string}
  */
-function assist_finalize(array $draft, ?array $persona = null, array $prompts = []): array
+function assist_finalize(array $draft, ?array $persona = null, array $prompts = [], array $history = []): array
 {
-    $draft = assist_clean($draft);
+    $draft = $persona ? assist_merge(assist_from_persona($persona), $draft) : assist_clean($draft);
     $system = <<<TXT
-Tu finalises la fiche d'un PERSONA à partir de la FICHE EN COURS.
-1. Complète les champs vides de façon cohérente avec la fiche. La description situe le personnage en 2 ou 3 phrases. Le portrait détaillé va dans looks pour préparer l'image. Réserve meta aux faits courts comme l'âge, le métier ou la ville. Dans history, family, friends, goals et personality, donne des éléments précis qui peuvent se manifester en conversation, en 200 caractères maximum par champ. Préserve les choix explicites, y compris l'absence de proches. Complète aussi name, tagline, tags, style, voice, relation et rules.
+Tu finalises la fiche d'un PERSONA à partir de la FICHE EN COURS et des choix de l'utilisateur dans la CONVERSATION.
+1. Relis la conversation et la fiche avant de rédiger. Complète les champs vides de façon cohérente, en utilisant les faits déjà donnés avant d'en proposer de nouveaux. Si un fait du brouillon contredit une correction explicite de l'utilisateur, applique la correction la plus récente. La description situe le personnage en 2 ou 3 phrases. Le portrait détaillé va dans looks pour préparer l'image. Réserve meta aux faits courts comme l'âge ou la ville. Dans history, family, friends, work, goals et personality, donne des éléments précis qui peuvent se manifester en conversation, en 200 caractères maximum par champ. Préserve les choix explicites, y compris l'absence de proches ou de travail. Complète aussi name, tagline, tags, style, voice, relation et rules.
 2. Écris "system_prompt" en français, à la 2e personne (« Tu es … »). La description et les attributs sont déjà transmis au modèle de discussion. Concentre le prompt sur ce qui guide le jeu : comment le personnage parle, se comporte avec l'interlocuteur et réagit à un imprévu, une contradiction ou un sujet qui le touche. Fais sentir ses motivations et ses relations quand elles deviennent pertinentes. Donne 2 ou 3 courtes répliques illustrant des réactions différentes. Garde les limites utiles, sans répéter le portrait ni réciter la biographie.
 3. Écris "image_prompt" en anglais, à partir de looks et style. Décris le sujet, les traits distinctifs, la tenue, l'expression et les éléments de cadrage, de lumière ou de décor utiles à l'image. Utilise des détails visibles plutôt que de raconter l'histoire ou de lister des traits de caractère abstraits.
 Réponds UNIQUEMENT avec un objet JSON :
-{"draft": {la fiche complète}, "system_prompt": "…", "image_prompt": "…"}
+{"draft": {la fiche complète}, "corrected": ["clés des champs corrigés sur demande explicite de l'utilisateur, ou tableau vide"], "system_prompt": "…", "image_prompt": "…"}
 TXT;
     if ($draft['source'] !== '') {
         $system .= "\nCe persona est un personnage EXISTANT (" . $draft['source'] . ") : respecte la version et l'époque choisies. Laisse vides les faits biographiques incertains, sauf demande explicite d'adaptation libre. Le prompt système commence par « Tu es " . $draft['name'] . ", … » en situant l'œuvre ; le prompt image reprend l'apparence de cette version.";
     }
     $user = ($persona ? assist_existing_context($persona, $prompts) . "\n" : '')
-        . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+        . "\n\nCONVERSATION\n" . assist_history($history);
 
-    $j = assist_llm_json($system, $user, 3600, $draft['source'] !== '' ? 0.6 : 0.75);
+    $j = assist_llm_json($system, $user, 3600, 0.4);
     $final = assist_merge($draft, is_array($j['draft'] ?? null) ? $j['draft'] : []);
     // ce que l'utilisateur a déjà donné prime toujours
+    $corrected = $persona === null && $history !== [] && is_array($j['corrected'] ?? null) ? $j['corrected'] : [];
     foreach (ASSIST_TEXT_FIELDS as $k => $_) {
-        if ($draft[$k] !== '') {
+        if ($draft[$k] !== '' && !in_array($k, $corrected, true)) {
             $final[$k] = $draft[$k];
         }
     }
@@ -530,7 +627,7 @@ TXT;
         throw new RuntimeException(t('assist.error.no_name'));
     }
     return [
-        'draft'         => $final,
+        'draft'         => assist_clean($final),
         'system_prompt' => mb_substr(trim((string) ($j['system_prompt'] ?? '')), 0, 12000),
         'image_prompt'  => mb_substr(trim((string) ($j['image_prompt'] ?? '')), 0, 4000),
     ];
@@ -550,6 +647,15 @@ function assist_review_fields(array $final, ?array $persona, array $prompts): ar
         }
     }
     $reviewMeta = array_filter($d['meta'], static fn (array $row): bool => !in_array(mb_strtolower($row['k']), $dedicated, true));
+    if ($d['work'] !== '') {
+        foreach ($reviewMeta as &$row) {
+            if (assist_is_work_label($row['k'])) {
+                $row['v'] = $d['work'];
+                unset($fields['work']);
+            }
+        }
+        unset($row);
+    }
     $fields['meta'] = meta_to_text($reviewMeta);
     $fields['system_prompt'] = $final['system_prompt'];
     $fields['image_prompt'] = $final['image_prompt'];
@@ -576,6 +682,9 @@ function assist_review_fields(array $final, ?array $persona, array $prompts): ar
         if (in_array(mb_strtolower($label), $existing, true)) {
             unset($fields[$key]);
         }
+    }
+    if (array_filter($existing, 'assist_is_work_label')) {
+        unset($fields['work']);
     }
     return $fields;
 }
@@ -604,7 +713,7 @@ function assist_profile_labels(): array
 {
     return [
         'history' => t('js.assist.f.history'), 'family' => t('js.assist.f.family'),
-        'friends' => t('js.assist.f.friends'), 'goals' => t('js.assist.f.goals'),
+        'friends' => t('js.assist.f.friends'), 'work' => t('js.assist.f.work'), 'goals' => t('js.assist.f.goals'),
         'personality' => t('js.assist.f.personality'), 'style' => t('assist.meta.style'),
         'source' => t('assist.meta.source'), 'source_url' => t('assist.meta.source_url'),
     ];
@@ -617,7 +726,8 @@ function assist_meta_rows(array $d): array
     $known = array_map(static fn ($r) => mb_strtolower($r['k']), $rows);
     foreach (assist_profile_labels() as $key => $k) {
         $v = $d[$key];
-        if ($v !== '' && !in_array(mb_strtolower($k), $known, true) && count($rows) < 20) {
+        if ($v !== '' && !in_array(mb_strtolower($k), $known, true) && count($rows) < 20
+            && ($key !== 'work' || !array_filter($known, 'assist_is_work_label'))) {
             $rows[] = ['k' => $k, 'v' => mb_substr($v, 0, 200)];
         }
     }
@@ -692,7 +802,8 @@ function assist_apply(array $persona, array $prompts, array $final): array
         }
     }
     foreach (assist_meta_rows($d) as $r) {
-        if (!isset($known[mb_strtolower($r['k'])]) && count($meta) < 20) {
+        if (!isset($known[mb_strtolower($r['k'])]) && count($meta) < 20
+            && (!assist_is_work_label($r['k']) || !array_filter(array_keys($known), 'assist_is_work_label'))) {
             $meta[]    = $r;
             $known[mb_strtolower($r['k'])] = true;
             $changes[] = t('labels.ai_field.meta');

@@ -20,7 +20,6 @@ const CHAT_REACTIONS = [
 
 const CHAT_AFFECTIONATE_REACTIONS = ['heart', 'tender', 'kiss', 'love', 'celebrate', 'hug'];
 const CHAT_PERSONA_REACTIONS = ['heart', 'laugh', 'hug', 'tender', 'kiss', 'love', 'celebrate', 'surprise', 'sad'];
-const CHAT_REACTION_MARKER = '⟦reaction:';
 
 function chat_reaction_options(): array
 {
@@ -91,20 +90,29 @@ function chat_reaction_instructions(bool $canReact): string
         . "Tiens compte de ces signaux naturellement, sans commenter chaque clic ni répéter les émojis. "
         . "Utilise aussi les émojis dans ton texte avec parcimonie, selon ton style habituel.";
     if ($canReact) {
-        $options = array_map(static fn (string $key): string => $key . ' = ' . CHAT_REACTIONS[$key][1], CHAT_PERSONA_REACTIONS);
-        $text .= " Exceptionnellement, si le dernier message de l’utilisateur mérite vraiment un petit geste "
-            . "(mot particulièrement gentil, annonce importante, vraie complicité ou réconfort), tu peux ajouter "
-            . "une seule réaction distincte de ta réponse. Termine ta réponse textuelle par " . CHAT_REACTION_MARKER . "identifiant⟧. "
-            . "Identifiants autorisés : " . implode('; ', $options) . ". "
-            . "Dans un échange ordinaire, écris simplement ta réponse sans marqueur. Ne redouble pas ta réaction dans le texte.";
+        $text .= "\n\nChoisis une réaction à apposer sur le dernier message de ton interlocuteur. "
+            . "Commence toujours par une ligne [reaction:choix], puis écris ta réponse normale sur la ligne suivante. "
+            . 'Choisis parmi ' . implode(', ', CHAT_PERSONA_REACTIONS) . ", none. "
+            . "Un remerciement personnel, une attention ou un compliment sincère appelle heart ou tender. "
+            . "Une bonne nouvelle appelle celebrate, une vraie blague laugh, une confidence douloureuse hug ou sad. "
+            . "Réserve kiss et love aux relations où c’est déjà naturel. Pour un échange pratique ou banal, choisis none. "
+            . "Exemples : « Merci d’avoir été là pour moi, ça m’a vraiment fait du bien » → [reaction:heart]. "
+            . "« On se parle à 18 h ? » → [reaction:none]. "
+            . "Le code est invisible pour ton interlocuteur. Dans ta réponse, poursuis l’échange sans commenter la réaction ni répéter son émoji.";
     }
     return $text;
 }
 
-/** Retient uniquement une éventuelle fin de fragment du marqueur avant d'émettre le texte SSE. */
+/** Lit la réaction en tête du flux et émet uniquement le texte de la réponse. */
 final class ChatReactionStream
 {
+    private const HEADER = '[reaction:';
+    private const LEGACY_MARKER = '⟦reaction:';
+
     public string $content = '';
+    private ?string $choice = null;
+    private ?string $head = '';
+    private bool $skipLeadingSpace = false;
     private string $pending = '';
 
     public function __construct(private readonly bool $canReact)
@@ -113,13 +121,34 @@ final class ChatReactionStream
 
     public function push(string $delta): string
     {
+        if ($this->head !== null) {
+            $this->head .= $delta;
+            $start = ltrim($this->head);
+            $lower = strtolower($start);
+            if (strlen($this->head) <= 64 && (str_starts_with(self::HEADER, $lower)
+                || (str_starts_with($lower, self::HEADER) && !str_contains($lower, ']') && !str_contains($lower, "\n")))) {
+                return '';
+            }
+            $delta = $this->head;
+            $this->head = null;
+            if (preg_match('/^\[reaction:\h*([a-z]{1,24})\h*\]/i', $start, $match)) {
+                $this->choice = strtolower($match[1]);
+                $delta = substr($start, strlen($match[0]));
+                $this->skipLeadingSpace = true;
+            }
+        }
+        if ($this->skipLeadingSpace) {
+            $delta = ltrim($delta);
+            $this->skipLeadingSpace = $delta === '';
+        }
+
         $text = preg_replace('/⟦reaction:[^⟧\r\n]{0,32}⟧/u', '', $this->pending . $delta);
         $this->pending = '';
         $start = strrpos($text, '⟦');
         if ($start !== false) {
             $tail = substr($text, $start);
-            if (str_starts_with(CHAT_REACTION_MARKER, $tail)
-                || (str_starts_with($tail, CHAT_REACTION_MARKER) && !str_contains($tail, '⟧') && strlen($tail) <= 48)) {
+            if (str_starts_with(self::LEGACY_MARKER, $tail)
+                || (str_starts_with($tail, self::LEGACY_MARKER) && !str_contains($tail, '⟧') && strlen($tail) <= 48)) {
                 $this->pending = $tail;
                 $text = substr($text, 0, $start);
             }
@@ -130,9 +159,25 @@ final class ChatReactionStream
 
     public function reaction(string $rawContent): string
     {
-        if (!$this->canReact || !preg_match('/⟦reaction:([a-z]+)⟧\s*$/u', $rawContent, $match)) {
+        if (!$this->canReact) {
             return '';
         }
-        return chat_reaction_key($match[1], 'user');
+        if ($this->choice !== null) {
+            return chat_reaction_key($this->choice, 'user');
+        }
+        return preg_match('/⟦reaction:([a-z]+)⟧\s*$/u', $rawContent, $match)
+            ? chat_reaction_key($match[1], 'user') : '';
+    }
+
+    public function finish(): string
+    {
+        // Une réponse qui commence par un simple « [ » peut s'arrêter avant qu'on puisse distinguer le préfixe.
+        $tail = $this->head ?? '';
+        $this->head = null;
+        if (str_starts_with(strtolower(ltrim($tail)), '[reaction')) {
+            return '';
+        }
+        $this->content .= $tail;
+        return $tail;
     }
 }

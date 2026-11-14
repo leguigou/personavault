@@ -8,7 +8,7 @@ let nextStream = '';
 const sherlock = { name: 'Sherlock Holmes', tagline: 'Détective consultant au 221B Baker Street', description: 'Détective génial et excentrique de Londres.',
     tags: ['detective', 'londres'], meta: [{ k: 'Œuvre', v: 'Arthur Conan Doyle' }, { k: 'Âge', v: '35' }, { k: 'Ville', v: 'Londres' }],
     looks: 'Grand, mince, visage anguleux, nez aquilin, yeux gris perçants.', style: 'illustration victorienne',
-    history: 'A ouvert un cabinet à Baker Street.', family: 'Mycroft, son frère.', friends: 'Watson, son confident.', goals: 'Résoudre les affaires que la police a abandonnées.',
+    history: 'A ouvert un cabinet à Baker Street.', family: 'Mycroft, son frère.', friends: 'Watson, son confident.', work: 'Détective consultant.', goals: 'Résoudre les affaires que la police a abandonnées.',
     personality: 'Observateur, logique, distant.', voice: 'Précis, ironique, vouvoie.', relation: 'Client venu le consulter.', rules: 'Reste dans son époque.' };
 const assist = (sys, user) => {
     if (/Tu remplis la fiche d'un PERSONA tiré d'un personnage EXISTANT/.test(sys)) {
@@ -24,7 +24,15 @@ const assist = (sys, user) => {
         if (/On peut passer à la relecture maintenant/.test(user)) {
             return JSON.stringify({ draft: { tagline: 'Détective prêt à relire' }, review: true });
         }
-        const known = /sherlock/i.test(user.split('RÉPONSE DE L\'UTILISATEUR')[1] || '');
+        const answer = user.split("RÉPONSE DE L'UTILISATEUR : ").at(-1);
+        if (/Détail ancien de Nina/.test(user) && answer.trim() === 'Je complète la voix de Nina') {
+            return JSON.stringify({ draft: { ...sherlock, name: 'Nina', work: 'Fleuriste', family: 'Vit loin de sa famille.', friends: 'Aucun ami proche.' },
+                topic: 'name', question: 'Quel est son prénom ?' });
+        }
+        if (answer.trim() === 'Je précise un détail de Nina') {
+            return JSON.stringify({ draft: { voice: 'Parle à voix basse.' }, topic: 'name', question: 'Quel est son prénom ?' });
+        }
+        const known = /sherlock/i.test(answer) && answer !== user;
         return JSON.stringify({ draft: {}, reply: '', question: 'Quel est son prénom ?', choices: ['Inès'],
             canon: known ? { name: 'Sherlock Holmes', work: 'Arthur Conan Doyle', version_choices: ['Les romans', 'La série'] } : null });
     }
@@ -68,21 +76,29 @@ http.createServer(async (req, res) => {
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ error: "'response_format.type' must be 'json_schema' or 'text'" }));
         }
+        const system = String(j.messages?.[0]?.content ?? '');
         const last = String(j.messages?.at(-1)?.content ?? '');
-        const text = assist(String(j.messages?.[0]?.content ?? ''), String(j.messages?.[1]?.content ?? ''))
-            ?? reply(String(j.messages?.[0]?.content ?? ''));
+        const text = system.includes('le sujet concret des derniers échanges') && last.includes('volcans en Islande')
+            ? 'Volcans en Islande' : (assist(system, String(j.messages?.[1]?.content ?? '')) ?? reply(system));
         const usage = { prompt_tokens: 100, completion_tokens: 20 };
         if (j.stream) {
             res.writeHead(200, { 'Content-Type': 'text/event-stream' });
             const mode = nextStream;
             nextStream = '';
             const delta = (content) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + '\n\n');
+            let finish = 'stop';
             if (last.endsWith('[Réaction à ton message]')) {
                 const target = last.match(/Message du personnage : "Réponse (\d+)/)?.[1];
                 const tone = last.includes('😡 — colère') ? 'colère' : last.includes('👍 — accord') ? 'accord simple' : 'autre';
                 delta(`Réaction à la réponse ${target} (${tone}).`);
             } else if (last.endsWith('Merci, tu as été adorable avec moi.')) {
-                for (const part of ['Ça me touche. ', '⟦re', 'action:', 'heart', '⟧']) delta(part);
+                if (system.includes('[reaction:choix]')) {
+                    for (const part of ['\n[re', 'action:', 'heart', ']', '\n', '\n']) delta(part);
+                }
+                delta('Ça me touche. Hier soir, j’ai vraiment');
+                finish = 'length';
+            } else if (last.endsWith('On se parle à 18 h ?') && system.includes('[reaction:choix]')) {
+                delta('[reaction:none]\nD’accord, à 18 h !');
             } else if (mode) {
                 if (mode !== 'silent') delta('Début de la nouvelle réponse.');
                 if (mode === 'fail') {
@@ -97,7 +113,7 @@ http.createServer(async (req, res) => {
             } else {
                 for (const w of text.split(' ')) delta(w + ' ');
             }
-            res.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage }) + '\n\n');
+            res.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: finish }], usage }) + '\n\n');
             return res.end('data: [DONE]\n\n');
         }
         res.setHeader('Content-Type', 'application/json');

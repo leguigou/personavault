@@ -4,6 +4,12 @@
  * The js.modal.*, js.unsaved.* and js.chat.jump keys are in common.php.
  */
 return [
+    'js.assist.review_progress' => 'Essential details covered in this draft · {percent}%',
+    'js.assist.f.work' => 'Work or activity',
+    'js.assist.resume_questions' => 'Resume questions',
+    'js.chat.retitling' => 'Rewriting title…',
+    'js.chat.retitled' => 'Title updated.',
+    'js.chat.retitle_failed' => 'Could not rewrite the title. Check that the model is available and try again.',
     'js.chat.react' => 'React to message',
     'js.chat.reactions' => 'Reactions',
     'js.chat.more_reactions' => 'More reactions',

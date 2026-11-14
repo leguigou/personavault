@@ -123,14 +123,16 @@ if ($action === 'delete' && $method === 'POST') {
     redirect('/chat');
 }
 
-/* --- titre automatique de la conversation --- */
-if ($action === 'autotitle' && $method === 'POST') {
+/* --- titre automatique ou réécriture à la demande --- */
+if (in_array($action, ['autotitle', 'retitle'], true) && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
     try {
-        $title = chat_auto_title($cid);
+        $title = chat_auto_title($cid, $action === 'retitle');
         echo json_encode($title ? ['ok' => true, 'title' => $title] : ['ok' => false], JSON_UNESCAPED_UNICODE);
+    } catch (DomainException $e) {
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
     }

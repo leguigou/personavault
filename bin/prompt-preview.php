@@ -29,7 +29,7 @@ $stmt->execute([$persona['id']]);
 $prompts = $stmt->fetchAll();
 
 $conv  = chat_with_persona($conv, $persona);
-$built = chat_build_messages($persona, $prompts, $conv, fetch_context_messages($cid, $conv), $msg);
+$built = chat_build_messages($persona, $prompts, $conv, fetch_context_messages($cid, $conv), $msg, canReact: chat_can_react($cid));
 
 echo 'conversation #' . $cid . ' — persona « ' . $persona['name'] . " »\n";
 echo 'messages envoyés : ' . count($built['messages']) . ' (historique retenu : ' . $built['kept'] . ")\n";

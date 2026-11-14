@@ -67,7 +67,7 @@
                         </div>
                         <div class="conv-body">
                             <div class="conv-line">
-                                <strong><?php if ($pinned): ?><svg class="conv-pinned-ico" viewBox="0 0 24 24" aria-label="<?= e(t('chat.list.pinned')) ?>"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg><?php endif; ?><?= e((string) $c['title']) ?></strong>
+                                <strong><?php if ($pinned): ?><svg class="conv-pinned-ico" viewBox="0 0 24 24" aria-label="<?= e(t('chat.list.pinned')) ?>"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg><?php endif; ?><span data-conv-title-text><?= e((string) $c['title']) ?></span></strong>
                                 <time datetime="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($when . ' UTC'))) ?>"><?= e(rel_time($when)) ?></time>
                             </div>
                             <div class="conv-line">
@@ -108,6 +108,10 @@
                 <button type="button" class="action-row" data-act="pin">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg>
                     <span data-label-pin="<?= e(t('chat.list.pin')) ?>" data-label-unpin="<?= e(t('chat.list.unpin')) ?>"></span>
+                </button>
+                <button type="button" class="action-row" data-act="retitle">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9L12 3Zm6.5 12v5M16 17.5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span><?= e(t('chat.list.retitle')) ?></span>
                 </button>
                 <button type="button" class="action-row is-danger" data-act="delete"
                         data-confirm="<?= e(t('chat.list.delete_confirm')) ?>">

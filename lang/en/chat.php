@@ -4,6 +4,7 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
+    'chat.list.retitle' => 'Rewrite title',
     'chat.emoji.like' => 'Agreed',
     'chat.emoji.heart' => 'Affection',
     'chat.emoji.laugh' => 'That made me laugh',

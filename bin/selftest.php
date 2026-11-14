@@ -629,7 +629,25 @@ try {
         'assistant : un attribut trop long est raccourci à la fin d’un mot');
     $__pg = assist_progress(['name' => 'A', 'tagline' => 'B', 'description' => str_repeat('x', 50)], [['kind' => 'system']]);
     $__sys = array_values(array_filter($__pg['items'], static fn ($i) => $i['key'] === 'system'))[0];
-    $check($__pg['percent'] === 29 && $__sys['done'] === true, 'assistant : avancement et prompt système existant reconnus');
+    $check($__pg['percent'] === 36 && $__sys['done'] === true && !in_array('voice', $__pg['missing'], true),
+        'assistant : avancement et prompt système existant reconnus');
+    $__complete = array_fill_keys(ASSIST_REQUIRED_FIELDS, 'Choix renseigné');
+    $__complete['family'] = 'Elle n’a pas de famille proche.';
+    $__complete['friends'] = 'Elle n’a pas d’amis pour le moment.';
+    unset($__complete['work']);
+    $__complete['meta'] = [['k' => 'Métier', 'v' => 'Fleuriste']];
+    $__result = assist_turn_result([], ['draft' => $__complete, 'topic' => 'family', 'question' => 'Et sa famille ?'], 'reply', []);
+    $check($__result['ready'] && $__result['progress']['percent'] === 100 && $__result['question'] === '' && $__result['draft']['work'] === 'Fleuriste',
+        'assistant : 100 % sans quota d’attributs, absences choisies respectées et question superflue retirée');
+    $__conflict = assist_turn_result($__complete, ['conflict' => 'work', 'question' => 'Fleuriste ou libraire ?'], 'reply', []);
+    $check(!$__conflict['ready'] && $__conflict['progress']['percent'] < 100 && $__conflict['topic'] === 'work',
+        'assistant : une contradiction concrète suspend la validation');
+    $__repeat = assist_turn_result(['name' => 'Inès'], ['topic' => 'name', 'question' => 'Son prénom ?'], 'reply', [], 'work');
+    $check($__repeat['topic'] === 'history' && $__repeat['question'] !== 'Son prénom ?',
+        'assistant : une question redondante est remplacée par un champ encore vide');
+    $__pause = assist_turn_result(['name' => 'Inès'], ['topic' => 'work', 'question' => 'Son métier ?'], 'reply', [], 'tagline', 2);
+    $check($__pause['paused'] && !$__pause['ready'] && $__pause['question'] === '' && $__pause['reply'] !== '',
+        'assistant : trois tours sans avancement interrompent la série de questions');
     $check(unique_slug('Assist') !== 'assist' && unique_slug('new') !== 'new', 'assistant : /p/assist et /p/new restent réservés');
     // personnage existant : référence nettoyée, lien de source limité au web, pas de nouvelle recherche pour le même
     $__cn = assist_canon_ref(['name' => '  Sherlock Holmes ', 'work' => 'Conan Doyle']);

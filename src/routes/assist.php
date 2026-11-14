@@ -6,6 +6,7 @@ declare(strict_types=1);
  *   GET  /p/assist          nouveau persona
  *   GET  /p/{slug}/assist   compléter une fiche existante
  *   POST /assist/turn       un tour de conversation (JSON)
+ *   POST /assist/status     recalculer l'avancement d'un brouillon repris (JSON)
  *   POST /assist/preview    préparer la fiche et ses prompts pour relecture (JSON)
  *   POST /assist/create     créer la fiche, ou l'appliquer sans rien écraser (JSON)
  */
@@ -48,13 +49,13 @@ if ($method === 'GET' && preg_match('#^/p/(?:([a-z0-9-]+)/)?assist$#', $path, $m
     exit;
 }
 
-if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/preview', '/assist/create'], true)) {
+if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/status', '/assist/preview', '/assist/create'], true)) {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     if ($path !== '/assist/create') {
         session_write_close(); // appel long : ne bloque pas les autres requêtes
         @set_time_limit(300); // personnage existant : recherche en ligne + deux appels au modèle
-        if (!llm_ready()) {
+        if ($path !== '/assist/status' && !llm_ready()) {
             http_response_code(400);
             echo json_encode(['ok' => false, 'error' => t('error.ai.configure_settings')], JSON_UNESCAPED_UNICODE);
             exit;
@@ -64,18 +65,32 @@ if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/preview', '/
         [$persona, $prompts] = $assistTarget(trim((string) ($_POST['slug'] ?? '')));
         $draft = json_decode((string) ($_POST['draft'] ?? '{}'), true);
         $draft = is_array($draft) ? $draft : [];
+        if ($path === '/assist/status') {
+            $status = assist_status($draft, $persona, $prompts, (string) ($_POST['conflict'] ?? ''));
+            echo json_encode(['ok' => true] + $status, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $history = json_decode((string) ($_POST['history'] ?? '[]'), true);
+        $history = is_array($history) ? $history : [];
         if ($path === '/assist/turn') {
-            $history = json_decode((string) ($_POST['history'] ?? '[]'), true);
             $action  = (string) ($_POST['action'] ?? 'reply');
             $action  = in_array($action, ['start', 'reply', 'suggest'], true) ? $action : 'reply';
             $pending = assist_canon_ref(json_decode((string) ($_POST['pending_canon'] ?? 'null'), true));
-            $res     = assist_turn($draft, is_array($history) ? $history : [], $action, (string) ($_POST['answer'] ?? ''), $persona, $prompts, $pending);
+            $res     = assist_turn($draft, $history, $action, (string) ($_POST['answer'] ?? ''), $persona, $prompts, $pending,
+                (string) ($_POST['focus'] ?? ''), (int) ($_POST['stalls'] ?? 0));
             echo json_encode(['ok' => true] + $res, JSON_UNESCAPED_UNICODE);
             exit;
         }
         if ($path === '/assist/preview') {
-            $final = assist_finalize($draft, $persona, $prompts);
-            echo json_encode(['ok' => true, 'fields' => assist_review_fields($final, $persona, $prompts)], JSON_UNESCAPED_UNICODE);
+            $final = assist_finalize($draft, $persona, $prompts, $history);
+            $prepared = $prompts;
+            foreach (['system', 'image'] as $kind) {
+                if ($final[$kind . '_prompt'] !== '') {
+                    $prepared[] = ['kind' => $kind];
+                }
+            }
+            echo json_encode(['ok' => true, 'fields' => assist_review_fields($final, $persona, $prompts),
+                'progress' => assist_progress($final['draft'], $prepared)], JSON_UNESCAPED_UNICODE);
             exit;
         }
         $fields = json_decode((string) ($_POST['fields'] ?? ''), true);

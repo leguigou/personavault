@@ -4,6 +4,7 @@
  * Toute clé ajoutée ici doit exister dans lang/en/chat.php et lang/es/chat.php (vérifié par bin/i18n-check.php).
  */
 return [
+    'chat.list.retitle' => 'Réécrire le titre',
     'chat.emoji.like' => 'D’accord',
     'chat.emoji.heart' => 'Affection',
     'chat.emoji.laugh' => 'Ça me fait rire',

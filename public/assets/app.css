@@ -3851,6 +3851,7 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
 }
 .action-row svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .action-row:hover, .action-row:focus-visible { background: rgba(var(--ink), .07); }
+.action-row[aria-busy="true"] { cursor: wait; color: var(--muted); }
 .action-row.is-danger { color: #f87171; }
 html[data-mode="light"] .action-row.is-danger { color: #dc2626; }
 @media (max-width: 640px) {
