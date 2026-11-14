@@ -325,7 +325,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
         </div>
         </div>
 
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/reasoning" class="sheet-directive" data-sheet-group="conversation">
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/reasoning" class="sheet-settings-form" data-sheet-group="conversation">
             <input type="hidden" name="_token" value="<?= e($token) ?>">
             <label class="field">
                 <span><?= e(t('settings.chat.reasoning')) ?></span>
@@ -334,18 +334,21 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                     $reasoningLabels = chat_reasoning_labels();
                     $inheritedEffort = chat_reasoning_effort($persona['reasoning_effort']) ?: setting('chat_reasoning_effort', 'none');
                     ?>
-                    <option value=""><?= e(t('chat.reasoning_inherit')) ?> (<?= e($reasoningLabels[$inheritedEffort] ?? $reasoningLabels['none']) ?>)</option>
+                    <option value=""><?= e(t('chat.reasoning_inherit')) ?></option>
                     <?php foreach ($reasoningLabels as $effort => $label): ?>
                         <option value="<?= $effort ?>" <?= $conv['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e($label) ?></option>
                     <?php endforeach; ?>
                 </select>
+                <?php if ($conv['reasoning_effort'] === ''): ?>
+                    <small><?= e(t('chat.reasoning_inherited_level', ['level' => $reasoningLabels[$inheritedEffort] ?? $reasoningLabels['none']])) ?></small>
+                <?php endif; ?>
             </label>
             <div class="form-actions">
-                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('form.save')) ?></button>
             </div>
         </form>
 
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/klipy" class="sheet-directive" data-sheet-group="conversation" data-klipy-settings>
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/klipy" class="sheet-settings-form" data-sheet-group="conversation" data-klipy-settings>
             <input type="hidden" name="_token" value="<?= e($token) ?>">
             <?php
             $inheritsKlipy = (int) $conv['klipy_formats'] === -1;
@@ -356,7 +359,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <input type="checkbox" name="inherit" value="1" <?= $inheritsKlipy ? 'checked' : '' ?>>
                 <span><?= e(t('chat.klipy_inherit')) ?></span>
             </label>
-            <div role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
+            <div class="klipy-options" role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
                 <?php foreach (klipy_format_labels() as $format => $label): ?>
                     <label class="check">
                         <input type="checkbox" name="klipy_formats[]" value="<?= $format ?>" <?= ($klipyMask & KLIPY_FORMATS[$format]) ? 'checked' : '' ?>>
@@ -365,7 +368,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <?php endforeach; ?>
             </div>
             <div class="form-actions">
-                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('form.save')) ?></button>
             </div>
         </form>
 

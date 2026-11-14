@@ -142,7 +142,7 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
                     <small><?= e(t('settings.chat.reasoning_help')) ?></small>
                 </label>
 
-                <div role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
+                <div class="klipy-options" role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
                     <strong><?= e(t('chat.klipy_formats')) ?></strong>
                     <input type="hidden" name="klipy_formats_present" value="1">
                     <?php foreach (klipy_format_labels() as $format => $label): ?>

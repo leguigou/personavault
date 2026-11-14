@@ -4,6 +4,7 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
+    'chat.reasoning_inherited_level' => 'Inherited setting · {level}',
     'chat.klipy_formats' => 'Spontaneous KLIPY media',
     'chat.klipy_inherit' => 'Follow the persona settings',
     'chat.klipy_gifs' => 'GIFs',
