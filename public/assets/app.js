@@ -3906,6 +3906,7 @@
                 closeReactions();
                 return;
             }
+            picker.style.maxHeight = `${bottom - top}px`;
             const { width, height } = picker.getBoundingClientRect();
             const x = anchor.left + Math.min(reactionPoint.x, anchor.width);
             picker.style.left = Math.max(left + 8, Math.min(x - width / 2, right - width - 8)) + "px";
@@ -3931,6 +3932,14 @@
                 const more = toolBtn("more-reactions", '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>', tr("chat.more_reactions"));
                 picker.appendChild(more);
             }
+            const msg = reactionBubble.closest(".msg-bot");
+            const actions = document.createElement("div");
+            actions.className = "reaction-actions";
+            if (lastReply() === msg && scroll.querySelector(".msg-user[data-msg-id]")) {
+                actions.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
+            }
+            actions.appendChild(toolBtn("del", ICONS.del, tr("chat.delete")));
+            picker.appendChild(actions);
             picker.hidden = false;
             positionReactions();
             (picker.querySelector('[aria-pressed="true"]') || picker.firstElementChild)?.focus({ preventScroll: true });
@@ -3965,13 +3974,21 @@
 
         picker.addEventListener("click", (event) => {
             event.stopPropagation();
+            if (!reactionBubble) return;
             const option = event.target.closest("[data-reaction-option]");
-            if (option && reactionBubble) {
+            const action = event.target.closest("[data-regen], [data-del]");
+            if (option) {
                 const item = reactionBubble;
                 closeReactions(true);
                 saveReaction(item, option.dataset.reactionOption);
             } else if (event.target.closest("[data-more-reactions]")) {
                 showReactions(true);
+            } else if (action) {
+                const msg = reactionBubble.closest(".msg-bot");
+                closeReactions(true);
+                if (!msg?.isConnected) return;
+                if (action.hasAttribute("data-regen")) regenerate(msg);
+                else removeMsg(msg.dataset.msgId);
             }
         });
         document.addEventListener("click", (event) => {
@@ -4005,29 +4022,30 @@
             return tr("chat.msg_time", { date, time });
         };
 
-        const buildTools = (el) => {
-            if (!el.dataset.msgId) return null;
-            const isBot = el.classList.contains("msg-bot");
-            const isLastBot = isBot && lastReply() === el;
+        const messageTime = (msg) => {
+            const when = fmtMsgTime(msg.dataset.at);
+            if (!when) return null;
+            const time = document.createElement("time");
+            time.className = "msg-time";
+            time.dateTime = msg.dataset.at;
+            time.textContent = when;
+            return time;
+        };
 
+        const showReplyTime = (msg) => {
+            const bubbles = msg.querySelector(".bubbles");
+            if (!bubbles || bubbles.querySelector(".msg-time")) return;
+            scroll.querySelectorAll(".msg-tools, .bubbles > .msg-time").forEach((el) => el.remove());
+            const time = messageTime(msg);
+            if (time) bubbles.appendChild(time);
+        };
+
+        const buildUserTools = (msg) => {
             const tools = document.createElement("div");
             tools.className = "msg-tools";
-
-            const when = fmtMsgTime(el.dataset.at);
-            if (when) {
-                const t = document.createElement("time");
-                t.className = "msg-time";
-                t.dateTime = el.dataset.at;
-                t.textContent = when;
-                tools.appendChild(t);
-            }
-
-            if (isLastBot && scroll.querySelector(".msg-user[data-msg-id]")) {
-                tools.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
-            }
-            // seuls mes messages sont modifiables : ceux du personnage se régénèrent ou se suppriment
-            if (!isBot) tools.appendChild(toolBtn("edit", ICONS.edit, tr("chat.edit")));
-            tools.appendChild(toolBtn("del", ICONS.del, tr("chat.delete")));
+            const time = messageTime(msg);
+            if (time) tools.appendChild(time);
+            tools.append(toolBtn("edit", ICONS.edit, tr("chat.edit")), toolBtn("del", ICONS.del, tr("chat.delete")));
             return tools;
         };
 
@@ -4221,13 +4239,10 @@
             }
         };
 
-        const regenerate = () => {
-            if (busy) return;
-            const last = lastReply();
-            if (!last) return;
-            if (last.querySelector(".bubble")?.textContent === "") return;
+        const regenerate = (msg) => {
+            if (busy || msg !== lastReply() || msg.querySelector(".bubble")?.textContent === "") return;
             scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
-            send(null, "auto", false, true, null, Number(last.dataset.msgId));
+            send(null, "auto", false, true, null, Number(msg.dataset.msgId));
         };
 
         scroll.addEventListener("keydown", (event) => {
@@ -4247,16 +4262,13 @@
                     closeReactions(true);
                 } else {
                     closeReactions();
-                    if (!msg.querySelector(".msg-tools")) {
-                        scroll.querySelectorAll(".msg-tools").forEach((tools) => tools.remove());
-                        msg.appendChild(buildTools(msg));
-                    }
                     const anchor = react.getBoundingClientRect();
                     reactionPoint = e.detail ? { x: e.clientX - anchor.left, y: e.clientY - anchor.top }
                         : { x: anchor.width / 2, y: Math.max(0, scroll.getBoundingClientRect().top - anchor.top) };
                     reactionAnchor = react;
                     reactionBubble = item;
                     react.setAttribute("aria-expanded", "true");
+                    showReplyTime(msg);
                     showReactions();
                 }
                 return;
@@ -4273,11 +4285,6 @@
                 e.stopPropagation();
                 const el = verBtn.closest(".msg");
                 if (el) switchVersion(el, Number(verBtn.dataset.verDir));
-                return;
-            }
-            if (e.target.closest("[data-regen]")) {
-                e.stopPropagation();
-                regenerate();
                 return;
             }
             const editBtn = e.target.closest("[data-edit]");
@@ -4306,20 +4313,17 @@
                 return;
             }
 
-            const msg = e.target.closest(".msg");
-            if (!msg) return;
-            if (msg.dataset.editing === "1") return;
+            const msg = e.target.closest(".msg-user[data-msg-id]");
+            if (!msg || msg.dataset.editing === "1") return;
 
             if (msg.querySelector(".msg-tools")) {
                 msg.querySelector(".msg-tools").remove();
                 return;
             }
-            scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
-            const tools = buildTools(msg);
-            if (tools) {
-                msg.appendChild(tools);
-                setTimeout(() => tools.scrollIntoView({ block: "nearest", behavior: "smooth" }), 40);
-            }
+            scroll.querySelectorAll(".msg-tools, .bubbles > .msg-time").forEach((el) => el.remove());
+            const tools = buildUserTools(msg);
+            msg.appendChild(tools);
+            setTimeout(() => tools.scrollIntoView({ block: "nearest", behavior: "smooth" }), 40);
         });
 
         const SEND_SVG = sendBtn.innerHTML;

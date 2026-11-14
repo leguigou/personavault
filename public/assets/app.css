@@ -901,10 +901,11 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
     flex: 0 0 100%;
     display: flex;
     gap: 6px;
-    margin: 4px 0 0 42px;
+    margin-top: 4px;
+    align-items: center;
+    justify-content: flex-end;
     animation: fade .16s both;
 }
-.msg-user .msg-tools { margin-left: 0; justify-content: flex-end; }
 
 .msg-tool {
     width: 31px;
@@ -1561,7 +1562,6 @@ html .bubble { font-size: var(--chat-font, 14.5px); }
 html[data-width="large"] .msg { max-width: 96%; }
 html[data-density="compact"] .chat-scroll { gap: 4px; }
 html[data-avatars="0"] .msg-avatar { display: none; }
-html[data-avatars="0"] .msg-tools { margin-left: 0; }
 html[data-bubble="plat"] .msg-bot .bubble { border-radius: 8px; background: rgba(var(--ink), .05); border-color: transparent; }
 html[data-bubble="carte"] .msg-bot .bubble { border-radius: 14px; background: rgba(var(--ink), .09); box-shadow: 0 10px 26px -22px var(--sh, #000); }
 
@@ -3483,12 +3483,9 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
     .tabbar .tab-ico, html[data-tabbar="pill"] .tabbar a { transition: none; }
 }
 
-/* date et heure d'un message, affichées avec ses actions quand on le touche */
-.msg-tools { align-items: center; }
-.msg-time { font-size: 11.5px; color: var(--muted-2); white-space: nowrap; margin-right: 4px; font-variant-numeric: tabular-nums; }
+/* Date affichée au toucher, sous les bulles du personnage. */
+.msg-time { font-size: 11.5px; color: var(--muted-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .msg-user .msg-time { margin-right: 6px; }
-/* persona : boutons à gauche, date après eux ; utilisateur : date à gauche, boutons contre la bulle */
-.msg-bot .msg-time { order: 99; margin: 0 0 0 6px; }
 
 .bubble[data-react] { cursor: pointer; }
 .bubble[data-react][aria-expanded="true"] { border-color: rgba(var(--acc-mid), .55); }
@@ -3522,9 +3519,10 @@ button.msg-reaction-chip:hover { background: rgba(var(--acc-mid), .26); }
     border-radius: 28px;
     background: var(--elev, #171423);
     box-shadow: 0 8px 28px rgba(0, 0, 0, .23);
+    overflow-y: auto;
 }
 .reaction-picker.is-expanded { border-radius: 21px; }
-.reaction-picker button {
+.reaction-picker > button {
     display: grid;
     place-items: center;
     width: 100%;
@@ -3538,9 +3536,17 @@ button.msg-reaction-chip:hover { background: rgba(var(--acc-mid), .26); }
     font-size: clamp(20px, 6.1vw, 26px);
     line-height: 1;
 }
-.reaction-picker button:hover,
-.reaction-picker button[aria-pressed="true"] { background: rgba(var(--acc-mid), .20); }
-.reaction-picker .msg-tool-more-reactions { background: rgba(var(--ink), .07); }
+.reaction-picker > button:hover,
+.reaction-picker > button[aria-pressed="true"] { background: rgba(var(--acc-mid), .20); }
+.reaction-picker > .msg-tool-more-reactions { background: rgba(var(--ink), .07); }
+.reaction-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 6px;
+    padding: 5px 4px 2px;
+    border-top: 1px solid var(--border-soft);
+}
+@media (pointer: coarse) { .reaction-actions .msg-tool { width: 44px; height: 44px; } }
 
 /* curseur à deux poignées : deux curseurs natifs superposés sur une même piste */
 .dual-range {
