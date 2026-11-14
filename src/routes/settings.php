@@ -215,7 +215,7 @@ if ($path === '/settings/chat' && $method === 'POST') {
     }
     flash('ok', t('flash.settings.chat_saved')
         . ($purged ? ' ' . t('flash.settings.server_purged', ['models' => t('labels.count.models_unloaded', count($purged))]) : ''));
-    redirect('/settings');
+    redirect('/settings#chat');
 }
 
 if ($path === '/settings/purge' && $method === 'POST') {
