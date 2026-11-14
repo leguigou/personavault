@@ -37,16 +37,16 @@ function chat_contacts(array $conversations): array
     return $contacts;
 }
 
-function chat_create_conversation(array $persona, bool $resume = false): int
+function chat_create_conversation(array $persona, bool $resume = false, bool $sharedMemory = true): int
 {
-    return db_tx(static function (PDO $pdo) use ($persona, $resume): int {
+    return db_tx(static function (PDO $pdo) use ($persona, $resume, $sharedMemory): int {
         $pid = (int) $persona['id'];
         if ($resume && ($latest = chat_latest_conversation($pid)) > 0) {
             return $latest;
         }
-        $stmt = $pdo->prepare('INSERT INTO conversations (persona_id, title)
-            SELECT id, ? FROM personas WHERE id = ? AND archived = 0');
-        $stmt->execute([t('labels.chat.default_title', ['name' => $persona['name']]), $pid]);
+        $stmt = $pdo->prepare('INSERT INTO conversations (persona_id, title, facts_enabled)
+            SELECT id, ?, ? FROM personas WHERE id = ? AND archived = 0');
+        $stmt->execute([t('labels.chat.default_title', ['name' => $persona['name']]), (int) $sharedMemory, $pid]);
         return $stmt->rowCount() === 1 ? (int) $pdo->lastInsertId() : 0;
     });
 }
@@ -1261,13 +1261,13 @@ function chat_recall_snippets(int $personaId, string $userMessage, int $excludeC
         return [];
     }
     $limit = max(1, $limit);
-    $scope = 'c.id <> ?';
+    $scope = '(c.id <> ? AND c.memory_enabled = 1 AND c.facts_enabled = 1)';
     $scopeParams = [$excludeCid];
     if ($compressedThrough > 0) {
         $marked = implode(', ', array_fill(0, count(CHAT_AFFECTIONATE_REACTIONS), '?'));
-        $scope = "($scope OR (m.id <= ? AND m.role = 'assistant' AND (m.reaction IN ($marked)
+        $scope = "($scope OR (c.id = ? AND m.id <= ? AND m.role = 'assistant' AND (m.reaction IN ($marked)
             OR EXISTS (SELECT 1 FROM json_each(COALESCE(NULLIF(m.bubble_reactions, ''), '{}')) WHERE value IN ($marked)))))";
-        $scopeParams = [...$scopeParams, $compressedThrough, ...CHAT_AFFECTIONATE_REACTIONS, ...CHAT_AFFECTIONATE_REACTIONS];
+        $scopeParams = [...$scopeParams, $excludeCid, $compressedThrough, ...CHAT_AFFECTIONATE_REACTIONS, ...CHAT_AFFECTIONATE_REACTIONS];
     }
 
     // index plein texte : n'importe lequel des mots-clés, les plus PERTINENTS d'abord (bm25)

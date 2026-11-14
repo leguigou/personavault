@@ -98,10 +98,13 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
             </button>
             <?php if (!(int) $persona['archived']): ?>
-                <form method="post" action="/chat/<?= (int) $conv['id'] ?>/new">
+                <form method="post" action="/chat/<?= (int) $conv['id'] ?>/new" data-new-chat
+                      data-title="<?= e(t('chat.head.new')) ?>" data-help="<?= e(t('chat.new.help')) ?>"
+                      data-fresh="<?= e(t('chat.new.fresh')) ?>" data-continue="<?= e(t('chat.new.continue')) ?>">
                     <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <button type="submit" class="icon-btn" title="<?= e(t('chat.head.new')) ?>" aria-label="<?= e(t('chat.head.new')) ?>">
-                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+                    <input type="hidden" name="mode" value="fresh">
+                    <button type="submit" class="icon-btn" aria-haspopup="dialog" title="<?= e(t('chat.head.new')) ?>" aria-label="<?= e(t('chat.head.new')) ?>">
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6M16 5l3 3m-9 6 3.6-.8 6-6a2.1 2.1 0 0 0-3-3l-6 6L10 14Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </button>
                 </form>
             <?php endif; ?>

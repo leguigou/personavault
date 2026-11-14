@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 if ($action === 'new' && $method === 'POST') {
     csrf_check();
-    $newId = chat_create_conversation($persona);
+    $newId = chat_create_conversation($persona, sharedMemory: ($_POST['mode'] ?? '') === 'with-memory');
     if ($newId === 0) {
         flash('error', t('flash.chat.pick_persona'));
     }

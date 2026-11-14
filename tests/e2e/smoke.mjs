@@ -241,7 +241,11 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     const first = await (await chatPost('/chat/2/opening')).json();
     expect(first.message.content === 'J’ai retrouvé une vieille pellicule.' && first.questions[0].includes('photograph'),
         'la première rencontre utilise le message importé et propose une question liée au persona');
-    const newChat = await chatPost('/chat/1/new');
+    const chatPage = await (await http('/chat/1')).text();
+    expect(chatPage.includes('data-new-chat') && chatPage.includes('data-fresh="Repartir de zéro"')
+        && chatPage.includes('data-continue="Continuer avec les souvenirs"'),
+        'le bouton de rédaction propose les deux modes de création');
+    const newChat = await chatPost('/chat/1/new', { mode: 'with-memory' });
     const path = newChat.headers.get('location');
     expect(newChat.status === 303 && /^\/chat\/\d+$/.test(path) && path !== '/chat/1',
         'le bouton du chat crée un fil distinct avec le même persona');
@@ -270,8 +274,11 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     const sidebar = (await (await http('/chat/1')).text()).split('</aside>')[0];
     expect((sidebar.match(/Camille Lefebvre<\/strong>/g) || []).length === 1 && sidebar.includes(`is-on" href="${path}"`),
         'le carnet latéral affiche une seule entrée pour Camille même depuis son ancien fil');
-    const privateChat = (await chatPost('/chat/1/new')).headers.get('location');
-    await chatPost(privateChat + '/facts-toggle', { enabled: '0' });
+    const privateChat = (await chatPost('/chat/1/new', { mode: 'fresh' })).headers.get('location');
+    const privatePage = await (await http(privateChat)).text();
+    expect(!/data-facts-toggle[^>]*\bchecked\b/.test(privatePage)
+        && /name="memory_enabled"[^>]*\bchecked\b/.test(privatePage),
+        'le fil neuf désactive les souvenirs partagés et garde la mémoire du fil');
     const privateOpening = await (await chatPost(privateChat + '/opening')).json();
     expect(!privateOpening.message.content.includes('Lisbonne') && !privateOpening.questions.some((q) => q.includes('Lyon')),
         'une ouverture sans souvenirs ne s’appuie ni sur les anciens fils ni sur l’histoire mémorisée');
@@ -338,7 +345,7 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
         .split('\n').filter((line) => line.startsWith('data: '))
         .map((line) => JSON.parse(line.slice(6))).find((event) => event.done);
     const profile = '/p/camille-lefebvre/relationship';
-    const path = (await chatPost('/chat/1/new')).headers.get('location');
+    const path = (await chatPost('/chat/1/new', { mode: 'with-memory' })).headers.get('location');
     const request = (message) => turn(path, message);
     const analyze = () => chatPost(path + '/relationship');
     expect((await request('Vous pouvez me tutoyer, s’il vous plaît ?'))?.relationship_pending,
@@ -355,7 +362,7 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     page = await (await http(profile)).text();
     expect(page.includes('Désaccord à propos de la photo') && page.includes('Résolu') && !page.includes('En cours'),
         'la réconciliation ferme le désaccord automatiquement');
-    const next = (await chatPost(path + '/new')).headers.get('location');
+    const next = (await chatPost(path + '/new', { mode: 'with-memory' })).headers.get('location');
     await turn(next, 'On reparle de la photo ?');
     const logs = await (await http('/settings/logs')).text();
     expect(logs.includes('Tu tutoies toujours cet interlocuteur')
