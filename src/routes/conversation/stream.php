@@ -182,9 +182,7 @@ if ($action === 'stream' && $method === 'POST') {
     $trackRelationship = !$reactionOnly && relationship_memory_on($conv);
     $address = $trackRelationship ? relationship_direct_address($text) : '';
     $relationshipRevision = $trackRelationship ? (int) relationship_state((int) $persona['id'])['revision'] : 0;
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget, $address);
     $mediaRequest = !$reactionOnly ? klipy_requested_media($text) : null;
-    $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
 
     if ($ping()) {
         if (!$regen && $imageBase !== '') {
@@ -206,6 +204,32 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     $mode    = ((string) ($_POST['fallback'] ?? '')) === '1' ? 'fallback' : 'auto';
+    $webResults = null;
+    $searchKey = trim((string) config('chat_web_search_key', getenv('BRAVE_SEARCH_API_KEY') ?: ''));
+    $searchMcp = (array) config('chat_web_lmstudio_mcp', []);
+    $mcpId = trim((string) ($searchMcp['id'] ?? ''));
+    $mcpTool = trim((string) ($searchMcp['tool'] ?? ''));
+    $useMcp = $mode === 'auto' && str_starts_with($mcpId, 'mcp/') && $mcpTool !== '';
+    if (($useMcp || $searchKey !== '') && !$reactionOnly && $mediaRequest === null && $text !== '') {
+        $searchModel = $mode === 'fallback' ? llm_config() : chat_llm_config_for($conv);
+        if ($mode !== 'fallback' || $searchModel['key'] !== '') {
+            $query = chat_web_query($history, $text, $searchModel, $ping);
+            if ($ping()) {
+                exit;
+            }
+            if ($query !== '') {
+                $sse(['phase' => 'web_search']);
+                $webResults = $useMcp
+                    ? chat_web_lmstudio_results($query, $searchModel, $mcpId, $mcpTool, $ping)
+                    : chat_web_results($query, $searchKey, $ping);
+                if ($ping()) {
+                    exit;
+                }
+            }
+        }
+    }
+    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget, $address, $webResults);
+    $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
     $sentAny = false;
     $requestedUrl = '';
     $mediaNotice = '';
@@ -312,6 +336,9 @@ if ($action === 'stream' && $method === 'POST') {
             setting('chat_split_position', 'before')
         )
         : [];
+    if (!$aborted && $webResults) {
+        $res['content'] .= "\n\n" . t('labels.chat.web_sources') . "\n" . implode("\n", array_column($webResults, 'url'));
+    }
 
     try {
         [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $reactionOnly, $userMsgId, $res, $splitPoints, $aborted, $conv, $reactionTarget, $trackRelationship, $address, $relationshipRevision): array {

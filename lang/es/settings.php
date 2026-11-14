@@ -359,5 +359,5 @@ return [
     'logs.purpose.test' => 'Prueba de conexión',
     'logs.purpose.other' => 'Otro',
     'logs.link_title' => 'Registro de intercambios',
-    'logs.link_text' => 'Ver lo que se envía al modelo y lo que devuelve (últimos 20).',
+    'logs.link_text' => 'Los últimos 20 intercambios con el modelo.',
 ];

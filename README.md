@@ -211,6 +211,21 @@ fournisseur distant — elle ne le fait jamais sans demander.
 **Images** : le bouton trombone n'apparaît que si le modèle choisi sait voir les images.
 Les photos sont converties en JPEG avant l'envoi (certains serveurs refusent le WebP).
 
+**Recherche web**. Pour utiliser un outil déjà installé dans `mcp.json`, utilise LM Studio 0.4.0
+ou plus récent et active **Allow calling servers from mcp.json** dans les réglages de son serveur.
+Renseigne le jeton API LM Studio dans le réglage du modèle de discussion de PersonaVault, puis
+indique le serveur MCP et le nom de son outil de recherche dans `config.local.php`.
+
+```php
+'chat_web_lmstudio_mcp' => ['id' => 'mcp/nom-du-serveur', 'tool' => 'nom_de_l_outil'],
+```
+
+Tu peux aussi configurer [Brave Search](https://api-dashboard.search.brave.com/) avec `chat_web_search_key`
+dans `config.local.php` ou `BRAVE_SEARCH_API_KEY` dans l’environnement du serveur PHP. Le chat local
+utilise l’outil LM Studio en priorité si configuré. Le modèle formule la requête à partir des derniers
+échanges, puis transmet cette requête au moteur choisi. Le persona répond dans le même tour avec les
+liens des résultats disponibles. [Documentation LM Studio](https://lmstudio.ai/docs/developer/core/mcp).
+
 ### Mémoire et contexte
 
 Ce que reçoit le modèle à chaque message, dans cet ordre :

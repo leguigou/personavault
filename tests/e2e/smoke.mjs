@@ -630,6 +630,39 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(settings.includes('test********-key') && !settings.includes('test-gif-key'),
         'la clé KLIPY est identifiable sans exposer sa valeur complète');
 }
+{
+    const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });
+    const path = (await submit('/chat/1/new', {})).headers.get('location');
+    const turn = async (message) => (await (await submit(path + '/stream', { message })).text())
+        .split('\n').filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6)));
+    const first = await turn('Tu as des adresses à Toulon pour ce week-end ?');
+    expect(!first.some((event) => event.phase === 'web_search'), 'une demande en attente de précision ne lance aucune recherche');
+    const results = await turn('Italien et pizza');
+    const searchAt = results.findIndex((event) => event.phase === 'web_search');
+    const content = results.find((event) => event.done)?.reply?.content ?? '';
+    expect(searchAt >= 0 && searchAt < results.findIndex((event) => event.delta)
+        && content.includes('7 rue Exemple') && content.includes('https://example.com/pizzeria-toulon')
+        && !content.includes('javascript:'), 'la précision reprend Toulon et le même tour répond à partir des résultats web');
+    expect((await (await http(path)).text()).includes('https://example.com/pizzeria-toulon'),
+        'les liens de la recherche restent dans la conversation');
+    const failed = await turn('Vérifie les horaires à Toulon');
+    expect(failed.some((event) => event.phase === 'web_search')
+        && failed.find((event) => event.done)?.reply?.content === 'Je ne peux pas vérifier les horaires cette fois-ci.',
+        'un échec du moteur laisse le persona répondre en signalant la vérification impossible');
+
+    if (peer) {
+        const mcpPath = (await submit('/chat/1/new', {})).headers.get('location');
+        const mcpTurn = async (message) => (await (await http(mcpPath + '/stream', {
+            method: 'POST', form: { _token: csrf, message }, origin: peer,
+        })).text()).split('\n').filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6)));
+        await mcpTurn('Tu as des adresses à Toulon pour ce week-end ?');
+        const mcpEvents = await mcpTurn('Italien et pizza');
+        const reply = mcpEvents.find((event) => event.done)?.reply?.content ?? '';
+        expect(mcpEvents.some((event) => event.phase === 'web_search') && reply.includes('7 rue Exemple')
+            && reply.includes('https://example.com/mcp-toulon') && !reply.includes('invented'),
+            'le chat local utilise le MCP LM Studio en priorité et conserve les liens réellement retournés');
+    }
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

@@ -207,6 +207,7 @@ return [
     'labels.chat.default_title'   => 'Discussion avec {name}',
     'labels.chat.memory_updated'  => 'Mémoire mise à jour : {facts}',
     'labels.chat.fallback_notice' => 'Réponse générée par {model} ({provider}), LM Studio non utilisé.',
+    'labels.chat.web_sources' => 'Sources web',
 
     // --- mémoire : raisons d'une compression non faite (affichées dans une bulle)
     'labels.compress.disabled'    => 'mémoire désactivée',

@@ -88,6 +88,7 @@ return [
         'other' => 'Memoria actualizada: {n} mensajes resumidos.',
     ],
     'js.chat.memory_phase'        => 'Actualizando la memoria…',
+    'js.chat.web_search_phase'    => 'Buscando en la web…',
     'js.chat.fb_not_loaded'       => 'El modelo no está cargado',
     'js.chat.fb_no_reply'         => 'LM Studio no ha respondido',
     'js.chat.fb_kept'             => 'Mensaje guardado en el campo: vuelve a enviarlo cuando LM Studio esté listo.',

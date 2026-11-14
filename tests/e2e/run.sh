@@ -39,6 +39,9 @@ return [
     'uploads'       => __DIR__ . '/storage/uploads',
     'assist_lookup_url' => 'http://127.0.0.1:$LLM_PORT/wiki/{lang}/api.php',
     'klipy_api_base' => 'http://127.0.0.1:$LLM_PORT/klipy',
+    'chat_web_search_key' => 'test-search-key',
+    'chat_web_search_url' => 'http://127.0.0.1:$LLM_PORT/web/search',
+    'chat_web_lmstudio_mcp' => getenv('PV_E2E_LMS_MCP') ? ['id' => 'mcp/test-search', 'tool' => 'web_search'] : [],
 ];
 PHP
 mkdir -p "$WORK/storage/uploads"
@@ -47,7 +50,7 @@ mkdir -p "$WORK/storage/uploads"
 php "$HERE/seed.php" "$WORK" "$LLM_PORT"
 node "$HERE/fake-llm.mjs" "$LLM_PORT" & PIDS+=($!)
 (cd "$WORK" && exec php -S "127.0.0.1:$PORT" -t public public/index.php) > "$WORK/server.log" 2>&1 & PIDS+=($!)
-(cd "$WORK" && exec php -S "127.0.0.1:$PEER_PORT" -t public public/index.php) > "$WORK/peer.log" 2>&1 & PIDS+=($!)
+(cd "$WORK" && PV_E2E_LMS_MCP=1 exec php -S "127.0.0.1:$PEER_PORT" -t public public/index.php) > "$WORK/peer.log" 2>&1 & PIDS+=($!)
 for _ in $(seq 1 50); do
     curl -s -o /dev/null "http://127.0.0.1:$PORT/login" &&
         curl -s -o /dev/null "http://127.0.0.1:$PEER_PORT/login" && break

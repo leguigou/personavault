@@ -1626,6 +1626,7 @@ html[data-bubble="carte"] .msg-bot .bubble { border-radius: 14px; background: rg
 .msg-bubble > .bubble { max-width: 100%; }
 
 .msg-bot .bubble { border-bottom-left-radius: 6px; }
+.msg-bot .bubble a { text-decoration: underline; }
 .msg-user .bubble {
     /* texte blanc sur un dégradé plus profond : lisible sur mobile */
     background: var(--bubble);
@@ -4383,19 +4384,34 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 
 /* ---------------------------------------------- journal des échanges (Réglages › Journal) */
 .settings-logs-link {
-    display: flex; align-items: center; gap: 12px;
-    color: inherit; text-decoration: none;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    background: var(--card, rgba(var(--ink), .03));
+    color: var(--text);
 }
-.settings-logs-link:hover { border-color: rgba(var(--acc), .4); }
+.settings-logs-link:is(:hover, :focus-visible) {
+    border-color: rgba(var(--acc), .4);
+}
 .settings-logs-ico {
-    flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%;
-    display: grid; place-items: center;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
     background: rgba(var(--acc), .14); color: rgb(var(--acc));
 }
 .settings-logs-ico svg { width: 20px; height: 20px; }
-.settings-logs-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.settings-logs-text small { color: var(--muted); font-size: 12px; }
-.settings-logs-go { width: 18px; height: 18px; color: var(--muted); flex: 0 0 auto; }
+.settings-logs-text { display: grid; gap: 3px; overflow-wrap: anywhere; }
+.settings-logs-text strong { font-size: 14px; font-weight: 650; line-height: 1.3; }
+.settings-logs-text small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.settings-logs-go { width: 18px; height: 18px; color: var(--muted); }
+.settings-logs-link:is(:hover, :focus-visible) .settings-logs-go { color: rgb(var(--acc)); }
 
 .logs-intro { margin: 0 0 14px; }
 .logs { display: flex; flex-direction: column; gap: 10px; padding-bottom: 40px; }
