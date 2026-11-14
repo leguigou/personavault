@@ -1433,7 +1433,7 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
 }
 .chat-side-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-side-mono img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
-.chat-side-name strong { display: block; overflow: hidden; text-overflow: ellipsis; }
+.chat-side-name strong { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--text-hi, #fff); }
 .chat-side-name strong ~ [data-side-title] { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 11px; }
 
 .chat-main {
@@ -3703,7 +3703,8 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
 .conv-item { display: flex; align-items: center; gap: 4px; }
 .conv-item .conv-card { flex: 1; min-width: 0; }
 .conv-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.conv-line strong { flex: 1; min-width: 0; }
+.conv-line strong { flex: 1; min-width: 0; color: var(--text-hi, #fff); }
+.conv-line strong span { color: inherit; font-size: inherit; }
 .contact-item {
     border: 1px solid var(--border-soft);
     border-radius: 16px;
@@ -3712,7 +3713,7 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
 .contact-item.is-unread { border-color: rgba(var(--acc), .35); }
 .contact-open { border: 0; background: transparent; }
 .contact-open .conv-avatar { border-radius: 50%; }
-.contact-open .conv-line strong { font-size: 15px; color: var(--text); }
+.contact-open .conv-line strong { font-size: 15px; font-weight: 700; }
 .contact-history { margin: 0 12px; border-top: 1px solid var(--border-soft); }
 .contact-history summary { padding: 10px 4px; color: var(--muted); font-size: 12px; cursor: pointer; }
 .contact-history summary:hover { color: var(--text); }
@@ -3737,7 +3738,7 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
     color: #fff;
     background: var(--grad);
 }
-.conv-item.is-unread .conv-line strong { font-weight: 750; color: var(--text); }
+.conv-item.is-unread .conv-line strong { font-weight: 750; }
 .conv-item.is-unread .conv-line time { color: rgb(var(--acc)); font-weight: 650; }
 .conv-item.is-unread .conv-preview { color: var(--text); }
 .conv-item.is-unread .conv-card { border-color: rgba(var(--acc), .35); }
