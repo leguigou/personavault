@@ -4,6 +4,13 @@
  * Tuteo (« tú »), como en francés.
  */
 return [
+    'settings.chat.klipy_test' => 'Probar la clave de KLIPY',
+    'settings.chat.klipy_test_ok' => 'Conexión correcta. KLIPY devolvió un GIF.',
+    'settings.chat.klipy_test_missing' => 'Introduce una clave de KLIPY válida antes de hacer la prueba.',
+    'settings.chat.klipy_test_rejected' => 'KLIPY rechazó la solicitud (HTTP {status}). Revisa la clave y sus permisos.',
+    'settings.chat.klipy_test_limit' => 'Se alcanzó el límite de solicitudes de KLIPY. Inténtalo más tarde.',
+    'settings.chat.klipy_test_unavailable' => 'No se pudo verificar la clave. KLIPY no está disponible o devolvió una respuesta inesperada.',
+    'settings.chat.klipy_test_empty' => 'KLIPY respondió, pero no se encontró ningún GIF utilizable.',
     'settings.chat.klipy_empty' => 'Ninguna clave guardada',
     'settings.chat.klipy_saved' => 'Clave guardada',
     'settings.chat.klipy_key' => 'Clave API de KLIPY',

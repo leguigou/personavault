@@ -3,6 +3,13 @@
  * English — Settings page (views/settings.php). Same keys as lang/fr/settings.php.
  */
 return [
+    'settings.chat.klipy_test' => 'Test KLIPY key',
+    'settings.chat.klipy_test_ok' => 'Connection successful. KLIPY returned a GIF.',
+    'settings.chat.klipy_test_missing' => 'Enter a valid KLIPY key before running the test.',
+    'settings.chat.klipy_test_rejected' => 'KLIPY rejected the request (HTTP {status}). Check the key and its permissions.',
+    'settings.chat.klipy_test_limit' => 'The KLIPY request limit was reached. Try again later.',
+    'settings.chat.klipy_test_unavailable' => 'Unable to verify the key. KLIPY is unreachable or returned an unexpected response.',
+    'settings.chat.klipy_test_empty' => 'KLIPY responded, but no usable GIF was found.',
     'settings.chat.klipy_empty' => 'No key saved',
     'settings.chat.klipy_saved' => 'Saved key',
     'settings.chat.klipy_key' => 'KLIPY API key',

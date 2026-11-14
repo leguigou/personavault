@@ -556,10 +556,17 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         return (await response.text()).split('\n').filter(line => line.startsWith('data: '))
             .map(line => JSON.parse(line.slice(6))).find(event => event.done)?.reply;
     };
+    const testKlipy = async (key = '') => (await submit('/settings/klipy/test', { klipy_api_key: key })).json();
+    expect(!(await testKlipy()).ok, 'le test KLIPY signale une clé manquante');
+    expect((await testKlipy('test-gif-key')).ok && !(await testKlipy()).ok,
+        'on peut tester une clé saisie sans l’enregistrer');
     await submit('/settings/chat', {
         chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`,
         chat_model: 'fake-model', klipy_api_key: 'test-gif-key',
     });
+    const rejected = await testKlipy('rejected-test-key');
+    expect(!rejected.ok && rejected.message.includes('401') && !rejected.message.includes('rejected-test-key')
+        && (await testKlipy()).ok, 'le test signale le refus et préserve la clé enregistrée');
     await submit('/p/camille-lefebvre', { name: 'Camille Lefebvre', klipy_formats_present: '1' });
     expect((await celebrate())?.klipy_url === '', 'le persona doit autoriser les GIF spontanés');
     await submit('/p/camille-lefebvre', { name: 'Camille Lefebvre', klipy_formats_present: '1', 'klipy_formats[]': 'gif' });

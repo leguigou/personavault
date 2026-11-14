@@ -69,6 +69,10 @@ http.createServer(async (req, res) => {
                 data: [{ id: 'fake-model', state: 'loaded', type: 'llm', max_context_length: 8192 }] }
             : { data: [{ id: 'fake-model' }] }));
     }
+    if (req.url.startsWith('/klipy/rejected-test-key/')) {
+        res.statusCode = 401;
+        return res.end();
+    }
     const klipyFormat = req.url.match(/^\/klipy\/test-gif-key\/(gif|sticker|clip)s\/search\?/)?.[1];
     if (klipyFormat) {
         const params = new URL(req.url, 'http://localhost').searchParams;

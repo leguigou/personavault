@@ -237,6 +237,29 @@ if ($path === '/settings/purge' && $method === 'POST') {
     exit;
 }
 
+if ($path === '/settings/klipy/test' && $method === 'POST') {
+    csrf_check_json();
+    session_write_close();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $input = $_POST['klipy_api_key'] ?? '';
+    $key = is_string($input) ? trim($input) : '';
+    $key = $key !== '' ? $key : setting('klipy_api_key');
+    $ok = false;
+    if ($key === '' || strlen($key) > 255) {
+        $message = t('settings.chat.klipy_test_missing');
+    } else {
+        try {
+            $ok = klipy_search_media('gif', 'celebrate', $key, [], true) !== '';
+            $message = $ok ? t('settings.chat.klipy_test_ok') : t('settings.chat.klipy_test_empty');
+        } catch (RuntimeException $error) {
+            $message = $error->getMessage(); // erreurs traduites par le connecteur, sans URL ni corps distant
+        }
+    }
+    echo json_encode(['ok' => $ok, 'message' => $message], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($path === '/settings/test' && $method === 'POST') {
     csrf_check_json();
     session_write_close();
