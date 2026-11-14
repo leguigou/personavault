@@ -721,6 +721,14 @@ try {
     $check(count($__p) === 1 && mb_substr($__t, $__p[0]) === 'mais bon on fait avec !', 'bulles : coupe à la dernière phrase, jamais en fin de texte');
     $__p = chat_split_points("\n\n" . $__t, 50, 2);
     $check(count($__p) === 1 && mb_substr("\n\n" . $__t, $__p[0]) === 'mais bon on fait avec !', 'bulles : décalage juste si la réponse commence par un saut de ligne');
+    $firstSentence = trim(str_repeat('mot ', 15)) . '. ';
+    $secondSentence = trim(str_repeat('suite ', 10)) . '. ';
+    $longReply = $firstSentence . $secondSentence . 'Dernière phrase.';
+    $check(chat_split_points($longReply, 15, 2) === [mb_strlen($firstSentence)]
+        && chat_split_points($longReply, 15, 2, 'after') === [mb_strlen($firstSentence . $secondSentence)],
+        'bulles : avant coupe au seuil, après attend la première fin de phrase au-delà');
+    $check(chat_split_points(trim($firstSentence . $secondSentence), 15, 2, 'after') === [],
+        'bulles : après garde une seule bulle si la première fin de phrase au-delà termine la réponse');
     echo PHP_EOL . '— thèmes' . PHP_EOL;
     $ui = ui_style();
     $check($ui['accent'] === 'violet' && $ui['mode'] === 'dark', 'par défaut : Violet + Sombre (rendu historique)');

@@ -38,6 +38,7 @@ return [
     'chat.list.pin' => 'Fijar arriba',
     'chat.list.unpin' => 'Quitar de fijadas',
     'chat.list.message_count' => ['one' => '{n} msj', 'other' => '{n} msjs'],
+    'chat.list.thread_count' => ['one' => '{n} conversación', 'other' => '{n} conversaciones'],
     'chat.list.actions' => 'Acciones de la conversación',
     'chat.list.more' => 'Más acciones',
     'chat.list.delete' => 'Eliminar la conversación',

@@ -148,7 +148,7 @@ if ($path === '/settings/chat' && $method === 'POST') {
         $profile = mb_substr(trim($_POST['chat_user_profile']), 0, CHAT_USER_PROFILE_MAX);
         db_tx(static function () use ($profile): void {
             set_setting('chat_user_profile', $profile);
-            set_setting('chat_user_profile_enabled', $profile !== '' && ($_POST['chat_user_profile_enabled'] ?? '') === '1' ? '1' : '0');
+            set_setting('chat_user_profile_enabled', ($_POST['chat_user_profile_enabled'] ?? '') === '1' ? '1' : '0');
         });
     }
     set_setting('chat_llm_provider', trim((string) ($_POST['chat_provider'] ?? 'lmstudio')));
@@ -158,6 +158,8 @@ if ($path === '/settings/chat' && $method === 'POST') {
     set_setting('chat_reasoning_effort', in_array($effort, ['none', 'low', 'medium', 'high'], true) ? $effort : 'none');
     set_setting('chat_split_enabled', !empty($_POST['chat_split_enabled']) ? '1' : '0');
     set_setting('chat_split_words', (string) max(15, min(120, (int) ($_POST['chat_split_words'] ?? 50))));
+    $splitPosition = $_POST['chat_split_position'] ?? setting('chat_split_position', 'before');
+    set_setting('chat_split_position', $splitPosition === 'after' ? 'after' : 'before');
     set_setting('chat_split_max_bubbles', (string) max(1, min(8, (int) ($_POST['chat_split_max_bubbles'] ?? 2))));
     $dmin = max(0.5, min(4.0, (float) ($_POST['chat_split_delay_min'] ?? 1)));
     $dmax = max(0.5, min(4.0, (float) ($_POST['chat_split_delay_max'] ?? 2)));

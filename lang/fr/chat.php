@@ -38,6 +38,7 @@ return [
     'chat.list.pin' => 'Épingler en haut',
     'chat.list.unpin' => 'Retirer des épinglées',
     'chat.list.message_count' => ['one' => '{n} msg', 'other' => '{n} msg'],
+    'chat.list.thread_count' => ['one' => '{n} discussion', 'other' => '{n} discussions'],
     'chat.list.actions' => 'Actions sur la conversation',
     'chat.list.more' => 'Plus d\'actions',
     'chat.list.delete' => 'Supprimer la conversation',

@@ -1,13 +1,12 @@
 <?php
-/** @var array $conversations @var bool $contactView @var bool $chatReady @var string $chatModel */
+/** @var array $conversations @var array $contacts @var bool $contactView @var bool $chatReady @var string $chatModel */
 // « . "\n" » après un texte en fin de ligne : garde le saut de ligne qu’avalerait la balise PHP fermante.
 ?>
 <section class="lib-head">
     <div class="lib-title">
-        <p class="eyebrow"><?= e(t('nav.chats')) ?></p>
         <h1>
-            <?= e(t('chat.list.title')) . "\n" ?>
-            <span class="count"><?= count($conversations) ?></span>
+            <?= e($contactView ? t('settings.look.chat_contacts') : t('chat.list.title')) . "\n" ?>
+            <span class="count"><?= count($contactView ? $contacts : $conversations) ?></span>
         </h1>
     </div>
 </section>
@@ -30,6 +29,44 @@
         <p><?= e(t('chat.list.empty_text')) ?></p>
         <a class="btn btn-primary" href="/"><?= e(t('nav.library')) ?></a>
     </div>
+<?php elseif ($contactView): ?>
+    <div class="conv-list contact-list">
+        <?php foreach ($contacts as $pid => $contact): ?>
+            <?php
+            $latest = $contact['latest'];
+            $when = $latest['last_at'] ?? $latest['created_at'];
+            ?>
+            <article class="contact-item<?= $contact['unread'] ? ' is-unread' : '' ?>" data-contact="<?= $pid ?>">
+                <a class="conv-card contact-open" href="/chat/<?= (int) $latest['id'] ?>" style="--hue: <?= hue_for($latest['persona_name']) ?>">
+                    <div class="conv-avatar">
+                        <?php if ($latest['persona_avatar']): ?>
+                            <img src="<?= e(media_url($latest['persona_avatar'])) ?>" alt="" loading="lazy">
+                        <?php else: ?>
+                            <div class="avatar-fallback"><span><?= e(initials($latest['persona_name'])) ?></span></div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="conv-body">
+                        <div class="conv-line">
+                            <strong><?= e($latest['persona_name']) ?></strong>
+                            <time datetime="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($when . ' UTC'))) ?>"><?= e(rel_time($when)) ?></time>
+                        </div>
+                        <div class="conv-line">
+                            <span class="conv-preview" data-contact-title="<?= (int) $latest['id'] ?>"><?= e($latest['title']) ?></span>
+                            <?php if ($contact['unread']): ?><span class="conv-badge"><?= e(t('chat.list.new_badge')) ?></span><?php endif; ?>
+                        </div>
+                    </div>
+                </a>
+                <details class="contact-history">
+                    <summary><?= e(t('chat.list.thread_count', count($contact['threads']))) ?></summary>
+                    <div class="conv-list contact-threads">
+                        <?php foreach ($contact['threads'] as $c): ?>
+                            <?php require __DIR__ . '/chat_thread_row.php'; ?>
+                        <?php endforeach; ?>
+                    </div>
+                </details>
+            </article>
+        <?php endforeach; ?>
+    </div>
 <?php else: ?>
     <?php
     $pinnedConvs = array_values(array_filter($conversations, static fn (array $c): bool => (int) ($c['pinned'] ?? 0) === 1));
@@ -41,58 +78,14 @@
         <?php if ($groupTitle !== ''): ?><h2 class="conv-group"><?= e($groupTitle) ?></h2><?php endif; ?>
         <div class="conv-list">
             <?php foreach ($list as $c): ?>
-                <?php
-                $hue     = hue_for((string) $c['persona_name']);
-                $unread  = (int) ($c['unread'] ?? 0) === 1;
-                $pinned  = (int) ($c['pinned'] ?? 0) === 1;
-                $preview = trim((string) ($c['last_msg'] ?? ''));
-                if ($preview === '' && (string) ($c['last_image'] ?? '') !== '') {
-                    $preview = t('chat.list.photo');
-                }
-                $when = (string) ($c['last_at'] ?? '') !== '' ? (string) $c['last_at'] : (string) $c['updated_at'];
-                ?>
-                <div class="conv-item<?= $unread ? ' is-unread' : '' ?><?= $pinned ? ' is-pinned' : '' ?>"
-                     data-conv-id="<?= (int) $c['id'] ?>" data-conv-title="<?= e((string) $c['title']) ?>" data-pinned="<?= $pinned ? '1' : '0' ?>">
-                    <a class="conv-card" href="/chat/<?= (int) $c['id'] ?>" style="--hue: <?= $hue ?>">
-                        <div class="conv-avatar">
-                            <?php if ($c['persona_avatar']): ?>
-                                <img src="<?= e(media_url((string) $c['persona_avatar'])) ?>" alt="" loading="lazy">
-                            <?php else: ?>
-                                <div class="avatar-fallback"><span><?= e(initials((string) $c['persona_name'])) ?></span></div>
-                            <?php endif; ?>
-                        </div>
-                        <div class="conv-body">
-                            <div class="conv-line">
-                                <strong><?php if ($pinned): ?><svg class="conv-pinned-ico" viewBox="0 0 24 24" aria-label="<?= e(t('chat.list.pinned')) ?>"><path d="M9 4h6l-1 5 3.5 3.5v1.5h-11v-1.5L10 9 9 4Zm3 10v6" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg><?php endif; ?><?php if ($contactView): ?><span><?= e((string) $c['persona_name']) ?></span><?php else: ?><span data-conv-title-text><?= e((string) $c['title']) ?></span><?php endif; ?></strong>
-                                <time datetime="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($when . ' UTC'))) ?>"><?= e(rel_time($when)) ?></time>
-                            </div>
-                            <?php if ($contactView): ?>
-                                <span class="conv-thread-title" data-conv-title-text><?= e((string) $c['title']) ?></span>
-                            <?php endif; ?>
-                            <div class="conv-line">
-                                <span class="conv-preview">
-                                    <?php if ($preview === ''): ?>
-                                        <?= e(t('chat.list.no_message')) ?>
-                                    <?php else: ?>
-                                        <?php if ((string) ($c['last_role'] ?? '') === 'user'): ?><b class="conv-you"><?= e(t('chat.list.you')) ?></b><?php endif; ?>
-                                        <?= e(mb_substr($preview, 0, 110)) ?>
-                                    <?php endif; ?>
-                                </span>
-                                <?php if ($unread): ?><span class="conv-badge"><?= e(t('chat.list.new_badge')) ?></span><?php endif; ?>
-                                <em class="conv-count"><?= e(t('chat.list.message_count', (int) $c['n'])) ?></em>
-                            </div>
-                        </div>
-                    </a>
-                    <button type="button" class="conv-more" data-conv-more aria-haspopup="dialog"
-                            aria-label="<?= e(t('chat.list.more')) ?>" title="<?= e(t('chat.list.more')) ?>">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/></svg>
-                    </button>
-                </div>
+                <?php require __DIR__ . '/chat_thread_row.php'; ?>
             <?php endforeach; ?>
         </div>
     <?php endforeach; ?>
-    <p class="conv-hint hint"><?= e(t('chat.list.long_press_hint')) ?></p>
+<?php endif; ?>
 
+<?php if ($conversations): ?>
+    <p class="conv-hint hint"><?= e(t('chat.list.long_press_hint')) ?></p>
     <!-- menu d'une conversation : appui long (mobile), clic droit ou « ⋯ » (ordinateur) -->
     <div class="modal action-sheet" id="conv-actions" data-token="<?= e(csrf_token()) ?>" hidden>
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="conv-actions-title">
