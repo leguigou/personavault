@@ -4,6 +4,7 @@ declare(strict_types=1);
 /* Moteur de discussion avec les personas (LM Studio par défaut, repli DeepSeek). */
 
 const CHAT_USER_PROFILE_MAX = 800;
+const CHAT_SPLIT_DELAY_MAX = 16;
 
 function chat_has_unread(): bool
 {

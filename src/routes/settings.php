@@ -167,8 +167,8 @@ if ($path === '/settings/chat' && $method === 'POST') {
     $splitPosition = $_POST['chat_split_position'] ?? setting('chat_split_position', 'before');
     set_setting('chat_split_position', $splitPosition === 'after' ? 'after' : 'before');
     set_setting('chat_split_max_bubbles', (string) max(1, min(8, (int) ($_POST['chat_split_max_bubbles'] ?? 2))));
-    $dmin = max(0.5, min(4.0, (float) ($_POST['chat_split_delay_min'] ?? 1)));
-    $dmax = max(0.5, min(4.0, (float) ($_POST['chat_split_delay_max'] ?? 2)));
+    $dmin = max(0.5, min(CHAT_SPLIT_DELAY_MAX, (float) ($_POST['chat_split_delay_min'] ?? 1)));
+    $dmax = max(0.5, min(CHAT_SPLIT_DELAY_MAX, (float) ($_POST['chat_split_delay_max'] ?? 2)));
     if ($dmax < $dmin) {
         [$dmin, $dmax] = [$dmax, $dmin];
     }
