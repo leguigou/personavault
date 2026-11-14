@@ -1611,8 +1611,16 @@ html[data-bubble="carte"] .msg-bot .bubble { border-radius: 14px; background: rg
     align-items: flex-start;
     min-width: 0;
 }
-.bubbles .bubble { border-bottom-left-radius: 10px; }
-.bubbles .bubble:last-child { border-bottom-left-radius: 6px; }
+.msg-user > .bubbles { align-items: flex-end; }
+.msg-bubble {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    max-width: 100%;
+    gap: 4px;
+}
+.msg-bubble > .bubble { max-width: 100%; }
 
 .msg-bot .bubble { border-bottom-left-radius: 6px; }
 .msg-user .bubble {
@@ -3034,6 +3042,7 @@ html.kb-open .chat-room .chat-composer { padding-bottom: 10px; }
    de .msg ne sert qu'à la barre d'outils) */
 .msg-bot > .bubble,
 .msg-bot > .bubbles { max-width: calc(100% - 34px); }
+html[data-avatars="0"] .msg-bot > .bubbles { max-width: 100%; }
 .msg-bot.typing > .bubble { max-width: none; }
 
 /* icônes de la barre du haut : taille fixe (sinon le SVG remplit le bouton) */
@@ -3481,29 +3490,8 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
 /* persona : boutons à gauche, date après eux ; utilisateur : date à gauche, boutons contre la bulle */
 .msg-bot .msg-time { order: 99; margin: 0 0 0 6px; }
 
-.msg-bot[data-msg-id] { position: relative; }
-.msg-reaction-trigger {
-    position: absolute;
-    top: 0;
-    left: calc(100% + 3px);
-    width: 30px;
-    height: 30px;
-    opacity: 0;
-}
-.msg-bot:hover > .msg-reaction-trigger,
-.msg-reaction-trigger:focus-visible,
-.msg-reaction-trigger[aria-expanded="true"] { opacity: 1; }
-@media (pointer: coarse) {
-    .msg-reaction-trigger { width: 34px; height: 34px; opacity: .72; }
-}
-.msg-reaction-row {
-    display: flex;
-    flex: 0 0 100%;
-    padding-inline-start: 34px;
-    margin-top: -5px;
-}
-html[data-avatars="0"] .msg-reaction-row { padding-inline-start: 0; }
-.msg-user .msg-reaction-row { justify-content: flex-end; padding-inline-start: 0; }
+.bubble[data-react] { cursor: pointer; }
+.bubble[data-react][aria-expanded="true"] { border-color: rgba(var(--acc-mid), .55); }
 .msg-reaction-chip {
     display: inline-flex;
     align-items: center;

@@ -57,19 +57,92 @@ function chat_reaction_key(mixed $key, string $role): string
     };
 }
 
-function chat_reaction_description(array $message): string
+function chat_message_split_points(array $message): array
 {
-    $key = chat_reaction_key($message['reaction'] ?? '', (string) ($message['role'] ?? ''));
-    return $key === '' ? '' : implode(' — ', CHAT_REACTIONS[$key]);
+    $length = mb_strlen((string) $message['content']);
+    $points = array_values(array_unique(array_filter(
+        array_map('intval', json_list($message['split_points'] ?? '')),
+        static fn (int $point): bool => $point > 0 && $point < $length
+    )));
+    sort($points, SORT_NUMERIC);
+    $legacy = (int) ($message['split_at'] ?? 0);
+    return !$points && $legacy > 0 && $legacy < $length ? [$legacy] : $points;
 }
 
-function chat_reaction_context(array $message): string
+function chat_message_bubbles(array $message): array
 {
-    $quote = trim((string) $message['content']);
-    if (mb_strlen($quote) > 900) {
-        $quote = mb_substr($quote, 0, 640) . ' […] ' . mb_substr($quote, -240);
+    $text = (string) $message['content'];
+    $points = chat_message_split_points($message);
+    if (!$points) {
+        return [$text];
     }
-    return chat_reaction_description($message) . ' | Message du personnage : '
+    $bubbles = [];
+    $start = 0;
+    foreach ([...$points, mb_strlen($text)] as $end) {
+        $part = trim(mb_substr($text, $start, $end - $start));
+        if ($part !== '') {
+            $bubbles[] = $part;
+        }
+        $start = $end;
+    }
+    return $bubbles ?: [$text];
+}
+
+/** La première bulle conserve la réaction au format des anciennes discussions. */
+function chat_bubble_reactions(array $message, ?array $bubbles = null): array
+{
+    $role = (string) $message['role'];
+    $first = chat_reaction_key($message['reaction'] ?? '', $role);
+    $keys = $first === '' ? [] : [0 => $first];
+    $stored = $message['bubble_reactions'] ?? '';
+    $extra = is_string($stored) && $stored !== '' ? json_decode($stored, true) : null;
+    if ($role === 'assistant' && is_array($extra) && $extra) {
+        $bubbles ??= chat_message_bubbles($message);
+        foreach ($extra as $index => $key) {
+            $key = chat_reaction_key($key, $role);
+            if (is_int($index) && $index > 0 && isset($bubbles[$index]) && $key !== '') {
+                $keys[$index] = $key;
+            }
+        }
+    }
+    return $keys;
+}
+
+function chat_pending_reactions(string $stored): array
+{
+    if ($stored === '') {
+        return [];
+    }
+    $pending = json_decode($stored, true);
+    return is_array($pending) ? $pending : [0 => $stored];
+}
+
+function chat_encode_reactions(array $reactions): string
+{
+    return $reactions ? json_encode((object) $reactions, JSON_THROW_ON_ERROR) : '';
+}
+
+function chat_affectionate_bubbles(array $message): array
+{
+    if ($message['role'] !== 'assistant' || (empty($message['reaction']) && empty($message['bubble_reactions']))) {
+        return [];
+    }
+    $bubbles = chat_message_bubbles($message);
+    $reactions = chat_bubble_reactions($message, $bubbles);
+    $lines = [];
+    foreach ($reactions as $index => $key) {
+        if (in_array($key, CHAT_AFFECTIONATE_REACTIONS, true)) {
+            $quote = mb_substr(trim($bubbles[$index]), 0, 320);
+            $lines[] = 'Réaction de l’utilisateur : ' . implode(' — ', CHAT_REACTIONS[$key]) . ' sur « ' . $quote . ' »';
+        }
+    }
+    return $lines;
+}
+
+function chat_reaction_context(array $message, int $maxTokens): string
+{
+    $quote = chat_shorten_middle(trim($message['content']), $maxTokens);
+    return implode(' — ', CHAT_REACTIONS[$message['reaction']]) . ' | Bulle du personnage : '
         . json_encode($quote, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 }
 
@@ -83,7 +156,7 @@ function chat_can_react(int $cid): bool
 
 function chat_reaction_instructions(bool $canReact): string
 {
-    $text = "Les réactions de l’utilisateur aux messages sont des indices de ton. "
+    $text = "Les réactions de l’utilisateur à une bulle de message sont des indices de ton. "
         . "Un 👍 veut dire « ok » ou marque un accord simple. Pour un 👎 ou 😡, accueille calmement le désaccord "
         . "ou la frustration si le sujet s’y prête ; demande ce qui a gêné si c’est utile, sans supposer la cause. "
         . "Un cœur, un bisou ou un visage amoureux indique une affection dont le sens dépend de votre relation. "

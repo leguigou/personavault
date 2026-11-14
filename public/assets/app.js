@@ -2859,25 +2859,6 @@
             chat.querySelector("[data-opening-questions]")?.remove();
         };
 
-        const bubble = (text, role) => {
-            const wrap = document.createElement("div");
-            wrap.className = "msg msg-" + (role === "user" ? "user" : "bot");
-            wrap.dataset.at = new Date().toISOString(); // message qui vient d'apparaître
-            if (role !== "user") {
-                const av = document.createElement("span");
-                av.className = "msg-avatar";
-                av.innerHTML = avatarHTML;
-                wrap.appendChild(av);
-            }
-            const b = document.createElement("div");
-            b.className = "bubble";
-            b.textContent = text;
-            wrap.appendChild(b);
-            scroll.appendChild(wrap);
-            wrap.dataset.live = "1";
-            return wrap;
-        };
-
         const renderMsg = (m) => {
             if (m.role === "memory") {
                 const line = document.createElement("div");
@@ -2897,7 +2878,7 @@
             }
             const wrap = document.createElement("div");
             wrap.className = "msg msg-" + (m.role === "user" ? "user" : "bot");
-            wrap.dataset.msgId = m.id;
+            if (m.id) wrap.dataset.msgId = m.id;
             wrap.dataset.versionId = m.version_id || "0";
             if (m.reaction_reply) wrap.dataset.reactionReply = "1";
             if (m.at) wrap.dataset.at = m.at;
@@ -2907,39 +2888,49 @@
                 av.innerHTML = avatarHTML;
                 wrap.appendChild(av);
             }
+            let img = null;
             if (m.image) {
-                const img = document.createElement("img");
+                img = document.createElement("img");
                 img.className = "bubble-img";
                 img.alt = tr("chat.photo_alt");
                 img.src = "/media/" + m.image + ".thumb.webp";
                 img.dataset.full = "/media/" + m.image + ".webp";
-                wrap.appendChild(img);
             }
 
-            const chars = Array.from(String(m.content || ""));
+            const content = String(m.content || "");
+            const chars = Array.from(content);
             const pts = (Array.isArray(m.split_points) ? m.split_points : [])
                 .map(Number)
                 .filter((n) => n > 0 && n < chars.length);
+            let parts = [content];
             if (pts.length) {
-                const holder = document.createElement("div");
-                holder.className = "bubbles";
                 const bounds = [0, ...pts, chars.length];
-                for (let i = 0; i < bounds.length - 1; i++) {
-                    const part = chars.slice(bounds[i], bounds[i + 1]).join("").trim();
-                    if (part === "") continue; // une coupe en fin de texte ne doit pas laisser de bulle vide
-                    const b = document.createElement("div");
-                    b.className = "bubble";
-                    b.textContent = part;
-                    holder.appendChild(b);
-                }
-                wrap.appendChild(holder);
-            } else {
+                parts = bounds.slice(1).map((end, i) =>
+                    // Même ensemble de caractères que trim() côté PHP.
+                    chars.slice(bounds[i], end).join("").replace(/^[ \t\n\r\0\v]+|[ \t\n\r\0\v]+$/g, "")
+                ).filter(Boolean);
+                if (!parts.length) parts = [content];
+            }
+            const holder = document.createElement("div");
+            holder.className = "bubbles";
+            if (img && content !== "") wrap.appendChild(img);
+            parts.forEach((part, i) => {
+                const item = document.createElement("div");
+                item.className = "msg-bubble";
+                item.dataset.bubbleIndex = String(i);
                 const b = document.createElement("div");
                 b.className = "bubble";
-                b.textContent = m.content;
-                wrap.appendChild(b);
-            }
-            paintReaction(wrap, m.reaction);
+                b.textContent = part;
+                if (img && content === "") {
+                    item.appendChild(img);
+                    b.hidden = true;
+                }
+                item.appendChild(b);
+                holder.appendChild(item);
+                if (wrap.dataset.msgId && m.role === "assistant" && !b.hidden) prepareReactionBubble(b);
+                paintReaction(item, m.bubble_reactions?.[i] ?? (i === 0 ? m.reaction : ""), m.role === "assistant");
+            });
+            wrap.appendChild(holder);
             return wrap;
         };
 
@@ -3800,7 +3791,6 @@
         const editUrl   = endpoint.replace(/\/send$/, "/msg-edit");
 
         const ICONS = {
-            react: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="12.5" r="7.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.5 14a3.4 3.4 0 0 0 6 0M8 10.5h.01m5 0h.01M19 3v6m-3-3h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
             regen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
             edit:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
             del:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9.5 7V5h5v2M7.5 7l.8 12h7.4l.8-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -3830,35 +3820,40 @@
         picker.setAttribute("aria-label", tr("chat.reactions"));
         document.body.appendChild(picker);
         let reactionAnchor = null;
-        let reactionMessage = null;
+        let reactionBubble = null;
+        let reactionPoint = null;
 
         const closeReactions = (restoreFocus = false) => {
             picker.hidden = true;
             reactionAnchor?.setAttribute("aria-expanded", "false");
             if (restoreFocus) reactionAnchor?.focus({ preventScroll: true });
             reactionAnchor = null;
-            reactionMessage = null;
+            reactionBubble = null;
+            reactionPoint = null;
         };
 
-        const reactionTrigger = (button) => {
-            button.dataset.react = "1";
-            button.setAttribute("aria-expanded", "false");
-            button.setAttribute("aria-controls", picker.id);
-            return button;
+        const reactionTrigger = (anchor) => {
+            anchor.dataset.react = "1";
+            anchor.setAttribute("aria-expanded", "false");
+            anchor.setAttribute("aria-controls", picker.id);
         };
 
-        const paintReaction = (msg, key) => {
-            msg.dataset.reaction = reactions[key] ? key : "";
-            msg.querySelector(".msg-reaction-row")?.remove();
-            const bot = msg.classList.contains("msg-bot");
-            if (bot && msg.dataset.msgId && !msg.querySelector(".msg-reaction-trigger")) {
-                const trigger = reactionTrigger(toolBtn("react", ICONS.react, tr("chat.react")));
-                trigger.classList.add("msg-reaction-trigger");
-                msg.appendChild(trigger);
+        const prepareReactionBubble = (bubble) => {
+            reactionTrigger(bubble);
+            bubble.tabIndex = 0;
+            bubble.setAttribute("role", "button");
+            bubble.setAttribute("aria-description", tr("chat.react"));
+        };
+
+        const paintReaction = (item, key, bot) => {
+            item.dataset.reaction = Object.hasOwn(reactions, key) ? key : "";
+            const oldChip = item.querySelector(".msg-reaction-chip");
+            const focused = oldChip === document.activeElement;
+            oldChip?.remove();
+            if (!item.dataset.reaction) {
+                if (focused) item.querySelector(".bubble")?.focus({ preventScroll: true });
+                return;
             }
-            if (!msg.dataset.reaction) return;
-            const row = document.createElement("div");
-            row.className = "msg-reaction-row";
             const chip = document.createElement(bot ? "button" : "span");
             chip.className = "msg-reaction-chip";
             if (bot) {
@@ -3883,34 +3878,42 @@
                 avatar.innerHTML = avatarHTML;
                 chip.appendChild(avatar);
             }
-            row.appendChild(chip);
-            msg.insertBefore(row, msg.querySelector(".msg-tools, .msg-versions"));
+            item.appendChild(chip);
+            if (focused) chip.focus({ preventScroll: true });
         };
-        scroll.querySelectorAll(".msg[data-msg-id]").forEach((msg) => paintReaction(msg, msg.dataset.reaction));
+        scroll.querySelectorAll(".msg[data-msg-id] .msg-bubble").forEach((item) => {
+            const bot = Boolean(item.closest(".msg-bot"));
+            const bubble = item.querySelector(".bubble");
+            if (bot && !bubble.hidden) prepareReactionBubble(bubble);
+            paintReaction(item, item.dataset.reaction, bot);
+        });
         const paintUserReaction = ({ id, reaction }) => {
-            const msg = scroll.querySelector('.msg-user[data-msg-id="' + Number(id) + '"]');
-            if (msg) paintReaction(msg, reaction);
+            const item = scroll.querySelector('.msg-user[data-msg-id="' + Number(id) + '"] [data-bubble-index="0"]');
+            if (item) paintReaction(item, reaction, false);
         };
 
         const positionReactions = () => {
             if (picker.hidden) return;
             const bounds = scroll.getBoundingClientRect();
             const anchor = reactionAnchor.getBoundingClientRect();
-            if (!reactionMessage.isConnected || !reactionAnchor.isConnected || anchor.bottom < bounds.top || anchor.top > bounds.bottom) {
+            const y = anchor.top + Math.min(reactionPoint.y, anchor.height);
+            const visual = window.visualViewport;
+            const left = visual?.offsetLeft ?? 0;
+            const top = Math.max(bounds.top, visual?.offsetTop ?? 0);
+            const right = left + (visual?.width ?? document.documentElement.clientWidth);
+            const bottom = Math.min(bounds.bottom, (visual?.offsetTop ?? 0) + (visual?.height ?? window.innerHeight));
+            if (!reactionAnchor.isConnected || y < top || y > bottom) {
                 closeReactions();
                 return;
             }
-            const left = reactionMessage.querySelector(".bubble")?.getBoundingClientRect().left ?? anchor.left;
             const { width, height } = picker.getBoundingClientRect();
-            picker.style.left = Math.max(8, Math.min(left, document.documentElement.clientWidth - width - 8)) + "px";
-            const above = anchor.top - height - 8;
-            picker.style.top = Math.max(8, Math.min(above >= bounds.top ? above : anchor.bottom + 8, window.innerHeight - height - 8)) + "px";
+            const x = anchor.left + Math.min(reactionPoint.x, anchor.width);
+            picker.style.left = Math.max(left + 8, Math.min(x - width / 2, right - width - 8)) + "px";
+            const offset = y - top >= height + 8 || y - top >= bottom - y ? y - height - 8 : y + 8;
+            picker.style.top = Math.max(top, Math.min(offset, bottom - height)) + "px";
         };
 
-        const openReactions = (msg, anchor, expanded = false) => {
-            reactionMessage = msg;
-            reactionAnchor = anchor;
-            anchor.setAttribute("aria-expanded", "true");
+        const showReactions = (expanded = false) => {
             const entries = Object.entries(reactions);
             picker.replaceChildren();
             picker.classList.toggle("is-expanded", expanded);
@@ -3921,7 +3924,7 @@
                 option.dataset.reactionOption = key;
                 option.title = label;
                 option.setAttribute("aria-label", option.title);
-                option.setAttribute("aria-pressed", String(msg.dataset.reaction === key));
+                option.setAttribute("aria-pressed", String(reactionBubble.dataset.reaction === key));
                 picker.appendChild(option);
             }
             if (!expanded) {
@@ -3933,51 +3936,53 @@
             (picker.querySelector('[aria-pressed="true"]') || picker.firstElementChild)?.focus({ preventScroll: true });
         };
 
-        const saveReaction = async (msg, key) => {
-            if (msg.dataset.reacting || msg.dataset.switching) return;
-            msg.dataset.reacting = "1";
+        const saveReaction = async (item, key) => {
+            const msg = item.closest(".msg-bot");
+            if (!msg || item.dataset.reacting || msg.dataset.switching) return;
+            item.dataset.reacting = "1";
             const mid = msg.dataset.msgId;
             const version = msg.dataset.versionId || "0";
-            const wanted = msg.dataset.reaction === key ? "" : key;
+            const bubble = item.dataset.bubbleIndex;
+            const queueKey = `${mid}:${version}:${bubble}`;
+            const wanted = item.dataset.reaction === key ? "" : key;
             try {
-                const body = new URLSearchParams({ _token: token, mid, version_id: version, reaction: wanted });
+                const body = new URLSearchParams({ _token: token, mid, version_id: version, bubble, reaction: wanted });
                 const response = await fetch(reactionUrl, { method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" } });
                 const data = await response.json();
                 if (!data.ok) throw new Error(data.error || tr("chat.reaction_error"));
-                const focused = msg.querySelector(".msg-reaction-chip") === document.activeElement;
-                paintReaction(msg, data.reaction);
-                if (focused) (msg.querySelector(".msg-reaction-chip") || msg.querySelector(".msg-reaction-trigger"))?.focus({ preventScroll: true });
-                if (!data.reaction) reactionQueue.delete(mid);
+                paintReaction(item, data.reaction, true);
+                if (!data.reaction) reactionQueue.delete(queueKey);
                 if (data.reply) {
-                    reactionQueue.set(mid, { mid, version, key: data.reaction, revision: data.revision });
+                    reactionQueue.set(queueKey, { mid, version, bubble, key: data.reaction, revision: data.revision });
                     sendQueuedReaction();
                 }
             } catch (err) {
                 notice(err.message || tr("chat.reaction_error"));
             } finally {
-                delete msg.dataset.reacting;
+                delete item.dataset.reacting;
             }
         };
 
         picker.addEventListener("click", (event) => {
             event.stopPropagation();
             const option = event.target.closest("[data-reaction-option]");
-            if (option && reactionMessage) {
-                const msg = reactionMessage;
+            if (option && reactionBubble) {
+                const item = reactionBubble;
                 closeReactions(true);
-                saveReaction(msg, option.dataset.reactionOption);
+                saveReaction(item, option.dataset.reactionOption);
             } else if (event.target.closest("[data-more-reactions]")) {
-                openReactions(reactionMessage, reactionAnchor, true);
+                showReactions(true);
             }
         });
         document.addEventListener("click", (event) => {
-            if (!picker.contains(event.target) && !event.target.closest("[data-react]")) closeReactions();
+            if (!event.target.closest("[data-react]")) closeReactions();
         });
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && !picker.hidden) closeReactions(true);
         });
         scroll.addEventListener("scroll", positionReactions, { passive: true });
         window.addEventListener("resize", positionReactions);
+        window.visualViewport?.addEventListener("resize", positionReactions);
 
         /* date et heure d'un message, dans la langue et le fuseau du téléphone :
            « Aujourd'hui à 14:05 », « Hier à 21:10 », « 8 nov. à 09:30 » (année si différente) */
@@ -4017,7 +4022,6 @@
                 tools.appendChild(t);
             }
 
-            if (isBot) tools.appendChild(reactionTrigger(toolBtn("react", ICONS.react, tr("chat.react"))));
             if (isLastBot && scroll.querySelector(".msg-user[data-msg-id]")) {
                 tools.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
             }
@@ -4084,7 +4088,7 @@
         };
 
         const switchVersion = async (el, dir) => {
-            if (busy || el.dataset.switching === "1" || el.dataset.reacting) return;
+            if (busy || el.dataset.switching === "1" || el.querySelector("[data-reacting]")) return;
             el.dataset.switching = "1";
             try {
                 const fd = new FormData();
@@ -4101,6 +4105,7 @@
                     split_points: d.split_points || [],
                     version_id: d.version_id,
                     reaction: d.reaction,
+                    bubble_reactions: d.bubble_reactions,
                     at: el.dataset.at,
                 });
                 fresh.dataset.ver = String(d.versions.index);
@@ -4136,7 +4141,7 @@
         const startEdit = (el) => {
             if (el.dataset.editing === "1") return;
             const id = el.dataset.msgId;
-            const block = el.querySelector(".bubbles") || el.querySelector(".bubble");
+            const block = el.querySelector(".bubbles");
             if (!id || !block) return;
 
             const full = [...el.querySelectorAll(".bubble")]
@@ -4225,16 +4230,34 @@
             send(null, "auto", false, true, null, Number(last.dataset.msgId));
         };
 
+        scroll.addEventListener("keydown", (event) => {
+            if (event.target.matches(".bubble[data-react]") && ["Enter", " "].includes(event.key)) {
+                event.preventDefault();
+                if (!event.repeat) event.target.click();
+            }
+        });
+
         scroll.addEventListener("click", (e) => {
             const react = e.target.closest("[data-react]");
             if (react) {
                 const msg = react.closest(".msg-bot");
-                if (!msg || msg.dataset.reacting) return;
+                const item = react.closest(".msg-bubble");
+                if (!msg || item.dataset.reacting || msg.dataset.switching || (e.detail && window.getSelection()?.isCollapsed === false)) return;
                 if (reactionAnchor === react) {
                     closeReactions(true);
                 } else {
                     closeReactions();
-                    openReactions(msg, react);
+                    if (!msg.querySelector(".msg-tools")) {
+                        scroll.querySelectorAll(".msg-tools").forEach((tools) => tools.remove());
+                        msg.appendChild(buildTools(msg));
+                    }
+                    const anchor = react.getBoundingClientRect();
+                    reactionPoint = e.detail ? { x: e.clientX - anchor.left, y: e.clientY - anchor.top }
+                        : { x: anchor.width / 2, y: Math.max(0, scroll.getBoundingClientRect().top - anchor.top) };
+                    reactionAnchor = react;
+                    reactionBubble = item;
+                    react.setAttribute("aria-expanded", "true");
+                    showReactions();
                 }
                 return;
             }
@@ -4355,8 +4378,8 @@
 
         const sendQueuedReaction = () => {
             if (busy || !reactionQueue.size) return;
-            const reaction = reactionQueue.values().next().value;
-            reactionQueue.delete(reaction.mid);
+            const [key, reaction] = reactionQueue.entries().next().value;
+            reactionQueue.delete(key);
             send(null, "auto", false, false, null, null, reaction);
         };
 
@@ -4391,7 +4414,10 @@
             };
             if (!regen && !reaction) {
                 clearIntro();
-                if (echo) userEl = bubble(text, "user");
+                if (echo) {
+                    userEl = renderMsg({ role: "user", content: text, at: new Date().toISOString() });
+                    scroll.appendChild(userEl);
+                }
                 scrollBottom(true, true);
             }
             typing();
@@ -4574,6 +4600,7 @@
                 if (reaction) {
                     fd.append("reaction_mid", reaction.mid);
                     fd.append("reaction_version", reaction.version);
+                    fd.append("reaction_bubble", reaction.bubble);
                     fd.append("reaction_revision", reaction.revision);
                     fd.append("reaction", reaction.key);
                 }
@@ -4655,15 +4682,9 @@
                                 afterId = Number(evt.after_id || userId);
                                 if (attachment && attachment === pendingFile) clearAttach();
                                 if (evt.user && userEl) {
-                                    userEl.dataset.msgId = evt.user.id;
-                                    if (evt.user.image) {
-                                        const img = document.createElement("img");
-                                        img.className = "bubble-img";
-                                        img.alt = tr("chat.photo_alt");
-                                        img.src = "/media/" + evt.user.image + ".thumb.webp";
-                                        img.dataset.full = "/media/" + evt.user.image + ".webp";
-                                        userEl.insertBefore(img, userEl.querySelector(".bubble"));
-                                    }
+                                    const fresh = renderMsg({ ...evt.user, at: userEl.dataset.at });
+                                    userEl.replaceWith(fresh);
+                                    userEl = fresh;
                                 }
                             } else if (evt.done) {
                                 finalReply = evt.reply || null;

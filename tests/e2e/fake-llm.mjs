@@ -113,9 +113,17 @@ http.createServer(async (req, res) => {
             const delta = (content) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + '\n\n');
             let finish = 'stop';
             if (last.endsWith('[Réaction à ton message]')) {
-                const target = last.match(/Message du personnage : "Réponse (\d+)/)?.[1];
+                const target = last.match(/Bulle du personnage : (".*")/)?.[1];
+                const quote = target ? JSON.parse(target) : '';
                 const tone = last.includes('😡 — colère') ? 'colère' : last.includes('👍 — accord') ? 'accord simple' : 'autre';
-                delta(`Réaction à la réponse ${target} (${tone}).`);
+                const responseNumber = quote.match(/^Réponse (\d+)/)?.[1];
+                if (j.messages.length !== 2 || system.includes('Mémoire de la conversation')) {
+                    delta('La discussion a été transmise avec la réaction.');
+                } else if (responseNumber) {
+                    delta(`Réaction à la réponse ${responseNumber} (${tone}).`);
+                } else {
+                    delta(quote);
+                }
             } else if (last.endsWith('Merci, tu as été adorable avec moi.')) {
                 if (system.includes('[reaction:choix]')) {
                     for (const part of ['\n[re', 'action:', 'heart', ']', '\n', '\n']) delta(part);

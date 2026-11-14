@@ -11,7 +11,7 @@ return [
     'js.chat.retitling' => 'Réécriture du titre…',
     'js.chat.retitled' => 'Titre mis à jour.',
     'js.chat.retitle_failed' => 'Le titre n’a pas pu être réécrit. Vérifie que le modèle est disponible et réessaie.',
-    'js.chat.react' => 'Réagir au message',
+    'js.chat.react' => 'Réagir à cette bulle',
     'js.chat.reactions' => 'Réactions',
     'js.chat.more_reactions' => 'Plus de réactions',
     'js.chat.reaction_you' => 'Toi · {emotion}',

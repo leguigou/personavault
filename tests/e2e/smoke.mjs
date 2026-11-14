@@ -282,6 +282,32 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
         const expectedStart = position === 'after' ? 'Dernière phrase.' : 'suite suite';
         expect(reply?.split_points?.length === 1 && reply.content.slice(reply.split_points[0]).startsWith(expectedStart),
             'le flux enregistre le point de coupe choisi ' + position);
+        if (position === 'after' && reply?.split_points?.length === 1) {
+            const react = async (bubble, reaction) => (await chatPost(privateChat + '/react', { mid: reply.id, bubble, reaction })).json();
+            const first = await react(0, 'like');
+            const second = await react(1, 'heart');
+            const follow = async (saved, bubble = saved.bubble) => (await (await chatPost(privateChat + '/stream', {
+                reaction_mid: reply.id, reaction_bubble: bubble, reaction: saved.reaction, reaction_revision: saved.revision,
+            })).text()).split('\n').filter((line) => line.startsWith('data: '))
+                .map((line) => JSON.parse(line.slice(6))).find((event) => event.done);
+            expect(first.reply && second.reply && (await follow(second, 0))?.skipped,
+                'une révision de réaction est liée à sa bulle');
+            expect((await follow(second))?.reply?.content === 'Dernière phrase.'
+                && (await follow(first))?.reply?.content === reply.content.slice(0, reply.split_points[0]).trim(),
+                'deux réactions à la même réponse utilisent chacune le texte de leur bulle');
+            const load = async () => (await (await http(privateChat + '/messages')).json()).messages.find((m) => m.id === reply.id);
+            expect((await load())?.bubble_reactions?.[1] === 'heart' && (await load())?.bubble_reactions?.[0] === 'like',
+                'les réactions aux deux bulles survivent au rechargement');
+            const invalid = await chatPost(privateChat + '/react', { mid: reply.id, bubble: 2, reaction: 'angry' });
+            expect(invalid.status === 409, 'une bulle inexistante ne peut pas recevoir de réaction');
+            expect(!(await react(0, '')).reply && !(await load())?.bubble_reactions?.[0]
+                && (await load())?.bubble_reactions?.[1] === 'heart', 'retirer une réaction préserve celle de la bulle voisine');
+            const regen = (await (await chatPost(privateChat + '/stream', { regen: '1', regen_reply: reply.id })).text())
+                .split('\n').filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6))).find((event) => event.done);
+            const archived = await (await chatPost(privateChat + '/version', { mid: regen?.reply?.id, dir: -1 })).json();
+            expect(archived.bubble_reactions?.[1] === 'heart' && !archived.bubble_reactions?.[0],
+                'le changement de version restaure les réactions de la bonne bulle');
+        }
     }
     await chatPost('/settings/chat', {
         ...splitSettings, chat_split_enabled: '', chat_split_words: '50', chat_split_max_bubbles: '1',
