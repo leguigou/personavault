@@ -296,8 +296,11 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     $res['klipy_url'] = $aborted ? '' : $requestedUrl;
-    if (!$aborted && !$reactionOnly && !$regen && $mediaRequest === null && $res['provider'] === 'chat') {
-        $res['klipy_url'] = chat_spontaneous_klipy($cid, $persona, $conv, $text, $res['content']);
+    if (!$aborted && !$reactionOnly && !$regen && $mediaRequest === null) {
+        $res['klipy_url'] = chat_spontaneous_klipy(
+            $cid, $persona, $conv, $text, $res['content'],
+            modelConfig: $res['provider'] === 'fallback' ? llm_config() : null
+        );
     }
     if ($res['content'] === '' && $mediaNotice !== '') {
         $res['content'] = $mediaNotice;

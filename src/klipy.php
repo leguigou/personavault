@@ -39,8 +39,8 @@ function klipy_search_media(string $format, string $mood, string $key, array $se
     if ($format !== 'clip') {
         $params['format_filter'] = $format === 'gif' ? 'gif' : 'gif,webp';
     }
-    // Une demande explicite peut chercher plus loin si la première page a déjà été vue.
-    $maxPages = $diagnostic && $seen ? 3 : 1;
+    // Si la première page contient uniquement des médias déjà vus, chercher plus loin.
+    $maxPages = $seen ? ($diagnostic ? 3 : 2) : 1;
     for ($page = 1; $page <= $maxPages; $page++) {
         $data = klipy_search_page($format, $key, $params + ['page' => $page], $diagnostic);
         foreach ($data['data'] ?? [] as $result) {
@@ -113,7 +113,7 @@ function klipy_requested_media(string $message): ?array
     return [strtolower($match[1]), $mood];
 }
 
-function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $message, string $reply, ?array $request = null): string
+function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $message, string $reply, ?array $request = null, ?array $modelConfig = null): string
 {
     $mask = (int) $conv['klipy_formats'];
     if ($mask === -1) {
@@ -138,7 +138,7 @@ function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $m
         return '';
     }
     $stmt = db()->prepare("SELECT klipy_url FROM messages WHERE conversation_id = ? AND role = 'assistant'
-        AND reaction_reply = 0 ORDER BY id DESC LIMIT 8");
+        AND reaction_reply = 0 ORDER BY id DESC LIMIT 4");
     $stmt->execute([$cid]);
     $recent = $stmt->fetchAll(PDO::FETCH_COLUMN);
     if (array_filter($recent)) {
@@ -147,19 +147,25 @@ function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $m
     try {
         $result = llm_request([
             ['role' => 'system', 'content' => 'Choisis un média KLIPY facultatif qui accompagne cette réponse et convient au style du persona. '
-                . 'Réponds par none ou par format:émotion. Formats autorisés : ' . implode(', ', array_keys($formats))
+                . 'Prends cette initiative même si l’utilisateur ne demande pas de média. '
+                . 'Pour un moment drôle, une bonne nouvelle, une surprise ou un échange chaleureux, choisis un média si cette réaction paraît naturelle. '
+                . 'Réponds uniquement par none ou par format:émotion. Formats autorisés : ' . implode(', ', array_keys($formats))
                 . '. Émotions : ' . implode(', ', array_keys(CHAT_GIF_QUERIES))
-                . '. Choisis none par défaut, notamment pour une demande pratique, un sujet intime ou une situation grave.'],
+                . '. Réponds none si le média n’apporte rien, notamment pour une demande pratique, un sujet intime ou une situation grave.'],
             ['role' => 'user', 'content' => json_encode([
                 'persona' => $persona['name'],
                 'style' => mb_substr((string) $conv['directive'], 0, 400),
                 'message' => mb_substr($message, 0, 800),
                 'réponse' => mb_substr($reply, 0, 800),
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)],
-        ], chat_llm_config_for($conv), [
-            'max_tokens' => 32, 'temperature' => 0, 'timeout' => 5, 'reasoning_effort' => 'none', 'purpose' => 'gif',
+        ], $modelConfig ?? chat_llm_config_for($conv), [
+            'max_tokens' => 32, 'temperature' => 0, 'timeout' => 8, 'reasoning_effort' => 'none', 'purpose' => 'gif',
         ]);
-        [$format, $mood] = array_pad(explode(':', strtolower(trim($result['content'])), 2), 2, '');
+        if (!preg_match('/\A\s*(?:```(?:text)?\s*)?([a-z]+)\s*:\s*([a-z]+)\s*(?:```\s*)?\z/i', $result['content'], $choice)) {
+            return '';
+        }
+        $format = strtolower($choice[1]);
+        $mood = strtolower($choice[2]);
         if (!isset($formats[$format], CHAT_GIF_QUERIES[$mood])) {
             return '';
         }

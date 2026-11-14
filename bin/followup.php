@@ -150,9 +150,13 @@ foreach ($convs as $conv) {
         );
 
     $messages = [['role' => 'system', 'content' => $system]];
+    $lastUserMessage = '';
     foreach ($history as $m) {
         $content = trim((string) $m['content'] . ($m['image'] !== '' ? ' [photo jointe]' : ''));
         $messages[] = ['role' => (string) $m['role'], 'content' => $content];
+        if ($m['role'] === 'user') {
+            $lastUserMessage = $content;
+        }
     }
     $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
 
@@ -191,16 +195,19 @@ foreach ($convs as $conv) {
     }
     try {
         // Les échanges récents ou le réglage peuvent avoir changé pendant la génération.
-        $stmt = db()->prepare("SELECT 1 FROM conversations WHERE id = ? AND auto_followup = 1
+        $stmt = db()->prepare("SELECT klipy_formats FROM conversations WHERE id = ? AND auto_followup = 1
                                 AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'chat_followup_enabled' AND value <> '1')");
         $stmt->execute([$cid]);
-        if (!$stmt->fetchColumn() || fetch_messages($cid, CHAT_MIN_RECENT, 0, true) !== $history) {
+        $formats = $stmt->fetchColumn();
+        if ($formats === false || fetch_messages($cid, CHAT_MIN_RECENT, 0, true) !== $history) {
             continue;
         }
+        $conv['klipy_formats'] = (int) $formats;
+        $klipyUrl = chat_spontaneous_klipy($cid, $persona, $conv, $lastUserMessage, $text, modelConfig: $fuCfg);
         $pdo = db();
         $pdo->beginTransaction();
-        $ins = $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model) VALUES (?, "assistant", ?, ?)');
-        $ins->execute([$cid, $text, (string) ($res['model'] ?? '')]);
+        $ins = $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, klipy_url) VALUES (?, "assistant", ?, ?, ?)');
+        $ins->execute([$cid, $text, (string) ($res['model'] ?? ''), $klipyUrl]);
         $pdo->prepare('UPDATE conversations SET last_followup_at = datetime("now"), unread = 1, updated_at = datetime("now") WHERE id = ?')
             ->execute([$cid]);
         $pdo->commit();
