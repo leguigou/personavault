@@ -13,4 +13,10 @@ return [
     // facultatif : autre base, autre dossier d'images
     // 'db'      => __DIR__ . '/storage/personavault.sqlite',
     // 'uploads' => __DIR__ . '/storage/uploads',
+
+    // facultatif : outil de recherche MCP déjà installé dans LM Studio
+    // 'chat_web_lmstudio_mcp' => ['id' => 'mcp/nom-du-serveur', 'tool' => 'nom_de_l_outil'],
+
+    // autre moteur : Brave Search (ou variable BRAVE_SEARCH_API_KEY)
+    // 'chat_web_search_key' => 'ta-clé-brave-search',
 ];

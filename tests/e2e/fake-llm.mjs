@@ -73,6 +73,32 @@ http.createServer(async (req, res) => {
         res.statusCode = 401;
         return res.end();
     }
+    if (req.url.startsWith('/web/search?')) {
+        const query = new URL(req.url, 'http://localhost').searchParams.get('q');
+        if (req.headers['x-subscription-token'] !== 'test-search-key' || query !== 'restaurants italiens pizzas Toulon') {
+            res.statusCode = 503;
+            return res.end();
+        }
+        return res.end(JSON.stringify({ web: { results: [
+            { title: 'Pizzeria de test', description: 'Pizzas italiennes au 7 rue Exemple à Toulon.', url: 'https://example.com/pizzeria-toulon' },
+            { title: 'Résultat invalide', description: '', url: 'javascript:alert(1)' },
+        ] } }));
+    }
+    if (req.method === 'POST' && req.url === '/api/v1/chat') {
+        const request = JSON.parse(body);
+        const integration = request.integrations?.[0];
+        if (request.input !== 'restaurants italiens pizzas Toulon' || request.model !== 'fake-model'
+            || request.store !== false || integration?.type !== 'plugin' || integration.id !== 'mcp/test-search'
+            || integration.allowed_tools?.join() !== 'web_search') {
+            res.statusCode = 400;
+            return res.end('{}');
+        }
+        const result = { title: 'Pizzeria de test', description: 'Pizzas au 7 rue Exemple à Toulon.', url: 'https://example.com/mcp-toulon' };
+        return res.end(JSON.stringify({ output: [
+            { type: 'tool_call', tool: 'web_search', output: JSON.stringify([result]), provider_info: { type: 'plugin', plugin_id: integration.id } },
+            { type: 'message', content: JSON.stringify({ results: [result, { ...result, url: 'https://example.com/invented' }] }) },
+        ] }));
+    }
     const klipyFormat = req.url.match(/^\/klipy\/test-gif-key\/(gif|sticker|clip)s\/search\?/)?.[1];
     if (klipyFormat) {
         const params = new URL(req.url, 'http://localhost').searchParams;
@@ -103,7 +129,12 @@ http.createServer(async (req, res) => {
         const system = String(j.messages?.[0]?.content ?? '');
         const last = String(j.messages?.at(-1)?.content ?? '');
         let text;
-        if (system.startsWith('Choisis un média KLIPY facultatif')) {
+        if (system.startsWith('Décide si le dernier message appelle une recherche')) {
+            const { recent, message } = JSON.parse(last);
+            const hasCity = recent.some(([role, content]) => role === 'user' && content.includes('à Toulon'));
+            text = JSON.stringify({ query: message === 'Italien et pizza' && hasCity ? 'restaurants italiens pizzas Toulon'
+                : message === 'Vérifie les horaires à Toulon' ? 'horaires Toulon' : '' });
+        } else if (system.startsWith('Choisis un média KLIPY facultatif')) {
             const format = system.match(/Formats autorisés : (gif|sticker|clip)/)?.[1];
             text = last.includes('Je fête cette réussite') ? format + ':celebrate' : 'none';
         } else if (system.includes("Analyse l'évolution de la relation")) {
@@ -128,6 +159,10 @@ http.createServer(async (req, res) => {
             text = 'mot '.repeat(14) + 'mot. ' + 'suite '.repeat(9) + 'suite. Dernière phrase.';
         } else if (system.includes('le sujet concret des derniers échanges') && last.includes('volcans en Islande')) {
             text = 'Volcans en Islande';
+        } else if (j.stream && last.includes('Extraits web :') && last.includes('7 rue Exemple')) {
+            text = 'La Pizzeria de test se trouve au 7 rue Exemple à Toulon.';
+        } else if (j.stream && system.includes('n’a renvoyé aucun résultat exploitable')) {
+            text = 'Je ne peux pas vérifier les horaires cette fois-ci.';
         } else {
             text = assist(system, String(j.messages?.[1]?.content ?? '')) ?? reply(system);
         }

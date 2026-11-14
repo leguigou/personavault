@@ -358,5 +358,5 @@ return [
     'logs.purpose.test' => 'Connection test',
     'logs.purpose.other' => 'Other',
     'logs.link_title' => 'Exchange log',
-    'logs.link_text' => 'See what is sent to the model and what it returns (last 20).',
+    'logs.link_text' => 'The last 20 exchanges with the model.',
 ];

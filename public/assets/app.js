@@ -3961,9 +3961,28 @@
         };
 
         const prepareReactionBubble = (bubble) => {
+            const lines = bubble.textContent.split(/\r?\n/);
+            const isLink = (line) => /^https?:\/\/[^\s<>"\\]+$/i.test(line);
+            const hasLinks = lines.some(isLink);
+            if (hasLinks) {
+                bubble.replaceChildren();
+                lines.forEach((line, index) => {
+                    if (index) bubble.append("\n", document.createElement("br"));
+                    if (!isLink(line)) {
+                        bubble.append(line);
+                        return;
+                    }
+                    const link = document.createElement("a");
+                    link.href = line;
+                    link.textContent = line;
+                    link.target = "_blank";
+                    link.rel = "noopener noreferrer";
+                    bubble.appendChild(link);
+                });
+            }
             reactionTrigger(bubble);
             bubble.tabIndex = 0;
-            bubble.setAttribute("role", "button");
+            bubble.setAttribute("role", hasLinks ? "group" : "button");
             bubble.setAttribute("aria-description", tr("chat.react"));
         };
 
@@ -4536,6 +4555,10 @@
         });
 
         scroll.addEventListener("click", (e) => {
+            if (e.target.closest(".bubble a")) {
+                closeReactions();
+                return;
+            }
             const react = e.target.closest("[data-react]");
             if (react) {
                 const msg = react.closest(".msg-bot");
@@ -4977,6 +5000,8 @@
                                 if (!live) loadingLabel(tr("lms.loading"));
                             } else if (evt.phase === "memory") {
                                 if (!live) loadingLabel(tr("chat.memory_phase"));
+                            } else if (evt.phase === "web_search") {
+                                if (!live) loadingLabel(tr("chat.web_search_phase"));
                             } else if (evt.start) {
                                 userId = Number(evt.user?.id || evt.user_id || 0);
                                 afterId = Number(evt.after_id || userId);

@@ -361,5 +361,5 @@ return [
     'logs.purpose.test' => 'Test de connexion',
     'logs.purpose.other' => 'Autre',
     'logs.link_title' => 'Journal des échanges',
-    'logs.link_text' => 'Voir ce qui est envoyé au modèle et ce qu’il renvoie (20 derniers).',
+    'logs.link_text' => 'Les 20 derniers échanges avec le modèle.',
 ];

@@ -88,6 +88,7 @@ return [
         'other' => 'Memory updated — {n} messages summarized.',
     ],
     'js.chat.memory_phase'        => 'Updating memory…',
+    'js.chat.web_search_phase'    => 'Searching the web…',
     'js.chat.fb_not_loaded'       => 'The model is not loaded',
     'js.chat.fb_no_reply'         => 'LM Studio did not respond',
     'js.chat.fb_kept'             => 'Message kept in the input — send it again when LM Studio is ready.',
