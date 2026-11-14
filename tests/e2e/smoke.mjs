@@ -278,9 +278,18 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     const splitSettings = {
         chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`, chat_model: 'fake-model',
         chat_split_enabled: '1', chat_split_words: '15', chat_split_max_bubbles: '2',
+        chat_split_delay_min: '12.5', chat_split_delay_max: '16',
     };
     for (const position of ['before', 'after']) {
         await chatPost('/settings/chat', { ...splitSettings, chat_split_position: position });
+        if (position === 'before') {
+            const settings = await (await http('/settings')).text();
+            const chat = await (await http(privateChat)).text();
+            expect(settings.includes('name="chat_split_delay_min" min="0.5" max="16"')
+                && settings.includes('name="chat_split_delay_max" min="0.5" max="16"')
+                && chat.includes('data-split-delay-min="12.5"') && chat.includes('data-split-delay-max="16"'),
+                'le réglage de pause accepte 16 secondes et transmet la plage enregistrée à la discussion');
+        }
         const stream = await (await chatPost(privateChat + '/stream', { message: 'Test du seuil de découpage' })).text();
         const reply = stream.split('\n').filter((line) => line.startsWith('data: '))
             .map((line) => JSON.parse(line.slice(6))).find((event) => event.done)?.reply;
@@ -316,6 +325,7 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     }
     await chatPost('/settings/chat', {
         ...splitSettings, chat_split_enabled: '', chat_split_words: '50', chat_split_max_bubbles: '1',
+        chat_split_delay_min: '1', chat_split_delay_max: '2',
         chat_memory_threshold: '600', chat_memory_target: '300', facts_frequency: 'each',
         chat_title_model: 'chat', chat_user_profile_enabled: '1', chat_user_profile: 'Je préfère les voyages en train.',
     });

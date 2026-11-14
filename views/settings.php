@@ -322,9 +322,9 @@ $facts = facts_settings();
                 <!-- un seul curseur, deux poignées : pause minimum (gauche) et maximum (droite) -->
                 <div class="dual-range" data-dual-range>
                     <span class="dual-range-fill" aria-hidden="true"></span>
-                    <input class="range" type="range" name="chat_split_delay_min" min="0.5" max="4" step="0.1"
+                    <input class="range" type="range" name="chat_split_delay_min" min="0.5" max="<?= CHAT_SPLIT_DELAY_MAX ?>" step="0.1"
                            value="<?= e((string) $dMin) ?>" aria-label="<?= e(t('settings.split.delay_min')) ?>">
-                    <input class="range" type="range" name="chat_split_delay_max" min="0.5" max="4" step="0.1"
+                    <input class="range" type="range" name="chat_split_delay_max" min="0.5" max="<?= CHAT_SPLIT_DELAY_MAX ?>" step="0.1"
                            value="<?= e((string) $dMax) ?>" aria-label="<?= e(t('settings.split.delay_max')) ?>">
                 </div>
             </div>
