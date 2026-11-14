@@ -80,7 +80,21 @@ http.createServer(async (req, res) => {
         const system = String(j.messages?.[0]?.content ?? '');
         const last = String(j.messages?.at(-1)?.content ?? '');
         let text;
-        if (system.includes('Tu ouvres une nouvelle conversation')) {
+        if (system.includes("Analyse l'évolution de la relation")) {
+            const { etat, nouveaux_echanges: exchanges } = JSON.parse(last);
+            const conflict = etat.find((entry) => entry.kind === 'conflict' && !entry.resolved && !entry.deleted);
+            const entries = [];
+            const resolve = [];
+            for (const turn of exchanges) {
+                if (turn.utilisateur === 'Je suis fâché à propos de la photo.') {
+                    entries.push({ kind: 'conflict', content: 'Désaccord à propos de la photo', source: turn.source });
+                }
+                if (turn.utilisateur === 'On en a parlé et on est réconciliés.' && conflict) {
+                    resolve.push({ id: conflict.id, source: turn.source });
+                }
+            }
+            text = JSON.stringify({ address: null, entries, resolve });
+        } else if (system.includes('Tu ouvres une nouvelle conversation')) {
             text = last.includes('pastéis au bord du Tage') && last.includes('Camille prépare une exposition à Lyon')
                 ? JSON.stringify({ message: 'Ça m’a fait repenser à ton voyage à Lisbonne. Tu y retournerais ?', questions: ['Et ton exposition à Lyon, elle avance ?'] })
                 : JSON.stringify({ message: 'Tu as déjà développé une pellicule argentique ?', questions: ['Tu photographies quoi en ce moment ?'] });

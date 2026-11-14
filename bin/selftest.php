@@ -127,6 +127,23 @@ try {
     facts_add($pid, 'Lisa prépare une exposition', 'projet', 'confirme', $cid, $replyMid);
     $pdo->prepare("UPDATE conversations SET opening_questions = '[\"Ton exposition avance ?\"]' WHERE id = ?")->execute([$cid]);
     $pdo->exec("INSERT INTO user_memories (content) VALUES ('Souvenir global de sauvegarde')");
+    $check(relationship_direct_address('Vous pouvez me tutoyer, s’il vous plaît ?') === 'tu'
+        && relationship_direct_address('Je ne veux pas que tu me tutoies.') === '', 'relation : demande explicite et négation');
+    db_tx(static fn (PDO $db): bool => relationship_queue($db, $pid, $sourceMid, $replyMid, 'tu', 0));
+    $check(relationship_pending($pid), 'relation : un échange terminé ouvre la fenêtre d’analyse');
+    $pdo->prepare('UPDATE relationships SET last_activity_at = ? WHERE persona_id = ?')->execute([time() - 300, $pid]);
+    $check(!relationship_pending($pid) && !relationship_process($pid), 'relation : aucune analyse après cinq minutes');
+    db_tx(static fn (PDO $db): bool => relationship_queue($db, $pid, $sourceMid, $replyMid, '', 0));
+    $check(relationship_pending($pid), 'relation : un échange réactive le traitement');
+    $snapshot = relationship_state($pid);
+    relationship_edit($pid, 'save', ['kind' => 'conflict', 'content' => 'Le projet a fait débat.']);
+    $entryId = (int) relationship_entries($pid)[0]['id'];
+    $check(!relationship_apply($pid, $snapshot, [], [], ['entries' => [], 'resolve' => []])
+        && !relationship_pending($pid), 'relation : une correction révoque une analyse déjà commencée');
+    relationship_edit($pid, 'save', ['entry_id' => $entryId, 'kind' => 'conflict', 'content' => 'Le projet a fait débat.', 'resolved' => '1']);
+    $pdo->prepare('UPDATE relationship_entries SET source_message_id = ? WHERE id = ?')->execute([$replyMid, $entryId]);
+    $check(str_contains(relationship_context($pid, []), 'Désaccord clos')
+        && !str_contains(relationship_context($pid, []), 'Désaccord en cours'), 'relation : la résolution retire l’effet du désaccord');
 
     $zip = backup_create_zip(true);
     $za  = new ZipArchive();
@@ -177,6 +194,10 @@ try {
         $check(($story['source_message_id'] ?? 0) === $copiedReply['id']
             && json_list($copy['opening_questions']) === ['Ton exposition avance ?'],
             'les souvenirs du persona sont rattachés au message importé et les questions sont restaurées');
+        $relation = relationship_entries($nid)[0] ?? [];
+        $check(relationship_state($nid)['address'] === 'tu' && !relationship_pending($nid)
+            && !empty($relation['resolved']) && ($relation['source_message_id'] ?? 0) === $copiedReply['id'],
+            'relation : les accords et désaccords sont restaurés avec leur source, sans relancer des analyses');
         $check((int) $pdo->query('SELECT COUNT(*) FROM user_memories WHERE persona_id IS NULL')->fetchColumn() === 2,
             'souvenir global restauré sans persona');
     }

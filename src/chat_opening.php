@@ -58,7 +58,8 @@ function chat_generate_opening(array $persona, array $prompts, array $conv): arr
     $memoryOn = (int) $conv['memory_enabled'] === 1 && (int) $conv['facts_enabled'] === 1;
     $threads = $memoryOn ? chat_opening_history($pid, $cid) : [];
     $facts = $memoryOn ? array_merge(facts_relevant($pid, '', 4), facts_relevant($pid, '', 4, 'story')) : [];
-    $hasHistory = $threads || in_array($pid, array_column($facts, 'persona_id'), true);
+    $hasHistory = $threads || in_array($pid, array_column($facts, 'persona_id'), true)
+        || relationship_context($pid, $conv) !== '';
     [$greetings, $cardContext] = chat_opening_card($prompts, (string) $persona['name']);
 
     $greeting = $greetings[0] ?? '';
@@ -73,6 +74,10 @@ function chat_generate_opening(array $persona, array $prompts, array $conv): arr
                 break;
             }
         }
+    }
+    // Un accueil écrit pour une première rencontre peut contredire les accords actuels.
+    if ($memoryOn && relationship_state($pid)['address'] !== '') {
+        $greeting = '';
     }
 
     $cfg = chat_llm_config_for($conv);

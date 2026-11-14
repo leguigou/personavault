@@ -40,6 +40,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
 
     <section class="chat-main" id="chat" data-chat
              data-conversation-id="<?= (int) $conv['id'] ?>"
+             <?php if ($targetMessage > 0): ?>data-target-message="<?= $targetMessage ?>"<?php endif; ?>
              data-send="/chat/<?= (int) $conv['id'] ?>/send"
              data-compress="/chat/<?= (int) $conv['id'] ?>/compress"
              data-remember="/chat/<?= (int) $conv['id'] ?>/remember"
@@ -47,6 +48,8 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
              data-facts-timing="<?= e($__facts['frequency'] === 'off' ? 'off' : $__facts['timing']) ?>"
              data-facts-idle="<?= (int) $__facts['idle'] ?>"
              data-status="/chat/<?= (int) $conv['id'] ?>/status"
+             data-relationship="/chat/<?= (int) $conv['id'] ?>/relationship"
+             <?php if (relationship_memory_on($conv)): ?>data-relationship-window="<?= relationship_wait_ms((int) $persona['id']) ?>"<?php endif; ?>
              <?php if ($openingPending): ?>data-opening="/chat/<?= (int) $conv['id'] ?>/opening"<?php endif; ?>
              data-token="<?= e($token) ?>"
              data-reactions="<?= e(json_encode(chat_reaction_options(), JSON_UNESCAPED_UNICODE)) ?>"
@@ -104,6 +107,12 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
         </header>
 
         <div class="chat-scroll" data-scroll data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>-chat">
+            <?php if ($sourceExcerpt !== false): ?>
+                <details class="settings-card chat-source-excerpt" data-source-excerpt open>
+                    <summary><?= e(t('relationship.source')) ?></summary>
+                    <p><?= nl2br(e($sourceExcerpt)) ?></p>
+                </details>
+            <?php endif; ?>
             <?php if (!empty($olderLeft)): ?>
                 <div class="chat-older">
                     <button type="button" class="btn btn-ghost btn-sm" data-load-older

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 9);
+define('PV_SCHEMA_VERSION', 10);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -206,6 +206,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 9) {
             migrate_v9($pdo);
+        }
+        if ($version < 10) {
+            migrate_v10($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -478,6 +481,37 @@ function migrate_v9(PDO $pdo): void
     add_column_if_missing($pdo, 'user_memories', 'subject', "TEXT NOT NULL DEFAULT 'user'");
     add_column_if_missing($pdo, 'user_memories', 'source_message_id', 'INTEGER REFERENCES messages(id) ON DELETE CASCADE');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_mem_source_message ON user_memories(source_message_id) WHERE source_message_id IS NOT NULL');
+}
+
+/** v10 : état de la relation et échanges à analyser. */
+function migrate_v10(PDO $pdo): void
+{
+    $pdo->exec("CREATE TABLE IF NOT EXISTS relationships (
+        persona_id INTEGER PRIMARY KEY REFERENCES personas(id) ON DELETE CASCADE,
+        address TEXT NOT NULL DEFAULT '',
+        address_reply_id INTEGER NOT NULL DEFAULT 0,
+        automatic INTEGER NOT NULL DEFAULT 1,
+        revision INTEGER NOT NULL DEFAULT 0,
+        last_activity_at INTEGER NOT NULL DEFAULT 0
+    )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS relationship_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        persona_id INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        content TEXT NOT NULL,
+        resolved INTEGER NOT NULL DEFAULT 0,
+        manual INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        source_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_relationship_entries ON relationship_entries(persona_id, id)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS relationship_queue (
+        reply_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+        persona_id INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE
+    )");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_relationship_queue ON relationship_queue(persona_id, reply_id)");
 }
 
 /** v6 : journal des échanges avec les modèles (20 derniers appels). */
@@ -1302,6 +1336,7 @@ require_once __DIR__ . '/reactions.php';
 require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/chat_opening.php';
 require_once __DIR__ . '/facts.php';
+require_once __DIR__ . '/relationships.php';
 require_once __DIR__ . '/backup.php';
 require_once __DIR__ . '/cards.php';
 

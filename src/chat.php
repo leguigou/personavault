@@ -983,7 +983,7 @@ function chat_estimate_tokens(string $text): int
 }
 
 /** Prompt système = prompts « système » de la fiche + fiche + consigne de session. */
-function chat_system_prompt(array $persona, array $personaPrompts, array $conv, array $facts = []): string
+function chat_system_prompt(array $persona, array $personaPrompts, array $conv, array $facts = [], string $addressOverride = ''): string
 {
     $parts = [];
     $system = '';
@@ -1054,6 +1054,10 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
         . "Le dernier message peut commencer par un bloc <contexte>…</contexte> : ce sont des informations "
         . "pour toi seul (heure, souvenirs), invisibles pour l'utilisateur. Utilise-les sans jamais citer ce bloc.";
 
+    $relationship = relationship_context((int) $persona['id'], $conv, $addressOverride);
+    if ($relationship !== '') {
+        $parts[] = $relationship;
+    }
     return implode("\n\n", $parts);
 }
 
@@ -1665,11 +1669,11 @@ function chat_auto_title(int $cid, bool $rewrite = false): ?string
  *                            lui est renvoyée (sinon « décris-la » dans le message suivant ne
  *                            pouvait rien donner : seul le texte des anciens messages partait)
  */
-function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null): array
+function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null, string $addressOverride = ''): array
 {
     // 1) Partie système en tête : fiche, consigne de jeu et résumé, puis format de réponse.
     //    LM Studio / llama.cpp peuvent réutiliser le préfixe commun entre les tours.
-    $system = chat_system_prompt($persona, $personaPrompts, $conv, []) . "\n\n" . chat_reaction_instructions($canReact);
+    $system = chat_system_prompt($persona, $personaPrompts, $conv, [], $addressOverride) . "\n\n" . chat_reaction_instructions($canReact);
 
     // 2) Partie VARIABLE (heure, souvenirs, rappels) : jointe au DERNIER message,
     //    pour ne pas invalider le cache de tout ce qui précède.

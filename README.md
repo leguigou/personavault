@@ -33,6 +33,14 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
   d'extraction réglables.
 - Relance spontanée : le personnage peut écrire de lui-même après plusieurs heures de silence
   (nécessite une tâche planifiée, voir plus bas).
+- **Votre relation**, accessible depuis la fiche du persona : accords, tutoiement ou vouvoiement,
+  évolution de la proximité et désaccords. Une réconciliation ferme le désaccord et retire son
+  effet sur le ton. Tu peux ajouter, corriger ou supprimer un élément et désactiver l’analyse
+  automatique pour ce persona. L’analyse traite les échanges terminés en arrière-plan et se met
+  en veille après cinq minutes sans conversation. Elle reprend au prochain échange.
+  En PHP-FPM, le serveur lance l’analyse dès la fin de la réponse. Sur les autres installations,
+  la page la lance automatiquement. Pour traiter aussi les échanges en attente lorsque l’onglet
+  a été fermé, planifie `php bin/relationships.php` toutes les minutes sur le serveur.
 - Photos : quand le modèle sait voir les images, un trombone apparaît pour en envoyer une.
 - Mise en forme : `*action*` s'affiche en italique et `**texte**` en gras (à l'affichage seulement : copie,
   modification et exports gardent les astérisques).
