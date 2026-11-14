@@ -8,7 +8,7 @@ $avatar   = (string) $persona['avatar'];
 $isArch   = (int) $persona['archived'] === 1;
 $token    = csrf_token();
 ?>
-<a class="back" href="/">
+<a class="back" href="/library">
     <svg viewBox="0 0 24 24" class="ico"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <?= e(t('nav.library')), "\n" ?>
 </a>
@@ -42,7 +42,7 @@ $token    = csrf_token();
         <div class="hero-badges">
             <?php if ($isArch): ?><span class="badge"><?= e(t('persona.badge_archived')) ?></span><?php endif; ?>
             <?php foreach ($tags as $t): ?>
-                <a class="badge badge-tag" href="/?tag=<?= urlencode((string) $t) ?>" title="<?= e(t('persona.tag_link_title')) ?>">#<?= e((string) $t) ?></a>
+                <a class="badge badge-tag" href="/library?tag=<?= urlencode((string) $t) ?>" title="<?= e(t('persona.tag_link_title')) ?>">#<?= e((string) $t) ?></a>
             <?php endforeach; ?>
         </div>
 

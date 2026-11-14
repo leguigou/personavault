@@ -72,9 +72,12 @@ for (const u of ['/', '/login', '/chat', '/settings', '/assets/app.css?v=1', '/a
 const loginPage = await http('/login');
 const t0 = token(await loginPage.text());
 await record('POST /login (mauvais mot de passe)', await http('/login', { method: 'POST', form: { _token: t0, password: 'faux' } }));
-await record('POST /login', await http('/login', { method: 'POST', form: { _token: t0, password: 'test' } }));
+const login = await http('/login', { method: 'POST', form: { _token: t0, password: 'test' } });
+expect(login.headers.get('location') === '/chat', 'la connexion ouvre les discussions');
+await record('POST /login', login);
+expect((await http('/')).headers.get('location') === '/chat', 'l’accueil ouvre les discussions');
 
-const home = await http('/');
+const home = await http('/library');
 const homeHtml = await home.text();
 expect(homeHtml.includes('data-chat-unread>'), 'le point de notification est visible avec une discussion non lue');
 expect((await (await http('/chat/unread')).json()).unread === true, 'le statut de notification indique un nouveau message');
@@ -82,20 +85,22 @@ const csrf = token(homeHtml);
 const media = (homeHtml.match(/src="(\/media\/[^"]+)"/) || [])[1] || '/media/absent.webp';
 
 // --- pages et routes GET
-for (const u of ['/', '/?fav=1', '/?arch=1', '/?q=lis', '/?tag=romance', '/p/new', '/p/camille-lefebvre',
+for (const u of ['/library', '/?fav=1', '/?arch=1', '/?q=lis', '/?tag=romance', '/p/new', '/p/camille-lefebvre',
     '/p/camille-lefebvre/edit', '/p/inexistant', '/chat', '/chat/1', '/chat/1/status', '/chat/1/messages?before=10',
     '/chat/1/search?q=lisb', '/chat/1/search?q=pasteis%20tage', '/chat/999', '/chat/models', '/memories',
     '/memories?q=train', '/settings', '/settings/logs', '/p/assist', '/p/smoke-test/assist', '/prompts/1/history', '/export.json', '/backup/export.zip', '/nope', '/photos/1', '/assets/app.js']) {
     const body = await record('GET ' + u, await http(u));
     // quelques vérifications de contenu, au-delà du statut
-    if (u === '/') expect(body.includes('Camille Lefebvre') && body.includes('Hugo Bernard'), 'la bibliothèque liste les personas');
+    if (u === '/library') expect(body.includes('Camille Lefebvre') && body.includes('Hugo Bernard'), 'la bibliothèque liste les personas');
+    if (u === '/chat') expect(/<nav class="tabbar"[^>]*>\s*<a href="\/chat"[^>]*aria-current="page"[\s\S]*?<\/a>\s*<a href="\/library"/.test(body),
+        'le menu du bas affiche Discussions en premier et Bibliothèque en deuxième');
     if (u === '/chat/1/search?q=lisb') expect((JSON.parse(body).results || []).length > 0, 'la recherche « lisb » trouve « Lisbonne »');
     if (u === '/chat/1/search?q=pasteis%20tage') expect((JSON.parse(body).results || []).length > 0, 'recherche sans accents, plusieurs mots');
     if (u === '/export.json') expect((JSON.parse(body).personas || []).length === 3, 'l’export JSON contient les 3 personas');
     if (u === '/chat/1') expect(body.includes('Message 11'), 'la discussion affiche ses messages');
 }
 expect((await (await http('/chat/unread')).json()).unread === false
-    && (await (await http('/')).text()).includes('data-chat-unread hidden>'),
+    && (await (await http('/library')).text()).includes('data-chat-unread hidden>'),
     'le point de notification disparaît après lecture de la dernière discussion non lue');
 await record('GET /media/(portrait)', await http(media));
 

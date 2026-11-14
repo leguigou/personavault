@@ -2,12 +2,16 @@
 declare(strict_types=1);
 
 /*
- * Bibliothèque (accueil) et création d’un persona.
+ * Bibliothèque et création d’un persona.
  */
 
 /* --------------------------------------------------------------- bibliothèque */
 
-if ($path === '/' && $method === 'GET') {
+if ($path === '/' && $method === 'GET' && !array_intersect(['q', 'tag', 'fav', 'arch'], array_keys($_GET))) {
+    redirect('/chat');
+}
+
+if (($path === '/library' || $path === '/') && $method === 'GET') {
     $q    = trim((string) ($_GET['q'] ?? ''));
     $tag  = trim((string) ($_GET['tag'] ?? ''));
     $fav  = ($_GET['fav'] ?? '') === '1';
@@ -99,7 +103,7 @@ if ($path === '/import' && $method === 'POST') {
             redirect('/p/' . rawurlencode($slug));
         }
         flash('ok', backup_import_notice($res));
-        redirect('/');
+        redirect('/library');
     } catch (Throwable $e) {
         flash('error', t('cards.flash.import_failed', ['error' => public_error($e)]));
     }

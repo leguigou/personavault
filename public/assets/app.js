@@ -2183,7 +2183,7 @@
                 if (h.name && h.name !== "tag" && h.value) params.set(h.name, h.value);
             });
             params.set("tag", tag);
-            window.location.href = "/?" + params.toString();
+            window.location.href = "/library?" + params.toString();
         };
 
         const renderSuggest = () => {

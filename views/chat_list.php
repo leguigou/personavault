@@ -27,7 +27,7 @@
         </div>
         <h2><?= e(t('chat.list.empty_title')) ?></h2>
         <p><?= e(t('chat.list.empty_text')) ?></p>
-        <a class="btn btn-primary" href="/"><?= e(t('nav.library')) ?></a>
+        <a class="btn btn-primary" href="/library"><?= e(t('nav.library')) ?></a>
     </div>
 <?php elseif ($contactView): ?>
     <div class="conv-list contact-list">

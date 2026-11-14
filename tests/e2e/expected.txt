@@ -7,7 +7,7 @@
 303 text/html  anonyme GET /media/p0000000000000000.webp
 200 text/html  POST /login (mauvais mot de passe)
 303 text/html  POST /login
-200 text/html  GET /
+200 text/html  GET /library
 200 text/html  GET /?fav=1
 200 text/html  GET /?arch=1
 200 text/html  GET /?q=lis
