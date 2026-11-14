@@ -29,7 +29,7 @@ function klipy_media_url(mixed $url): string
     return is_string($url) && preg_match('~\Ahttps://static\.klipy\.com/[a-z0-9/_\-.%]+\.(?:gif|webp|png|mp4)\z~i', $url) ? $url : '';
 }
 
-function klipy_search_media(string $format, string $mood, string $key, array $seen): string
+function klipy_search_media(string $format, string $mood, string $key, array $seen, bool $diagnostic = false): string
 {
     if (!isset(CHAT_GIF_QUERIES[$mood])) {
         return '';
@@ -42,12 +42,17 @@ function klipy_search_media(string $format, string $mood, string $key, array $se
     $ch = curl_init(rtrim($base, '/') . '/' . rawurlencode($key) . '/' . $format . 's/search?' . http_build_query($params));
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_TIMEOUT => 4]);
     $body = curl_exec($ch);
-    if (!is_string($body) || curl_getinfo($ch, CURLINFO_HTTP_CODE) !== 200) {
-        return '';
-    }
-    $data = json_decode($body, true);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $data = $status === 200 && is_string($body) ? json_decode($body, true) : null;
     $results = $data['data']['data'] ?? null;
-    if (!is_array($results)) {
+    if (($data['result'] ?? null) === false || !is_array($results)) {
+        if ($diagnostic) {
+            throw new RuntimeException(match ($status) {
+                400, 401, 403, 404 => t('settings.chat.klipy_test_rejected', ['status' => $status]),
+                429 => t('settings.chat.klipy_test_limit'),
+                default => t('settings.chat.klipy_test_unavailable'),
+            });
+        }
         return '';
     }
     foreach ($results as $result) {

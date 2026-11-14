@@ -269,6 +269,8 @@ $facts = facts_settings();
             <?php if ($klipyKey !== ''): ?>
                 <label class="check"><input type="checkbox" name="klipy_api_key_clear" value="1"><span><?= e(t('settings.chat.klipy_clear')) ?></span></label>
             <?php endif; ?>
+            <button type="button" class="btn btn-ghost btn-sm" data-klipy-test><?= e(t('settings.chat.klipy_test')) ?></button>
+            <p class="llm-status" data-klipy-status role="status" hidden></p>
         </section>
 
         <details class="settings-card settings-fold">

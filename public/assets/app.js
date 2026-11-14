@@ -332,6 +332,28 @@
         });
     });
 
+    const klipyTest = document.querySelector("[data-klipy-test]");
+    klipyTest?.addEventListener("click", async () => {
+        const status = klipyTest.form.querySelector("[data-klipy-status]");
+        const { _token, klipy_api_key } = klipyTest.form.elements;
+        klipyTest.disabled = true;
+        status.hidden = false;
+        status.className = "llm-status";
+        status.textContent = tr("settings.test_connecting");
+        try {
+            const body = new URLSearchParams({ _token: _token.value, klipy_api_key: klipy_api_key.value });
+            const response = await fetch("/settings/klipy/test", { method: "POST", body });
+            const result = await response.json();
+            status.classList.add(response.ok && result.ok ? "is-ok" : "is-ko");
+            status.textContent = result.message || tr("settings.test_failed");
+        } catch {
+            status.classList.add("is-ko");
+            status.textContent = tr("settings.test_failed");
+        } finally {
+            klipyTest.disabled = false;
+        }
+    });
+
     /* consigne de la conversation : enregistrée sans recharger la page */
     document.querySelectorAll("[data-directive-form]").forEach((form) => {
         form.addEventListener("submit", async (e) => {

@@ -6,6 +6,13 @@
  * Certains textes sur plusieurs lignes gardent l'indentation de la page (sortie HTML identique).
  */
 return [
+    'settings.chat.klipy_test' => 'Tester la clé KLIPY',
+    'settings.chat.klipy_test_ok' => 'Connexion réussie. KLIPY a renvoyé un GIF.',
+    'settings.chat.klipy_test_missing' => 'Renseigne une clé KLIPY valide avant de lancer le test.',
+    'settings.chat.klipy_test_rejected' => 'KLIPY a refusé la requête (HTTP {status}). Vérifie la clé et ses autorisations.',
+    'settings.chat.klipy_test_limit' => 'La limite de requêtes KLIPY est atteinte. Réessaie plus tard.',
+    'settings.chat.klipy_test_unavailable' => 'Impossible de vérifier la clé. KLIPY est inaccessible ou a renvoyé une réponse inattendue.',
+    'settings.chat.klipy_test_empty' => 'KLIPY a répondu, mais aucun GIF utilisable n’a été trouvé.',
     'settings.chat.klipy_empty' => 'Aucune clé enregistrée',
     'settings.chat.klipy_saved' => 'Clé enregistrée',
     'settings.chat.klipy_key' => 'Clé API KLIPY',
