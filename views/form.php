@@ -142,6 +142,12 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
                     <small><?= e(t('settings.chat.reasoning_help')) ?></small>
                 </label>
 
+                <input type="hidden" name="spontaneous_gifs" value="0">
+                <label class="check">
+                    <input type="checkbox" name="spontaneous_gifs" value="1" <?= $persona['spontaneous_gifs'] ? 'checked' : '' ?>>
+                    <span><?= e(t('chat.gif_spontaneous')) ?></span>
+                </label>
+
                 <div class="row2">
                     <label class="field">
                         <span><?= e(t('form.temperature')) ?></span>

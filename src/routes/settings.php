@@ -137,6 +137,12 @@ if ($path === '/settings/chat' && $method === 'POST') {
     $baseUrl = trim((string) ($_POST['chat_base_url'] ?? ''));
     $model   = trim((string) ($_POST['chat_model'] ?? ''));
     $key     = trim((string) ($_POST['chat_api_key'] ?? ''));
+    $klipyKey = trim((string) ($_POST['klipy_api_key'] ?? ''));
+    if (isset($_POST['klipy_api_key_clear'])) {
+        set_setting('klipy_api_key', '');
+    } elseif ($klipyKey !== '') {
+        set_setting('klipy_api_key', $klipyKey);
+    }
 
     if ($baseUrl !== '' && !preg_match('#^https?://#i', $baseUrl)) {
         flash('error', t('error.settings.url_scheme'));

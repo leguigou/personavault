@@ -161,7 +161,7 @@ function chat_reaction_instructions(bool $canReact): string
         . "ou la frustration si le sujet s’y prête ; demande ce qui a gêné si c’est utile, sans supposer la cause. "
         . "Un cœur, un bisou ou un visage amoureux indique une affection dont le sens dépend de votre relation. "
         . "Tiens compte de ces signaux naturellement, sans commenter chaque clic ni répéter les émojis. "
-        . "Utilise aussi les émojis dans ton texte avec parcimonie, selon ton style habituel.";
+        . "Utilise les émojis avec parcimonie et intègre-les à une phrase, selon ton style habituel.";
     if ($canReact) {
         $text .= "\n\nChoisis une réaction à apposer sur le dernier message de ton interlocuteur. "
             . "Commence toujours par une ligne [reaction:choix], puis écris ta réponse normale sur la ligne suivante. "

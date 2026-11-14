@@ -753,6 +753,9 @@ try {
         'bulles : avant coupe au seuil, après attend la première fin de phrase au-delà');
     $check(chat_split_points(trim($firstSentence . $secondSentence), 15, 2, 'after') === [],
         'bulles : après garde une seule bulle si la première fin de phrase au-delà termine la réponse');
+    $check(chat_split_points($firstSentence . "\n🔥 🫱🏽‍🫲🏻 🇫🇷 1️⃣", 15, 2) === []
+        && chat_split_points($firstSentence . '2026', 15, 2) === [mb_strlen($firstSentence)],
+        'bulles : rattache les émojis seuls au texte et conserve les nombres');
     echo PHP_EOL . '— thèmes' . PHP_EOL;
     $ui = ui_style();
     $check($ui['accent'] === 'violet' && $ui['mode'] === 'dark', 'par défaut : Violet + Sombre (rendu historique)');

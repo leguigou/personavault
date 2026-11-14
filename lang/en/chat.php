@@ -4,6 +4,8 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
+    'chat.gif_spontaneous' => 'Spontaneous GIFs',
+    'chat.gif_alt' => 'Animated GIF chosen by the persona',
     'chat.reasoning_inherit' => 'Follow the persona setting',
     'chat.reasoning_global' => 'Follow the global setting',
     'chat.list.retitle' => 'Rewrite title',

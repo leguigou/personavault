@@ -38,6 +38,7 @@ return [
     'db'            => __DIR__ . '/storage/test.sqlite',
     'uploads'       => __DIR__ . '/storage/uploads',
     'assist_lookup_url' => 'http://127.0.0.1:$LLM_PORT/wiki/{lang}/api.php',
+    'klipy_api_base' => 'http://127.0.0.1:$LLM_PORT/klipy',
 ];
 PHP
 mkdir -p "$WORK/storage/uploads"

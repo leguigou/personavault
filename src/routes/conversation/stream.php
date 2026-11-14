@@ -279,6 +279,9 @@ if ($action === 'stream' && $method === 'POST') {
         }
     }
 
+    $res['gif_url'] = !$aborted && !$regen && !$reactionOnly && $res['provider'] === 'chat'
+        ? chat_spontaneous_gif($cid, $persona, $conv, $text, $res['content']) : '';
+
     $splitPoints = !$aborted && (string) setting('chat_split_enabled', '1') === '1'
         ? chat_split_points(
             (string) $res['content'],
@@ -308,11 +311,12 @@ if ($action === 'stream' && $method === 'POST') {
                     ->execute([$cid, $userMsgId]);
             }
 
-            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points, reaction_reply)
-                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?, ?)')
+            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points, reaction_reply, gif_url)
+                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?, ?, ?)')
                 ->execute([
                     $cid, $res['content'], $res['model'], (int) $res['prompt_tokens'], (int) $res['completion_tokens'],
                     (int) $res['ms'], $splitPoints ? json_encode($splitPoints) : '', $reactionOnly ? 1 : 0,
+                    $res['gif_url'],
                 ]);
             $assistantId = (int) $pdo->lastInsertId();
             $versions = null;
@@ -378,6 +382,7 @@ if ($action === 'stream' && $method === 'POST') {
             'versions' => $versions,
             'version_id' => $versionId,
             'reaction_reply' => $reactionOnly,
+            'gif_url' => $res['gif_url'],
         ],
         'user_reaction' => $res['reaction'] !== '' ? ['id' => $userMsgId, 'reaction' => $res['reaction']] : null,
         'meta'  => [

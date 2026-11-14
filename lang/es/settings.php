@@ -4,6 +4,9 @@
  * Tuteo (« tú »), como en francés.
  */
 return [
+    'settings.chat.klipy_key' => 'Clave API de KLIPY',
+    'settings.chat.klipy_help' => 'Permite GIF espontáneos para los personajes con esta opción activa. Solo se envían palabras clave a KLIPY.',
+    'settings.chat.klipy_clear' => 'Borrar la clave de KLIPY',
     'settings.look.chat_list'    => 'Presentación de las conversaciones',
     'settings.look.chat_threads' => 'Títulos de las conversaciones',
     'settings.look.chat_contacts' => 'Agenda de contactos',
