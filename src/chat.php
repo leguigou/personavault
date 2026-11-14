@@ -1541,6 +1541,16 @@ function chat_reasoning_effort(mixed $value): string
     return in_array($value, ['none', 'low', 'medium', 'high'], true) ? $value : '';
 }
 
+function chat_reasoning_labels(): array
+{
+    return [
+        'none' => t('settings.chat.reasoning_none'),
+        'low' => t('settings.chat.reasoning_low'),
+        'medium' => t('settings.chat.reasoning_medium'),
+        'high' => t('settings.chat.reasoning_high'),
+    ];
+}
+
 /** Fusionne les réglages IA du persona avec ceux de la discussion. */
 function chat_with_persona(array $conv, array $persona): array
 {

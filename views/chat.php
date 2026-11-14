@@ -319,9 +319,13 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
             <label class="field">
                 <span><?= e(t('settings.chat.reasoning')) ?></span>
                 <select class="input" name="reasoning_effort">
-                    <option value=""><?= e(t('chat.reasoning_inherit')) ?> (<?= e(t('settings.chat.reasoning_' . (chat_reasoning_effort($persona['reasoning_effort']) ?: setting('chat_reasoning_effort', 'none')))) ?>)</option>
-                    <?php foreach (['none', 'low', 'medium', 'high'] as $effort): ?>
-                        <option value="<?= $effort ?>" <?= $conv['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e(t('settings.chat.reasoning_' . $effort)) ?></option>
+                    <?php
+                    $reasoningLabels = chat_reasoning_labels();
+                    $inheritedEffort = chat_reasoning_effort($persona['reasoning_effort']) ?: setting('chat_reasoning_effort', 'none');
+                    ?>
+                    <option value=""><?= e(t('chat.reasoning_inherit')) ?> (<?= e($reasoningLabels[$inheritedEffort] ?? $reasoningLabels['none']) ?>)</option>
+                    <?php foreach ($reasoningLabels as $effort => $label): ?>
+                        <option value="<?= $effort ?>" <?= $conv['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e($label) ?></option>
                     <?php endforeach; ?>
                 </select>
             </label>

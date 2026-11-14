@@ -135,8 +135,8 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
                     <span><?= e(t('settings.chat.reasoning')) ?></span>
                     <select class="input" name="reasoning_effort">
                         <option value=""><?= e(t('chat.reasoning_global')) ?></option>
-                        <?php foreach (['none', 'low', 'medium', 'high'] as $effort): ?>
-                            <option value="<?= $effort ?>" <?= $persona['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e(t('settings.chat.reasoning_' . $effort)) ?></option>
+                        <?php foreach (chat_reasoning_labels() as $effort => $label): ?>
+                            <option value="<?= $effort ?>" <?= $persona['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e($label) ?></option>
                         <?php endforeach; ?>
                     </select>
                     <small><?= e(t('settings.chat.reasoning_help')) ?></small>
