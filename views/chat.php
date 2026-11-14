@@ -163,7 +163,11 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <?php elseif ($role === 'notice'): ?>
                     <div class="msg-notice" data-msg-id="<?= (int) $m['id'] ?>"><?= e((string) $m['content']) ?></div>
                 <?php else: ?>
-                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-version-id="<?= (int) $m['version_id'] ?>" data-reaction="<?= e(chat_reaction_key($m['reaction'], $role)) ?>"<?php if ($m['reaction_reply']): ?> data-reaction-reply="1"<?php endif; ?> data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>"<?php if (($replyVersions['mid'] ?? 0) === (int) $m['id']): ?> data-ver="<?= (int) $replyVersions['index'] ?>" data-vers="<?= (int) $replyVersions['total'] ?>"<?php endif; ?>>
+                    <?php
+                    $bubbles = chat_message_bubbles($m);
+                    $bubbleReactions = chat_bubble_reactions($m, $bubbles);
+                    ?>
+                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-version-id="<?= (int) $m['version_id'] ?>"<?php if ($m['reaction_reply']): ?> data-reaction-reply="1"<?php endif; ?> data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>"<?php if (($replyVersions['mid'] ?? 0) === (int) $m['id']): ?> data-ver="<?= (int) $replyVersions['index'] ?>" data-vers="<?= (int) $replyVersions['total'] ?>"<?php endif; ?>>
                         <?php if ($role !== 'user'): ?>
                             <span class="msg-avatar">
                                 <?php if ($persona['avatar']): ?>
@@ -173,33 +177,20 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                                 <?php endif; ?>
                             </span>
                         <?php endif; ?>
-                        <?php if ((string) ($m['image'] ?? '') !== ''): ?>
-                            <img class="bubble-img" src="<?= e(media_url((string) $m['image'], true)) ?>"
-                                 alt="<?= e(t('chat.msg.photo_sent')) ?>" data-full="<?= e(media_url((string) $m['image'], false)) ?>">
-                        <?php endif; ?>
                         <?php
-                        $__mc   = (string) $m['content'];
-                        $__len  = mb_strlen($__mc);
-                        $__pts  = array_values(array_filter(
-                            array_map('intval', json_list($m['split_points'] ?? '[]')),
-                            static fn (int $x): bool => $x > 0 && $x < $__len
-                        ));
-                        if (!$__pts && (int) ($m['split_at'] ?? 0) > 0 && (int) $m['split_at'] < $__len) {
-                            $__pts = [(int) $m['split_at']];
-                        }
+                        $photoOnly = $m['image'] !== '' && $m['content'] === '';
+                        $photo = $m['image'] === '' ? '' : '<img class="bubble-img" src="' . e(media_url($m['image'], true))
+                            . '" alt="' . e(t('chat.msg.photo_sent')) . '" data-full="' . e(media_url($m['image'], false)) . '">';
+                        if (!$photoOnly) echo $photo;
                         ?>
-                        <?php if ($__pts): ?>
-                            <div class="bubbles">
-                                <?php $__prev = 0; ?>
-                                <?php foreach (array_merge($__pts, [$__len]) as $__cut): ?>
-                                    <?php $__part = trim(mb_substr($__mc, $__prev, $__cut - $__prev)); $__prev = $__cut; ?>
-                                    <?php if ($__part === '') continue; // jamais de bulle vide ?>
-                                    <div class="bubble"><?= nl2br(e($__part)) ?></div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="bubble"><?= nl2br(e($__mc)) ?></div>
-                        <?php endif; ?>
+                        <div class="bubbles">
+                            <?php foreach ($bubbles as $index => $part): ?>
+                                <div class="msg-bubble" data-bubble-index="<?= $index ?>" data-reaction="<?= e($bubbleReactions[$index] ?? '') ?>">
+                                    <?php if ($photoOnly) echo $photo; ?>
+                                    <div class="bubble"<?= $photoOnly ? ' hidden' : '' ?>><?= nl2br(e($part)) ?></div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                 <?php endif; ?>
             <?php endforeach; ?>

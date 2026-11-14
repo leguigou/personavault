@@ -134,23 +134,5 @@ function export_render(iterable $rows, array $meta, string $format): string
 /** Bulles d'un message (découpage enregistré dans split_points), comme dans views/chat.php. */
 function export_bubbles(array $row): array
 {
-    $text = (string) $row['content'];
-    $len  = mb_strlen($text);
-    $pts  = array_values(array_filter(
-        array_map('intval', json_list($row['split_points'] ?? '[]')),
-        static fn (int $x): bool => $x > 0 && $x < $len
-    ));
-    if (!$pts && (int) ($row['split_at'] ?? 0) > 0 && (int) $row['split_at'] < $len) {
-        $pts = [(int) $row['split_at']];
-    }
-    $out  = [];
-    $prev = 0;
-    foreach (array_merge($pts, [$len]) as $cut) {
-        $part = trim(mb_substr($text, $prev, $cut - $prev));
-        if ($part !== '') {
-            $out[] = $part;
-        }
-        $prev = $cut;
-    }
-    return $out;
+    return array_values(array_filter(array_map('trim', chat_message_bubbles($row)), static fn (string $part): bool => $part !== ''));
 }

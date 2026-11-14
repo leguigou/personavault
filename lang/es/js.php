@@ -11,7 +11,7 @@ return [
     'js.chat.retitling' => 'Reescribiendo el título…',
     'js.chat.retitled' => 'Título actualizado.',
     'js.chat.retitle_failed' => 'No se pudo reescribir el título. Comprueba que el modelo esté disponible y vuelve a intentarlo.',
-    'js.chat.react' => 'Reaccionar al mensaje',
+    'js.chat.react' => 'Reaccionar a esta burbuja',
     'js.chat.reactions' => 'Reacciones',
     'js.chat.more_reactions' => 'Más reacciones',
     'js.chat.reaction_you' => 'Tú · {emotion}',

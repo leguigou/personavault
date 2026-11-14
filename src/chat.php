@@ -417,8 +417,8 @@ function chat_compress_payload(array $toSummarize, array $conv): array
             continue;
         }
         $who = $role === 'user' ? 'Utilisateur' : 'Personnage';
-        $reaction = $role === 'assistant' && in_array($m['reaction'] ?? '', CHAT_AFFECTIONATE_REACTIONS, true)
-            ? "\nRéaction de l’utilisateur : " . chat_reaction_description($m) : '';
+        $reactions = chat_affectionate_bubbles($m);
+        $reaction = $reactions ? "\n" . implode("\n", $reactions) : '';
         $transcript .= $who . ' : ' . mb_substr(trim((string) $m['content']), 0, 1400) . $reaction . "\n\n";
         $kept++;
     }
@@ -1227,14 +1227,15 @@ function chat_recall_snippets(int $personaId, string $userMessage, int $excludeC
     $scopeParams = [$excludeCid];
     if ($compressedThrough > 0) {
         $marked = implode(', ', array_fill(0, count(CHAT_AFFECTIONATE_REACTIONS), '?'));
-        $scope = "($scope OR (m.id <= ? AND m.role = 'assistant' AND m.reaction IN ($marked)))";
-        $scopeParams = [...$scopeParams, $compressedThrough, ...CHAT_AFFECTIONATE_REACTIONS];
+        $scope = "($scope OR (m.id <= ? AND m.role = 'assistant' AND (m.reaction IN ($marked)
+            OR EXISTS (SELECT 1 FROM json_each(COALESCE(NULLIF(m.bubble_reactions, ''), '{}')) WHERE value IN ($marked)))))";
+        $scopeParams = [...$scopeParams, $compressedThrough, ...CHAT_AFFECTIONATE_REACTIONS, ...CHAT_AFFECTIONATE_REACTIONS];
     }
 
     // index plein texte : n'importe lequel des mots-clés, les plus PERTINENTS d'abord (bm25)
     try {
         $stmt = db()->prepare(
-            "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, m.reaction, c.title
+            "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, m.reaction, m.bubble_reactions, m.split_points, m.split_at, c.title
                FROM messages_fts f
                JOIN messages m ON m.id = f.rowid
                JOIN conversations c ON c.id = m.conversation_id
@@ -1248,7 +1249,7 @@ function chat_recall_snippets(int $personaId, string $userMessage, int $excludeC
     }
 
     // repli : sous-chaînes, les plus récentes d'abord
-    $sql    = "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, m.reaction, c.title
+    $sql    = "SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, m.reaction, m.bubble_reactions, m.split_points, m.split_at, c.title
                FROM messages m JOIN conversations c ON c.id = m.conversation_id
                WHERE c.persona_id = ? AND m.role IN ('user', 'assistant') AND $scope";
     $params = [$personaId, ...$scopeParams];
@@ -1671,6 +1672,10 @@ function chat_auto_title(int $cid, bool $rewrite = false): ?string
  */
 function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null, string $addressOverride = ''): array
 {
+    if ($reactionTarget !== null) {
+        $conv['memory_enabled'] = 0;
+        $history = [];
+    }
     // 1) Partie système en tête : fiche, consigne de jeu et résumé, puis format de réponse.
     //    LM Studio / llama.cpp peuvent réutiliser le préfixe commun entre les tours.
     $system = chat_system_prompt($persona, $personaPrompts, $conv, [], $addressOverride) . "\n\n" . chat_reaction_instructions($canReact);
@@ -1679,11 +1684,13 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     //    pour ne pas invalider le cache de tout ce qui précède.
     $factsOn = (int) ($conv['memory_enabled'] ?? 1) === 1 && (int) ($conv['facts_enabled'] ?? 1) === 1;
     $context = [chat_time_context($conv, $history)];
+    $limit  = max(2048, (int) ($conv['context_window'] ?? 8192));
+    $budget = $limit - (int) ($conv['max_tokens'] ?? 400) - 512;
     if ($reactionTarget !== null) {
-        $context[] = "L’utilisateur vient de réagir à un de tes messages, peut-être plus ancien que le dernier échange. "
-            . "Réponds brièvement en personnage à ce geste précis et au sujet de ce message. "
-            . "Pour 👍, reste dans le registre du simple accord. Voici le message visé :\n"
-            . chat_reaction_context($reactionTarget);
+        $context[] = "L’utilisateur vient de réagir à la bulle citée ci-dessous. "
+            . "Réponds brièvement en personnage en te fondant uniquement sur le texte de cette bulle et la réaction indiquée. "
+            . "Pour 👍, reste dans le registre du simple accord.\n"
+            . chat_reaction_context($reactionTarget, $budget - chat_estimate_tokens($system));
     }
 
     $pid = (int) $persona['id'];
@@ -1704,8 +1711,8 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $lines = [];
         foreach ($recall as $r) {
             $who = (string) $r['role'] === 'user' ? 'Utilisateur' : 'Toi';
-            $reaction = $r['role'] === 'assistant' && in_array($r['reaction'] ?? '', CHAT_AFFECTIONATE_REACTIONS, true)
-                ? ' (réaction de l’utilisateur : ' . chat_reaction_description($r) . ')' : '';
+            $reactions = chat_affectionate_bubbles($r);
+            $reaction = $reactions ? ' (' . implode(' / ', $reactions) . ')' : '';
             $where = (int) $r['conversation_id'] === (int) $conv['id'] ? 'moment marqué dans cette conversation' : 'autre conversation';
             $lines[] = '- (' . chat_llm_date((string) $r['created_at']) . ', ' . $where . ') ' . $who . ' : '
                 . mb_substr(trim((string) $r['content']), 0, 320) . $reaction;
@@ -1716,8 +1723,6 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     }
     $contextBlock = "<contexte>\n" . implode("\n\n", $context) . "\n</contexte>";
 
-    $limit  = max(2048, (int) ($conv['context_window'] ?? 8192));
-    $budget = $limit - (int) ($conv['max_tokens'] ?? 400) - 512;
     $used   = chat_estimate_tokens($system) + chat_estimate_tokens($contextBlock) + chat_estimate_tokens($userMessage);
 
     $kept = [];
@@ -2013,17 +2018,43 @@ function reply_version_archive(int $cid, int $userMsgId): void
     if (!$rows || (int) $rows[0]['version_id'] > 0) {
         return;
     }
-    $content = trim(implode("\n\n", array_map(static fn (array $r): string => trim((string) $r['content']), $rows)));
-    if ($content === '') {
+    $original = $rows[0];
+    $content = $original['content'];
+    $points = chat_message_split_points($original);
+    $reactions = chat_bubble_reactions($original);
+    if (count($rows) > 1) {
+        $content = '';
+        $points = [];
+        $reactions = [];
+        foreach ($rows as $row) {
+            $bubbles = chat_message_bubbles($row);
+            $marked = chat_bubble_reactions($row, $bubbles);
+            foreach ($bubbles as $index => $part) {
+                $part = trim($part);
+                if ($part === '') {
+                    continue;
+                }
+                if ($content !== '') {
+                    $points[] = mb_strlen($content);
+                    $content .= "\n\n";
+                }
+                if (isset($marked[$index])) {
+                    $reactions[count($points)] = $marked[$index];
+                }
+                $content .= $part;
+            }
+        }
+    }
+    if (trim($content) === '') {
         return;
     }
-    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at, reaction)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)')
+    $first = $reactions[0] ?? '';
+    unset($reactions[0]);
+    db()->prepare('INSERT INTO reply_versions (conversation_id, user_message_id, content, model, split_points, created_at, reaction, bubble_reactions)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         ->execute([
-            $cid, $userMsgId, $content, (string) $rows[0]['model'],
-            count($rows) === 1 ? (string) $rows[0]['split_points'] : '',
-            (string) $rows[0]['created_at'],
-            count($rows) === 1 ? (string) $rows[0]['reaction'] : '',
+            $cid, $userMsgId, $content, $original['model'], $points ? json_encode($points) : '',
+            $original['created_at'], $first, chat_encode_reactions($reactions),
         ]);
 }
 

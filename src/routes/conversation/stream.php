@@ -57,17 +57,23 @@ if ($action === 'stream' && $method === 'POST') {
     $reactionTarget = null;
     $userMsgId = 0;
     if ($reactionOnly) {
-        $stmt = db()->prepare("SELECT id, role, content, reaction, reaction_pending FROM messages
+        $stmt = db()->prepare("SELECT * FROM messages
                                 WHERE conversation_id = ? AND id = ? AND role = 'assistant'
-                                  AND version_id = ? AND reaction_pending = ? AND reaction_pending <> '' AND reaction = ?");
+                                  AND version_id = ? AND reaction_pending <> ''");
+        $bubble = filter_var($_POST['reaction_bubble'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
         $revision = $_POST['reaction_revision'] ?? '';
-        $stmt->execute([$cid, $reactionMid, (int) ($_POST['reaction_version'] ?? 0),
-            is_string($revision) ? $revision : '', chat_reaction_key($_POST['reaction'] ?? '', 'assistant')]);
-        $reactionTarget = $stmt->fetch() ?: null;
-        if ($reactionTarget === null) {
+        $key = chat_reaction_key($_POST['reaction'] ?? '', 'assistant');
+        $stmt->execute([$cid, $reactionMid, (int) ($_POST['reaction_version'] ?? 0)]);
+        $message = $stmt->fetch();
+        $bubbles = $message ? chat_message_bubbles($message) : [];
+        if ($bubble === false || !isset($bubbles[$bubble]) || $key === '' || !is_string($revision)
+            || (chat_pending_reactions($message['reaction_pending'])[$bubble] ?? null) !== $revision
+            || (chat_bubble_reactions($message, $bubbles)[$bubble] ?? '') !== $key) {
             $sse(['done' => true, 'skipped' => true]);
             exit;
         }
+        $reactionTarget = ['id' => $reactionMid, 'bubble' => $bubble, 'revision' => $revision,
+            'content' => $bubbles[$bubble], 'reaction' => $key];
         $text = '';
         $afterId = (int) db()->query('SELECT MAX(id) FROM messages WHERE conversation_id = ' . $cid)->fetchColumn();
         $sse(['start' => true, 'after_id' => $afterId]);
@@ -150,7 +156,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     // uniquement ce qui n'est pas déjà dans le résumé (+ léger recouvrement)
-    $history = fetch_context_messages($cid, $conv);
+    $history = $reactionOnly ? [] : fetch_context_messages($cid, $conv);
     if ($regen) {
         // régénérer (ou rejouer après modification) un message avec photo : on la renvoie
         if ($regenImage !== '') {
@@ -268,7 +274,7 @@ if ($action === 'stream' && $method === 'POST') {
     $aborted = !empty($res['aborted']);
     if ($aborted) {
         $res['content'] = trim((string) $res['content']);
-        if ($res['content'] === '') {
+        if ($res['content'] === '' || $reactionOnly) {
             exit;
         }
     }
@@ -285,11 +291,15 @@ if ($action === 'stream' && $method === 'POST') {
     try {
         [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $reactionOnly, $userMsgId, $res, $splitPoints, $aborted, $conv, $reactionTarget, $trackRelationship, $address, $relationshipRevision): array {
             if ($reactionOnly) {
-                $active = $pdo->prepare('SELECT 1 FROM messages WHERE id = ? AND reaction_pending = ?');
-                $active->execute([$reactionTarget['id'], $reactionTarget['reaction_pending']]);
-                if (!$active->fetchColumn()) {
+                $active = $pdo->prepare('SELECT reaction_pending FROM messages WHERE id = ?');
+                $active->execute([$reactionTarget['id']]);
+                $pending = chat_pending_reactions((string) $active->fetchColumn());
+                if (($pending[$reactionTarget['bubble']] ?? null) !== $reactionTarget['revision']) {
                     return [0, null, null, 0, false];
                 }
+                unset($pending[$reactionTarget['bubble']]);
+                $pdo->prepare('UPDATE messages SET reaction_pending = ? WHERE id = ?')
+                    ->execute([chat_encode_reactions($pending), $reactionTarget['id']]);
             }
             if ($regen) {
                 // L'ancienne réponse reste visible jusqu'à la validation de la transaction.
@@ -324,9 +334,6 @@ if ($action === 'stream' && $method === 'POST') {
                 if ($res['reaction'] !== '') {
                     $pdo->prepare("UPDATE messages SET reaction = ? WHERE id = ? AND role = 'user'")
                         ->execute([$res['reaction'], $userMsgId]);
-                }
-                if ($reactionOnly) {
-                    $pdo->prepare("UPDATE messages SET reaction_pending = '' WHERE id = ?")->execute([$reactionTarget['id']]);
                 }
                 if (!empty($res['notice'])) {
                     $pdo->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "notice", ?)')

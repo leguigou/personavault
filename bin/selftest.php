@@ -114,7 +114,8 @@ try {
     echo "Sauvegarde\n";
     $sourceMid = (int) db()->query('SELECT id FROM messages WHERE conversation_id = ' . $cid)->fetchColumn();
     $pdo->prepare("UPDATE messages SET reaction = 'hug' WHERE id = ?")->execute([$sourceMid]);
-    $pdo->prepare("INSERT INTO messages (conversation_id, role, content, split_points, reaction) VALUES (?, 'assistant', 'Premier essai.', '[8]', 'heart')")->execute([$cid]);
+    $pdo->prepare("INSERT INTO messages (conversation_id, role, content, split_points, reaction, bubble_reactions)
+                   VALUES (?, 'assistant', 'Premier essai.', '[8]', 'heart', ?)")->execute([$cid, '{"1":"laugh"}']);
     $replyMid = (int) $pdo->lastInsertId();
     reply_version_archive($cid, $sourceMid);
     $firstVersion = (int) $pdo->lastInsertId();
@@ -175,9 +176,11 @@ try {
         $copy = $pdo->query('SELECT * FROM conversations WHERE persona_id = ' . $nid)->fetch();
         $copyMessages = fetch_messages((int) $copy['id']);
         [$copiedUser, $copiedReply] = $copyMessages;
-        $reaction = $pdo->prepare('SELECT reaction FROM reply_versions WHERE id = ?');
+        $reaction = $pdo->prepare('SELECT reaction, bubble_reactions FROM reply_versions WHERE id = ?');
         $reaction->execute([$copiedReply['version_id']]);
-        $check($copiedUser['reaction'] === 'hug' && $copiedReply['reaction'] === 'heart' && $reaction->fetchColumn() === 'heart',
+        $versionReaction = $reaction->fetch();
+        $check($copiedUser['reaction'] === 'hug' && $copiedReply['reaction'] === 'heart' && $versionReaction['reaction'] === 'heart'
+            && $copiedReply['bubble_reactions'] === '{"1":"laugh"}' && $versionReaction['bubble_reactions'] === '{"1":"laugh"}',
             'réactions des messages et de la version sélectionnée restaurées');
         $check((int) $copy['id'] !== $cid && count(fetch_messages($cid)) === 2, 'discussion rattachée au nouveau persona, original préservé');
         $check($mediaExists($copiedUser['image']) && $copiedUser['image'] !== $chatImg, 'pièce jointe du message restaurée avec sa miniature');

@@ -11,7 +11,7 @@ return [
     'js.chat.retitling' => 'Rewriting title…',
     'js.chat.retitled' => 'Title updated.',
     'js.chat.retitle_failed' => 'Could not rewrite the title. Check that the model is available and try again.',
-    'js.chat.react' => 'React to message',
+    'js.chat.react' => 'React to this bubble',
     'js.chat.reactions' => 'Reactions',
     'js.chat.more_reactions' => 'More reactions',
     'js.chat.reaction_you' => 'You · {emotion}',

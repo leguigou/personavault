@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 10);
+define('PV_SCHEMA_VERSION', 11);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -209,6 +209,9 @@ function migrate(PDO $pdo): void
         }
         if ($version < 10) {
             migrate_v10($pdo);
+        }
+        if ($version < 11) {
+            migrate_v11($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -512,6 +515,13 @@ function migrate_v10(PDO $pdo): void
         user_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_relationship_queue ON relationship_queue(persona_id, reply_id)");
+}
+
+/** v11 : réactions aux bulles qui suivent la première. */
+function migrate_v11(PDO $pdo): void
+{
+    add_column_if_missing($pdo, 'messages', 'bubble_reactions', "TEXT NOT NULL DEFAULT ''");
+    add_column_if_missing($pdo, 'reply_versions', 'bubble_reactions', "TEXT NOT NULL DEFAULT ''");
 }
 
 /** v6 : journal des échanges avec les modèles (20 derniers appels). */
