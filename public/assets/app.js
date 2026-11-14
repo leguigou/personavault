@@ -3553,7 +3553,7 @@
             if (Date.now() >= relationshipDeadline) return;
             relationshipTimer = setTimeout(async () => {
                 if (Date.now() >= relationshipDeadline) return;
-                if (busy) {
+                if (busy || processingQueue) {
                     scheduleRelationship();
                     return;
                 }
@@ -3572,7 +3572,18 @@
             }, 1200);
         };
         scheduleRelationship(Number(chat.dataset.relationshipWindow) || 0);
-        const runFacts = () => { factsTimer = 0; rememberFacts(); };
+        const runFacts = () => {
+            factsTimer = 0;
+            if (busy || processingQueue) {
+                scheduleFacts();
+                return;
+            }
+            processingQueue = true;
+            rememberFacts().finally(() => {
+                processingQueue = false;
+                processChatQueue();
+            });
+        };
         const scheduleFacts = () => {
             if (factsTiming === "off") return Promise.resolve();
             if (factsTiming !== "idle") return rememberFacts();
@@ -3632,8 +3643,7 @@
         };
 
         const syncSend = () => {
-            // pendant une génération le bouton reste actif : il sert à arrêter
-            sendBtn.disabled = opening || (!busy && input.value.trim() === "" && !pendingFile);
+            sendBtn.disabled = input.value.trim() === "" && !pendingFile;
         };
 
         const streamUrl = endpoint.replace(/\/send$/, "/stream");
@@ -3834,6 +3844,7 @@
                 notice(tr("chat.fb_kept"));
                 scroll.lastElementChild?.setAttribute("data-fb-kept", "1");
                 scrollBottom();
+                processChatQueue();
             })
         );
 
@@ -3843,7 +3854,10 @@
         });
 
         document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && fbModal && !fbModal.hidden) fbModal.hidden = true;
+            if (e.key === "Escape" && fbModal && !fbModal.hidden) {
+                fbModal.hidden = true;
+                processChatQueue();
+            }
         });
 
         /* --- outils par message (modifier / supprimer / régénérer) --- */
@@ -3896,7 +3910,9 @@
             }
         };
         const reactionUrl = endpoint.replace(/\/send$/, "/react");
-        const reactionQueue = new Map();
+        const chatQueue = [];
+        let processingQueue = false;
+        let maintenancePending = false;
         const reactionPopover = document.createElement("div");
         reactionPopover.id = "message-reactions";
         reactionPopover.className = "reaction-popover";
@@ -4041,14 +4057,23 @@
             (picker.querySelector('[aria-pressed="true"]') || picker.firstElementChild)?.focus({ preventScroll: true });
         };
 
-        const saveReaction = async (item, key) => {
+        const queueReactionSave = (item, key) => {
             const msg = item.closest(".msg-bot");
             if (!msg || item.dataset.reacting || msg.dataset.switching) return;
             item.dataset.reacting = "1";
+            chatQueue.push({ item, key });
+            processChatQueue();
+        };
+
+        const saveReaction = async ({ item, key }) => {
+            const msg = item.closest(".msg-bot");
+            if (!msg?.isConnected) {
+                delete item.dataset.reacting;
+                return;
+            }
             const mid = msg.dataset.msgId;
             const version = msg.dataset.versionId || "0";
             const bubble = item.dataset.bubbleIndex;
-            const queueKey = `${mid}:${version}:${bubble}`;
             const wanted = item.dataset.reaction === key ? "" : key;
             try {
                 const body = new URLSearchParams({ _token: token, mid, version_id: version, bubble, reaction: wanted });
@@ -4057,10 +4082,8 @@
                 if (!data.ok) throw new Error(data.error || tr("chat.reaction_error"));
                 if (data.reaction) recordReactionUse(data.reaction);
                 paintReaction(item, data.reaction, true, true);
-                if (!data.reaction) reactionQueue.delete(queueKey);
                 if (data.reply) {
-                    reactionQueue.set(queueKey, { mid, version, bubble, key: data.reaction, revision: data.revision });
-                    sendQueuedReaction();
+                    return { mid, version, bubble, key: data.reaction, revision: data.revision };
                 }
             } catch (err) {
                 notice(err.message || tr("chat.reaction_error"));
@@ -4077,7 +4100,7 @@
             if (option) {
                 const item = reactionBubble;
                 closeReactions(true);
-                saveReaction(item, option.dataset.reactionOption);
+                queueReactionSave(item, option.dataset.reactionOption);
             } else if (event.target.closest("[data-more-reactions]")) {
                 showReactions(true);
             } else if (action) {
@@ -4277,6 +4300,7 @@
         };
 
         const saveEdit = async (el) => {
+            if (busy || processingQueue) return;
             const id = el.dataset.msgId;
             const ta = el.querySelector(".msg-edit textarea");
             if (!id || !ta) return;
@@ -4326,8 +4350,15 @@
         };
 
         const regenerate = (msg) => {
-            if (busy || msg !== lastReply() || msg.querySelector(".bubble")?.textContent === "") return;
+            if (busy || processingQueue || msg !== lastReply() || msg.querySelector(".bubble")?.textContent === "") return;
             send(null, "auto", false, true, null, Number(msg.dataset.msgId));
+        };
+
+        const lastUserMessage = () => [...scroll.querySelectorAll(".msg-user[data-msg-id]")].at(-1);
+        const retryLastMessage = (msg) => {
+            if (busy || opening || processingQueue || msg !== lastUserMessage()) return;
+            const reply = lastReply();
+            send(null, "auto", false, true, Number(msg.dataset.msgId), reply ? Number(reply.dataset.msgId) : null);
         };
 
         const messageMenu = document.createElement("div");
@@ -4369,9 +4400,10 @@
             const time = messageTime(msg);
             if (time) messageMenu.appendChild(time);
 
-            const addAction = (kind, label, run) => {
+            const addAction = (kind, label, run, disabled = false) => {
                 const button = document.createElement("button");
                 button.type = "button";
+                button.disabled = disabled;
                 button.className = "action-row" + (kind === "del" ? " is-danger" : "");
                 button.innerHTML = ICONS[kind];
                 button.append(label);
@@ -4398,6 +4430,9 @@
                 });
             }
             addAction("edit", tr("chat.edit"), () => startEdit(msg));
+            if (msg === lastUserMessage()) {
+                addAction("regen", tr("chat.retry_last_message"), () => retryLastMessage(msg), busy || opening || processingQueue);
+            }
             addAction("del", tr("chat.delete"), () => removeMsg(msg.dataset.msgId));
 
             const visual = window.visualViewport;
@@ -4533,23 +4568,15 @@
 
         });
 
-        const SEND_SVG = sendBtn.innerHTML;
-        const STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.4" y="6.4" width="11.2" height="11.2" rx="2.6" fill="currentColor"/></svg>';
+        const stopBtn = form.querySelector("[data-chat-stop]");
+        const queueStatus = chat.querySelector("[data-chat-queue]");
         let controller = null;
 
         const setStreaming = (on) => {
-            sendBtn.classList.toggle("is-stop", on);
-            sendBtn.innerHTML = on ? STOP_SVG : SEND_SVG;
-            sendBtn.setAttribute("aria-label", on ? tr("chat.stop_label") : tr("chat.send"));
-            sendBtn.title = on ? tr("chat.stop") : tr("chat.send");
+            stopBtn.hidden = !on;
         };
 
-        sendBtn.addEventListener("click", (e) => {
-            if (busy && controller) {
-                e.preventDefault();
-                controller.abort();
-            }
-        });
+        stopBtn.addEventListener("click", () => controller?.abort());
 
         /* --- photo jointe (uniquement si le modèle voit les images) --- */
         const attachBtn = form.querySelector("[data-attach]");
@@ -4587,16 +4614,49 @@
         });
         attachPreview?.querySelector("[data-attach-remove]")?.addEventListener("click", clearAttach);
 
-        const sendQueuedReaction = () => {
-            if (busy || !reactionQueue.size) return;
-            const [key, reaction] = reactionQueue.entries().next().value;
-            reactionQueue.delete(key);
-            send(null, "auto", false, false, null, null, reaction);
+        const processChatQueue = async () => {
+            const count = chatQueue.length;
+            queueStatus.hidden = count === 0;
+            queueStatus.textContent = count ? tr("chat.pending_actions", { count }) : "";
+            if (busy || opening || processingQueue || fbModal?.hidden === false || (!count && !maintenancePending)) return;
+            processingQueue = true;
+            try {
+                const next = chatQueue.shift();
+                if (next?.item) {
+                    const reaction = await saveReaction(next);
+                    if (reaction) await send(null, "auto", false, false, null, null, reaction);
+                } else if (next) {
+                    await send(next.text, "auto", true, false, null, null, null, next.attachment);
+                } else {
+                    maintenancePending = false;
+                    const data = await compressMemory();
+                    if (data?.compressed > 0) {
+                        notice(tr("chat.memory_updated", data.compressed));
+                        scrollBottom();
+                    }
+                    await scheduleFacts();
+                    await autoTitle();
+                }
+            } finally {
+                processingQueue = false;
+                processChatQueue();
+            }
         };
 
-        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, reaction = null) => {
+        const queueMessage = () => {
+            const text = input.value.trim();
+            if (text === "" && !pendingFile) return;
+            const attachment = pendingFile ? { file: pendingFile, shrink: pendingShrink } : null;
+            chatQueue.push({ text, attachment });
+            input.value = "";
+            grow();
+            clearAttach();
+            processChatQueue();
+        };
+
+        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, reaction = null, attachment = null) => {
             const text = regen || reaction ? "" : (overrideText ?? input.value.trim());
-            if (!regen && !reaction && text === "" && !pendingFile) return;
+            if (!regen && !reaction && text === "" && !attachment) return;
             if (busy || opening) return;
 
             const tryFallback = () => {
@@ -4605,22 +4665,26 @@
                     input.value = "";
                     grow();
                 }
-                send(text, "fallback", echo, regen, regenMid, regenReply, reaction);
+                const retry = send(text, "fallback", echo, regen, regenMid, regenReply, reaction, attachment);
+                if (attachment && pendingFile === attachment.file) clearAttach();
+                retry.finally(processChatQueue);
             };
             busy = true;
             syncSend();
             setStreaming(true);
-            if (overrideText === null && !regen && !reaction) {
-                input.value = "";
-                grow();
-            }
-
             let userEl = null;
             const restoreDraft = () => {
                 userEl?.remove();
                 if (!regen && !reaction && !input.value) {
                     input.value = text;
                     grow();
+                }
+                if (attachment && !pendingFile) {
+                    pendingFile = attachment.file;
+                    pendingShrink = attachment.shrink;
+                    const preview = attachPreview?.querySelector("img");
+                    if (preview) preview.src = URL.createObjectURL(pendingFile);
+                    if (attachPreview) attachPreview.hidden = false;
                 }
             };
             if (!regen && !reaction) {
@@ -4639,6 +4703,7 @@
                 restoreDraft();
                 askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down", tryFallback);
                 busy = false;
+                processChatQueue();
                 syncSend();
                 return;
             }
@@ -4818,9 +4883,8 @@
                     fd.append("reaction_revision", reaction.revision);
                     fd.append("reaction", reaction.key);
                 }
-                const attachment = regen || reaction ? null : pendingFile;
                 if (attachment) {
-                    const file = (await pendingShrink?.catch(() => null)) || attachment;
+                    const file = (await attachment.shrink?.catch(() => null)) || attachment.file;
                     fd.append("image", file, file.name || "photo.jpg");
                 }
 
@@ -4832,7 +4896,7 @@
                 };
                 let res = await fetch(streamUrl, request);
                 // Un autre onglet peut encore avoir le verrou de cette discussion.
-                for (let attempt = 0; reaction && res.status === 409 && attempt < 8; attempt++) {
+                for (let attempt = 0; res.status === 409 && attempt < 8; attempt++) {
                     await res.body?.cancel();
                     await new Promise((resolve) => setTimeout(resolve, 750));
                     res = await fetch(streamUrl, request);
@@ -4895,7 +4959,6 @@
                             } else if (evt.start) {
                                 userId = Number(evt.user?.id || evt.user_id || 0);
                                 afterId = Number(evt.after_id || userId);
-                                if (attachment && attachment === pendingFile) clearAttach();
                                 if (evt.user && userEl) {
                                     const fresh = renderMsg({ ...evt.user, at: userEl.dataset.at });
                                     userEl.replaceWith(fresh);
@@ -4924,6 +4987,15 @@
                     if (failed) {
                         clearLive();
                         if (!keptUser) restoreDraft();
+                        if (keptUser && userId) {
+                            const recovered = await recoverReply();
+                            if (recovered) {
+                                settleLive(recovered);
+                                if (!reaction) maintenancePending = true;
+                                scrollBottom();
+                                return;
+                            }
+                        }
                         if (mode === "auto" && !streamed && !keptUser && ["down", "not_loaded", "no_model", "error"].includes(failedKind)) {
                             askFallback(text, failed, failedKind, tryFallback);
                         } else {
@@ -4941,17 +5013,7 @@
                 }
 
                 scrollBottom();
-                if (!reaction) {
-                    compressMemory()
-                        .then((d) => {
-                            if (d && d.compressed > 0) {
-                                notice(tr("chat.memory_updated", d.compressed));
-                                scrollBottom();
-                            }
-                        })
-                        .then(() => scheduleFacts())
-                        .then(() => autoTitle());
-                }
+                if (!reaction) maintenancePending = true;
             } catch (err) {
                 document.getElementById("chat-typing")?.remove();
                 clearInterval(probe);
@@ -4960,7 +5022,8 @@
                 if (reply) settleLive(reply);
                 else clearLive();
                 if (!userId) restoreDraft();
-                notice(err.name === "AbortError" ? tr("chat.aborted") : tr("common.error", { message: err.message }));
+                if (err.name === "AbortError") notice(tr("chat.aborted"));
+                else if (!reply) notice(tr("common.error", { message: err.message }));
                 scrollBottom();
             } finally {
                 [live, ...bubbleEls].filter(Boolean).forEach((b) => {
@@ -4976,18 +5039,18 @@
                 syncSend();
                 // sur téléphone, redonner le focus ouvrirait le clavier à chaque réponse
                 if (!reaction && !matchMedia("(pointer: coarse)").matches) input.focus({ preventScroll: true });
-                sendQueuedReaction();
+                processChatQueue();
             }
         };
 
         form.addEventListener("submit", (e) => {
             e.preventDefault();
-            send();
+            queueMessage();
         });
         input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
-                send();
+                queueMessage();
             }
         });
         input.addEventListener("input", () => {
@@ -5039,6 +5102,7 @@
                     }
                     opening = false;
                     syncSend();
+                    processChatQueue();
                 }
             };
             loadOpening();

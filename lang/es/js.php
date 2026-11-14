@@ -4,6 +4,8 @@
  * Las claves js.modal.*, js.unsaved.* y js.chat.jump están en common.php.
  */
 return [
+    'js.chat.retry_last_message' => 'Reintentar la respuesta',
+    'js.chat.pending_actions' => 'En espera · {count}',
     'js.facts.story' => 'Historia del personaje',
     'js.assist.review_progress' => 'Datos esenciales incluidos en esta propuesta · {percent} %',
     'js.assist.f.work' => 'Trabajo o actividad',

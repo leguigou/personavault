@@ -4,6 +4,8 @@
  * The js.modal.*, js.unsaved.* and js.chat.jump keys are in common.php.
  */
 return [
+    'js.chat.retry_last_message' => 'Retry response',
+    'js.chat.pending_actions' => 'Queued · {count}',
     'js.facts.story' => 'Persona’s story',
     'js.assist.review_progress' => 'Essential details covered in this draft · {percent}%',
     'js.assist.f.work' => 'Work or activity',

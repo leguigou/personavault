@@ -136,7 +136,9 @@ if ($action === 'stream' && $method === 'POST') {
                     $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
                     $stmt->execute([$cid]);
                     // réappliquer les réglages du persona (modèle, fenêtre, consigne…)
+                    $effectiveWindow = $conv['context_window'];
                     $conv = chat_with_persona($stmt->fetch(), $persona);
+                    $conv['context_window'] = $effectiveWindow;
                 }
             }
         } catch (Throwable $e) {

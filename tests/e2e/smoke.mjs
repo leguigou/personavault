@@ -593,6 +593,11 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(edited.replay && replay.includes('Avec plaisir !') && !replay.includes('Je ne peux pas envoyer')
         && replay.replaceAll('\\/', '/').includes('https://static.klipy.com/test/hello.gif'),
         'la formulation naturelle déclenche KLIPY après modification du message et le modèle reçoit le résultat');
+    await requestGif();
+    const repeated = await requestGif();
+    expect(repeated.replaceAll('\\/', '/').includes('https://static.klipy.com/test/wink-second.gif'),
+        'la demande répétée passe à la page suivante pour trouver un GIF inédit');
+    expect((await requestGif()).includes('KLIPY n’a trouvé aucun média'), 'une recherche épuisée ne renvoie pas de doublon');
     await submit('/chat/1/klipy', {});
     expect((await requestGif()).includes('Ce format KLIPY est désactivé'), 'une demande explicite signale un format désactivé');
     const stickerChat = (await submit('/chat/1/new', {})).headers.get('location');

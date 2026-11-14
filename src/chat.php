@@ -239,6 +239,38 @@ function chat_shorten_middle(string $text, int $maxTokens): string
     return rtrim(mb_substr($text, 0, $half)) . ' […] ' . ltrim(mb_substr($text, -$half));
 }
 
+/** Les budgets sont proportionnels à la fenêtre de référence de 16 384 tokens. */
+function chat_token_budget(array $conv): array
+{
+    $window = max(1024, (int) ($conv['context_window'] ?? 8192));
+    $technical = min(512, intdiv($window, 4));
+    $output = max(64, min((int) ($conv['max_tokens'] ?? 400), intdiv($window, 2)));
+    $reserve = max($output + $technical, (int) round($window * 3384 / 16384));
+    return [
+        'input' => $window - $reserve,
+        'output' => $output,
+        'memory' => (int) round($window * 3000 / 16384),
+        'history' => (int) round($window * 8000 / 16384),
+    ];
+}
+
+/** Variante stricte pour les blocs qui doivent rester dans le budget estimé. */
+function chat_fit_text(string $text, int $tokens): string
+{
+    if ($tokens <= 1) {
+        return '';
+    }
+    if (chat_estimate_tokens($text) <= $tokens) {
+        return $text;
+    }
+    $chars = (int) floor(($tokens - 1) * 3.6);
+    if ($chars < 12) {
+        return mb_substr($text, 0, $chars);
+    }
+    $half = intdiv($chars - 5, 2);
+    return rtrim(mb_substr($text, 0, $half)) . ' […] ' . ltrim(mb_substr($text, -$half));
+}
+
 /** Le résumé de la conversation remplace-t-il les anciens messages ? */
 function chat_uses_summary(array $conv): bool
 {
@@ -313,10 +345,12 @@ function chat_memory_stats(int $cid, array $conv): array
     $recentTokens = (int) ceil(((int) ($row['chars'] ?? 0)) / 3.6) + $unsummarized;
 
     $useSummary    = chat_uses_summary($conv);
-    $summaryTokens = chat_estimate_tokens((string) ($conv['summary'] ?? ''));
-    $window        = max(2048, (int) ($conv['context_window'] ?? 8192));
-    $budget        = $window - (int) ($conv['max_tokens'] ?? 400) - 512;
+    $limits        = chat_token_budget($conv);
+    $summaryTokens = chat_estimate_tokens(chat_fit_text((string) ($conv['summary'] ?? ''), intdiv($limits['memory'], 2)));
+    $window        = max(1024, (int) ($conv['context_window'] ?? 8192));
+    $budget        = $limits['input'];
     $base          = chat_base_tokens($conv) + ($useSummary ? $summaryTokens : 0);
+    $budget        = min($budget, $base + $limits['history'] + max(0, $limits['memory'] - ($useSummary ? $summaryTokens : 0)));
 
     // historique effectivement envoyé (même règle que chat_build_messages)
     $history   = 0;
@@ -330,8 +364,11 @@ function chat_memory_stats(int $cid, array $conv): array
             if ($sentCount >= CHAT_MIN_RECENT) {
                 break;
             }
-            $cost = chat_estimate_tokens(chat_shorten_middle((string) $m['content'],
-                max(60, intdiv(max(0, $budget - $base - $history), CHAT_MIN_RECENT - $sentCount)))) + 4;
+            $room = intdiv(max(0, $budget - $base - $history), CHAT_MIN_RECENT - $sentCount) - 4;
+            if ($room <= 1) {
+                break;
+            }
+            $cost = chat_estimate_tokens(chat_fit_text((string) $m['content'], $room)) + 4;
         }
         $history += $cost;
         $sentCount++;
@@ -1692,25 +1729,35 @@ function chat_auto_title(int $cid, bool $rewrite = false): ?string
  */
 function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null, string $addressOverride = ''): array
 {
+    $limits = chat_token_budget($conv);
+    $budget = $limits['input'] - 8; // enveloppes des messages système et utilisateur
     if ($reactionTarget !== null) {
         $conv['memory_enabled'] = 0;
         $history = [];
     }
+    $conv['summary'] = chat_fit_text((string) ($conv['summary'] ?? ''), intdiv($limits['memory'], 2));
+    $summaryCost = (int) ($conv['memory_enabled'] ?? 1) === 1 && $conv['summary'] !== ''
+        ? chat_estimate_tokens($conv['summary']) : 0;
+    $text = $reactionTarget !== null ? '[Réaction à ton message]' : ($userMessage !== '' ? $userMessage : ($imageDataUrl ? 'Regarde cette photo.' : ''));
+    $text = chat_fit_text($text, intdiv($budget, 2));
     // 1) Partie système en tête : fiche, consigne de jeu et résumé, puis format de réponse.
     //    LM Studio / llama.cpp peuvent réutiliser le préfixe commun entre les tours.
     $system = chat_system_prompt($persona, $personaPrompts, $conv, [], $addressOverride) . "\n\n" . chat_reaction_instructions($canReact);
+    $historyReserve = min($limits['history'], intdiv($budget * 2, 3));
+    $systemRoom = $budget - $historyReserve - $limits['memory'] - chat_estimate_tokens($text) - 256;
+    $system = chat_fit_text($system, max(intdiv($budget, 6), $systemRoom));
 
     // 2) Partie VARIABLE (heure, souvenirs, rappels) : jointe au DERNIER message,
     //    pour ne pas invalider le cache de tout ce qui précède.
     $factsOn = (int) ($conv['memory_enabled'] ?? 1) === 1 && (int) ($conv['facts_enabled'] ?? 1) === 1;
-    $context = [chat_time_context($conv, $history)];
-    $limit  = max(2048, (int) ($conv['context_window'] ?? 8192));
-    $budget = $limit - (int) ($conv['max_tokens'] ?? 400) - 512;
+    $context = [];
+    $contextRoom = max(0, $budget - chat_estimate_tokens($system) - chat_estimate_tokens($text) - 12);
+    $time = $reactionTarget === null ? chat_fit_text(chat_time_context($conv, $history), min(256, intdiv($contextRoom, 2))) : '';
     if ($reactionTarget !== null) {
         $context[] = "L’utilisateur vient de réagir à la bulle citée ci-dessous. "
             . "Réponds brièvement en personnage en te fondant uniquement sur le texte de cette bulle et la réaction indiquée. "
             . "Pour 👍, reste dans le registre du simple accord.\n"
-            . chat_reaction_context($reactionTarget, $budget - chat_estimate_tokens($system));
+            . chat_reaction_context($reactionTarget, $contextRoom);
     }
 
     $pid = (int) $persona['id'];
@@ -1741,9 +1788,14 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
             . "(sers-t'en comme de souvenirs, ne les cite pas mot pour mot, ne les mentionne pas comme "
             . "des « extraits ») :\n" . implode("\n", $lines);
     }
-    $contextBlock = "<contexte>\n" . implode("\n\n", $context) . "\n</contexte>";
+    $memoryRoom = $reactionTarget !== null ? $contextRoom : min($limits['memory'] - $summaryCost, $contextRoom - chat_estimate_tokens($time));
+    $memory = chat_fit_text(implode("\n\n", $context), $memoryRoom);
+    $contextBlock = "<contexte>\n" . trim($time . "\n\n" . $memory) . "\n</contexte>";
 
-    $used   = chat_estimate_tokens($system) + chat_estimate_tokens($contextBlock) + chat_estimate_tokens($userMessage);
+    $text = $contextBlock . "\n\n" . $text;
+    $used = chat_estimate_tokens($system) + chat_estimate_tokens($text);
+    // L’historique peut utiliser la réserve de mémoire laissée libre.
+    $historyBudget = min($budget, $used + $limits['history'] + max(0, $limits['memory'] - $summaryCost - chat_estimate_tokens($memory)));
 
     $kept = [];
     $dropped = 0;
@@ -1755,8 +1807,8 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         }
         $content = (string) $msg['content'];
         $image   = $role === 'user' ? (string) ($msg['image'] ?? '') : '';
-        $cost = chat_estimate_tokens($content) + 4;
-        if ($used + $cost > $budget) {
+        $cost = chat_estimate_tokens($content) + 4 + ($image !== '' ? 8 : 0);
+        if ($used + $cost > $historyBudget) {
             // on remonte du plus récent vers le plus ancien : au-delà du plancher, on s'arrête
             // au premier message qui ne tient plus (jamais de trou dans le fil)
             if (count($kept) >= CHAT_MIN_RECENT) {
@@ -1764,8 +1816,14 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
                 break;
             }
             // dans le plancher : le message est gardé, raccourci s'il est long
-            $content = chat_shorten_middle($content, max(60, intdiv(max(0, $budget - $used), CHAT_MIN_RECENT - count($kept))));
-            $cost    = chat_estimate_tokens($content) + 4;
+            $overhead = 4 + ($image !== '' ? 8 : 0);
+            $room = intdiv(max(0, $historyBudget - $used), CHAT_MIN_RECENT - count($kept)) - $overhead;
+            if ($room <= 1) {
+                $dropped = (int) $msg['id'];
+                break;
+            }
+            $content = chat_fit_text($content, $room);
+            $cost = chat_estimate_tokens($content) + $overhead;
         }
         $used += $cost;
         if ($image !== '') {
@@ -1789,9 +1847,6 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $messages = [['role' => 'system', 'content' => $system]];
     $messages = array_merge($messages, $kept);
 
-    $text = $reactionTarget !== null ? '[Réaction à ton message]' : ($userMessage !== '' ? $userMessage : ($imageDataUrl ? 'Regarde cette photo.' : ''));
-    $text = $contextBlock . "\n\n" . $text;
-
     if ($imageDataUrl !== null && $imageDataUrl !== '') {
         // message multimodal : texte + image (modèles « vlm »)
         $messages[] = ['role' => 'user', 'content' => [
@@ -1806,7 +1861,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         'messages' => $messages,
         'kept'     => count($kept),
         'dropped'  => $dropped,
-        'tokens'   => $used,
+        'tokens'   => $used + 8,
     ];
 }
 
@@ -1876,7 +1931,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
 {
     $opts = [
         'temperature'      => (float) ($conv['temperature'] ?? 0.85),
-        'max_tokens'       => (int) ($conv['max_tokens'] ?? 400),
+        'max_tokens'       => chat_token_budget($conv)['output'],
         'timeout'          => 300,
         'reasoning_effort' => ($conv['reasoning_override'] ?? '') ?: setting('chat_reasoning_effort', 'none'),
         'should_abort'     => $shouldAbort,
