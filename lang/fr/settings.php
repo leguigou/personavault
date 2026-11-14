@@ -6,6 +6,8 @@
  * Certains textes sur plusieurs lignes gardent l'indentation de la page (sortie HTML identique).
  */
 return [
+    'settings.chat.klipy_empty' => 'Aucune clé enregistrée',
+    'settings.chat.klipy_saved' => 'Clé enregistrée',
     'settings.chat.klipy_key' => 'Clé API KLIPY',
     'settings.chat.klipy_help' => 'Autorise les GIF spontanés pour les personas qui ont activé cette option. Seuls des mots-clés de recherche sont envoyés à KLIPY.',
     'settings.chat.klipy_clear' => 'Effacer la clé KLIPY',

@@ -3,6 +3,8 @@
  * English — Settings page (views/settings.php). Same keys as lang/fr/settings.php.
  */
 return [
+    'settings.chat.klipy_empty' => 'No key saved',
+    'settings.chat.klipy_saved' => 'Saved key',
     'settings.chat.klipy_key' => 'KLIPY API key',
     'settings.chat.klipy_help' => 'Enables spontaneous GIFs for personas with this option turned on. Only search keywords are sent to KLIPY.',
     'settings.chat.klipy_clear' => 'Clear the KLIPY key',
