@@ -560,10 +560,13 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(!(await testKlipy()).ok, 'le test KLIPY signale une clé manquante');
     expect((await testKlipy('test-gif-key')).ok && !(await testKlipy()).ok,
         'on peut tester une clé saisie sans l’enregistrer');
-    await submit('/settings/chat', {
+    const saved = await submit('/settings/chat', {
         chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`,
         chat_model: 'fake-model', klipy_api_key: 'test-gif-key',
     });
+    expect(saved.headers.get('location') === '/settings#chat'
+        && (await (await http('/settings')).text()).includes('data-default-label="Tester la clé enregistrée"'),
+        'après enregistrement, les réglages Discussion proposent de tester la clé enregistrée');
     const rejected = await testKlipy('rejected-test-key');
     expect(!rejected.ok && rejected.message.includes('401') && !rejected.message.includes('rejected-test-key')
         && (await testKlipy()).ok, 'le test signale le refus et préserve la clé enregistrée');

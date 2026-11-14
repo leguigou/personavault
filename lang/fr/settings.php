@@ -6,6 +6,7 @@
  * Certains textes sur plusieurs lignes gardent l'indentation de la page (sortie HTML identique).
  */
 return [
+    'settings.chat.klipy_test_saved' => 'Tester la clé enregistrée',
     'settings.chat.klipy_test' => 'Tester la clé KLIPY',
     'settings.chat.klipy_test_ok' => 'Connexion réussie. KLIPY a renvoyé un GIF.',
     'settings.chat.klipy_test_missing' => 'Renseigne une clé KLIPY valide avant de lancer le test.',

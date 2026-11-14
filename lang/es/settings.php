@@ -4,6 +4,7 @@
  * Tuteo (« tú »), como en francés.
  */
 return [
+    'settings.chat.klipy_test_saved' => 'Probar la clave guardada',
     'settings.chat.klipy_test' => 'Probar la clave de KLIPY',
     'settings.chat.klipy_test_ok' => 'Conexión correcta. KLIPY devolvió un GIF.',
     'settings.chat.klipy_test_missing' => 'Introduce una clave de KLIPY válida antes de hacer la prueba.',

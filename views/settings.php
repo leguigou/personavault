@@ -269,7 +269,11 @@ $facts = facts_settings();
             <?php if ($klipyKey !== ''): ?>
                 <label class="check"><input type="checkbox" name="klipy_api_key_clear" value="1"><span><?= e(t('settings.chat.klipy_clear')) ?></span></label>
             <?php endif; ?>
-            <button type="button" class="btn btn-ghost btn-sm" data-klipy-test><?= e(t('settings.chat.klipy_test')) ?></button>
+            <button type="button" class="btn btn-ghost btn-sm" data-klipy-test
+                    data-entered-label="<?= e(t('settings.chat.klipy_test')) ?>"
+                    data-default-label="<?= e($klipyKey !== '' ? t('settings.chat.klipy_test_saved') : t('settings.chat.klipy_test')) ?>">
+                <?= e($klipyKey !== '' ? t('settings.chat.klipy_test_saved') : t('settings.chat.klipy_test')) ?>
+            </button>
             <p class="llm-status" data-klipy-status role="status" hidden></p>
         </section>
 

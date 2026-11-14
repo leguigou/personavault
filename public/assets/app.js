@@ -333,20 +333,28 @@
     });
 
     const klipyTest = document.querySelector("[data-klipy-test]");
+    const klipyKeyInput = klipyTest?.form.elements.klipy_api_key;
+    klipyKeyInput?.addEventListener("input", () => {
+        klipyTest.textContent = klipyKeyInput.value.trim() ? klipyTest.dataset.enteredLabel : klipyTest.dataset.defaultLabel;
+        klipyTest.form.querySelector("[data-klipy-status]").hidden = true;
+    });
     klipyTest?.addEventListener("click", async () => {
         const status = klipyTest.form.querySelector("[data-klipy-status]");
-        const { _token, klipy_api_key } = klipyTest.form.elements;
+        const { _token } = klipyTest.form.elements;
+        const key = klipyKeyInput.value;
         klipyTest.disabled = true;
         status.hidden = false;
         status.className = "llm-status";
         status.textContent = tr("settings.test_connecting");
         try {
-            const body = new URLSearchParams({ _token: _token.value, klipy_api_key: klipy_api_key.value });
+            const body = new URLSearchParams({ _token: _token.value, klipy_api_key: key });
             const response = await fetch("/settings/klipy/test", { method: "POST", body });
             const result = await response.json();
+            if (klipyKeyInput.value !== key) return;
             status.classList.add(response.ok && result.ok ? "is-ok" : "is-ko");
             status.textContent = result.message || tr("settings.test_failed");
         } catch {
+            if (klipyKeyInput.value !== key) return;
             status.classList.add("is-ko");
             status.textContent = tr("settings.test_failed");
         } finally {
