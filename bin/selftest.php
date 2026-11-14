@@ -507,6 +507,10 @@ try {
     $ins->execute([$cid2, 'user', 'Porto, jazz, concert, encore du jazz au concert de Porto']);
     $rec = chat_recall_snippets($pid, 'Tu te souviens du concert de jazz ?', $cid, 2);
     $check(count($rec) === 2 && str_contains((string) $rec[0]['content'], 'encore du jazz'), 'rappel : les extraits les plus pertinents d’abord');
+    $pdo->prepare('UPDATE conversations SET facts_enabled = 0 WHERE id = ?')->execute([$cid2]);
+    $check(chat_recall_snippets($pid, 'Tu te souviens du concert de jazz ?', $cid, 2) === [],
+        'rappel : les extraits d’un fil sans souvenirs partagés restent dans ce fil');
+    $pdo->prepare('UPDATE conversations SET facts_enabled = 1 WHERE id = ?')->execute([$cid2]);
     $check((int) db()->query("SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'jazz'")->fetchColumn() === 2, 'index cohérent avec la table');
     $ins->execute([$cid, 'assistant', 'On a regardé les lucioles ensemble.']);
     $marked = (int) db()->lastInsertId();

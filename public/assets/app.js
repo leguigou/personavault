@@ -298,6 +298,22 @@
     })();
     window.pvModal = pvModal;
 
+    document.querySelector("[data-new-chat]")?.addEventListener("submit", async (e) => {
+        const form = e.currentTarget;
+        e.preventDefault();
+        const mode = await pvModal.open({
+            title: form.dataset.title,
+            text: form.dataset.help,
+            actions: [
+                { label: form.dataset.continue, value: "with-memory" },
+                { label: form.dataset.fresh, value: "fresh", kind: "primary" },
+            ],
+        });
+        if (!mode) return;
+        form.elements.mode.value = mode;
+        form.submit();
+    });
+
     /* interrupteurs de la conversation : enregistrés dès qu'ils changent */
     document.querySelectorAll(".sheet-form").forEach((form) => {
         form.querySelector("[data-autosave-fallback]")?.setAttribute("hidden", "");
