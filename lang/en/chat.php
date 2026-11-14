@@ -38,6 +38,7 @@ return [
     'chat.list.pin' => 'Pin to top',
     'chat.list.unpin' => 'Unpin',
     'chat.list.message_count' => ['one' => '{n} msg', 'other' => '{n} msgs'],
+    'chat.list.thread_count' => ['one' => '{n} conversation', 'other' => '{n} conversations'],
     'chat.list.actions' => 'Conversation actions',
     'chat.list.more' => 'More actions',
     'chat.list.delete' => 'Delete conversation',

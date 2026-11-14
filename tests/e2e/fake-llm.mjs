@@ -84,6 +84,8 @@ http.createServer(async (req, res) => {
             text = last.includes('pastéis au bord du Tage') && last.includes('Camille prépare une exposition à Lyon')
                 ? JSON.stringify({ message: 'Ça m’a fait repenser à ton voyage à Lisbonne. Tu y retournerais ?', questions: ['Et ton exposition à Lyon, elle avance ?'] })
                 : JSON.stringify({ message: 'Tu as déjà développé une pellicule argentique ?', questions: ['Tu photographies quoi en ce moment ?'] });
+        } else if (last.endsWith('Test du seuil de découpage')) {
+            text = 'mot '.repeat(14) + 'mot. ' + 'suite '.repeat(9) + 'suite. Dernière phrase.';
         } else if (system.includes('le sujet concret des derniers échanges') && last.includes('volcans en Islande')) {
             text = 'Volcans en Islande';
         } else {

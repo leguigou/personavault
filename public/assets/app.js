@@ -1446,7 +1446,7 @@
                     const m = /^([\w-]+)(!?=)(.*)$/.exec(cond.trim());
                     if (!m) return true;
                     const field = document.querySelector('[name="' + m[1] + '"]');
-                    const v = field ? field.value : "";
+                    const v = field && (field.type !== "checkbox" || field.checked) ? field.value : "";
                     return m[2] === "=" ? v === m[3] : v !== m[3];
                 });
             });
@@ -1454,6 +1454,23 @@
         document.addEventListener("change", applyConds);
         applyConds();
     }
+
+    const splitPicker = document.querySelector("[data-split-position-picker]");
+    splitPicker?.addEventListener("click", async () => {
+        const field = splitPicker.form.elements.namedItem("chat_split_position");
+        const position = await pvModal.open({
+            title: splitPicker.dataset.title,
+            actions: ["before", "after"].map((value) => ({
+                label: splitPicker.dataset[value],
+                value,
+                kind: field.value === value ? "primary" : "ghost",
+            })),
+        });
+        if (!position || field.value === position) return;
+        field.value = position;
+        splitPicker.textContent = splitPicker.dataset[position];
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
     /* ------------------- réglages : résumé des sections repliables */
     const foldSums = document.querySelectorAll("[data-fold-sum]");
@@ -2428,6 +2445,8 @@
                 if (!response.ok || !data.ok || !data.title) throw new Error(data.error || tr("chat.retitle_failed"));
                 item.dataset.convTitle = data.title;
                 item.querySelector("[data-conv-title-text]").textContent = data.title;
+                const contactTitle = item.closest("[data-contact]")?.querySelector('[data-contact-title="' + id + '"]');
+                if (contactTitle) contactTitle.textContent = data.title;
                 if (current === item) {
                     titleEl.textContent = data.title;
                     if (!convSheet.hidden) closeMenu();
@@ -3492,7 +3511,7 @@
                 if (!d.ok || !d.title) return;
 
                 chat.dataset.autoTitle = "0";
-                const row = document.querySelector(".chat-side-row.is-on [data-side-title]");
+                const row = document.querySelector('.chat-side-row.is-on [data-side-title="' + chat.dataset.conversationId + '"]');
                 if (row) row.textContent = d.title;
                 const head = document.querySelector("#chat-settings .sheet-head h2");
                 if (head) head.textContent = d.title;
@@ -3531,6 +3550,7 @@
 
         const splitOn    = chat.dataset.split === "1";
         const splitWords = Math.max(8, parseInt(chat.dataset.splitWords || "50", 10));
+        const splitAfter = chat.dataset.splitPosition === "after";
         const splitMax   = Math.max(1, parseInt(chat.dataset.splitMax || "2", 10));
         const splitDmin  = Math.max(0.2, parseFloat(chat.dataset.splitDelayMin || "1"));
         const splitDmax  = Math.max(splitDmin, parseFloat(chat.dataset.splitDelayMax || "2"));
@@ -4415,7 +4435,7 @@
 
             const countWords = (s) => (s.trim() === "" ? 0 : s.trim().split(/\s+/).length);
 
-            // coupe une portion à la dernière fin de phrase avant la limite de mots
+            // Cherche la dernière fin de phrase avant le seuil ou la première après.
             const cutInSegment = (seg) => {
                 const words = [];
                 const reW = /\S+/g;
@@ -4424,7 +4444,7 @@
                 if (words.length <= splitWords) return 0;
 
                 const ends = [];
-                const reEnd = /[.!?…]+(?=\s|$)|\n/g;
+                const reEnd = /[.!?…]+(?=\s|$)|\r\n|[\n\r\v\f\x85\u2028\u2029]/g;
                 let mm;
                 while ((mm = reEnd.exec(seg))) {
                     const at = mm.index + mm[0].length;
@@ -4434,18 +4454,11 @@
 
                 const bounds = ends.map((at) => ({ at, n: words.filter((w) => w < at).length }));
 
-                let chosen = null;
-                for (const b of bounds) if (b.n <= splitWords) chosen = b;
-                if (chosen && chosen.n < 6) chosen = null;
-                if (!chosen) {
-                    for (const b of bounds) {
-                        if (b.n > splitWords) {
-                            chosen = b;
-                            break;
-                        }
-                    }
-                }
-                if (!chosen) chosen = bounds[bounds.length - 1];
+                const before = bounds.findLast((b) => b.n <= splitWords && b.n >= 6);
+                const after = bounds.find((b) => b.n > splitWords);
+                const chosen = splitAfter ? after : (before || after);
+                // Attendre la suite quand une coupure très courte peut encore être évitée.
+                if (!chosen) return 0;
 
                 let cut = chosen.at;
                 while (cut < seg.length && /\s/.test(seg[cut])) cut++;

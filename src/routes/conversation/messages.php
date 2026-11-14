@@ -352,11 +352,15 @@ if ($action === '' && $method === 'GET') {
             break;
         }
     }
+    $contactView = setting('ui_chat_list', 'threads') === 'contacts';
     $convs = db()->query(
-        'SELECT c.id, c.title, c.updated_at, c.unread, p.name AS persona_name, p.avatar AS persona_avatar
-             FROM conversations c JOIN personas p ON p.id = c.persona_id
-             ORDER BY c.pinned DESC, c.updated_at DESC LIMIT 30'
+        'SELECT c.id, c.persona_id, c.title, c.pinned, c.unread, p.name AS persona_name, p.avatar AS persona_avatar
+             FROM conversations c JOIN personas p ON p.id = c.persona_id ORDER BY ' . ($contactView
+            ? 'COALESCE((SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id AND m.role IN ("user", "assistant")
+                 ORDER BY m.id DESC LIMIT 1), c.created_at) DESC, c.id DESC'
+            : 'c.pinned DESC, c.updated_at DESC LIMIT 30')
     )->fetchAll();
+    $sideContacts = $contactView ? array_slice(chat_contacts($convs), 0, 30, true) : [];
 
     render('chat', [
         'title'     => $conv['title'],
@@ -370,7 +374,8 @@ if ($action === '' && $method === 'GET') {
         'personaMemories' => chat_persona_memories((int) $persona['id'], 12),
         'olderLeft' => max(0, $total - count($messages)),
         'convs'     => $convs,
-        'contactView' => setting('ui_chat_list', 'threads') === 'contacts',
+        'contactView' => $contactView,
+        'sideContacts' => $sideContacts,
         'personaPrompts' => $personaPrompts,
         'chatReady' => chat_llm_ready(),
         'chatModel' => chat_llm_config_raw()['model'],

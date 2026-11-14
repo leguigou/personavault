@@ -274,7 +274,8 @@ if ($action === 'stream' && $method === 'POST') {
         ? chat_split_points(
             (string) $res['content'],
             (int) setting('chat_split_words', '50'),
-            (int) setting('chat_split_max_bubbles', '2')
+            (int) setting('chat_split_max_bubbles', '2'),
+            setting('chat_split_position', 'before')
         )
         : [];
 

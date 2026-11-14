@@ -20,6 +20,22 @@ function chat_latest_conversation(int $personaId): int
     return (int) $stmt->fetchColumn();
 }
 
+/** Regroupe les fils par persona en conservant l'ordre d'activité de la requête. */
+function chat_contacts(array $conversations): array
+{
+    $contacts = [];
+    foreach ($conversations as $conv) {
+        $pid = (int) $conv['persona_id'];
+        $contacts[$pid] ??= ['latest' => $conv, 'threads' => [], 'pinned' => false, 'unread' => false];
+        $contacts[$pid]['threads'][] = $conv;
+        $contacts[$pid]['pinned'] = $contacts[$pid]['pinned'] || (int) $conv['pinned'] === 1;
+        $contacts[$pid]['unread'] = $contacts[$pid]['unread'] || (int) $conv['unread'] === 1;
+    }
+    // Tri stable : l'épinglage remonte le contact, sans changer le fil qui s'ouvre.
+    uasort($contacts, static fn (array $a, array $b): int => $b['pinned'] <=> $a['pinned']);
+    return $contacts;
+}
+
 function chat_create_conversation(array $persona, bool $resume = false): int
 {
     return db_tx(static function (PDO $pdo) use ($persona, $resume): int {
@@ -1428,11 +1444,10 @@ function persona_ai_directive(array $persona, array $prompts): array
 
 /**
  * Points de coupe d'une réponse en plusieurs bulles.
- * Chaque bulle vise $maxWords mots maximum, se termine sur une fin de phrase et
- * évite les bulles trop courtes (on préfère dépasser un peu que couper après 3 mots).
+ * Chaque bulle vise une fin de phrase au voisinage de $maxWords.
  * @return array<int,int> décalages en OCTETS dans le texte d'origine
  */
-function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2): array
+function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2, string $position = 'before'): array
 {
     $lead       = strlen($text) - strlen(ltrim($text)); // décalages rendus sur le texte d'origine
     $text       = trim($text);
@@ -1475,26 +1490,16 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2):
             break;
         }
 
-        $chosen = null;
+        $before = $after = null;
         foreach ($boundaries as $b) {
-            if ($b['words'] <= $maxWords) {
-                $chosen = $b; // dernière coupure sous la limite
+            if ($b['words'] > $maxWords) {
+                $after = $b;
+                break;
             }
+            $before = $b;
         }
-        if ($chosen && $chosen['words'] < 6) {
-            $chosen = null; // bulle minuscule : on accepte de dépasser un peu
-        }
-        if (!$chosen) {
-            foreach ($boundaries as $b) {
-                if ($b['words'] > $maxWords) {
-                    $chosen = $b;
-                    break;
-                }
-            }
-        }
-        if (!$chosen) {
-            $chosen = end($boundaries) ?: null;
-        }
+        $chosen = $position === 'after' ? $after
+            : (($before['words'] ?? 0) >= 6 ? $before : ($after ?? $before));
         if (!$chosen) {
             break;
         }
@@ -1518,11 +1523,11 @@ function chat_split_cuts(string $text, int $maxWords = 50, int $maxBubbles = 2):
 }
 
 /** Mêmes coupes, exprimées en points de code (stockage / rendu PHP). */
-function chat_split_points(string $text, int $maxWords = 50, int $maxBubbles = 2): array
+function chat_split_points(string $text, int $maxWords = 50, int $maxBubbles = 2, string $position = 'before'): array
 {
     return array_map(
         static fn (int $bytes): int => mb_strlen(substr($text, 0, $bytes)),
-        chat_split_cuts($text, $maxWords, $maxBubbles)
+        chat_split_cuts($text, $maxWords, $maxBubbles, $position)
     );
 }
 

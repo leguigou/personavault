@@ -11,11 +11,17 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
 <div class="chat-shell">
     <aside class="chat-side">
         <div class="chat-side-head">
-            <span><?= e(t('nav.chats')) ?></span>
+            <span><?= e(t($contactView ? 'settings.look.chat_contacts' : 'nav.chats')) ?></span>
             <a class="mini" href="/chat"><?= e(t('chat.side.all')) ?></a>
         </div>
-        <?php foreach ($convs as $c): ?>
-            <a class="chat-side-row <?= (int) $c['id'] === (int) $conv['id'] ? 'is-on' : '' ?>" href="/chat/<?= (int) $c['id'] ?>">
+        <?php
+        $sideRows = $contactView ? array_column($sideContacts, 'latest') : $convs;
+        foreach ($sideRows as $c):
+            $sideContact = $sideContacts[(int) $c['persona_id']] ?? null;
+            $active = $contactView ? (int) $c['persona_id'] === (int) $conv['persona_id'] : (int) $c['id'] === (int) $conv['id'];
+            $unread = $sideContact['unread'] ?? ((int) $c['unread'] === 1);
+        ?>
+            <a class="chat-side-row <?= $active ? 'is-on' : '' ?>" href="/chat/<?= (int) $c['id'] ?>">
                 <span class="chat-side-mono">
                     <?php if ($contactView && $c['persona_avatar']): ?>
                         <img src="<?= e(media_url((string) $c['persona_avatar'])) ?>" alt="">
@@ -24,15 +30,16 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                     <?php endif; ?>
                 </span>
                 <span class="chat-side-name">
-                    <?php if ((int) ($c['unread'] ?? 0) === 1): ?><span class="unread-dot" aria-label="<?= e(t('chat.unread')) ?>"></span><?php endif; ?>
+                    <?php if ($unread): ?><span class="unread-dot" aria-label="<?= e(t('chat.unread')) ?>"></span><?php endif; ?>
                     <?php if ($contactView): ?><strong><?= e((string) $c['persona_name']) ?></strong><?php endif; ?>
-                    <span data-side-title><?= e((string) $c['title']) ?></span>
+                    <span data-side-title="<?= (int) $c['id'] ?>"><?= e((string) $c['title']) ?></span>
                 </span>
             </a>
         <?php endforeach; ?>
     </aside>
 
     <section class="chat-main" id="chat" data-chat
+             data-conversation-id="<?= (int) $conv['id'] ?>"
              data-send="/chat/<?= (int) $conv['id'] ?>/send"
              data-compress="/chat/<?= (int) $conv['id'] ?>/compress"
              data-remember="/chat/<?= (int) $conv['id'] ?>/remember"
@@ -46,6 +53,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
              data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) === 1 && chat_title_mode() !== 'off' ? 1 : 0 ?>"
              data-split="<?= (string) setting('chat_split_enabled', '1') === '1' ? '1' : '0' ?>"
              data-split-words="<?= (int) setting('chat_split_words', '50') ?>"
+             data-split-position="<?= setting('chat_split_position', 'before') === 'after' ? 'after' : 'before' ?>"
              data-split-max="<?= (int) setting('chat_split_max_bubbles', '2') ?>"
              data-split-delay-min="<?= e((string) setting('chat_split_delay_min', '1')) ?>"
              data-split-delay-max="<?= e((string) setting('chat_split_delay_max', '2')) ?>"

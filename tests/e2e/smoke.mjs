@@ -215,20 +215,20 @@ await post('/settings/chat', { chat_provider: 'lmstudio', chat_base_url: `http:/
     chat_memory_threshold: '600', chat_memory_target: '300', chat_split_words: '50', chat_split_max_bubbles: '1',
     facts_frequency: 'each', chat_title_model: 'chat', chat_user_profile_enabled: '1', chat_user_profile: 'Je préfère les voyages en train.' });
 const profileSettings = await (await http('/settings')).text();
-expect(profileSettings.includes('name="chat_user_profile_enabled" value="1" checked')
-    && profileSettings.includes('Je préfère les voyages en train.'), 'la présentation globale est enregistrée et activée');
+expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
+    && profileSettings.includes('id="chat-user-profile-field" data-show-if="chat_user_profile_enabled=1">')
+    && profileSettings.includes('Je préfère les voyages en train.'), 'la présentation globale est enregistrée et affichée quand elle est activée');
 
 {
     const chatPost = (path, form = {}, options = {}) => http(path, { method: 'POST', form: { _token: csrf, ...form }, ...options });
     const details = await (await http('/p/camille-lefebvre')).text();
     expect(details.includes('href="/chat/1" aria-labelledby="act-chat"') && !details.includes('name="persona_id"'),
         'la fiche reprend la conversation et ne propose pas de créer un autre fil');
-    expect(!(await (await http('/chat')).text()).includes('class="conv-thread-title"'),
+    expect(!(await (await http('/chat')).text()).includes('class="conv-list contact-list"'),
         'la présentation par titre est active par défaut');
     await chatPost('/settings/ui', { ui_chat_list: 'contacts' });
-    const contacts = await (await http('/chat')).text();
-    expect(contacts.includes('class="conv-thread-title"') && contacts.includes('Camille Lefebvre</span></strong>')
-        && !contacts.includes('data-open-picker'), 'le carnet met le nom du persona en avant et conserve le titre du fil');
+    const saved = await (await http('/settings')).text();
+    expect(saved.includes('value="contacts" selected'), 'le mode carnet reste sélectionné après enregistrement');
 
     const remembered = await (await chatPost('/chat/1/remember')).json();
     expect(remembered.memories.some((memory) => memory.subject === 'story' && memory.content.includes('exposition à Lyon')),
@@ -254,11 +254,40 @@ expect(profileSettings.includes('name="chat_user_profile_enabled" value="1" chec
     const refreshed = await (await http('/p/camille-lefebvre')).text();
     expect(refreshed.includes(`href="${path}" aria-labelledby="act-chat"`),
         'la fiche reprend le nouveau fil lorsqu’il devient le plus récent');
+    await chatPost('/chat/1/pin', { pinned: '1' });
+    const contacts = await (await http('/chat')).text();
+    const camille = contacts.match(/<article[^>]*data-contact="1">([\s\S]*?)<\/article>/g) || [];
+    expect(camille.length === 1 && camille[0].includes('Camille Lefebvre</strong>')
+        && camille[0].includes(`class="conv-card contact-open" href="${path}"`)
+        && camille[0].includes('class="conv-card" href="/chat/1"')
+        && camille[0].includes(`class="conv-card" href="${path}"`) && !contacts.includes('data-open-picker'),
+        'le carnet regroupe les deux fils de Camille et ouvre le plus récent même si l’ancien est épinglé');
+    const sidebar = (await (await http('/chat/1')).text()).split('</aside>')[0];
+    expect((sidebar.match(/Camille Lefebvre<\/strong>/g) || []).length === 1 && sidebar.includes(`is-on" href="${path}"`),
+        'le carnet latéral affiche une seule entrée pour Camille même depuis son ancien fil');
     const privateChat = (await chatPost('/chat/1/new')).headers.get('location');
     await chatPost(privateChat + '/facts-toggle', { enabled: '0' });
     const privateOpening = await (await chatPost(privateChat + '/opening')).json();
     expect(!privateOpening.message.content.includes('Lisbonne') && !privateOpening.questions.some((q) => q.includes('Lyon')),
         'une ouverture sans souvenirs ne s’appuie ni sur les anciens fils ni sur l’histoire mémorisée');
+    const splitSettings = {
+        chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`, chat_model: 'fake-model',
+        chat_split_enabled: '1', chat_split_words: '15', chat_split_max_bubbles: '2',
+    };
+    for (const position of ['before', 'after']) {
+        await chatPost('/settings/chat', { ...splitSettings, chat_split_position: position });
+        const stream = await (await chatPost(privateChat + '/stream', { message: 'Test du seuil de découpage' })).text();
+        const reply = stream.split('\n').filter((line) => line.startsWith('data: '))
+            .map((line) => JSON.parse(line.slice(6))).find((event) => event.done)?.reply;
+        const expectedStart = position === 'after' ? 'Dernière phrase.' : 'suite suite';
+        expect(reply?.split_points?.length === 1 && reply.content.slice(reply.split_points[0]).startsWith(expectedStart),
+            'le flux enregistre le point de coupe choisi ' + position);
+    }
+    await chatPost('/settings/chat', {
+        ...splitSettings, chat_split_enabled: '', chat_split_words: '50', chat_split_max_bubbles: '1',
+        chat_memory_threshold: '600', chat_memory_target: '300', facts_frequency: 'each',
+        chat_title_model: 'chat', chat_user_profile_enabled: '1', chat_user_profile: 'Je préfère les voyages en train.',
+    });
     await chatPost('/settings/ui', { ui_chat_list: 'threads' });
 }
 

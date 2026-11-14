@@ -148,15 +148,16 @@ $facts = facts_settings();
 
         <section class="settings-card">
             <h3 class="settings-card-title"><?= e(t('settings.user_profile.title')) ?></h3>
+            <?php $profileEnabled = setting('chat_user_profile_enabled', '0') === '1'; ?>
             <label class="check">
-                <input type="checkbox" name="chat_user_profile_enabled" value="1" <?= setting('chat_user_profile_enabled', '0') === '1' ? 'checked' : '' ?>>
+                <input type="checkbox" name="chat_user_profile_enabled" value="1" aria-controls="chat-user-profile-field chat-user-profile-help" <?= $profileEnabled ? 'checked' : '' ?>>
                 <span><?= e(t('settings.user_profile.enable')) ?></span>
             </label>
-            <label class="field">
+            <label class="field" id="chat-user-profile-field" data-show-if="chat_user_profile_enabled=1"<?= $profileEnabled ? '' : ' hidden' ?>>
                 <span><?= e(t('settings.user_profile.label')) ?></span>
                 <textarea class="input" name="chat_user_profile" rows="3" maxlength="<?= CHAT_USER_PROFILE_MAX ?>" aria-describedby="chat-user-profile-help"><?= e(setting('chat_user_profile', '')) ?></textarea>
             </label>
-            <p class="hint" id="chat-user-profile-help"><?= e(t('settings.user_profile.help')) ?></p>
+            <p class="hint" id="chat-user-profile-help" data-show-if="chat_user_profile_enabled=1"<?= $profileEnabled ? '' : ' hidden' ?>><?= e(t('settings.user_profile.help')) ?></p>
         </section>
 
         <section class="settings-card">
@@ -265,12 +266,22 @@ $facts = facts_settings();
                 <span><?= e(t('settings.split.enable')) ?></span>
             </label>
 
-            <label class="field range-field">
-                <span><?= e(t('settings.split.words')) ?> <b data-out="words"><?= (int) setting('chat_split_words', '50') ?></b></span>
-                <input class="range" type="range" name="chat_split_words" min="15" max="120" step="5"
+            <?php
+            $splitPosition = setting('chat_split_position', 'before') === 'after' ? 'after' : 'before';
+            $splitLabels = ['before' => t('settings.split.before'), 'after' => t('settings.split.after')];
+            ?>
+            <div class="field range-field">
+                <label for="chat-split-words"><?= e(t('settings.split.words')) ?> <b data-out="words"><?= (int) setting('chat_split_words', '50') ?></b></label>
+                <input id="chat-split-words" class="range" type="range" name="chat_split_words" min="15" max="120" step="5" aria-describedby="chat-split-words-help"
                        value="<?= (int) setting('chat_split_words', '50') ?>" data-out="words">
-                <small><?= e(t('settings.split.words_help')) ?></small>
-            </label>
+                <input type="hidden" name="chat_split_position" value="<?= e($splitPosition) ?>">
+                <?php ob_start(); ?>
+                <button type="button" class="inline-choice" data-split-position-picker aria-haspopup="dialog"
+                        data-title="<?= e(t('settings.split.position')) ?>"
+                        data-before="<?= e($splitLabels['before']) ?>" data-after="<?= e($splitLabels['after']) ?>"><?= e($splitLabels[$splitPosition]) ?></button>
+                <?php $splitPicker = trim(ob_get_clean()); ?>
+                <small id="chat-split-words-help"><?= t_html('settings.split.words_help', ['position' => $splitPicker]) ?></small>
+            </div>
 
             <label class="field range-field">
                 <span><?= e(t('settings.split.bubbles')) ?> <b data-out="bubbles"><?= (int) setting('chat_split_max_bubbles', '2') ?></b></span>
@@ -611,6 +622,7 @@ $facts = facts_settings();
                     <?php endforeach; ?>
                 </select>
             </div>
+            <small><?= e(t('settings.look.chat_list_help')) ?></small>
         </div>
 
         <div class="ui-preview" data-ui-preview aria-label="<?= e(t('settings.look.preview')) ?>">
