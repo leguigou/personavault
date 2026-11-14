@@ -78,7 +78,7 @@ function klipy_search_media(string $format, string $mood, string $key, array $se
 /** Les demandes explicites utilisent des mots-clés prédéfinis, sans transmettre le message à KLIPY. */
 function klipy_requested_media(string $message): ?array
 {
-    if (!preg_match('/(?:^\s*(?:\/|(?:un|a)\s+)|\b(?:envoie[z]?|montre[z]?|trouve[z]?|cherche[z]?|ajoute[z]?|affiche[z]?|partage[z]?|donne[z]?|send|show|veux|voudrais)\b[^.!?\n]{0,80}?\s)(gif|sticker|clip)\b/iu', $message, $match)) {
+    if (!preg_match('/(?:^\s*(?:\/|(?:un|a)\s+(?:petit\s+)?)|\b(?:envoi(?:e[sz]?|yer)|montr(?:e[sz]?|er)|trouv(?:e[sz]?|er)|cherch(?:e[sz]?|er)|ajout(?:e[sz]?|er)|affich(?:e[sz]?|er)|partag(?:e[sz]?|er)|donn(?:e[sz]?|er)|send|show|veux|voudrais)\b[^.!?\n]{0,80}?\s)(gif|sticker|clip)\b/iu', $message, $match)) {
         return null;
     }
     $mood = match (true) {
