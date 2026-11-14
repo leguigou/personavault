@@ -427,7 +427,7 @@
     /* copie dans le presse-papiers + retour visuel : un bouton icône montre ✓ un instant,
        un bouton texte affiche « Copié » */
     const CHECK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4.5 4.5L19 6.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    const copyText = async (text, btn) => {
+    const copyText = async (text, btn, feedback = tr("copy.toast")) => {
         text = String(text).trim();
         try {
             await navigator.clipboard.writeText(text);
@@ -439,7 +439,7 @@
             document.execCommand("copy");
             ta.remove();
         }
-        toast(tr("copy.toast"));
+        toast(feedback);
         if (!btn || btn.dataset.copying === "1") return;
         btn.dataset.copying = "1";
         const icon = btn.querySelector("svg");
@@ -1911,7 +1911,7 @@
         });
         document.addEventListener("keydown", (e) => {
             const img = e.target.closest?.("[data-full]");
-            if (img && lb.hidden && (e.key === "Enter" || e.key === " ")) {
+            if (img && lb.hidden && !e.defaultPrevented && (e.key === "Enter" || e.key === " ")) {
                 e.preventDefault();
                 open(img);
                 return;
@@ -2928,6 +2928,7 @@
                 item.appendChild(b);
                 holder.appendChild(item);
                 if (wrap.dataset.msgId && m.role === "assistant" && !b.hidden) prepareReactionBubble(b);
+                if (wrap.dataset.msgId && m.role === "user") prepareUserBubble(b.hidden ? img : b);
                 paintReaction(item, m.bubble_reactions?.[i] ?? (i === 0 ? m.reaction : ""), m.role === "assistant");
             });
             wrap.appendChild(holder);
@@ -3791,6 +3792,8 @@
         const editUrl   = endpoint.replace(/\/send$/, "/msg-edit");
 
         const ICONS = {
+            copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+            select: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6m-6 4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
             regen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
             edit:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
             del:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9.5 7V5h5v2M7.5 7l.8 12h7.4l.8-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -3810,21 +3813,49 @@
         };
 
         const reactions = JSON.parse(chat.dataset.reactions || "{}");
+        const reactionUsageKey = "pv_reaction_usage";
+        let reactionUsageInMemory = {};
+        let reactionUsageStorageFailed = false;
+        const readReactionUsage = () => {
+            if (reactionUsageStorageFailed) return reactionUsageInMemory;
+            try {
+                const stored = JSON.parse(localStorage.getItem(reactionUsageKey));
+                if (stored && typeof stored === "object" && !Array.isArray(stored)) return stored;
+            } catch {
+                // Le classement reste disponible pour la page si le stockage est bloqué.
+            }
+            return reactionUsageInMemory;
+        };
+        const recordReactionUse = (key) => {
+            const usage = readReactionUsage();
+            usage[key] = { count: (usage[key]?.count || 0) + 1, lastUsed: Date.now() };
+            reactionUsageInMemory = usage;
+            try {
+                localStorage.setItem(reactionUsageKey, JSON.stringify(usage));
+            } catch {
+                reactionUsageStorageFailed = true;
+            }
+        };
         const reactionUrl = endpoint.replace(/\/send$/, "/react");
         const reactionQueue = new Map();
+        const reactionPopover = document.createElement("div");
+        reactionPopover.id = "message-reactions";
+        reactionPopover.className = "reaction-popover";
+        reactionPopover.hidden = true;
         const picker = document.createElement("div");
-        picker.id = "message-reactions";
         picker.className = "reaction-picker";
-        picker.hidden = true;
         picker.setAttribute("role", "group");
         picker.setAttribute("aria-label", tr("chat.reactions"));
-        document.body.appendChild(picker);
+        const actions = document.createElement("div");
+        actions.className = "reaction-actions";
+        reactionPopover.append(picker, actions);
+        document.body.appendChild(reactionPopover);
         let reactionAnchor = null;
         let reactionBubble = null;
         let reactionPoint = null;
 
         const closeReactions = (restoreFocus = false) => {
-            picker.hidden = true;
+            reactionPopover.hidden = true;
             reactionAnchor?.setAttribute("aria-expanded", "false");
             if (restoreFocus) reactionAnchor?.focus({ preventScroll: true });
             reactionAnchor = null;
@@ -3835,7 +3866,7 @@
         const reactionTrigger = (anchor) => {
             anchor.dataset.react = "1";
             anchor.setAttribute("aria-expanded", "false");
-            anchor.setAttribute("aria-controls", picker.id);
+            anchor.setAttribute("aria-controls", reactionPopover.id);
         };
 
         const prepareReactionBubble = (bubble) => {
@@ -3845,7 +3876,7 @@
             bubble.setAttribute("aria-description", tr("chat.react"));
         };
 
-        const paintReaction = (item, key, bot) => {
+        const paintReaction = (item, key, bot, animate = false) => {
             item.dataset.reaction = Object.hasOwn(reactions, key) ? key : "";
             const oldChip = item.querySelector(".msg-reaction-chip");
             const focused = oldChip === document.activeElement;
@@ -3870,6 +3901,10 @@
             const emoji = document.createElement("span");
             emoji.textContent = reactions[key].emoji;
             emoji.setAttribute("aria-hidden", "true");
+            if (animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                emoji.dataset.reactionAnimation = key;
+                emoji.addEventListener("animationend", () => { delete emoji.dataset.reactionAnimation; }, { once: true });
+            }
             chip.appendChild(emoji);
             if (!bot && avatarHTML) {
                 const avatar = document.createElement("span");
@@ -3893,7 +3928,7 @@
         };
 
         const positionReactions = () => {
-            if (picker.hidden) return;
+            if (reactionPopover.hidden) return;
             const bounds = scroll.getBoundingClientRect();
             const anchor = reactionAnchor.getBoundingClientRect();
             const y = anchor.top + Math.min(reactionPoint.y, anchor.height);
@@ -3906,16 +3941,20 @@
                 closeReactions();
                 return;
             }
-            picker.style.maxHeight = `${bottom - top}px`;
-            const { width, height } = picker.getBoundingClientRect();
+            reactionPopover.style.maxHeight = `${bottom - top}px`;
+            const { width, height } = reactionPopover.getBoundingClientRect();
             const x = anchor.left + Math.min(reactionPoint.x, anchor.width);
-            picker.style.left = Math.max(left + 8, Math.min(x - width / 2, right - width - 8)) + "px";
+            reactionPopover.style.left = Math.max(left + 8, Math.min(x - width / 2, right - width - 8)) + "px";
             const offset = y - top >= height + 8 || y - top >= bottom - y ? y - height - 8 : y + 8;
-            picker.style.top = Math.max(top, Math.min(offset, bottom - height)) + "px";
+            reactionPopover.style.top = Math.max(top, Math.min(offset, bottom - height)) + "px";
         };
 
         const showReactions = (expanded = false) => {
-            const entries = Object.entries(reactions);
+            const usage = readReactionUsage();
+            const entries = Object.entries(reactions).sort(([a], [b]) =>
+                (usage[b]?.count || 0) - (usage[a]?.count || 0)
+                || (usage[b]?.lastUsed || 0) - (usage[a]?.lastUsed || 0)
+            );
             picker.replaceChildren();
             picker.classList.toggle("is-expanded", expanded);
             for (const [key, { emoji, label }] of expanded ? entries : entries.slice(0, 6)) {
@@ -3933,14 +3972,12 @@
                 picker.appendChild(more);
             }
             const msg = reactionBubble.closest(".msg-bot");
-            const actions = document.createElement("div");
-            actions.className = "reaction-actions";
+            actions.replaceChildren();
             if (lastReply() === msg && scroll.querySelector(".msg-user[data-msg-id]")) {
                 actions.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
             }
             actions.appendChild(toolBtn("del", ICONS.del, tr("chat.delete")));
-            picker.appendChild(actions);
-            picker.hidden = false;
+            reactionPopover.hidden = false;
             positionReactions();
             (picker.querySelector('[aria-pressed="true"]') || picker.firstElementChild)?.focus({ preventScroll: true });
         };
@@ -3959,7 +3996,8 @@
                 const response = await fetch(reactionUrl, { method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" } });
                 const data = await response.json();
                 if (!data.ok) throw new Error(data.error || tr("chat.reaction_error"));
-                paintReaction(item, data.reaction, true);
+                if (data.reaction) recordReactionUse(data.reaction);
+                paintReaction(item, data.reaction, true, true);
                 if (!data.reaction) reactionQueue.delete(queueKey);
                 if (data.reply) {
                     reactionQueue.set(queueKey, { mid, version, bubble, key: data.reaction, revision: data.revision });
@@ -3972,7 +4010,7 @@
             }
         };
 
-        picker.addEventListener("click", (event) => {
+        reactionPopover.addEventListener("click", (event) => {
             event.stopPropagation();
             if (!reactionBubble) return;
             const option = event.target.closest("[data-reaction-option]");
@@ -3995,7 +4033,7 @@
             if (!event.target.closest("[data-react]")) closeReactions();
         });
         document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape" && !picker.hidden) closeReactions(true);
+            if (event.key === "Escape" && !reactionPopover.hidden) closeReactions(true);
         });
         scroll.addEventListener("scroll", positionReactions, { passive: true });
         window.addEventListener("resize", positionReactions);
@@ -4035,18 +4073,9 @@
         const showReplyTime = (msg) => {
             const bubbles = msg.querySelector(".bubbles");
             if (!bubbles || bubbles.querySelector(".msg-time")) return;
-            scroll.querySelectorAll(".msg-tools, .bubbles > .msg-time").forEach((el) => el.remove());
+            scroll.querySelectorAll(".bubbles > .msg-time").forEach((el) => el.remove());
             const time = messageTime(msg);
             if (time) bubbles.appendChild(time);
-        };
-
-        const buildUserTools = (msg) => {
-            const tools = document.createElement("div");
-            tools.className = "msg-tools";
-            const time = messageTime(msg);
-            if (time) tools.appendChild(time);
-            tools.append(toolBtn("edit", ICONS.edit, tr("chat.edit")), toolBtn("del", ICONS.del, tr("chat.delete")));
-            return tools;
         };
 
         /* idées de premier message : remplit la zone de saisie (sans envoyer) */
@@ -4148,7 +4177,6 @@
                 (d.deleted || []).forEach((mid) => {
                     scroll.querySelector('[data-msg-id="' + mid + '"]')?.remove();
                 });
-                scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
                 paintVersions();
                 loadStatus();
             } catch (e) {
@@ -4156,23 +4184,22 @@
             }
         };
 
+        const messageText = (msg) => [...msg.querySelectorAll(".bubble")]
+            .map((bubble) => bubble.textContent.trim()).join("\n\n").trim();
+
         const startEdit = (el) => {
             if (el.dataset.editing === "1") return;
             const id = el.dataset.msgId;
             const block = el.querySelector(".bubbles");
             if (!id || !block) return;
 
-            const full = [...el.querySelectorAll(".bubble")]
-                .map((b) => b.textContent.trim())
-                .join("\n\n");
-
             const editor = document.createElement("div");
             editor.className = "msg-edit";
 
             const ta = document.createElement("textarea");
             ta.className = "input";
-            ta.value = full;
-            ta.rows = Math.min(9, Math.max(3, Math.ceil(full.length / 42)));
+            ta.value = messageText(el);
+            ta.rows = Math.min(9, Math.max(3, Math.ceil(ta.value.length / 42)));
 
             const actions = document.createElement("div");
             actions.className = "msg-edit-actions";
@@ -4185,7 +4212,6 @@
             el._editBackup = block;
             block.replaceWith(editor);
             el.dataset.editing = "1";
-            el.querySelectorAll(".msg-tools").forEach((t) => t.remove());
             ta.focus();
             ta.setSelectionRange(ta.value.length, ta.value.length);
         };
@@ -4241,12 +4267,158 @@
 
         const regenerate = (msg) => {
             if (busy || msg !== lastReply() || msg.querySelector(".bubble")?.textContent === "") return;
-            scroll.querySelectorAll(".msg-tools").forEach((t) => t.remove());
             send(null, "auto", false, true, null, Number(msg.dataset.msgId));
         };
 
+        const messageMenu = document.createElement("div");
+        messageMenu.id = "own-message-actions";
+        messageMenu.className = "message-menu";
+        messageMenu.hidden = true;
+        messageMenu.setAttribute("role", "group");
+        messageMenu.setAttribute("aria-label", tr("chat.message_actions"));
+        document.body.appendChild(messageMenu);
+        let menuAnchor = null;
+        let press = null;
+        let heldPointer = null;
+
+        const prepareUserBubble = (bubble) => {
+            bubble.dataset.messageMenu = "";
+            bubble.tabIndex = 0;
+            bubble.setAttribute("aria-controls", messageMenu.id);
+            bubble.setAttribute("aria-description", tr("chat.message_actions"));
+            bubble.setAttribute("aria-expanded", "false");
+        };
+        scroll.querySelectorAll(".msg-user[data-msg-id] .bubble:not([hidden]), .msg-user[data-msg-id] .msg-bubble > .bubble-img")
+            .forEach(prepareUserBubble);
+
+        const closeMessageMenu = (restoreFocus = false) => {
+            messageMenu.hidden = true;
+            menuAnchor?.setAttribute("aria-expanded", "false");
+            if (restoreFocus) menuAnchor?.focus({ preventScroll: true });
+            menuAnchor = null;
+        };
+
+        const openMessageMenu = (anchor, x, y) => {
+            const msg = anchor.closest(".msg-user[data-msg-id]");
+            if (!msg?.isConnected || msg.dataset.editing === "1") return;
+            closeReactions();
+            closeMessageMenu();
+            menuAnchor = anchor;
+            anchor.setAttribute("aria-expanded", "true");
+            messageMenu.replaceChildren();
+            const time = messageTime(msg);
+            if (time) messageMenu.appendChild(time);
+
+            const addAction = (kind, label, run) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "action-row" + (kind === "del" ? " is-danger" : "");
+                button.innerHTML = ICONS[kind];
+                button.append(label);
+                button.addEventListener("click", () => {
+                    closeMessageMenu(true);
+                    if (msg.isConnected) run();
+                });
+                messageMenu.appendChild(button);
+            };
+            const content = messageText(msg);
+            if (content) {
+                addAction("copy", tr("chat.copy_message"), () => copyText(content, null, tr("chat.message_copied")));
+                addAction("select", tr("chat.select_text"), () => {
+                    const bubbles = [...msg.querySelectorAll(".bubble:not([hidden])")];
+                    scroll.querySelector(".msg.is-selecting-text")?.classList.remove("is-selecting-text");
+                    msg.classList.add("is-selecting-text");
+                    const range = document.createRange();
+                    range.setStartBefore(bubbles[0]);
+                    range.setEndAfter(bubbles.at(-1));
+                    const selection = window.getSelection();
+                    if (!selection) return;
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                });
+            }
+            addAction("edit", tr("chat.edit"), () => startEdit(msg));
+            addAction("del", tr("chat.delete"), () => removeMsg(msg.dataset.msgId));
+
+            const visual = window.visualViewport;
+            const left = (visual?.offsetLeft ?? 0) + 8;
+            const top = (visual?.offsetTop ?? 0) + 8;
+            const right = left + (visual?.width ?? document.documentElement.clientWidth) - 16;
+            const bottom = top + (visual?.height ?? window.innerHeight) - 16;
+            messageMenu.style.maxHeight = `${bottom - top}px`;
+            messageMenu.hidden = false;
+            const { width, height } = messageMenu.getBoundingClientRect();
+            messageMenu.style.left = `${Math.max(left, Math.min(x - 20, right - width))}px`;
+            messageMenu.style.top = `${Math.max(top, Math.min(y + 8, bottom - height))}px`;
+            messageMenu.querySelector("button")?.focus({ preventScroll: true });
+        };
+
+        const cancelPress = () => {
+            clearTimeout(press?.timer);
+            press = null;
+        };
+        scroll.addEventListener("pointerdown", (event) => {
+            const anchor = event.target.closest("[data-message-menu]");
+            if (!anchor || anchor.closest(".is-selecting-text") || !event.isPrimary || event.button !== 0) return;
+            cancelPress();
+            const { pointerId, clientX: x, clientY: y } = event;
+            press = { pointerId, x, y, timer: setTimeout(() => {
+                press = null;
+                heldPointer = pointerId;
+                openMessageMenu(anchor, x, y);
+            }, 480) };
+        });
+        document.addEventListener("pointerdown", (event) => {
+            heldPointer = null;
+            const selecting = scroll.querySelector(".msg.is-selecting-text");
+            if (selecting && !selecting.contains(event.target)) selecting.classList.remove("is-selecting-text");
+            if (!messageMenu.contains(event.target)) closeMessageMenu();
+        }, true);
+        document.addEventListener("selectionchange", () => {
+            if (window.getSelection()?.isCollapsed) {
+                scroll.querySelector(".msg.is-selecting-text")?.classList.remove("is-selecting-text");
+            }
+        });
+        document.addEventListener("pointermove", (event) => {
+            if (press?.pointerId === event.pointerId && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10) cancelPress();
+        });
+        for (const type of ["pointerup", "pointercancel"]) {
+            document.addEventListener(type, (event) => {
+                if (press?.pointerId === event.pointerId) cancelPress();
+            });
+        }
+        document.addEventListener("click", (event) => {
+            if (heldPointer === null || event.detail === 0) return;
+            heldPointer = null;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
+        scroll.addEventListener("contextmenu", (event) => {
+            const anchor = event.target.closest("[data-message-menu]");
+            if (!anchor || anchor.closest(".is-selecting-text")) return;
+            event.preventDefault();
+            if (heldPointer !== null) return;
+            if (press) heldPointer = press.pointerId;
+            cancelPress();
+            const rect = anchor.getBoundingClientRect();
+            openMessageMenu(anchor, event.clientX || rect.right, event.clientY || rect.top);
+        });
+        scroll.addEventListener("scroll", () => {
+            cancelPress();
+            closeMessageMenu();
+        }, { passive: true });
+        window.addEventListener("resize", () => closeMessageMenu());
+        window.visualViewport?.addEventListener("resize", () => closeMessageMenu());
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && !messageMenu.hidden) closeMessageMenu(true);
+        });
+
         scroll.addEventListener("keydown", (event) => {
-            if (event.target.matches(".bubble[data-react]") && ["Enter", " "].includes(event.key)) {
+            if (event.target.matches("[data-message-menu]") && ["Enter", " ", "ContextMenu"].includes(event.key)) {
+                event.preventDefault();
+                const rect = event.target.getBoundingClientRect();
+                openMessageMenu(event.target, rect.right, rect.top);
+            } else if (event.target.matches(".bubble[data-react]") && ["Enter", " "].includes(event.key)) {
                 event.preventDefault();
                 if (!event.repeat) event.target.click();
             }
@@ -4273,25 +4445,11 @@
                 }
                 return;
             }
-            const del = e.target.closest("[data-del]");
-            if (del) {
-                e.stopPropagation();
-                const el = del.closest(".msg");
-                if (el) removeMsg(el.dataset.msgId);
-                return;
-            }
             const verBtn = e.target.closest("[data-ver-dir]");
             if (verBtn) {
                 e.stopPropagation();
                 const el = verBtn.closest(".msg");
                 if (el) switchVersion(el, Number(verBtn.dataset.verDir));
-                return;
-            }
-            const editBtn = e.target.closest("[data-edit]");
-            if (editBtn) {
-                e.stopPropagation();
-                const el = editBtn.closest(".msg");
-                if (el) startEdit(el);
                 return;
             }
             const saveBtn = e.target.closest("[data-save]");
@@ -4313,17 +4471,6 @@
                 return;
             }
 
-            const msg = e.target.closest(".msg-user[data-msg-id]");
-            if (!msg || msg.dataset.editing === "1") return;
-
-            if (msg.querySelector(".msg-tools")) {
-                msg.querySelector(".msg-tools").remove();
-                return;
-            }
-            scroll.querySelectorAll(".msg-tools, .bubbles > .msg-time").forEach((el) => el.remove());
-            const tools = buildUserTools(msg);
-            msg.appendChild(tools);
-            setTimeout(() => tools.scrollIntoView({ block: "nearest", behavior: "smooth" }), 40);
         });
 
         const SEND_SVG = sendBtn.innerHTML;

@@ -31,7 +31,7 @@ if ($action === '' && $method === 'POST') {
     $aiCtx    = max(2048, min(131072, (int) ($_POST['context_window'] ?? 8192)));
     $aiDirect = trim((string) ($_POST['directive'] ?? ''));
 
-    $stmt = db()->prepare('UPDATE personas SET slug=?, name=?, tagline=?, description=?, avatar=?, tags=?, meta=?, model=?, temperature=?, max_tokens=?, context_window=?, directive=?, updated_at=datetime("now") WHERE id=?');
+    $stmt = db()->prepare('UPDATE personas SET slug=?, name=?, tagline=?, description=?, avatar=?, tags=?, meta=?, model=?, temperature=?, max_tokens=?, context_window=?, directive=?, reasoning_effort=?, updated_at=datetime("now") WHERE id=?');
     $stmt->execute([
         $newSlug,
         $name,
@@ -45,6 +45,7 @@ if ($action === '' && $method === 'POST') {
         $aiMax,
         $aiCtx,
         $aiDirect,
+        chat_reasoning_effort($_POST['reasoning_effort'] ?? $persona['reasoning_effort']),
         $pid,
     ]);
     if ((string) $avatar !== (string) $persona['avatar']) {

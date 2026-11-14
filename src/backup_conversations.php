@@ -249,7 +249,10 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 'opening_questions' => '',
                 'created_at' => $now, 'updated_at' => $now,
             ]);
-            $cid = backup_insert_row($pdo, 'conversations', $fields + ['persona_id' => $personaId]);
+            $cid = backup_insert_row($pdo, 'conversations', $fields + [
+                'persona_id' => $personaId,
+                'reasoning_effort' => chat_reasoning_effort($conversation['reasoning_effort'] ?? ''),
+            ]);
             $messageIds = [];
             $assistantIds = [];
             $userIds = [];

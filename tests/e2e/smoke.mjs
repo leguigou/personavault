@@ -534,6 +534,21 @@ await record('POST /backup/import', zipImport);
 const restoredSettings = await (await http('/settings')).text();
 expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \([1-9]\d*\)/.test(restoredSettings),
     'la restauration ZIP affiche le nombre de discussions, messages et souvenirs importés');
+{
+    const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });
+    const turn = async (id, level) => {
+        const response = await submit(`/chat/${id}/stream`, { message: 'Test du réglage de réflexion' });
+        return (await response.text()).includes(`Niveau reçu : ${level}.`);
+    };
+    await submit('/p/camille-lefebvre', { name: 'Camille Lefebvre', reasoning_effort: 'medium' });
+    expect(await turn(1, 'medium'), 'la discussion hérite du niveau de réflexion du persona');
+    await submit('/chat/1/reasoning', { reasoning_effort: 'high' });
+    expect(await turn(1, 'high'), 'la discussion peut augmenter son niveau de réflexion');
+    await submit('/chat/1/reasoning', { reasoning_effort: 'none' });
+    expect(await turn(1, 'none'), 'la discussion peut désactiver la réflexion du persona');
+    await submit('/chat/1/reasoning', { reasoning_effort: '' });
+    expect(await turn(1, 'medium') && await turn(2, 'none'), 'le retour à l’héritage respecte les autres personas');
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 
