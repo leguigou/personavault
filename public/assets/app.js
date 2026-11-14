@@ -4614,14 +4614,19 @@
         });
         attachPreview?.querySelector("[data-attach-remove]")?.addEventListener("click", clearAttach);
 
-        const processChatQueue = async () => {
+        const paintQueueStatus = () => {
             const count = chatQueue.length;
-            queueStatus.hidden = count === 0;
-            queueStatus.textContent = count ? tr("chat.pending_actions", { count }) : "";
-            if (busy || opening || processingQueue || fbModal?.hidden === false || (!count && !maintenancePending)) return;
+            queueStatus.hidden = count < 2;
+            queueStatus.textContent = count >= 2 ? tr("chat.pending_actions", { count }) : "";
+        };
+
+        const processChatQueue = async () => {
+            paintQueueStatus();
+            if (busy || opening || processingQueue || fbModal?.hidden === false || (!chatQueue.length && !maintenancePending)) return;
             processingQueue = true;
             try {
                 const next = chatQueue.shift();
+                paintQueueStatus();
                 if (next?.item) {
                     const reaction = await saveReaction(next);
                     if (reaction) await send(null, "auto", false, false, null, null, reaction);
