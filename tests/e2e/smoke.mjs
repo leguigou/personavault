@@ -568,7 +568,9 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(animated?.gif_url === gifUrl, 'le GIF KLIPY accompagne la réponse en direct');
     expect((await (await http('/chat/1')).text()).includes(gifUrl), 'le GIF est restauré au rechargement');
     expect((await celebrate())?.gif_url === '', 'les GIF spontanés sont espacés');
-    expect(!(await (await http('/settings')).text()).includes('test-gif-key'), 'la clé KLIPY reste côté serveur');
+    const settings = await (await http('/settings')).text();
+    expect(settings.includes('test********-key') && !settings.includes('test-gif-key'),
+        'la clé KLIPY est identifiable sans exposer sa valeur complète');
 }
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));

@@ -252,13 +252,21 @@ $facts = facts_settings();
         </section>
 
         <section class="settings-card">
+            <?php
+            $klipyKey = setting('klipy_api_key');
+            $visible = min(4, intdiv(max(0, mb_strlen($klipyKey) - 4), 2));
+            $maskedKlipyKey = $visible > 0 ? mb_substr($klipyKey, 0, $visible) . '********' . mb_substr($klipyKey, -$visible) : '********';
+            ?>
             <label class="field">
                 <span><?= e(t('settings.chat.klipy_key')) ?></span>
                 <input class="input" type="password" name="klipy_api_key" maxlength="255" autocomplete="new-password" spellcheck="false"
-                       placeholder="<?= setting('klipy_api_key') !== '' ? e(t('settings.ia.api_key_keep')) : '' ?>">
+                       placeholder="<?= e($klipyKey !== '' ? $maskedKlipyKey : t('settings.chat.klipy_empty')) ?>">
+                <?php if ($klipyKey !== ''): ?>
+                    <small><?= e(t('settings.chat.klipy_saved')) ?> <code><?= e($maskedKlipyKey) ?></code></small>
+                <?php endif; ?>
                 <small><?= e(t('settings.chat.klipy_help')) ?></small>
             </label>
-            <?php if (setting('klipy_api_key') !== ''): ?>
+            <?php if ($klipyKey !== ''): ?>
                 <label class="check"><input type="checkbox" name="klipy_api_key_clear" value="1"><span><?= e(t('settings.chat.klipy_clear')) ?></span></label>
             <?php endif; ?>
         </section>
