@@ -1050,19 +1050,20 @@
             ["source", tr("assist.f.source")], ["name", tr("assist.f.name")], ["tagline", tr("assist.f.tagline")],
             ["description", tr("assist.f.description")], ["meta", tr("assist.f.meta")], ["looks", tr("assist.f.looks")],
             ["history", tr("assist.f.history")], ["family", tr("assist.f.family")],
-            ["friends", tr("assist.f.friends")], ["goals", tr("assist.f.goals")],
+            ["friends", tr("assist.f.friends")], ["work", tr("assist.f.work")], ["goals", tr("assist.f.goals")],
             ["style", tr("assist.f.style")], ["personality", tr("assist.f.personality")], ["voice", tr("assist.f.voice")],
             ["relation", tr("assist.f.relation")], ["rules", tr("assist.f.rules")], ["tags", tr("assist.f.tags")],
         ];
         const paintFiche = () => {
             const d = state.draft || {};
-            const pct = state.progress.percent || 0;
+            const progress = state.progress;
+            const pct = progress.percent || 0;
             asRoot.querySelector("[data-as-name]").textContent = d.name ? d.name + (d.tagline ? " · " + d.tagline : "") : tr("assist.unnamed");
             asRoot.querySelector("[data-as-pct]").textContent = pct + " %";
             asRoot.querySelector("[data-as-bar]").style.width = pct + "%";
             // étapes
-            const items = state.progress.items || [];
-            const next = items.findIndex((it) => !it.done && !it.auto);
+            const items = progress.items || [];
+            const next = items.findIndex((it) => it.key === state.topic && !it.done);
             const ol = asRoot.querySelector("[data-as-steps]");
             ol.replaceChildren(...items.map((it, i) => {
                 const li = el("li", it.done ? "is-done" : i === next ? "is-now" : it.auto ? "is-auto" : "");
@@ -1139,16 +1140,25 @@
                 b.addEventListener("click", () => answer(c));
                 return b;
             });
-            const sug = el("button", "as-chip is-suggest", tr("assist.suggest"));
-            sug.type = "button";
-            sug.addEventListener("click", suggest);
-            list.unshift(sug);
-            asRoot.querySelector("[data-as-create]").disabled = Boolean(state.pendingCanon);
-            if (state.history.length > 1 && !state.pendingCanon) {
+            if (!state.ready && !state.paused) {
+                const sug = el("button", "as-chip is-suggest", tr("assist.suggest"));
+                sug.type = "button";
+                sug.addEventListener("click", suggest);
+                list.unshift(sug);
+            }
+            asRoot.querySelector("[data-as-create]").disabled = busy || Boolean(state.pendingCanon);
+            if ((state.history.length > 1 || state.ready) && !state.pendingCanon) {
                 const now = el("button", "as-chip is-now", isNew ? tr("assist.create_now") : tr("assist.apply_now"));
                 now.type = "button";
                 now.addEventListener("click", openReview);
-                list.push(now);
+                if (state.ready || state.paused) list.unshift(now);
+                else list.push(now);
+            }
+            if (state.paused) {
+                const resume = el("button", "as-chip", tr("assist.resume_questions"));
+                resume.type = "button";
+                resume.addEventListener("click", () => turn("start"));
+                list.push(resume);
             }
             chipsEl.replaceChildren(...list);
             chipsEl.scrollLeft = 0;
@@ -1179,11 +1189,20 @@
                 const r = await post("/assist/turn", {
                     draft: state.draft, history: state.history, action, answer: text,
                     pending_canon: state.pendingCanon || null,
+                    focus: state.topic || "", stalls: String(state.stalls || 0),
                 });
-                if (JSON.stringify(state.draft) !== JSON.stringify(r.draft)) state.review = null;
+                if (action !== "start" || JSON.stringify(state.draft) !== JSON.stringify(r.draft)) {
+                    state.review = null;
+                    state.reviewProgress = null;
+                }
                 state.draft = r.draft;
                 state.progress = r.progress;
-                if (!r.review) state.choices = r.choices || [];
+                state.choices = r.choices || [];
+                state.ready = r.ready === true;
+                state.paused = r.paused === true;
+                state.topic = r.topic || "";
+                state.conflict = r.conflict || "";
+                state.stalls = r.stalls || 0;
                 state.pendingCanon = r.pending_canon || null;
                 const said = [r.reply, r.question].filter(Boolean).join("\n\n");
                 if (said) state.history.push({ role: "assistant", content: said });
@@ -1206,6 +1225,7 @@
             if (!text || busy) return;
             state.history.push({ role: "user", content: text });
             pushMsg({ role: "user", text });
+            save();
             input.value = "";
             autosize();
             turn("reply", text);
@@ -1214,6 +1234,7 @@
             if (busy) return;
             state.history.push({ role: "user", content: tr("assist.suggest_said") });
             pushMsg({ role: "user", text: tr("assist.suggest_said"), kind: "suggest" });
+            save();
             turn("suggest");
         }
         const reviewLabels = new Map([
@@ -1227,8 +1248,9 @@
                 busy = true;
                 finalEl.hidden = false;
                 try {
-                    const r = await post("/assist/preview", { draft: state.draft });
+                    const r = await post("/assist/preview", { draft: state.draft, history: state.history });
                     state.review = r.fields;
+                    state.reviewProgress = r.progress;
                     save();
                 } catch (err) {
                     toast({ title: tr("assist.failed"), text: err.message }, true);
@@ -1242,7 +1264,7 @@
             for (const [key, label] of reviewLabels) {
                 if (!Object.hasOwn(state.review, key)) continue;
                 const field = el("label", "as-review-field");
-                const profileField = ["history", "family", "friends", "goals", "personality"].includes(key);
+                const profileField = ["history", "family", "friends", "work", "goals", "personality"].includes(key);
                 const multiline = profileField || ["description", "meta", "system_prompt", "image_prompt"].includes(key);
                 const control = el(multiline ? "textarea" : "input", "input");
                 if (multiline) control.rows = key.endsWith("_prompt") ? 6 : 3;
@@ -1255,6 +1277,9 @@
                 rows.push(field);
             }
             reviewFields.replaceChildren(...rows);
+            const coverage = review.querySelector("[data-as-review-progress]");
+            coverage.hidden = !state.reviewProgress;
+            if (state.reviewProgress) coverage.textContent = tr("assist.review_progress", { percent: state.reviewProgress.percent });
             reviewError.hidden = true;
             review.showModal();
             reviewScroll.scrollTop = 0;
@@ -1314,6 +1339,18 @@
         const saved = load();
         if (saved && Array.isArray(saved.msgs) && saved.msgs.length) {
             state = Object.assign(state, saved);
+            if (!state.progress.missing) {
+                const draft = state.draft;
+                post("/assist/status", { draft, conflict: state.conflict || "" }).then((r) => {
+                    if (state.draft !== draft) return;
+                    state.progress = r.progress;
+                    state.ready = r.ready && !state.pendingCanon;
+                    if (state.ready) state.choices = [];
+                    paintFiche();
+                    paintChips();
+                    save();
+                }).catch(() => {});
+            }
             paintThread();
             paintChips();
         } else if (isNew) {
@@ -2339,7 +2376,7 @@
         });
     }
 
-    /* liste des discussions : appui long (mobile), clic droit ou « ⋯ » → menu épingler / supprimer */
+    /* liste des discussions : appui long (mobile), clic droit ou « ⋯ » → menu d'actions */
     const convSheet = document.getElementById("conv-actions");
     // posées dans <main>, ces fenêtres passeraient sous la barre du bas : on les sort dans <body>
     [convSheet, ...document.querySelectorAll(".modal[data-modal]")].forEach((m) => m && document.body.appendChild(m));
@@ -2363,11 +2400,22 @@
         let openedAt = 0;
         const titleEl = convSheet.querySelector("[data-act-title]");
         const pinLabel = convSheet.querySelector("[data-act=pin] span");
+        const retitleBtn = convSheet.querySelector("[data-act=retitle]");
+        const retitleLabel = retitleBtn.querySelector("span");
+        const retitleText = retitleLabel.textContent;
+        const pendingTitles = new Set();
+        const syncRetitle = () => {
+            const loading = pendingTitles.has(current?.dataset.convId);
+            retitleBtn.disabled = loading;
+            retitleBtn.setAttribute("aria-busy", String(loading));
+            retitleLabel.textContent = loading ? tr("chat.retitling") : retitleText;
+        };
         const openMenu = (item, byTouch = false) => {
             current = item;
             openedAt = Date.now();
             titleEl.textContent = item.dataset.convTitle || "";
             pinLabel.textContent = item.dataset.pinned === "1" ? pinLabel.dataset.labelUnpin : pinLabel.dataset.labelPin;
+            syncRetitle();
             modalOpen(convSheet);
             // au doigt, pas de surbrillance « sélectionné » sur la première ligne
             if (!byTouch) convSheet.querySelector("[data-act]")?.focus({ preventScroll: true });
@@ -2386,6 +2434,34 @@
             });
             document.body.appendChild(f);
             f.submit();
+        };
+
+        const retitle = async (item) => {
+            const id = item.dataset.convId;
+            if (pendingTitles.has(id)) return;
+            pendingTitles.add(id);
+            syncRetitle();
+            try {
+                const response = await fetch("/chat/" + id + "/retitle", {
+                    method: "POST",
+                    body: new URLSearchParams({ _token: convSheet.dataset.token }),
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.ok || !data.title) throw new Error(data.error || tr("chat.retitle_failed"));
+                item.dataset.convTitle = data.title;
+                item.querySelector("[data-conv-title-text]").textContent = data.title;
+                if (current === item) {
+                    titleEl.textContent = data.title;
+                    if (!convSheet.hidden) closeMenu();
+                }
+                toast(tr("chat.retitled"));
+            } catch (error) {
+                toast(error.message, true);
+            } finally {
+                pendingTitles.delete(id);
+                syncRetitle();
+            }
         };
 
         document.querySelectorAll(".conv-item").forEach((item) => {
@@ -2448,6 +2524,8 @@
             const id = current.dataset.convId;
             if (btn.dataset.act === "pin") {
                 post("/chat/" + id + "/pin", { pinned: current.dataset.pinned === "1" ? "0" : "1" });
+            } else if (btn.dataset.act === "retitle") {
+                await retitle(current);
             } else if (btn.dataset.act === "delete") {
                 closeMenu();
                 const ok = await pvModal.confirm(

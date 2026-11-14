@@ -223,6 +223,11 @@ if ($action === 'stream' && $method === 'POST') {
             $mode,
             $shouldAbort
         );
+        $tail = $filtered->finish();
+        if ($tail !== '') {
+            $sentAny = true;
+            $sse(['delta' => $tail]);
+        }
         $res['reaction'] = $filtered->reaction((string) $res['content']);
         $res['content'] = trim($filtered->content);
         if ($res['content'] === '' && empty($res['aborted'])) {

@@ -4,6 +4,12 @@
  * Las claves js.modal.*, js.unsaved.* y js.chat.jump están en common.php.
  */
 return [
+    'js.assist.review_progress' => 'Datos esenciales incluidos en esta propuesta · {percent} %',
+    'js.assist.f.work' => 'Trabajo o actividad',
+    'js.assist.resume_questions' => 'Retomar las preguntas',
+    'js.chat.retitling' => 'Reescribiendo el título…',
+    'js.chat.retitled' => 'Título actualizado.',
+    'js.chat.retitle_failed' => 'No se pudo reescribir el título. Comprueba que el modelo esté disponible y vuelve a intentarlo.',
     'js.chat.react' => 'Reaccionar al mensaje',
     'js.chat.reactions' => 'Reacciones',
     'js.chat.more_reactions' => 'Más reacciones',

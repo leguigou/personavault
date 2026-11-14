@@ -140,6 +140,20 @@ expect(JSON.parse(comp).compressed > 0, 'la compression résume des messages');
 const rem = await post('/chat/1/remember', { force: '1' });
 expect((JSON.parse(rem).added || []).length > 0, 'l’extraction ajoute un souvenir');
 await post('/chat/1/autotitle');
+{
+    const chatAction = async (cid, action, form = {}) => http(`/chat/${cid}/${action}`, {
+        method: 'POST', form: { _token: csrf, ...form },
+    });
+    const empty = await (await chatAction(2, 'retitle')).json();
+    expect(!empty.ok && empty.error, 'la réécriture d’une conversation vide explique pourquoi elle est impossible');
+    await (await chatAction(1, 'stream', { message: 'Parlons maintenant des volcans en Islande.' })).text();
+    const title = await (await chatAction(1, 'retitle')).json();
+    const list = await (await http('/chat')).text();
+    expect(title.ok && title.title === 'Volcans en Islande'
+        && list.includes('data-act="retitle"') && list.includes('data-conv-title="Volcans en Islande"'),
+        'le menu permet de remplacer un titre manuel par le sujet des échanges récents');
+    expect(!(await (await chatAction(1, 'autotitle')).json()).ok, 'le titre réécrit est protégé de la génération automatique');
+}
 await post('/memories', { content: 'Aime le jazz', category: 'preference', confidence: 'confirme', persona_id: '' });
 await post('/settings/ui', { ui_font_size: '16', ui_bubble_style: 'carte', ui_density: 'compact', ui_width: 'large', ui_avatars: '1' });
 await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_followup: '' });
@@ -155,6 +169,20 @@ await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_fo
         && (version.source?.url || '').startsWith('https://fr.wikipedia.org/wiki/Sherlock_Holmes'), 'assistant : la version choisie et la référence sont transmises au remplissage');
     const t2 = JSON.parse(await post('/assist/turn', { draft: '{}', history: '[]', action: 'reply', answer: 'Une fleuriste' }, '/assist/turn (idée libre)'));
     expect(t2.ok && t2.source === null && t2.question !== '', 'assistant : idée libre, une question à la fois');
+    const draftTurn = async (form) => (await (await http('/assist/turn', { method: 'POST', form: { _token: csrf, ...form } })).json());
+    const history = Array.from({ length: 18 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: i === 0 ? 'Détail ancien de Nina' : `Détail ${i}` }));
+    const completed = await draftTurn({ history: JSON.stringify(history), answer: 'Je complète la voix de Nina' });
+    expect(completed.ready && completed.progress.percent === 100 && completed.question === '' && completed.draft.work === 'Fleuriste',
+        'assistant : retrouve un détail au-delà des douze derniers messages et s’arrête à 100 %');
+    const enriched = await draftTurn({ draft: JSON.stringify(completed.draft), answer: 'Je précise un détail de Nina' });
+    expect(enriched.ready && enriched.question === '' && enriched.draft.voice === 'Parle à voix basse.',
+        'assistant : une fiche prête accepte encore des précisions sans rouvrir le questionnaire');
+    let stalled = { draft: { name: 'Nina' }, topic: 'name', stalls: 0 };
+    for (let i = 0; i < 3; i++) {
+        stalled = await draftTurn({ draft: JSON.stringify(stalled.draft), focus: stalled.topic, stalls: String(stalled.stalls), answer: 'Je ne sais pas.' });
+    }
+    expect(stalled.paused && stalled.question === '' && stalled.progress.percent < 100,
+        'assistant : la série de questions s’arrête après trois tours sans progrès');
     for (const answer of ['Je valide la fiche.', 'C’est bon, je valide.', 'On peut passer à la relecture maintenant']) {
         const validation = await http('/assist/turn', { method: 'POST', form: { _token: csrf, draft: JSON.stringify(version.draft), answer } });
         const result = await validation.json();
@@ -162,7 +190,7 @@ await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_fo
             && (await http('/p/sherlock-holmes')).status === 404, 'assistant : la validation écrite demande la relecture et conserve la fiche sans l’enregistrer');
     }
     const preview = JSON.parse(await post('/assist/preview', { draft: JSON.stringify(version.draft) }));
-    expect(preview.ok && preview.fields.system_prompt.includes('Sherlock Holmes') && preview.fields.image_prompt.includes('Sherlock Holmes')
+    expect(preview.ok && preview.progress.percent === 100 && preview.fields.system_prompt.includes('Sherlock Holmes') && preview.fields.image_prompt.includes('Sherlock Holmes')
         && preview.fields.family.includes('Mycroft') && preview.fields.friends.includes('Watson') && preview.fields.history && preview.fields.goals
         && !Object.hasOwn(preview.fields, 'looks')
         && (await http('/p/sherlock-holmes')).status === 404, 'assistant : la relecture contient les deux prompts et ne crée pas la fiche');
@@ -297,13 +325,17 @@ if (peer) {
     expect(!(await react(target.id, '')).reply && !(await recent(1)).find((m) => m.id === target.id)?.reaction,
         'retirer une réaction ne déclenche pas une nouvelle réponse');
 
+    const practical = await (await chat(2, 'stream', { message: 'On se parle à 18 h ?' })).text();
+    expect(!practical.includes('[reaction:') && !turn(practical)?.user_reaction
+        && turn(practical)?.reply?.content === 'D’accord, à 18 h !', 'un échange pratique peut rester sans émoji ni marqueur visible');
     const kindness = { message: 'Merci, tu as été adorable avec moi.' };
     const first = await (await chat(1, 'stream', kindness)).text();
     const second = await (await chat(1, 'stream', kindness)).text();
     const userReaction = turn(first)?.user_reaction;
-    expect(userReaction?.reaction === 'heart' && !first.includes('⟦') && !second.includes('⟦') && !turn(second)?.user_reaction
+    expect(userReaction?.reaction === 'heart' && !first.includes('[re') && !second.includes('[re') && !turn(second)?.user_reaction
+        && turn(first)?.reply?.content === 'Ça me touche. Hier soir, j’ai vraiment'
         && (await recent(1)).find((m) => m.id === userReaction.id)?.reaction === 'heart',
-        'la réaction du personnage est enregistrée, filtrée du flux et soumise à un délai');
+        'la réaction du personnage survit à une réponse tronquée, reste invisible dans le texte et respecte le délai');
     const last = turn(second)?.reply;
     if (last) {
         await react(last.id, 'heart');

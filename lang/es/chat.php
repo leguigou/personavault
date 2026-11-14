@@ -4,6 +4,7 @@
  * Mismas claves que lang/fr/chat.php (referencia). Se tutea al usuario, como en francés.
  */
 return [
+    'chat.list.retitle' => 'Reescribir el título',
     'chat.emoji.like' => 'De acuerdo',
     'chat.emoji.heart' => 'Afecto',
     'chat.emoji.laugh' => 'Me hace reír',

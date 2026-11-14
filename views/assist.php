@@ -79,6 +79,7 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
             <form class="as-review-form" data-as-review-form>
                 <header>
                     <h2 id="as-review-title" tabindex="-1" autofocus><?= e(t('assist.review_title')) ?></h2>
+                    <p data-as-review-progress hidden></p>
                     <?php if (!$isNew): ?><p><?= e(t('assist.fiche_note_complete')) ?></p><?php endif; ?>
                 </header>
                 <div class="as-review-scroll" data-as-review-scroll>
