@@ -325,6 +325,13 @@
         });
     });
 
+    document.querySelectorAll("[data-klipy-settings]").forEach((form) => {
+        const inherit = form.elements.inherit;
+        form.querySelectorAll('[name="klipy_formats[]"]').forEach((format) => {
+            format.addEventListener("change", () => { inherit.checked = false; });
+        });
+    });
+
     /* consigne de la conversation : enregistrée sans recharger la page */
     document.querySelectorAll("[data-directive-form]").forEach((form) => {
         form.addEventListener("submit", async (e) => {
@@ -2931,18 +2938,26 @@
                 if (wrap.dataset.msgId && m.role === "user") prepareUserBubble(b.hidden ? img : b);
                 paintReaction(item, m.bubble_reactions?.[i] ?? (i === 0 ? m.reaction : ""), m.role === "assistant");
             });
-            if (m.gif_url) {
-                const gif = document.createElement("figure");
-                gif.className = "chat-gif";
-                const image = document.createElement("img");
-                image.alt = chat.dataset.gifAlt;
-                image.loading = "lazy";
-                image.referrerPolicy = "no-referrer";
-                image.src = m.gif_url;
+            if (m.klipy_url) {
+                const figure = document.createElement("figure");
+                figure.className = "chat-klipy";
+                const isClip = m.klipy_url.toLowerCase().endsWith(".mp4");
+                const media = document.createElement(isClip ? "video" : "img");
+                if (isClip) {
+                    media.controls = true;
+                    media.playsInline = true;
+                    media.preload = "none";
+                    media.setAttribute("aria-label", chat.dataset.klipyAlt);
+                } else {
+                    media.alt = chat.dataset.klipyAlt;
+                    media.loading = "lazy";
+                    media.referrerPolicy = "no-referrer";
+                }
+                media.src = m.klipy_url;
                 const credit = document.createElement("figcaption");
                 credit.textContent = "Powered by KLIPY";
-                gif.append(image, credit);
-                holder.appendChild(gif);
+                figure.append(media, credit);
+                holder.appendChild(figure);
             }
             wrap.appendChild(holder);
             return wrap;
@@ -4165,7 +4180,7 @@
                     split_points: d.split_points || [],
                     version_id: d.version_id,
                     reaction: d.reaction,
-                    gif_url: d.gif_url,
+                    klipy_url: d.klipy_url,
                     bubble_reactions: d.bubble_reactions,
                     at: el.dataset.at,
                 });

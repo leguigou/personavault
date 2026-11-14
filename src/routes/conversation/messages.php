@@ -13,7 +13,7 @@ function chat_message_json(array $message): array
         'role' => (string) $message['role'],
         'content' => (string) $message['content'],
         'image' => (string) $message['image'],
-        'gif_url' => klipy_gif_url($message['gif_url']),
+        'klipy_url' => klipy_media_url($message['klipy_url']),
         'split_points' => chat_message_split_points($message),
         'version_id' => (int) $message['version_id'],
         'reaction' => chat_reaction_key($message['reaction'], (string) $message['role']),
@@ -215,8 +215,8 @@ if ($action === 'version' && $method === 'POST') {
     if ((int) $v['id'] !== (int) $msg['version_id']) {
         db_tx(static function (PDO $pdo) use ($cid, $mid, $v): void {
             $pdo->prepare("DELETE FROM user_memories WHERE subject = 'story' AND source_message_id = ?")->execute([$mid]);
-            $pdo->prepare("UPDATE messages SET content = ?, model = ?, split_at = 0, split_points = ?, version_id = ?, reaction = ?, bubble_reactions = ?, gif_url = ?, reaction_pending = '' WHERE id = ?")
-                ->execute([$v['content'], $v['model'], $v['split_points'], (int) $v['id'], $v['reaction'], $v['bubble_reactions'], $v['gif_url'], $mid]);
+            $pdo->prepare("UPDATE messages SET content = ?, model = ?, split_at = 0, split_points = ?, version_id = ?, reaction = ?, bubble_reactions = ?, klipy_url = ?, reaction_pending = '' WHERE id = ?")
+                ->execute([$v['content'], $v['model'], $v['split_points'], (int) $v['id'], $v['reaction'], $v['bubble_reactions'], $v['klipy_url'], $mid]);
             chat_invalidate_summary($cid, $mid);
             $pdo->prepare('UPDATE conversations SET facts_cursor = MIN(facts_cursor, ?) WHERE id = ?')->execute([$mid - 1, $cid]);
         });
@@ -228,7 +228,7 @@ if ($action === 'version' && $method === 'POST') {
         'split_points' => chat_message_split_points($v),
         'version_id'   => (int) $v['id'],
         'reaction'     => chat_reaction_key($v['reaction'], 'assistant'),
-        'gif_url'      => klipy_gif_url($v['gif_url']),
+        'klipy_url'      => klipy_media_url($v['klipy_url']),
         'bubble_reactions' => (object) chat_bubble_reactions(['role' => 'assistant'] + $v),
         'versions'     => ['index' => $pos + 1, 'total' => count($ids)],
     ], JSON_UNESCAPED_UNICODE);

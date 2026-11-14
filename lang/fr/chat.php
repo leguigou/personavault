@@ -4,8 +4,12 @@
  * Toute clé ajoutée ici doit exister dans lang/en/chat.php et lang/es/chat.php (vérifié par bin/i18n-check.php).
  */
 return [
-    'chat.gif_spontaneous' => 'GIF spontanés',
-    'chat.gif_alt' => 'GIF animé choisi par le persona',
+    'chat.klipy_formats' => 'Médias spontanés KLIPY',
+    'chat.klipy_inherit' => 'Suivre les réglages du persona',
+    'chat.klipy_gifs' => 'GIF',
+    'chat.klipy_stickers' => 'Stickers',
+    'chat.klipy_clips' => 'Clips',
+    'chat.klipy_alt' => 'Média KLIPY choisi par le persona',
     'chat.reasoning_inherit' => 'Suivre le réglage du persona',
     'chat.reasoning_global' => 'Suivre le réglage global',
     'chat.list.retitle' => 'Réécrire le titre',

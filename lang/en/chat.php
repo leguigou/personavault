@@ -4,8 +4,12 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
-    'chat.gif_spontaneous' => 'Spontaneous GIFs',
-    'chat.gif_alt' => 'Animated GIF chosen by the persona',
+    'chat.klipy_formats' => 'Spontaneous KLIPY media',
+    'chat.klipy_inherit' => 'Follow the persona settings',
+    'chat.klipy_gifs' => 'GIFs',
+    'chat.klipy_stickers' => 'Stickers',
+    'chat.klipy_clips' => 'Clips',
+    'chat.klipy_alt' => 'KLIPY media chosen by the persona',
     'chat.reasoning_inherit' => 'Follow the persona setting',
     'chat.reasoning_global' => 'Follow the global setting',
     'chat.list.retitle' => 'Rewrite title',

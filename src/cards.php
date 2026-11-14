@@ -136,7 +136,7 @@ function card_build(array $persona): array
                     'max_tokens'     => (int) $persona['max_tokens'],
                     'context_window' => (int) $persona['context_window'],
                     'reasoning_effort' => $persona['reasoning_effort'],
-                    'spontaneous_gifs' => (bool) $persona['spontaneous_gifs'],
+                    'klipy_formats' => (int) $persona['klipy_formats'],
                 ],
             ],
         ],
@@ -384,7 +384,7 @@ function card_parse(array $card): array
             'max_tokens'     => $ext['max_tokens'] ?? 400,
             'context_window' => $ext['context_window'] ?? 8192,
             'reasoning_effort' => chat_reasoning_effort($ext['reasoning_effort'] ?? ''),
-            'spontaneous_gifs' => !empty($ext['spontaneous_gifs']),
+            'klipy_formats' => $ext['klipy_formats'] ?? (int) !empty($ext['spontaneous_gifs']),
         ];
         return ['persona' => $persona, 'prompts' => $prompts];
     }

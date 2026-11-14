@@ -53,7 +53,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
              <?php if ($openingPending): ?>data-opening="/chat/<?= (int) $conv['id'] ?>/opening"<?php endif; ?>
              data-token="<?= e($token) ?>"
              data-reactions="<?= e(json_encode(chat_reaction_options(), JSON_UNESCAPED_UNICODE)) ?>"
-             data-gif-alt="<?= e(t('chat.gif_alt')) ?>"
+             data-klipy-alt="<?= e(t('chat.klipy_alt')) ?>"
              data-auto-title="<?= (int) ($conv['title_auto'] ?? 1) === 1 && chat_title_mode() !== 'off' ? 1 : 0 ?>"
              data-split="<?= (string) setting('chat_split_enabled', '1') === '1' ? '1' : '0' ?>"
              data-split-words="<?= (int) setting('chat_split_words', '50') ?>"
@@ -191,9 +191,13 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                                     <div class="bubble"<?= $photoOnly ? ' hidden' : '' ?>><?= nl2br(e($part)) ?></div>
                                 </div>
                             <?php endforeach; ?>
-                            <?php if ($gif = klipy_gif_url($m['gif_url'])): ?>
-                                <figure class="chat-gif">
-                                    <img src="<?= e($gif) ?>" alt="<?= e(t('chat.gif_alt')) ?>" loading="lazy" referrerpolicy="no-referrer">
+                            <?php if ($mediaUrl = klipy_media_url($m['klipy_url'])): ?>
+                                <figure class="chat-klipy">
+                                    <?php if (str_ends_with(strtolower($mediaUrl), '.mp4')): ?>
+                                        <video src="<?= e($mediaUrl) ?>" controls playsinline preload="none" aria-label="<?= e(t('chat.klipy_alt')) ?>"></video>
+                                    <?php else: ?>
+                                        <img src="<?= e($mediaUrl) ?>" alt="<?= e(t('chat.klipy_alt')) ?>" loading="lazy" referrerpolicy="no-referrer">
+                                    <?php endif; ?>
                                     <figcaption>Powered by KLIPY</figcaption>
                                 </figure>
                             <?php endif; ?>
@@ -336,6 +340,30 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                     <?php endforeach; ?>
                 </select>
             </label>
+            <div class="form-actions">
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
+            </div>
+        </form>
+
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/klipy" class="sheet-directive" data-sheet-group="conversation" data-klipy-settings>
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <?php
+            $inheritsKlipy = (int) $conv['klipy_formats'] === -1;
+            $klipyMask = (int) ($inheritsKlipy ? $persona['klipy_formats'] : $conv['klipy_formats']);
+            ?>
+            <strong><?= e(t('chat.klipy_formats')) ?></strong>
+            <label class="check">
+                <input type="checkbox" name="inherit" value="1" <?= $inheritsKlipy ? 'checked' : '' ?>>
+                <span><?= e(t('chat.klipy_inherit')) ?></span>
+            </label>
+            <div role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
+                <?php foreach (klipy_format_labels() as $format => $label): ?>
+                    <label class="check">
+                        <input type="checkbox" name="klipy_formats[]" value="<?= $format ?>" <?= ($klipyMask & KLIPY_FORMATS[$format]) ? 'checked' : '' ?>>
+                        <span><?= e($label) ?></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
             <div class="form-actions">
                 <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
             </div>

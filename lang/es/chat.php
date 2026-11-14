@@ -4,8 +4,12 @@
  * Mismas claves que lang/fr/chat.php (referencia). Se tutea al usuario, como en francés.
  */
 return [
-    'chat.gif_spontaneous' => 'GIF espontáneos',
-    'chat.gif_alt' => 'GIF animado elegido por el personaje',
+    'chat.klipy_formats' => 'Contenido espontáneo de KLIPY',
+    'chat.klipy_inherit' => 'Usar los ajustes del personaje',
+    'chat.klipy_gifs' => 'GIF',
+    'chat.klipy_stickers' => 'Stickers',
+    'chat.klipy_clips' => 'Clips',
+    'chat.klipy_alt' => 'Contenido de KLIPY elegido por el personaje',
     'chat.reasoning_inherit' => 'Usar el ajuste del personaje',
     'chat.reasoning_global' => 'Usar el ajuste global',
     'chat.list.retitle' => 'Reescribir el título',

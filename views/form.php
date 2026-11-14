@@ -142,11 +142,16 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
                     <small><?= e(t('settings.chat.reasoning_help')) ?></small>
                 </label>
 
-                <input type="hidden" name="spontaneous_gifs" value="0">
-                <label class="check">
-                    <input type="checkbox" name="spontaneous_gifs" value="1" <?= $persona['spontaneous_gifs'] ? 'checked' : '' ?>>
-                    <span><?= e(t('chat.gif_spontaneous')) ?></span>
-                </label>
+                <div role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
+                    <strong><?= e(t('chat.klipy_formats')) ?></strong>
+                    <input type="hidden" name="klipy_formats_present" value="1">
+                    <?php foreach (klipy_format_labels() as $format => $label): ?>
+                        <label class="check">
+                            <input type="checkbox" name="klipy_formats[]" value="<?= $format ?>" <?= ((int) $persona['klipy_formats'] & KLIPY_FORMATS[$format]) ? 'checked' : '' ?>>
+                            <span><?= e($label) ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
 
                 <div class="row2">
                     <label class="field">
