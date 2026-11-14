@@ -171,7 +171,10 @@ if ($action === 'stream' && $method === 'POST') {
         }
     }
     $canReact = !$regen && !$reactionOnly && chat_can_react($cid);
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget);
+    $trackRelationship = !$reactionOnly && relationship_memory_on($conv);
+    $address = $trackRelationship ? relationship_direct_address($text) : '';
+    $relationshipRevision = $trackRelationship ? (int) relationship_state((int) $persona['id'])['revision'] : 0;
+    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget, $address);
 
     if ($ping()) {
         if (!$regen && $imageBase !== '') {
@@ -280,12 +283,12 @@ if ($action === 'stream' && $method === 'POST') {
         : [];
 
     try {
-        [$assistantId, $versions, $notice, $versionId] = db_tx(static function (PDO $pdo) use ($cid, $regen, $reactionOnly, $userMsgId, $res, $splitPoints, $aborted, $conv, $reactionTarget): array {
+        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $reactionOnly, $userMsgId, $res, $splitPoints, $aborted, $conv, $reactionTarget, $trackRelationship, $address, $relationshipRevision): array {
             if ($reactionOnly) {
                 $active = $pdo->prepare('SELECT 1 FROM messages WHERE id = ? AND reaction_pending = ?');
                 $active->execute([$reactionTarget['id'], $reactionTarget['reaction_pending']]);
                 if (!$active->fetchColumn()) {
-                    return [0, null, null, 0];
+                    return [0, null, null, 0, false];
                 }
             }
             if ($regen) {
@@ -314,6 +317,7 @@ if ($action === 'stream' && $method === 'POST') {
             }
 
             $notice = null;
+            $relationshipPending = false;
             if ($aborted) {
                 $pdo->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
             } else {
@@ -333,8 +337,15 @@ if ($action === 'stream' && $method === 'POST') {
                 $storedModel = $res['provider'] === 'chat' ? (string) $res['model'] : (string) $conv['model'];
                 $pdo->prepare('UPDATE conversations SET model = ?, provider = ?, updated_at = datetime("now") WHERE id = ?')
                     ->execute([$storedModel, $res['provider'], $cid]);
+                if ($trackRelationship) {
+                    $enabled = $pdo->prepare('SELECT 1 FROM conversations WHERE id = ? AND memory_enabled = 1 AND facts_enabled = 1');
+                    $enabled->execute([$cid]);
+                    if ($enabled->fetchColumn()) {
+                        $relationshipPending = relationship_queue($pdo, (int) $conv['persona_id'], $userMsgId, $assistantId, $address, $relationshipRevision);
+                    }
+                }
             }
-            return [$assistantId, $versions, $notice, $versionId];
+            return [$assistantId, $versions, $notice, $versionId, $relationshipPending];
         });
     } catch (Throwable $e) {
         $sse(['error' => public_error($e), 'kind' => 'error', 'kept_user' => !$regen && !$reactionOnly]);
@@ -350,6 +361,7 @@ if ($action === 'stream' && $method === 'POST') {
 
     $out = [
         'done'  => true,
+        'relationship_pending' => $relationshipPending,
         'reply' => [
             'id'       => $assistantId,
             'role'     => 'assistant',
@@ -376,5 +388,9 @@ if ($action === 'stream' && $method === 'POST') {
 
     fclose($chatLock);
     $sse($out);
+    if ($relationshipPending && function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+        relationship_run((int) $persona['id']);
+    }
     exit;
 }

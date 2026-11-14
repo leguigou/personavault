@@ -35,7 +35,12 @@ function backup_add_conversations(ZipArchive $zip, string $root, array &$stats):
     $memories = $pdo->query('SELECT * FROM user_memories ORDER BY id')->fetchAll();
     $stats['conversations'] = count($conversations);
     $stats['memories'] = count($memories);
-    $data = backup_json(['conversations' => $conversations, 'memories' => $memories]);
+    $data = backup_json([
+        'conversations' => $conversations,
+        'memories' => $memories,
+        'relationships' => $pdo->query('SELECT persona_id, address, automatic FROM relationships ORDER BY persona_id')->fetchAll(),
+        'relationship_entries' => $pdo->query('SELECT * FROM relationship_entries ORDER BY id')->fetchAll(),
+    ]);
     $max = (int) config('zip_max_entry_size', 40 * 1024 * 1024);
     if (strlen($data) > $max) {
         throw new RuntimeException(t('error.backup.entry_too_big_size', ['size' => human_bytes(strlen($data))]));
@@ -103,7 +108,7 @@ function backup_restore_conversations(ZipArchive $zip, array $index, string $roo
     // d'une seule fiche et d'un seul identifiant référencé est sans ambiguïté.
     if ($legacy && !$personaIds && count($personas) === 1 && ($persona = reset($personas))) {
         $referenced = [];
-        foreach ([$data['conversations'], $data['memories']] as $rows) {
+            foreach ([$data['conversations'], $data['memories'], (array) ($data['relationships'] ?? [])] as $rows) {
             foreach ($rows as $row) {
                 $id = backup_id($row['persona_id'] ?? null);
                 if ($id) {
@@ -176,6 +181,39 @@ function backup_restore_conversations(ZipArchive $zip, array $index, string $roo
             $count++;
         }
         return $count;
+    });
+
+    db_tx(static function (PDO $pdo) use ($data, $personaIds, $conversationIds, $now): void {
+        $sources = [];
+        foreach ($conversationIds as $conversation) {
+            foreach ($conversation['messages'] as $oldId => $newId) {
+                $sources[$conversation['persona_id']][$oldId] = $newId;
+            }
+        }
+        $settings = $pdo->prepare('INSERT INTO relationships (persona_id, address, automatic) VALUES (?, ?, ?) ON CONFLICT DO NOTHING');
+        foreach ((array) ($data['relationships'] ?? []) as $row) {
+            $pid = $personaIds[backup_id($row['persona_id'] ?? null)] ?? 0;
+            if ($pid) {
+                $address = $row['address'] ?? '';
+                $settings->execute([$pid, in_array($address, ['tu', 'vous'], true) ? $address : '', empty($row['automatic']) ? 0 : 1]);
+            }
+        }
+        foreach ((array) ($data['relationship_entries'] ?? []) as $row) {
+            $pid = $personaIds[backup_id($row['persona_id'] ?? null)] ?? 0;
+            $kind = $row['kind'] ?? '';
+            $content = $row['content'] ?? '';
+            if (!$pid || !in_array($kind, ['agreement', 'change', 'conflict'], true) || !is_string($content) || trim($content) === '') {
+                continue;
+            }
+            backup_insert_row($pdo, 'relationship_entries', [
+                'persona_id' => $pid, 'kind' => $kind, 'content' => mb_substr($content, 0, 400),
+                'resolved' => $kind === 'conflict' && !empty($row['resolved']) ? 1 : 0,
+                'manual' => empty($row['manual']) ? 0 : 1,
+                'deleted' => empty($row['deleted']) ? 0 : 1,
+                'source_message_id' => $sources[$pid][backup_id($row['source_message_id'] ?? null)] ?? null,
+                'updated_at' => backup_str($row['updated_at'] ?? $now, 40),
+            ]);
+        }
     });
 }
 

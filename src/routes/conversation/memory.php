@@ -6,6 +6,16 @@ declare(strict_types=1);
  * Inclus par src/routes/conversation.php ($cid, $action, $conv, $persona, $personaPrompts).
  */
 
+if ($action === 'relationship' && $method === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    csrf_check_json();
+    session_write_close();
+    ignore_user_abort(true);
+    $pending = relationship_memory_on($conv) && relationship_run((int) $persona['id']);
+    echo json_encode(['ok' => true, 'pending' => $pending]);
+    exit;
+}
+
 /* --- compression mémoire (AJAX, après la réponse) --- */
 if ($action === 'compress' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');

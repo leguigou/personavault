@@ -74,6 +74,12 @@ $token    = csrf_token();
                 </form>
             <?php endif; ?>
             <div class="round-act">
+                <a class="round-btn" href="/p/<?= e($persona['slug']) ?>/relationship" aria-labelledby="act-relationship">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                </a>
+                <span class="round-label" id="act-relationship"><?= e(t('relationship.title')) ?></span>
+            </div>
+            <div class="round-act">
                 <a class="round-btn" href="/p/<?= e($persona['slug']) ?>/edit" aria-describedby="act-edit">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
                 </a>

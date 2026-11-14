@@ -340,6 +340,12 @@ if ($action === '' && $method === 'GET') {
     }
     $total    = (int) db()->query('SELECT COUNT(*) FROM messages WHERE conversation_id = ' . (int) $cid)->fetchColumn();
     $messages = fetch_messages($cid, 50);
+    $targetMessage = max(0, (int) ($_GET['message'] ?? 0));
+    if ($targetMessage && $messages && $targetMessage < (int) $messages[0]['id']) {
+        $stmt = db()->prepare('SELECT content FROM messages WHERE id = ? AND conversation_id = ?');
+        $stmt->execute([$targetMessage, $cid]);
+        $sourceExcerpt = $stmt->fetchColumn();
+    }
     // ‹ 1/3 › : seulement sous la dernière réponse (celle qu'on peut régénérer)
     $replyVersions = null;
     for ($i = count($messages) - 1; $i >= 0; $i--) {
@@ -373,6 +379,8 @@ if ($action === '' && $method === 'GET') {
         'totalMsgs' => $total,
         'personaMemories' => chat_persona_memories((int) $persona['id'], 12),
         'olderLeft' => max(0, $total - count($messages)),
+        'targetMessage' => $targetMessage,
+        'sourceExcerpt' => $sourceExcerpt ?? false,
         'convs'     => $convs,
         'contactView' => $contactView,
         'sideContacts' => $sideContacts,

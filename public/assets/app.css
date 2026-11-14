@@ -1035,6 +1035,8 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
     padding: 4px 0 12px;
 }
 .chat-older .btn { font-size: 11.5px; padding: 7px 14px; }
+.chat-source-excerpt { align-self: stretch; }
+.chat-source-excerpt p { margin: 10px 0 0; overflow-wrap: anywhere; }
 
 .directive-text {
     margin: 0 0 6px;

@@ -1456,6 +1456,10 @@
     }
 
     const splitPicker = document.querySelector("[data-split-position-picker]");
+    document.querySelectorAll("[data-relationship-conflict]").forEach((row) => {
+        const kind = row.closest("form").elements.namedItem("kind");
+        kind.addEventListener("change", () => { row.hidden = kind.value !== "conflict"; });
+    });
     splitPicker?.addEventListener("click", async () => {
         const field = splitPicker.form.elements.namedItem("chat_split_position");
         const position = await pvModal.open({
@@ -2829,6 +2833,14 @@
         input?.addEventListener("input", () => { if (!jump.hidden) requestAnimationFrame(placeJump); });
 
         scrollBottom(false, true);
+        const targetMessage = chat.dataset.targetMessage;
+        if (targetMessage) {
+            const target = scroll.querySelector('[data-msg-id="' + targetMessage + '"]') || scroll.querySelector("[data-source-excerpt]");
+            if (target) {
+                stick = false;
+                requestAnimationFrame(() => target.scrollIntoView({ block: "center" }));
+            }
+        }
 
         /* quand le clavier s'ouvre, garder le dernier message visible
            (si on suivait déjà le bas de la discussion) */
@@ -3482,6 +3494,33 @@
         const factsTiming = chat.dataset.factsTiming || "now";
         const factsIdleMs = Math.max(10, Number(chat.dataset.factsIdle) || 45) * 1000;
         let factsTimer = 0;
+        let relationshipTimer = 0;
+        let relationshipDeadline = 0;
+        const scheduleRelationship = (windowMs = 0) => {
+            if (windowMs) relationshipDeadline = Date.now() + windowMs;
+            clearTimeout(relationshipTimer);
+            if (Date.now() >= relationshipDeadline) return;
+            relationshipTimer = setTimeout(async () => {
+                if (Date.now() >= relationshipDeadline) return;
+                if (busy) {
+                    scheduleRelationship();
+                    return;
+                }
+                const fd = new FormData();
+                fd.append("_token", token);
+                try {
+                    const response = await fetch(chat.dataset.relationship, { method: "POST", body: fd, keepalive: true });
+                    const data = await response.json();
+                    if (response.ok && data.pending) {
+                        clearTimeout(relationshipTimer);
+                        relationshipTimer = setTimeout(() => scheduleRelationship(), 3800);
+                    }
+                } catch {
+                    // La prochaine réponse reprendra les échanges encore en attente.
+                }
+            }, 1200);
+        };
+        scheduleRelationship(Number(chat.dataset.relationshipWindow) || 0);
         const runFacts = () => { factsTimer = 0; rememberFacts(); };
         const scheduleFacts = () => {
             if (factsTiming === "off") return Promise.resolve();
@@ -4628,6 +4667,7 @@
                                 }
                             } else if (evt.done) {
                                 finalReply = evt.reply || null;
+                                if (evt.relationship_pending) scheduleRelationship(300000);
                                 finalNotice = evt.notice || null;
                                 skipped = evt.skipped === true;
                                 if (evt.user_reaction) paintUserReaction(evt.user_reaction);

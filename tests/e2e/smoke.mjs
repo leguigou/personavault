@@ -291,6 +291,42 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     await chatPost('/settings/ui', { ui_chat_list: 'threads' });
 }
 
+{
+    const chatPost = (path, form = {}) => http(path, { method: 'POST', form: { _token: csrf, ...form } });
+    const turn = async (path, message) => (await (await chatPost(path + '/stream', { message })).text())
+        .split('\n').filter((line) => line.startsWith('data: '))
+        .map((line) => JSON.parse(line.slice(6))).find((event) => event.done);
+    const profile = '/p/camille-lefebvre/relationship';
+    const path = (await chatPost('/chat/1/new')).headers.get('location');
+    const request = (message) => turn(path, message);
+    const analyze = () => chatPost(path + '/relationship');
+    expect((await request('Vous pouvez me tutoyer, s’il vous plaît ?'))?.relationship_pending,
+        'un échange terminé déclenche le traitement de la relation');
+    expect((await (await http(profile)).text()).includes('value="tu" selected'), 'la demande de tutoiement est mémorisée immédiatement');
+    await analyze();
+    await request('Je suis fâché à propos de la photo.');
+    await analyze();
+    let page = await (await http(profile)).text();
+    expect(page.includes('Désaccord à propos de la photo') && page.includes('En cours') && page.includes('?message='),
+        'une dispute ajoute un désaccord actif et un lien vers le message');
+    await request('On en a parlé et on est réconciliés.');
+    await analyze();
+    page = await (await http(profile)).text();
+    expect(page.includes('Désaccord à propos de la photo') && page.includes('Résolu') && !page.includes('En cours'),
+        'la réconciliation ferme le désaccord automatiquement');
+    const next = (await chatPost(path + '/new')).headers.get('location');
+    await turn(next, 'On reparle de la photo ?');
+    const logs = await (await http('/settings/logs')).text();
+    expect(logs.includes('Tu tutoies toujours cet interlocuteur')
+        && logs.includes('Désaccord clos, sans distance ni tension persistante'),
+        'le nouveau fil reçoit le tutoiement et la fin de la distance');
+    await chatPost(profile, { operation: 'settings', address: 'vous' });
+    expect(!(await request('Une dernière chose.'))?.relationship_pending
+        && (await (await http(profile)).text()).includes('value="vous" selected'),
+        'le réglage manuel s’applique et la désactivation suspend les analyses');
+    await chatPost(profile, { operation: 'settings', address: '', automatic: '1' });
+}
+
 const sse = await post('/chat/1/stream', { message: 'Bonjour, test du flux' });
 expect(sse.includes('"delta"') && sse.includes('"done"'), 'la réponse arrive en streaming jusqu’au bout');
 expect((await (await http('/settings/logs')).text()).includes('Je préfère les voyages en train.'),
