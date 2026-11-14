@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 11);
+define('PV_SCHEMA_VERSION', 12);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -212,6 +212,10 @@ function migrate(PDO $pdo): void
         }
         if ($version < 11) {
             migrate_v11($pdo);
+        }
+        if ($version < 12) {
+            add_column_if_missing($pdo, 'personas', 'reasoning_effort', "TEXT NOT NULL DEFAULT ''");
+            add_column_if_missing($pdo, 'conversations', 'reasoning_effort', "TEXT NOT NULL DEFAULT ''");
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);

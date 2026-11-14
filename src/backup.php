@@ -184,6 +184,7 @@ function backup_add_persona(ZipArchive $zip, string $root, array $p, array &$sta
         'max_tokens'     => (int) $p['max_tokens'],
         'context_window' => (int) $p['context_window'],
         'directive'      => (string) $p['directive'],
+        'reasoning_effort' => $p['reasoning_effort'],
         'created_at'     => (string) $p['created_at'],
         'updated_at'     => (string) $p['updated_at'],
         'avatar'         => $avatarFile,
@@ -491,8 +492,8 @@ function backup_insert_persona(array $persona, array $prompts, string $avatar = 
 
         $identity = db_tx(static function (PDO $pdo) use ($persona, $name, $avatar, $photos, $clean, $tags, $meta): array {
             $slug = unique_slug($name, null);
-            $stmt = $pdo->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta, favorite, archived, model, temperature, max_tokens, context_window, directive, created_at, updated_at)
-                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime("now"),datetime("now"))');
+            $stmt = $pdo->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta, favorite, archived, model, temperature, max_tokens, context_window, directive, reasoning_effort, created_at, updated_at)
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime("now"),datetime("now"))');
             $stmt->execute([
                 $slug,
                 $name,
@@ -508,6 +509,7 @@ function backup_insert_persona(array $persona, array $prompts, string $avatar = 
                 max(64, min(4096, (int) backup_str($persona['max_tokens'] ?? '400', 0, '400'))),
                 max(2048, min(131072, (int) backup_str($persona['context_window'] ?? '8192', 0, '8192'))),
                 backup_str($persona['directive'] ?? '', 5000),
+                chat_reasoning_effort($persona['reasoning_effort'] ?? ''),
             ]);
             $pid = (int) $pdo->lastInsertId();
 

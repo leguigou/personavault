@@ -112,7 +112,9 @@ http.createServer(async (req, res) => {
             nextStream = '';
             const delta = (content) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + '\n\n');
             let finish = 'stop';
-            if (last.endsWith('[Réaction à ton message]')) {
+            if (last.endsWith('Test du réglage de réflexion')) {
+                delta(`Niveau reçu : ${j.reasoning_effort}.`);
+            } else if (last.endsWith('[Réaction à ton message]')) {
                 const target = last.match(/Bulle du personnage : (".*")/)?.[1];
                 const quote = target ? JSON.parse(target) : '';
                 const tone = last.includes('😡 — colère') ? 'colère' : last.includes('👍 — accord') ? 'accord simple' : 'autre';

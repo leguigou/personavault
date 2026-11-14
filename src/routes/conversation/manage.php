@@ -108,6 +108,14 @@ if ($action === 'directive' && $method === 'POST') {
     redirect('/chat/' . $cid);
 }
 
+if ($action === 'reasoning' && $method === 'POST') {
+    csrf_check();
+    db()->prepare('UPDATE conversations SET reasoning_effort = ? WHERE id = ?')
+        ->execute([chat_reasoning_effort($_POST['reasoning_effort'] ?? ''), $cid]);
+    flash('ok', t('flash.chat.toggles_saved'));
+    redirect('/chat/' . $cid);
+}
+
 if ($action === 'rename' && $method === 'POST') {
     csrf_check();
     $title = trim((string) ($_POST['title'] ?? ''));

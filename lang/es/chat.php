@@ -4,6 +4,8 @@
  * Mismas claves que lang/fr/chat.php (referencia). Se tutea al usuario, como en francés.
  */
 return [
+    'chat.reasoning_inherit' => 'Usar el ajuste del personaje',
+    'chat.reasoning_global' => 'Usar el ajuste global',
     'chat.list.retitle' => 'Reescribir el título',
     'chat.emoji.like' => 'De acuerdo',
     'chat.emoji.heart' => 'Afecto',

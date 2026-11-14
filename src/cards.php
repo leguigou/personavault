@@ -135,6 +135,7 @@ function card_build(array $persona): array
                     'temperature'    => (float) $persona['temperature'],
                     'max_tokens'     => (int) $persona['max_tokens'],
                     'context_window' => (int) $persona['context_window'],
+                    'reasoning_effort' => $persona['reasoning_effort'],
                 ],
             ],
         ],
@@ -381,6 +382,7 @@ function card_parse(array $card): array
             'temperature'    => $ext['temperature'] ?? 0.85,
             'max_tokens'     => $ext['max_tokens'] ?? 400,
             'context_window' => $ext['context_window'] ?? 8192,
+            'reasoning_effort' => chat_reasoning_effort($ext['reasoning_effort'] ?? ''),
         ];
         return ['persona' => $persona, 'prompts' => $prompts];
     }

@@ -897,16 +897,6 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
 
 .msg { flex-wrap: wrap; }
 
-.msg-tools {
-    flex: 0 0 100%;
-    display: flex;
-    gap: 6px;
-    margin-top: 4px;
-    align-items: center;
-    justify-content: flex-end;
-    animation: fade .16s both;
-}
-
 .msg-tool {
     width: 31px;
     height: 31px;
@@ -3485,7 +3475,35 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
 
 /* Date affichée au toucher, sous les bulles du personnage. */
 .msg-time { font-size: 11.5px; color: var(--muted-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.msg-user .msg-time { margin-right: 6px; }
+
+.msg-user:not(.is-selecting-text) [data-message-menu] {
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+.message-menu {
+    position: fixed;
+    z-index: 55;
+    width: min(280px, calc(100vw - 16px));
+    padding: 8px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    background: var(--elev, #171423);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .34);
+}
+.message-menu .msg-time {
+    display: block;
+    padding: 8px 14px;
+    font-size: 13px;
+    white-space: normal;
+}
+.message-menu .action-row {
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+}
+.message-menu .action-row:hover,
+.message-menu .action-row:focus-visible { background: rgba(var(--ink), .07); }
 
 .bubble[data-react] { cursor: pointer; }
 .bubble[data-react][aria-expanded="true"] { border-color: rgba(var(--acc-mid), .55); }
@@ -3504,22 +3522,77 @@ html[data-tabbar="classic"] .tabbar .tab-add .tab-label { color: rgb(var(--acc-a
 }
 button.msg-reaction-chip { cursor: pointer; }
 button.msg-reaction-chip:hover { background: rgba(var(--acc-mid), .26); }
+
+@media (prefers-reduced-motion: no-preference) {
+    [data-reaction-animation] {
+        position: relative;
+        animation: reaction-pop 320ms ease-out both;
+    }
+    [data-reaction-animation="like"] { animation-name: reaction-bounce; }
+    [data-reaction-animation="heart"] { animation-name: reaction-heartbeat; }
+    [data-reaction-animation="celebrate"]::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle, #ffd477 55%, transparent 70%) 50% 0 / 4px 4px,
+            radial-gradient(circle, #ff82af 55%, transparent 70%) 100% 30% / 3px 3px,
+            radial-gradient(circle, #73dbff 55%, transparent 70%) 86% 95% / 4px 4px,
+            radial-gradient(circle, #ffd477 55%, transparent 70%) 15% 92% / 3px 3px,
+            radial-gradient(circle, #c1a0ff 55%, transparent 70%) 0 35% / 4px 4px;
+        background-repeat: no-repeat;
+        animation: reaction-sparkles 320ms ease-out both;
+    }
+}
+
+@keyframes reaction-pop {
+    0% { transform: scale(.85); }
+    40% { transform: scale(1.5); }
+    100% { transform: scale(1); }
+}
+@keyframes reaction-bounce {
+    0% { transform: scale(.85); }
+    35% { transform: translateY(-7px) rotate(-12deg) scale(1.5); }
+    68% { transform: translateY(1px) rotate(5deg) scale(1.08); }
+    100% { transform: none; }
+}
+@keyframes reaction-heartbeat {
+    0% { transform: scale(.9); }
+    32% { transform: scale(1.65); }
+    55% { transform: scale(1.05); }
+    74% { transform: scale(1.28); }
+    100% { transform: scale(1); }
+}
+@keyframes reaction-sparkles {
+    0% { transform: scale(.65); opacity: 0; }
+    35% { opacity: 1; }
+    100% { transform: scale(2.4); opacity: 0; }
+}
+
 .reaction-avatar { display: grid; place-items: center; position: relative; width: 17px; height: 17px; border-radius: 50%; overflow: hidden; }
 .reaction-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .reaction-avatar .avatar-fallback span { font-size: 7px; transform: none; }
-.reaction-picker {
+.reaction-popover {
     position: fixed;
     z-index: 25;
     display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 6px;
+    width: min(348px, calc(100vw - 16px));
+    pointer-events: none;
+}
+.reaction-picker {
+    display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 3px;
-    width: min(348px, calc(100vw - 16px));
     padding: 6px;
     border: 1px solid var(--border);
     border-radius: 28px;
     background: var(--elev, #171423);
     box-shadow: 0 8px 28px rgba(0, 0, 0, .23);
     overflow-y: auto;
+    pointer-events: auto;
 }
 .reaction-picker.is-expanded { border-radius: 21px; }
 .reaction-picker > button {
@@ -3540,11 +3613,14 @@ button.msg-reaction-chip:hover { background: rgba(var(--acc-mid), .26); }
 .reaction-picker > button[aria-pressed="true"] { background: rgba(var(--acc-mid), .20); }
 .reaction-picker > .msg-tool-more-reactions { background: rgba(var(--ink), .07); }
 .reaction-actions {
-    grid-column: 1 / -1;
     display: flex;
     gap: 6px;
-    padding: 5px 4px 2px;
-    border-top: 1px solid var(--border-soft);
+    padding-inline: 6px;
+}
+.reaction-actions .msg-tool {
+    background: var(--elev, #171423);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .23);
+    pointer-events: auto;
 }
 @media (pointer: coarse) { .reaction-actions .msg-tool { width: 44px; height: 44px; } }
 

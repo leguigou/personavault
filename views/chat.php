@@ -314,6 +314,26 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
         </div>
         </div>
 
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/reasoning" class="sheet-directive" data-sheet-group="conversation">
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <label class="field">
+                <span><?= e(t('settings.chat.reasoning')) ?></span>
+                <select class="input" name="reasoning_effort">
+                    <?php
+                    $reasoningLabels = chat_reasoning_labels();
+                    $inheritedEffort = chat_reasoning_effort($persona['reasoning_effort']) ?: setting('chat_reasoning_effort', 'none');
+                    ?>
+                    <option value=""><?= e(t('chat.reasoning_inherit')) ?> (<?= e($reasoningLabels[$inheritedEffort] ?? $reasoningLabels['none']) ?>)</option>
+                    <?php foreach ($reasoningLabels as $effort => $label): ?>
+                        <option value="<?= $effort ?>" <?= $conv['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <div class="form-actions">
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
+            </div>
+        </form>
+
         <!-- réglages du personnage : communs à toutes ses conversations -->
         <section data-sheet-group="conversation" class="persona-summary">
             <div class="mem-head">

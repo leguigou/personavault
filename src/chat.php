@@ -1536,10 +1536,22 @@ function chat_split_points(string $text, int $maxWords = 50, int $maxBubbles = 2
     );
 }
 
-/**
- * Les réglages IA (modèle, température, tokens, consigne) appartiennent au persona :
- * on les fusionne dans la conversation avant de construire la requête.
- */
+function chat_reasoning_effort(mixed $value): string
+{
+    return in_array($value, ['none', 'low', 'medium', 'high'], true) ? $value : '';
+}
+
+function chat_reasoning_labels(): array
+{
+    return [
+        'none' => t('settings.chat.reasoning_none'),
+        'low' => t('settings.chat.reasoning_low'),
+        'medium' => t('settings.chat.reasoning_medium'),
+        'high' => t('settings.chat.reasoning_high'),
+    ];
+}
+
+/** Fusionne les réglages IA du persona avec ceux de la discussion. */
 function chat_with_persona(array $conv, array $persona): array
 {
     $directive     = trim((string) ($persona['directive'] ?? ''));
@@ -1557,6 +1569,8 @@ function chat_with_persona(array $conv, array $persona): array
     $conv['max_tokens']     = (int) ($persona['max_tokens'] ?? 400);
     $conv['context_window'] = (int) ($persona['context_window'] ?? 8192);
     $conv['directive']      = $directive;
+    $conv['reasoning_override'] = chat_reasoning_effort($conv['reasoning_effort'] ?? '')
+        ?: chat_reasoning_effort($persona['reasoning_effort'] ?? '');
 
     return $conv;
 }
@@ -1858,7 +1872,7 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
         'temperature'      => (float) ($conv['temperature'] ?? 0.85),
         'max_tokens'       => (int) ($conv['max_tokens'] ?? 400),
         'timeout'          => 300,
-        'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
+        'reasoning_effort' => ($conv['reasoning_override'] ?? '') ?: setting('chat_reasoning_effort', 'none'),
         'should_abort'     => $shouldAbort,
         'purpose'          => 'chat',
     ];
@@ -1914,7 +1928,8 @@ function chat_reply_stream(array $messages, array $conv, callable $onDelta, stri
             if ($partial) {
                 throw $first;
             }
-            if (!empty($opts['reasoning_effort']) && ($first->getCode() === 400 || str_contains($first->getMessage(), '(400)'))) {
+            if (empty($conv['reasoning_override']) && !empty($opts['reasoning_effort'])
+                && ($first->getCode() === 400 || str_contains($first->getMessage(), '(400)'))) {
                 $opts['reasoning_effort'] = '';
                 $res = llm_stream($messages, $cfg, $opts, $emit);
             } else {

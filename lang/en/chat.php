@@ -4,6 +4,8 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
+    'chat.reasoning_inherit' => 'Follow the persona setting',
+    'chat.reasoning_global' => 'Follow the global setting',
     'chat.list.retitle' => 'Rewrite title',
     'chat.emoji.like' => 'Agreed',
     'chat.emoji.heart' => 'Affection',
