@@ -4,6 +4,8 @@
  * Toute clé ajoutée ici doit exister dans lang/en/chat.php et lang/es/chat.php (vérifié par bin/i18n-check.php).
  */
 return [
+    'chat.klipy_format_disabled' => 'Ce format KLIPY est désactivé dans cette discussion.',
+    'chat.klipy_no_media' => 'KLIPY n’a trouvé aucun média pour cette demande.',
     'chat.reasoning_inherited_level' => 'Réglage hérité · {level}',
     'chat.klipy_formats' => 'Médias spontanés KLIPY',
     'chat.klipy_inherit' => 'Suivre les réglages du persona',

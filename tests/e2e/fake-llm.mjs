@@ -76,11 +76,11 @@ http.createServer(async (req, res) => {
     const klipyFormat = req.url.match(/^\/klipy\/test-gif-key\/(gif|sticker|clip)s\/search\?/)?.[1];
     if (klipyFormat) {
         const params = new URL(req.url, 'http://localhost').searchParams;
-        if (params.get('q') !== 'happy dance' || params.get('content_filter') !== 'high') {
+        if (!['happy dance', 'playful wink'].includes(params.get('q')) || params.get('content_filter') !== 'high') {
             res.statusCode = 400;
             return res.end();
         }
-        const url = (extension) => 'https://static.klipy.com/test/celebrate.' + extension;
+        const url = (extension) => 'https://static.klipy.com/test/' + (params.get('q') === 'playful wink' ? 'wink' : 'celebrate') + '.' + extension;
         const file = klipyFormat === 'clip' ? { mp4: url('mp4') }
             : klipyFormat === 'sticker' ? { md: { webp: { url: url('webp') } } }
             : { md: { gif: { url: url('gif') } } };
@@ -135,7 +135,10 @@ http.createServer(async (req, res) => {
             nextStream = '';
             const delta = (content) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + '\n\n');
             let finish = 'stop';
-            if (last.endsWith('Test du réglage de réflexion')) {
+            if (last.endsWith('Envoie-moi un GIF avec un clin d’œil')) {
+                delta('Avec plaisir ! [G');
+                delta('IF d’un clin d’œil]');
+            } else if (last.endsWith('Test du réglage de réflexion')) {
                 delta(`Niveau reçu : ${j.reasoning_effort}.`);
             } else if (last.endsWith('[Réaction à ton message]')) {
                 const target = last.match(/Bulle du personnage : (".*")/)?.[1];

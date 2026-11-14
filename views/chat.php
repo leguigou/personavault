@@ -186,13 +186,14 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                         ?>
                         <div class="bubbles">
                             <?php foreach ($bubbles as $index => $part): ?>
+                                <?php if ($role === 'assistant' && $part === '') continue; ?>
                                 <div class="msg-bubble" data-bubble-index="<?= $index ?>" data-reaction="<?= e($bubbleReactions[$index] ?? '') ?>">
                                     <?php if ($photoOnly) echo $photo; ?>
                                     <div class="bubble"<?= $photoOnly ? ' hidden' : '' ?>><?= nl2br(e($part)) ?></div>
                                 </div>
                             <?php endforeach; ?>
                             <?php if ($mediaUrl = klipy_media_url($m['klipy_url'])): ?>
-                                <figure class="chat-klipy">
+                                <figure class="bubble chat-klipy">
                                     <?php if (str_ends_with(strtolower($mediaUrl), '.mp4')): ?>
                                         <video src="<?= e($mediaUrl) ?>" controls playsinline preload="none" aria-label="<?= e(t('chat.klipy_alt')) ?>"></video>
                                     <?php else: ?>

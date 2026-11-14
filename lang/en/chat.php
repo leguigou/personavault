@@ -4,6 +4,8 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
+    'chat.klipy_format_disabled' => 'This KLIPY format is disabled in this conversation.',
+    'chat.klipy_no_media' => 'KLIPY found no media for this request.',
     'chat.reasoning_inherited_level' => 'Inherited setting · {level}',
     'chat.klipy_formats' => 'Spontaneous KLIPY media',
     'chat.klipy_inherit' => 'Follow the persona settings',

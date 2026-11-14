@@ -181,6 +181,8 @@ if ($action === 'stream' && $method === 'POST') {
     $address = $trackRelationship ? relationship_direct_address($text) : '';
     $relationshipRevision = $trackRelationship ? (int) relationship_state((int) $persona['id'])['revision'] : 0;
     $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget, $address);
+    $mediaRequest = !$reactionOnly ? klipy_requested_media($text) : null;
+    $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
 
     if ($ping()) {
         if (!$regen && $imageBase !== '') {
@@ -216,7 +218,7 @@ if ($action === 'stream' && $method === 'POST') {
         return connection_aborted() !== 0;
     };
 
-    $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort, $canReact): array {
+    $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort, $canReact, $mediaRequest): array {
         $filtered = new ChatReactionStream($canReact);
         $res = chat_reply_stream(
             $built['messages'],
@@ -239,7 +241,7 @@ if ($action === 'stream' && $method === 'POST') {
         }
         $res['reaction'] = $filtered->reaction((string) $res['content']);
         $res['content'] = trim($filtered->content);
-        if ($res['content'] === '' && empty($res['aborted'])) {
+        if ($res['content'] === '' && empty($res['aborted']) && $mediaRequest === null) {
             throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
         }
         return $res;
@@ -279,8 +281,19 @@ if ($action === 'stream' && $method === 'POST') {
         }
     }
 
-    $res['klipy_url'] = !$aborted && !$regen && !$reactionOnly && $res['provider'] === 'chat'
-        ? chat_spontaneous_klipy($cid, $persona, $conv, $text, $res['content']) : '';
+    $res['klipy_url'] = '';
+    $mediaNotice = '';
+    if (!$aborted && !$reactionOnly && ($mediaRequest !== null || (!$regen && $res['provider'] === 'chat'))) {
+        try {
+            $res['klipy_url'] = chat_spontaneous_klipy($cid, $persona, $conv, $text, $res['content'], $mediaRequest);
+        } catch (RuntimeException $error) {
+            $mediaNotice = $error->getMessage();
+        }
+    }
+    if ($res['content'] === '' && $mediaNotice !== '') {
+        $res['content'] = $mediaNotice;
+        $mediaNotice = '';
+    }
 
     $splitPoints = !$aborted && (string) setting('chat_split_enabled', '1') === '1'
         ? chat_split_points(
@@ -373,6 +386,7 @@ if ($action === 'stream' && $method === 'POST') {
     $out = [
         'done'  => true,
         'relationship_pending' => $relationshipPending,
+        'media_notice' => $mediaNotice,
         'reply' => [
             'id'       => $assistantId,
             'role'     => 'assistant',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 const CHAT_GIF_QUERIES = [
     'celebrate' => 'happy dance', 'laugh' => 'laughing reaction', 'surprise' => 'surprised reaction',
     'comfort' => 'comforting hug', 'excited' => 'excited reaction', 'facepalm' => 'funny facepalm',
+    'wink' => 'playful wink', 'hello' => 'friendly wave',
 ];
 
 const KLIPY_FORMATS = ['gif' => 1, 'sticker' => 2, 'clip' => 4];
@@ -74,14 +75,45 @@ function klipy_search_media(string $format, string $mood, string $key, array $se
     return '';
 }
 
-function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $message, string $reply): string
+/** Les demandes explicites utilisent des mots-clés prédéfinis, sans transmettre le message à KLIPY. */
+function klipy_requested_media(string $message): ?array
+{
+    if (!preg_match('/(?:^\s*(?:\/|(?:un|a)\s+)|\b(?:envoie[z]?|montre[z]?|trouve[z]?|cherche[z]?|ajoute[z]?|affiche[z]?|partage[z]?|donne[z]?|send|show|veux|voudrais)\b[^.!?\n]{0,80}?\s)(gif|sticker|clip)\b/iu', $message, $match)) {
+        return null;
+    }
+    $mood = match (true) {
+        (bool) preg_match('/clin d[’\x27](?:œ|oe)il|wink|sédu|provocat|sexy|flirt|pomme|apple/iu', $message) => 'wink',
+        (bool) preg_match('/f[êe]t|c[ée]l[ée]br|\bdans[ea]|réuss|applaud|celebr/iu', $message) => 'celebrate',
+        (bool) preg_match('/rire|dr[oô]le|laugh|funny/iu', $message) => 'laugh',
+        (bool) preg_match('/c[âa]lin|réconfort|hug/iu', $message) => 'comfort',
+        (bool) preg_match('/surpris|étonn|shock/iu', $message) => 'surprise',
+        default => 'hello',
+    };
+    return [strtolower($match[1]), $mood];
+}
+
+function chat_spontaneous_klipy(int $cid, array $persona, array $conv, string $message, string $reply, ?array $request = null): string
 {
     $mask = (int) $conv['klipy_formats'];
     if ($mask === -1) {
         $mask = (int) $persona['klipy_formats'];
     }
     $formats = array_filter(KLIPY_FORMATS, static fn (int $bit): bool => ($bit & $mask) !== 0);
-    if (!$formats || ($key = setting('klipy_api_key')) === '') {
+    if ($request !== null && !isset($formats[$request[0]])) {
+        throw new RuntimeException(t('chat.klipy_format_disabled'));
+    }
+    $key = setting('klipy_api_key');
+    if ($request !== null) {
+        if ($key === '') {
+            throw new RuntimeException(t('settings.chat.klipy_test_missing'));
+        }
+        $url = klipy_search_media($request[0], $request[1], $key, [], true);
+        if ($url === '') {
+            throw new RuntimeException(t('chat.klipy_no_media'));
+        }
+        return $url;
+    }
+    if (!$formats || $key === '') {
         return '';
     }
     $stmt = db()->prepare("SELECT klipy_url FROM messages WHERE conversation_id = ? AND role = 'assistant'
