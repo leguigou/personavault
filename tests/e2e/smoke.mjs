@@ -586,6 +586,13 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         'une demande explicite affiche un vrai GIF même pendant le délai, sans description dans le flux');
     expect(/<figure class="bubble chat-klipy">\s*<img src="https:\/\/static\.klipy\.com\/test\/wink\.gif"/.test(await (await http('/chat/1')).text()),
         'le GIF demandé est conservé dans sa propre bulle');
+    const recent = await (await http('/chat/1/messages')).json();
+    const mid = recent.messages.filter(m => m.role === 'user').at(-1).id;
+    const edited = await (await submit('/chat/1/msg-edit', { mid, content: "Tu m'envoies un petit gif" })).json();
+    const replay = await (await submit('/chat/1/stream', { regen: '1', regen_mid: mid })).text();
+    expect(edited.replay && replay.includes('Avec plaisir !') && !replay.includes('Je ne peux pas envoyer')
+        && replay.replaceAll('\\/', '/').includes('https://static.klipy.com/test/hello.gif'),
+        'la formulation naturelle déclenche KLIPY après modification du message et le modèle reçoit le résultat');
     await submit('/chat/1/klipy', {});
     expect((await requestGif()).includes('Ce format KLIPY est désactivé'), 'une demande explicite signale un format désactivé');
     const stickerChat = (await submit('/chat/1/new', {})).headers.get('location');

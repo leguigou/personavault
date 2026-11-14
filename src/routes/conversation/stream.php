@@ -205,6 +205,18 @@ if ($action === 'stream' && $method === 'POST') {
 
     $mode    = ((string) ($_POST['fallback'] ?? '')) === '1' ? 'fallback' : 'auto';
     $sentAny = false;
+    $requestedUrl = '';
+    $mediaNotice = '';
+    if ($mediaRequest !== null) {
+        try {
+            $requestedUrl = chat_spontaneous_klipy($cid, $persona, $conv, $text, '', $mediaRequest);
+        } catch (RuntimeException $error) {
+            $mediaNotice = $error->getMessage();
+        }
+        $built['messages'][0]['content'] .= $requestedUrl !== ''
+            ? "\nLe média demandé a été trouvé et sera joint automatiquement à ta réponse. Réagis naturellement en une phrase courte."
+            : "\nLe média demandé est indisponible. L’application affichera la raison. Réponds brièvement en personnage.";
+    }
 
     // bouton « Arrêter » : le client coupe la connexion. connection_aborted() ne le voit
     // qu'après une écriture : on envoie un commentaire SSE (ignoré par le client) toutes
@@ -281,14 +293,9 @@ if ($action === 'stream' && $method === 'POST') {
         }
     }
 
-    $res['klipy_url'] = '';
-    $mediaNotice = '';
-    if (!$aborted && !$reactionOnly && ($mediaRequest !== null || (!$regen && $res['provider'] === 'chat'))) {
-        try {
-            $res['klipy_url'] = chat_spontaneous_klipy($cid, $persona, $conv, $text, $res['content'], $mediaRequest);
-        } catch (RuntimeException $error) {
-            $mediaNotice = $error->getMessage();
-        }
+    $res['klipy_url'] = $aborted ? '' : $requestedUrl;
+    if (!$aborted && !$reactionOnly && !$regen && $mediaRequest === null && $res['provider'] === 'chat') {
+        $res['klipy_url'] = chat_spontaneous_klipy($cid, $persona, $conv, $text, $res['content']);
     }
     if ($res['content'] === '' && $mediaNotice !== '') {
         $res['content'] = $mediaNotice;
