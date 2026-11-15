@@ -15,7 +15,17 @@ return [
     'settings.chat.klipy_test_unavailable' => 'Impossible de vérifier la clé. KLIPY est inaccessible ou a renvoyé une réponse inattendue.',
     'settings.chat.klipy_test_empty' => 'KLIPY a répondu, mais aucun GIF utilisable n’a été trouvé.',
     'settings.chat.klipy_empty' => 'Aucune clé enregistrée',
-    'settings.chat.klipy_saved' => 'Clé enregistrée',
+    'settings.api_key_saved' => 'Clé enregistrée',
+    'settings.connection.mcp_title' => 'Recherche MCP via LM Studio',
+    'settings.connection.mcp_missing' => 'Aucun outil de recherche MCP n’est configuré.',
+    'settings.connection.search_ok' => 'Connexion réussie. La recherche a renvoyé des sources.',
+    'settings.connection.search_empty' => 'Le service a répondu, mais la recherche n’a renvoyé aucune source exploitable.',
+    'settings.connection.rejected' => 'Accès refusé (HTTP {status}). Vérifie la clé ou le jeton et ses autorisations.',
+    'settings.connection.limit' => 'Limite de requêtes atteinte. Réessaie plus tard.',
+    'settings.connection.http_error' => 'Le service a refusé la requête (HTTP {status}). Vérifie sa configuration.',
+    'settings.connection.unavailable' => 'Service inaccessible ou réponse inattendue.',
+    'settings.connection.invalid_key' => 'La clé ou le jeton contient un caractère invalide.',
+    'settings.chat.brave_key' => 'Clé API Brave Search',
     'settings.chat.klipy_key' => 'Clé API KLIPY',
     'settings.chat.klipy_help' => 'Autorise l’envoi de médias spontanés selon les réglages de chaque discussion. Seuls des mots-clés de recherche sont envoyés à KLIPY.',
     'settings.chat.klipy_clear' => 'Effacer la clé KLIPY',
@@ -62,7 +72,6 @@ return [
     'settings.ia.provider_hint' => 'Pour que l’IA analyse la photo principale en rédigeant un prompt, choisis un modèle qui lit les images (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek ne lit que le texte. OpenRouter donne accès à tous ces modèles avec une seule clé : le nom du modèle s’écrit « fournisseur/modèle » (ex. google/gemini-2.5-flash).',
     'settings.ia.api_key'       => 'Clé API',
     'settings.ia.api_key_keep'  => 'Laisser vide pour conserver la clé',
-    'settings.ia.api_key_saved_help' => 'Une clé est déjà enregistrée. Saisis-en une nouvelle pour la remplacer.',
     'settings.ia.api_key_help'  => 'Stockée dans la base locale de l’app, jamais affichée en clair.',
     'settings.ia.status_ready'  => 'Prêt · {model}',
     'settings.ia.status_no_key' => 'Aucune clé enregistrée',
@@ -84,9 +93,8 @@ return [
         'other' => '{n} modèles détectés · ★ = recommandés pour la discussion.',
     ],
     'settings.chat.model_manual' => 'Serveur injoignable : saisis le nom du modèle à la main.',
-    'settings.chat.api_key'     => 'Clé API (facultative)',
-    'settings.chat.api_key_saved_placeholder' => 'Clé enregistrée — laisser vide',
-    'settings.chat.api_key_placeholder' => 'vide pour LM Studio',
+    'settings.chat.api_key'     => 'Clé API ou jeton d’accès',
+    'settings.chat.api_key_placeholder' => 'Requis si le serveur exige une authentification',
     'settings.chat.memory_title' => 'Réflexion et mémoire',
     'settings.chat.reasoning'   => 'Réflexion du modèle',
     'settings.chat.reasoning_none'   => 'Désactivée (recommandé)',
@@ -245,8 +253,8 @@ return [
             <p>C’est en général un service distant (DeepSeek, OpenAI, OpenRouter…). Les données ne partent
             qu’au moment où tu cliques sur une action IA.</p>',
     'settings.info.api_key_label'     => 'clé API',
-    'settings.info.api_key_html'      => '<p>La clé est enregistrée dans la base locale de l’app et n’est <strong>jamais réaffichée</strong>
-            dans la page. Laisse le champ vide pour conserver la clé actuelle.</p>
+    'settings.info.api_key_html'      => '<p>La clé est enregistrée dans la base locale de l’app. Seul un aperçu masqué s’affiche.
+            Laisse le champ vide pour conserver la clé actuelle.</p>
             <p>Le bouton « Test de connexion » n’envoie la clé enregistrée qu’à l’adresse enregistrée : si tu
             changes d’adresse, saisis la clé à nouveau.</p>',
     'settings.info.chat_model_label'  => 'modèle de discussion',

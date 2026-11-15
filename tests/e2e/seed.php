@@ -64,6 +64,7 @@ facts_add($c, 'Prend souvent le train', 'fait', 'confirme', $cid);
 
 foreach ([
     'chat_llm_provider' => 'lmstudio', 'chat_llm_base_url' => "http://127.0.0.1:$llmPort/v1", 'chat_llm_model' => 'fake-model',
+    'chat_llm_api_key' => 'lms-test-token',
     'chat_split_enabled' => '0', 'chat_title_model' => 'chat', 'chat_followup_enabled' => '0',
     'chat_memory_threshold' => '600', 'chat_memory_target' => '300',
     // modèle des Réglages › IA (assistant de création)

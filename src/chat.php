@@ -657,14 +657,25 @@ function lms_root(): string
     return preg_replace('#/v\d+/?$#', '', $base) ?: $base;
 }
 
+function lms_api_headers(bool $json = false): array
+{
+    $headers = $json ? ['Content-Type: application/json'] : [];
+    $key = chat_llm_config_raw()['key'];
+    if ($key !== '') {
+        $headers[] = 'Authorization: Bearer ' . $key;
+    }
+    return $headers;
+}
+
 /** Modèles actuellement chargés en mémoire (API native v1, repli v0). */
 function lms_loaded_models(): array
 {
     $root = lms_root();
     $out  = [];
+    $headers = lms_api_headers();
 
     $ch = curl_init($root . '/api/v1/models');
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 6, CURLOPT_CONNECTTIMEOUT => 3]);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 6, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_HTTPHEADER => $headers]);
     $raw  = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -687,7 +698,7 @@ function lms_loaded_models(): array
 
     // repli : ancienne API v0
     $ch = curl_init($root . '/api/v0/models');
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 6, CURLOPT_CONNECTTIMEOUT => 3]);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 6, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_HTTPHEADER => $headers]);
     $raw2 = curl_exec($ch);
     curl_close($ch);
     $data2 = json_decode((string) $raw2, true);
@@ -708,27 +719,24 @@ function lms_load_async(string $model, int $contextLength = 8192): bool
     if ($model === '') {
         return false;
     }
-    $root = lms_root();
-    $log  = dirname(__DIR__) . '/storage/lms-load.log';
-    $body = json_encode([
-        'model'          => $model,
-        'context_length' => max(2048, $contextLength),
-    ], JSON_UNESCAPED_UNICODE);
-
-    // la réponse de LM Studio et son code HTTP sont gardés dans le journal, suivis d'un
-    // marqueur de fin : lms_load_result() sait ainsi si le chargement a réussi ou échoué
-    $curl = sprintf(
-        'curl -s -m 300 -X POST %s -H %s -d %s -w %s',
-        escapeshellarg($root . '/api/v1/models/load'),
-        escapeshellarg('Content-Type: application/json'),
-        escapeshellarg((string) $body),
-        escapeshellarg("\n__HTTP:%{http_code}")
-    );
-    $cmd = sprintf('nohup sh -c %s > %s 2>&1 &', escapeshellarg($curl . '; printf "\n__EXIT:%s\n" "$?"'), escapeshellarg($log));
-
-    @unlink($log);
-    exec($cmd);
-    return true;
+    $log = PV_ROOT . '/storage/lms-load.log';
+    $script = PV_ROOT . '/bin/lms-load.php';
+    $encodedModel = base64_encode($model);
+    $contextLength = max(2048, $contextLength);
+    // Le processus PHP lit le jeton dans les réglages, jamais dans sa ligne de commande.
+    if (PHP_OS_FAMILY === 'Windows') {
+        $quote = static fn (string $value): string => "'" . str_replace("'", "''", $value) . "'";
+        $php = dirname(PHP_BINARY) . '/php.exe';
+        $command = '$ErrorActionPreference = "Stop"; Start-Process -WindowStyle Hidden -FilePath '
+            . $quote(is_file($php) ? $php : 'php.exe') . ' -ArgumentList '
+            . $quote('"' . $script . '" ' . $encodedModel . ' ' . $contextLength) . ' -RedirectStandardOutput ' . $quote($log);
+        $cmd = 'powershell.exe -NoProfile -NonInteractive -EncodedCommand ' . base64_encode(mb_convert_encoding($command, 'UTF-16LE', 'UTF-8'));
+    } else {
+        $cmd = 'nohup php ' . escapeshellarg($script) . ' ' . escapeshellarg($encodedModel) . ' ' . $contextLength
+            . ' > ' . escapeshellarg($log) . ' 2>/dev/null < /dev/null &';
+    }
+    exec($cmd, $output, $status);
+    return $status === 0;
 }
 
 /**
@@ -780,7 +788,7 @@ function lms_unload(string $instanceId): bool
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
         CURLOPT_CONNECTTIMEOUT => 4,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_HTTPHEADER     => lms_api_headers(true),
         CURLOPT_POSTFIELDS     => json_encode(['instance_id' => $instanceId]),
     ]);
     $raw  = curl_exec($ch);
@@ -847,13 +855,18 @@ function lms_load_sync(string $model, int $contextLength, ?callable $onTick = nu
     if ($model === '') {
         return false;
     }
+    return lms_load_request($model, $contextLength, $onTick)['ok'];
+}
+
+function lms_load_request(string $model, int $contextLength, ?callable $onTick = null): array
+{
     $ch = curl_init(lms_root() . '/api/v1/models/load');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 300,
         CURLOPT_CONNECTTIMEOUT => 3,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_HTTPHEADER     => lms_api_headers(true),
         CURLOPT_POSTFIELDS     => json_encode(['model' => $model, 'context_length' => max(2048, $contextLength)], JSON_UNESCAPED_UNICODE),
     ]);
     if ($onTick) {
@@ -869,8 +882,20 @@ function lms_load_sync(string $model, int $contextLength, ?callable $onTick = nu
     }
     $raw  = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $exit = curl_errno($ch);
     curl_close($ch);
-    return $raw !== false && $code >= 200 && $code < 300;
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    $error = $data['error'] ?? '';
+    if (is_array($error)) {
+        $error = $error['message'] ?? '';
+    }
+    $error = is_string($error) ? $error : '';
+    $key = chat_llm_config_raw()['key'];
+    if ($key !== '') {
+        $error = str_replace($key, '********', $error);
+    }
+    $error = mb_substr(str_replace(['__EXIT:', '__HTTP:'], '', $error), 0, 400);
+    return ['ok' => $raw !== false && $code >= 200 && $code < 300 && $error === '', 'http' => $code, 'exit' => $exit, 'error' => $error];
 }
 
 /**
@@ -1884,8 +1909,9 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
 function lms_status(): array
 {
     $root = lms_root();
+    $headers = lms_api_headers();
     $ch = curl_init($root . '/api/v1/models');
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 2]);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_HTTPHEADER => $headers]);
     $raw  = curl_exec($ch);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -1921,7 +1947,7 @@ function lms_status(): array
     // l'API v1 déclare « llm » pour des modèles qui voient très bien les images
     // (gemma 4 par ex.) : on complète avec la modalité déclarée par l'API v0.
     $ch = curl_init($root . '/api/v0/models');
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 2]);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_CONNECTTIMEOUT => 2, CURLOPT_HTTPHEADER => $headers]);
     $raw0 = curl_exec($ch);
     curl_close($ch);
     if ($raw0 !== false) {

@@ -1,5 +1,5 @@
 <?php
-/** @var array $llm @var bool $hasKey @var array $chat @var array $chatModels @var bool $chatHasKey */
+/** @var array $llm @var array $keyPreviews @var array $chat @var array $chatModels */
 /*
  * Textes : lang/<langue>/settings.php. Une ligne vide après une balise PHP fermante en fin de ligne
  * est voulue : PHP avale le saut de ligne qui suit cette balise, la ligne vide le rétablit
@@ -19,6 +19,9 @@ $providers = [
 $info = static fn (string $key, string $label): string =>
     '<button type="button" class="info-btn" data-info="' . e($key) . '" aria-label="' . e(t('settings.info_more', ['label' => $label])) . '">i</button>';
 $facts = facts_settings();
+$hasKey = $keyPreviews['llm'] !== '';
+$chatHasKey = $keyPreviews['chat'] !== '';
+$klipyHasKey = $keyPreviews['klipy'] !== '';
 ?>
 <a class="back settings-back" href="/">
     <svg viewBox="0 0 24 24" class="ico"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -92,7 +95,7 @@ $facts = facts_settings();
                    placeholder="<?= $hasKey ? e(t('settings.ia.api_key_keep')) : 'sk-…' ?>">
             <small>
                 <?php if ($hasKey): ?>
-                    <?= e(t('settings.ia.api_key_saved_help')) ?>
+                    <?= e(t('settings.api_key_saved')) ?> <code><?= e($keyPreviews['llm']) ?></code>
 
                 <?php else: ?>
                     <?= e(t('settings.ia.api_key_help')) ?>
@@ -108,7 +111,7 @@ $facts = facts_settings();
             </label>
         <?php endif; ?>
 
-        <div class="llm-status" data-llm-status>
+        <div class="llm-status" id="test-llm-status" role="status">
             <?php if ($hasKey): ?>
                 <span class="dot dot-ok"></span> <?= e(t('settings.ia.status_ready', ['model' => $llm['model']])) ?>
             <?php else: ?>
@@ -119,7 +122,8 @@ $facts = facts_settings();
 
         <div class="form-actions save-bar">
             <span class="dirty-note"><?= e(t('settings.dirty')) ?></span>
-            <button type="button" class="btn btn-ghost" data-llm-test><?= e(t('settings.ia.test')) ?></button>
+            <button type="button" class="btn btn-ghost" data-connection-test="/settings/test"
+                    data-test-fields="base_url model api_key" aria-controls="test-llm-status"><?= e(t('settings.ia.test')) ?></button>
             <button class="btn btn-primary" type="submit"><?= e(t('settings.save')) ?></button>
         </div>
     </form>
@@ -208,7 +212,10 @@ $facts = facts_settings();
         <label class="field">
             <span><?= e(t('settings.chat.api_key')) ?></span>
             <input class="input" type="password" name="chat_api_key" autocomplete="off" spellcheck="false"
-                   placeholder="<?= e($chatHasKey ? t('settings.chat.api_key_saved_placeholder') : t('settings.chat.api_key_placeholder')) ?>">
+                   placeholder="<?= e($chatHasKey ? t('settings.ia.api_key_keep') : t('settings.chat.api_key_placeholder')) ?>">
+            <?php if ($chatHasKey): ?>
+                <small><?= e(t('settings.api_key_saved')) ?> <code><?= e($keyPreviews['chat']) ?></code></small>
+            <?php endif; ?>
         </label>
 
         <?php if ($chatHasKey): ?>
@@ -217,6 +224,9 @@ $facts = facts_settings();
                 <span><?= e(t('settings.clear_key')) ?></span>
             </label>
         <?php endif; ?>
+        <button type="button" class="btn btn-ghost btn-sm" data-connection-test="/settings/chat/test"
+                data-test-fields="chat_base_url chat_model chat_api_key" aria-controls="test-chat-status"><?= e(t('settings.ia.test')) ?></button>
+        <p class="llm-status" id="test-chat-status" role="status" hidden></p>
         </section>
 
         <section class="settings-card">
@@ -252,30 +262,44 @@ $facts = facts_settings();
         </section>
 
         <section class="settings-card">
-            <?php
-            $klipyKey = setting('klipy_api_key');
-            $visible = min(4, intdiv(max(0, mb_strlen($klipyKey) - 4), 2));
-            $maskedKlipyKey = $visible > 0 ? mb_substr($klipyKey, 0, $visible) . '********' . mb_substr($klipyKey, -$visible) : '********';
-            ?>
             <label class="field">
                 <span><?= e(t('settings.chat.klipy_key')) ?></span>
                 <input class="input" type="password" name="klipy_api_key" maxlength="255" autocomplete="new-password" spellcheck="false"
-                       placeholder="<?= e($klipyKey !== '' ? $maskedKlipyKey : t('settings.chat.klipy_empty')) ?>">
-                <?php if ($klipyKey !== ''): ?>
-                    <small><?= e(t('settings.chat.klipy_saved')) ?> <code><?= e($maskedKlipyKey) ?></code></small>
+                       placeholder="<?= e($klipyHasKey ? t('settings.ia.api_key_keep') : t('settings.chat.klipy_empty')) ?>">
+                <?php if ($klipyHasKey): ?>
+                    <small><?= e(t('settings.api_key_saved')) ?> <code><?= e($keyPreviews['klipy']) ?></code></small>
                 <?php endif; ?>
                 <small><?= e(t('settings.chat.klipy_help')) ?></small>
             </label>
-            <?php if ($klipyKey !== ''): ?>
+            <?php if ($klipyHasKey): ?>
                 <label class="check"><input type="checkbox" name="klipy_api_key_clear" value="1"><span><?= e(t('settings.chat.klipy_clear')) ?></span></label>
             <?php endif; ?>
-            <button type="button" class="btn btn-ghost btn-sm" data-klipy-test
-                    data-entered-label="<?= e(t('settings.chat.klipy_test')) ?>"
-                    data-default-label="<?= e($klipyKey !== '' ? t('settings.chat.klipy_test_saved') : t('settings.chat.klipy_test')) ?>">
-                <?= e($klipyKey !== '' ? t('settings.chat.klipy_test_saved') : t('settings.chat.klipy_test')) ?>
+            <button type="button" class="btn btn-ghost btn-sm" data-connection-test="/settings/klipy/test" data-test-fields="klipy_api_key"
+                    aria-controls="test-klipy-status"
+                    data-entered-label="<?= e(t('settings.chat.klipy_test')) ?>">
+                <?= e($klipyHasKey ? t('settings.chat.klipy_test_saved') : t('settings.chat.klipy_test')) ?>
             </button>
-            <p class="llm-status" data-klipy-status role="status" hidden></p>
+            <p class="llm-status" id="test-klipy-status" role="status" hidden></p>
         </section>
+
+        <?php if ($keyPreviews['brave'] !== ''): ?>
+            <section class="settings-card">
+                <h3 class="settings-card-title"><?= e(t('settings.chat.brave_key')) ?></h3>
+                <p class="hint"><?= e(t('settings.api_key_saved')) ?> <code><?= e($keyPreviews['brave']) ?></code></p>
+                <button type="button" class="btn btn-ghost btn-sm" data-connection-test="/settings/brave/test"
+                        aria-controls="test-brave-status"><?= e(t('settings.ia.test')) ?></button>
+                <p class="llm-status" id="test-brave-status" role="status" hidden></p>
+            </section>
+        <?php endif; ?>
+        <?php if ($searchMcp !== null): ?>
+            <section class="settings-card">
+                <h3 class="settings-card-title"><?= e(t('settings.connection.mcp_title')) ?></h3>
+                <p class="hint"><code><?= e($searchMcp['id']) ?></code> · <code><?= e($searchMcp['tool']) ?></code></p>
+                <button type="button" class="btn btn-ghost btn-sm" data-connection-test="/settings/mcp/test"
+                        aria-controls="test-mcp-status"><?= e(t('settings.ia.test')) ?></button>
+                <p class="llm-status" id="test-mcp-status" role="status" hidden></p>
+            </section>
+        <?php endif; ?>
 
         <details class="settings-card settings-fold">
             <summary>

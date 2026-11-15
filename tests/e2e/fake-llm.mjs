@@ -4,6 +4,7 @@ import http from 'node:http';
 
 const port = Number(process.argv[2] || 18235);
 let nextStream = '';
+let modelState = 'loaded';
 // assistant de création : fiche de test (personnage existant « Sherlock Holmes »)
 const sherlock = { name: 'Sherlock Holmes', tagline: 'Détective consultant au 221B Baker Street', description: 'Détective génial et excentrique de Londres.',
     tags: ['detective', 'londres'], meta: [{ k: 'Œuvre', v: 'Arthur Conan Doyle' }, { k: 'Âge', v: '35' }, { k: 'Ville', v: 'Londres' }],
@@ -62,12 +63,39 @@ http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/test/next-stream') {
         return res.end(nextStream);
     }
+    if (req.method === 'POST' && req.url === '/test/model-state') {
+        modelState = body;
+        res.statusCode = 204;
+        return res.end();
+    }
     if (req.method === 'GET' && req.url.endsWith('/models')) {
+        if (req.url.startsWith('/api/') && req.headers.authorization !== 'Bearer lms-test-token') {
+            res.statusCode = 401;
+            return res.end('{}');
+        }
         res.setHeader('Content-Type', 'application/json');
         return res.end(JSON.stringify(req.url.includes('/api/')
-            ? { models: [{ key: 'fake-model', type: 'llm', loaded_instances: [{ id: 'fake-model', config: { context_length: 8192 } }] }],
-                data: [{ id: 'fake-model', state: 'loaded', type: 'llm', max_context_length: 8192 }] }
+            ? { models: [{ key: 'fake-model', type: 'llm', loaded_instances: modelState === 'loaded'
+                ? [{ id: 'fake-model', config: { context_length: 8192 } }] : [] }],
+                data: [{ id: 'fake-model', state: modelState, type: 'llm', max_context_length: 8192 }] }
             : { data: [{ id: 'fake-model' }] }));
+    }
+    if (req.method === 'POST' && req.url === '/api/v1/models/load') {
+        const request = JSON.parse(body);
+        if (req.headers.authorization !== 'Bearer lms-test-token') {
+            res.statusCode = 401;
+            return res.end(JSON.stringify({ error: { message: 'Jeton de chargement manquant ou incorrect' } }));
+        }
+        if (modelState === 'refused') {
+            res.statusCode = 403;
+            return res.end(JSON.stringify({ error: { message: 'Permissions insuffisantes : ' + req.headers.authorization } }));
+        }
+        if (request.model !== 'fake-model' || request.context_length < 2048) {
+            res.statusCode = 400;
+            return res.end('{}');
+        }
+        modelState = 'loaded';
+        return res.end(JSON.stringify({ instance_id: 'fake-model' }));
     }
     if (req.url.startsWith('/klipy/rejected-test-key/')) {
         res.statusCode = 401;
@@ -75,7 +103,8 @@ http.createServer(async (req, res) => {
     }
     if (req.url.startsWith('/web/search?')) {
         const query = new URL(req.url, 'http://localhost').searchParams.get('q');
-        if (req.headers['x-subscription-token'] !== 'test-search-key' || query !== 'restaurants italiens pizzas Toulon') {
+        if (req.headers['x-subscription-token'] !== 'test-search-key'
+            || !['restaurants italiens pizzas Toulon', 'Tour Eiffel Paris site officiel'].includes(query)) {
             res.statusCode = 503;
             return res.end();
         }
@@ -87,7 +116,8 @@ http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/api/v1/chat') {
         const request = JSON.parse(body);
         const integration = request.integrations?.[0];
-        if (request.input !== 'restaurants italiens pizzas Toulon' || request.model !== 'fake-model'
+        if (req.headers.authorization !== 'Bearer lms-test-token'
+            || !['restaurants italiens pizzas Toulon', 'Tour Eiffel Paris site officiel'].includes(request.input) || request.model !== 'fake-model'
             || request.store !== false || integration?.type !== 'plugin' || integration.id !== 'mcp/test-search'
             || integration.allowed_tools?.join() !== 'web_search') {
             res.statusCode = 400;
@@ -120,6 +150,17 @@ http.createServer(async (req, res) => {
     }
     if (req.url.endsWith('/chat/completions')) {
         const j = JSON.parse(body || '{}');
+        if (j.messages?.[0]?.content === 'Réponds uniquement par OK.') {
+            const key = req.url.startsWith('/remote/') ? 'llm-test-secret' : 'lms-test-token';
+            if (req.headers.authorization !== 'Bearer ' + key) {
+                res.statusCode = 401;
+                return res.end(JSON.stringify({ error: { message: 'Jeton reçu : ' + req.headers.authorization } }));
+            }
+            if (req.url.startsWith('/redirect/')) {
+                res.writeHead(307, { Location: '/v1/chat/completions' });
+                return res.end();
+            }
+        }
         // comme LM Studio : json_object refusé, json_schema accepté
         if (j.response_format?.type === 'json_object') {
             res.statusCode = 400;

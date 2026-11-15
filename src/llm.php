@@ -413,6 +413,42 @@ function llm_chat(array $messages, bool $json = false, int $timeout = 90, ?array
     return $content;
 }
 
+/** Journalise le test sans conserver les réponses ou erreurs brutes du service. */
+function llm_test_connection(string $baseUrl, string $model, string $key): int
+{
+    $headers = ['Content-Type: application/json'];
+    if ($key !== '') {
+        $headers[] = 'Authorization: Bearer ' . $key;
+    }
+    $body = [
+        'model' => $model,
+        'messages' => [['role' => 'user', 'content' => 'Réponds uniquement par OK.']],
+        'max_tokens' => 16,
+        'stream' => false,
+    ];
+    $started = microtime(true);
+    $error = null;
+    try {
+        $data = service_json_request($baseUrl . '/chat/completions', $headers, 30,
+            body: json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR), diagnostic: true);
+        if (!is_array($data['choices'][0]['message'] ?? null)) {
+            throw new RuntimeException('');
+        }
+    } catch (RuntimeException $e) {
+        $error = $e;
+    }
+    $ms = (int) round((microtime(true) - $started) * 1000);
+    llm_log_write($body, $baseUrl, ['purpose' => 'test'], [
+        'status' => $error === null ? 'ok' : 'error', 'ms' => $ms,
+        'code' => $error === null ? 200 : $error->getCode(),
+        'error' => $error === null ? '' : service_connection_error($error->getCode()),
+    ]);
+    if ($error !== null) {
+        throw $error;
+    }
+    return $ms;
+}
+
 /** Extrait un objet JSON d'une réponse qui peut contenir du texte ou des ```json. */
 function llm_json(?string $raw): array
 {

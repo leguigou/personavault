@@ -13,7 +13,17 @@ return [
     'settings.chat.klipy_test_unavailable' => 'No se pudo verificar la clave. KLIPY no está disponible o devolvió una respuesta inesperada.',
     'settings.chat.klipy_test_empty' => 'KLIPY respondió, pero no se encontró ningún GIF utilizable.',
     'settings.chat.klipy_empty' => 'Ninguna clave guardada',
-    'settings.chat.klipy_saved' => 'Clave guardada',
+    'settings.api_key_saved' => 'Clave guardada',
+    'settings.connection.mcp_title' => 'Búsqueda MCP mediante LM Studio',
+    'settings.connection.mcp_missing' => 'No hay ninguna herramienta de búsqueda MCP configurada.',
+    'settings.connection.search_ok' => 'Conexión correcta. La búsqueda devolvió fuentes.',
+    'settings.connection.search_empty' => 'El servicio respondió, pero la búsqueda no devolvió fuentes utilizables.',
+    'settings.connection.rejected' => 'Acceso denegado (HTTP {status}). Revisa la clave o el token y sus permisos.',
+    'settings.connection.limit' => 'Se alcanzó el límite de solicitudes. Inténtalo más tarde.',
+    'settings.connection.http_error' => 'El servicio rechazó la solicitud (HTTP {status}). Revisa su configuración.',
+    'settings.connection.unavailable' => 'Servicio inaccesible o respuesta inesperada.',
+    'settings.connection.invalid_key' => 'La clave o el token contiene un carácter no válido.',
+    'settings.chat.brave_key' => 'Clave API de Brave Search',
     'settings.chat.klipy_key' => 'Clave API de KLIPY',
     'settings.chat.klipy_help' => 'Permite enviar contenido espontáneo según los ajustes de cada conversación. Solo se envían palabras clave a KLIPY.',
     'settings.chat.klipy_clear' => 'Borrar la clave de KLIPY',
@@ -60,7 +70,6 @@ return [
     'settings.ia.provider_hint' => 'Para que la IA analice la foto principal al redactar un prompt, elige un modelo que lea imágenes (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek solo lee texto. OpenRouter da acceso a todos estos modelos con una sola clave: el nombre del modelo es «proveedor/modelo» (p. ej. google/gemini-2.5-flash).',
     'settings.ia.api_key'       => 'Clave API',
     'settings.ia.api_key_keep'  => 'Déjalo vacío para conservar la clave',
-    'settings.ia.api_key_saved_help' => 'Ya hay una clave guardada. Escribe una nueva para sustituirla.',
     'settings.ia.api_key_help'  => 'Se guarda en la base local de la app y nunca se muestra en claro.',
     'settings.ia.status_ready'  => 'Listo · {model}',
     'settings.ia.status_no_key' => 'Ninguna clave guardada',
@@ -82,9 +91,8 @@ return [
         'other' => '{n} modelos detectados · ★ = recomendados para conversar.',
     ],
     'settings.chat.model_manual' => 'Servidor inaccesible: escribe el nombre del modelo a mano.',
-    'settings.chat.api_key'     => 'Clave API (opcional)',
-    'settings.chat.api_key_saved_placeholder' => 'Clave guardada — déjalo vacío',
-    'settings.chat.api_key_placeholder' => 'vacío para LM Studio',
+    'settings.chat.api_key'     => 'Clave API o token de acceso',
+    'settings.chat.api_key_placeholder' => 'Obligatorio si el servidor exige autenticación',
     'settings.chat.memory_title' => 'Razonamiento y memoria',
     'settings.chat.reasoning'   => 'Razonamiento del modelo',
     'settings.chat.reasoning_none'   => 'Desactivado (recomendado)',
@@ -243,8 +251,8 @@ return [
             <p>Suele ser un servicio remoto (DeepSeek, OpenAI, OpenRouter…). Los datos solo se envían
             cuando haces clic en una acción de IA.</p>',
     'settings.info.api_key_label'     => 'clave API',
-    'settings.info.api_key_html'      => '<p>La clave se guarda en la base local de la app y <strong>nunca se vuelve a mostrar</strong>
-            en la página. Deja el campo vacío para conservar la clave actual.</p>
+    'settings.info.api_key_html'      => '<p>La clave se guarda en la base local de la app. Solo se muestra una vista enmascarada.
+            Deja el campo vacío para conservar la clave actual.</p>
             <p>El botón «Probar la conexión» solo envía la clave guardada a la dirección guardada: si
             cambias de dirección, vuelve a escribir la clave.</p>',
     'settings.info.chat_model_label'  => 'modelo de conversación',

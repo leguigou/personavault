@@ -63,7 +63,7 @@ return [
 
     // ajustes: prueba del modelo, purga de LM Studio
     'js.settings.test_running'    => 'Probando…',
-    'js.settings.test_connecting' => 'Conectando con el modelo…',
+    'js.settings.test_connecting' => 'Comprobando la conexión…',
     'js.settings.test_failed'     => 'La prueba ha fallado.',
     'js.settings.test_ok'         => 'Conectado · {model} · {ms} ms',
     'js.settings.purging'         => 'Purgando…',
