@@ -24,6 +24,80 @@ function chat_message_json(array $message): array
     ];
 }
 
+/* --- recherche et fenêtre de lecture dans la conversation affichée --- */
+if ($action === 'find-messages' && $method === 'GET') {
+    session_write_close();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $query = is_string($_GET['q'] ?? null) ? mb_substr(trim($_GET['q']), 0, 160) : '';
+    $date = is_string($_GET['date'] ?? null) ? $_GET['date'] : '';
+    $day = preg_match('/\A\d{4}-\d{2}-\d{2}\z/', $date)
+        ? DateTimeImmutable::createFromFormat('!Y-m-d', $date, chat_now()->getTimezone()) : false;
+    if ($date !== '' && (!$day || $day->format('Y-m-d') !== $date)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false]);
+        exit;
+    }
+    if ($query === '' && !$day) {
+        echo json_encode(['ok' => true, 'total' => 0, 'results' => []]);
+        exit;
+    }
+
+    $sql = "FROM messages WHERE conversation_id = ? AND role IN ('user', 'assistant')";
+    $params = [$cid];
+    if ($day) {
+        $sql .= ' AND created_at >= ? AND created_at < ?';
+        $params[] = gmdate('Y-m-d H:i:s', $day->getTimestamp());
+        $params[] = gmdate('Y-m-d H:i:s', $day->modify('+1 day')->getTimestamp());
+    }
+    $pdo = db();
+    if ($query !== '') {
+        $pdo->sqliteCreateFunction('pv_message_matches', static fn (string $content): int => (int) (mb_stripos($content, $query) !== false), 1);
+        $sql .= ' AND pv_message_matches(content) = 1';
+    }
+    $stmt = $pdo->prepare('SELECT COUNT(*) ' . $sql);
+    $stmt->execute($params);
+    $total = (int) $stmt->fetchColumn();
+    $offset = max(0, (int) ($_GET['offset'] ?? 0));
+    $stmt = $pdo->prepare('SELECT id, role, content, image, klipy_url, created_at ' . $sql . ' ORDER BY id DESC LIMIT 40 OFFSET ' . $offset);
+    $stmt->execute($params);
+    $results = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $content = $row['content'] !== '' ? $row['content'] : ($row['image'] !== '' ? t('chat.msg.photo_sent') : t('chat.klipy_alt'));
+        $pos = $query === '' ? false : mb_stripos($content, $query);
+        $start = $pos === false ? 0 : max(0, $pos - 55);
+        $excerpt = ($start > 0 ? '…' : '') . mb_substr($content, $start, 220) . (mb_strlen($content) > $start + 220 ? '…' : '');
+        $results[] = [
+            'id' => (int) $row['id'], 'role' => $row['role'], 'excerpt' => $excerpt,
+            'match_at' => $pos === false ? null : $pos - $start + (int) ($start > 0),
+            'match_length' => $pos === false ? 0 : mb_strlen($query),
+            'at' => gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($row['created_at'] . ' UTC')),
+        ];
+    }
+    echo json_encode(['ok' => true, 'total' => $total, 'results' => $results], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'message-window' && $method === 'GET') {
+    session_write_close();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $id = max(0, (int) ($_GET['id'] ?? 0));
+    $stmt = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND id = ? AND role IN ('user', 'assistant')");
+    $stmt->execute([$cid, $id]);
+    $target = $stmt->fetch();
+    if (!$target) {
+        http_response_code(404);
+        echo json_encode(['ok' => false]);
+        exit;
+    }
+    $stmt = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND id > ? AND role IN ('user', 'assistant') ORDER BY id LIMIT 14");
+    $stmt->execute([$cid, $id]);
+    $rows = [...fetch_messages($cid, 14, $id, true), $target, ...$stmt->fetchAll()];
+    echo json_encode(['ok' => true, 'messages' => array_map('chat_message_json', $rows)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /* --- recherche dans toutes les conversations du même persona --- */
 if ($action === 'search' && $method === 'GET') {
     session_write_close();

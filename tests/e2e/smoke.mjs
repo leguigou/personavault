@@ -82,6 +82,26 @@ const homeHtml = await home.text();
 expect(homeHtml.includes('data-chat-unread>'), 'le point de notification est visible avec une discussion non lue');
 expect((await (await http('/chat/unread')).json()).unread === true, 'le statut de notification indique un nouveau message');
 const csrf = token(homeHtml);
+{
+    const searchPath = '/chat/1/find-messages';
+    const find = async (url) => (await http(url)).json();
+    const found = await find(searchPath + '?q=R%C3%89PONSE');
+    expect(found.ok && found.total === 6 && found.results[0]?.id === 12
+        && found.results.every((row) => row.role === 'assistant' && row.excerpt.startsWith('Réponse') && row.match_at === 0),
+        'la recherche locale retrouve le texte sans tenir compte de la casse et classe les résultats du plus récent au plus ancien');
+    const other = await find('/chat/2/find-messages?q=R%C3%89PONSE');
+    expect(other.total === 0 && (await find(searchPath + '?offset=1&q=R%C3%89PONSE')).results[0]?.id === 10,
+        'la recherche reste limitée à la discussion et peut paginer les résultats');
+    const day = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Paris' }).format(new Date(found.results[0]?.at));
+    const dated = await find(searchPath + '?date=' + day);
+    expect(dated.results.some((row) => row.id === 12) && dated.results.every((row) =>
+        new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Paris' }).format(new Date(row.at)) === day)
+        && (await find(searchPath + '?date=2000-01-01')).total === 0
+        && (await http(searchPath + '?date=2026-02-30')).status === 400, 'le filtre par date utilise le jour local de la discussion');
+    const window = await find('/chat/1/message-window?id=4');
+    expect(window.messages.some((message) => message.id === 3) && window.messages.some((message) => message.id === 5)
+        && (await http('/chat/2/message-window?id=4')).status === 404, 'la vue dans le fil charge les voisins du résultat dans la bonne discussion');
+}
 const media = (homeHtml.match(/src="(\/media\/[^"]+)"/) || [])[1] || '/media/absent.webp';
 
 // --- pages et routes GET
