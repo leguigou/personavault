@@ -3189,19 +3189,21 @@ html[data-avatars="0"] .msg-bot > .bubbles { max-width: 100%; }
 .hours-range { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
 .hours-range .input { width: 72px; text-align: center; padding-left: 8px; padding-right: 8px; }
 
-/* barre d'enregistrement : collée en bas dès qu'il y a des modifications */
+/* Dans les réglages, les actions restent visibles même avant la première modification. */
 .dirty-note { display: none; margin-right: auto; align-self: center; font-size: 12.5px; color: var(--warn-t, #fcd34d); }
 form.is-dirty .dirty-note { display: inline; }
+.settings-page .save-bar,
 form.is-dirty .save-bar {
     position: sticky;
     bottom: 12px;
     z-index: 20;
     padding: 10px;
     border-radius: 16px;
-    border: 1px solid rgba(251, 191, 36, .28);
+    border: 1px solid var(--border);
     background: var(--bar, rgba(14, 14, 24, .97));
     box-shadow: 0 16px 40px -18px var(--sh, #000);
 }
+form.is-dirty .save-bar { border-color: rgba(251, 191, 36, .28); }
 
 /* maintenance LM Studio, séparée du formulaire */
 .settings-maint { margin-top: 14px; }
@@ -3236,8 +3238,6 @@ form.is-dirty .save-bar {
     /* en-tête compact : la barre du bas remplace le lien retour */
     .settings-back, .settings-head .form-sub { display: none; }
     .settings-head { margin-bottom: 12px; }
-
-    form.is-dirty .save-bar { bottom: calc(62px + var(--safe-b) + 10px); }
 }
 
 @media (max-width: 559px) {
@@ -3361,6 +3361,7 @@ html[data-tabbar="classic"] { --tabbar-space: calc(66px + var(--safe-b)); }
 
 .toast { bottom: calc(var(--tabbar-space) + 18px); }
 @media (max-width: 899px) {
+    .settings-page .save-bar,
     form.is-dirty .save-bar { bottom: calc(var(--tabbar-space) + 10px); }
     /* réserve sous le contenu pour la barre du bas — pas dans une conversation, qui n'en a pas */
     .page:not(.page-chat) { padding-bottom: calc(var(--tabbar-space) + 40px); }
