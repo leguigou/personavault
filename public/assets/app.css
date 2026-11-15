@@ -1467,12 +1467,10 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
     list-style: none;
     cursor: pointer;
     border-radius: 50%;
-    border-color: rgba(var(--ink), .19);
-    background: rgba(var(--ink), .15);
-    color: var(--text);
 }
 .chat-more summary:is(:hover, :focus-visible), .chat-more[open] summary {
-    background: rgba(var(--ink), .22);
+    background: rgba(var(--ink), .12);
+    color: var(--text);
 }
 .chat-more summary::-webkit-details-marker { display: none; }
 .chat-more-panel {
@@ -1909,12 +1907,15 @@ button.chat-quote:hover { border-inline-start-color: rgb(var(--acc)); }
 }
 .chat-send svg { width: 20px; height: 20px; }
 .chat-send:hover { filter: brightness(1.08); }
+.chat-more summary,
 .chat-send:disabled {
     background: rgba(var(--ink), .07);
     color: var(--muted-2);
+    border: 1px solid var(--border-soft);
+}
+.chat-send:disabled {
     box-shadow: none;
     cursor: default;
-    border: 1px solid var(--border-soft);
 }
 
 .chat-foot {
