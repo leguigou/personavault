@@ -95,6 +95,8 @@ return [
     'js.chat.lms_no_answer'       => 'LM Studio ne répond pas sur {url}.',
     'js.chat.configured_address'  => 'l’adresse configurée',
     'js.chat.regen'               => 'Régénérer la réponse',
+    'js.chat.reply'               => 'Répondre',
+    'js.chat.quote_unavailable'   => 'Le message cité n’est plus disponible.',
     'js.chat.model_hint_on' => 'Modèle de test, pour cette conversation seulement. Le persona garde le sien.',
     'js.chat.model_default' => 'modèle par défaut',
     'js.chat.model_changed' => 'Modèle changé pour cette conversation',

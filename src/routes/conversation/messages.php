@@ -12,6 +12,7 @@ function chat_message_json(array $message): array
         'id' => (int) $message['id'],
         'role' => (string) $message['role'],
         'content' => (string) $message['content'],
+        'reply_to' => chat_reply_quote($message),
         'image' => (string) $message['image'],
         'klipy_url' => klipy_media_url($message['klipy_url']),
         'split_points' => chat_message_split_points($message),

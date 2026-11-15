@@ -1615,6 +1615,46 @@ html[data-bubble="carte"] .msg-bot .bubble { border-radius: 14px; background: rg
     min-width: 0;
 }
 .msg-user > .bubbles { align-items: flex-end; }
+.msg-user > .bubbles:has(> .chat-quote) {
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px;
+    border-radius: 18px 18px 6px 18px;
+    background: var(--bubble);
+    color: #fff;
+}
+.msg-user > .bubbles:has(> .chat-quote) .bubble { padding: 4px 8px 6px; background: none; }
+.chat-quote {
+    display: grid;
+    min-width: 0;
+    max-width: 100%;
+    gap: 2px;
+    padding: 6px 10px;
+    border: 0;
+    border-inline-start: 3px solid rgb(var(--acc-soft));
+    border-radius: 8px;
+    background: rgba(var(--acc), .09);
+    color: inherit;
+    font: inherit;
+    font-size: 12.5px;
+    line-height: 1.4;
+    text-align: start;
+}
+.msg-user .chat-quote { background: rgba(0, 0, 0, .18); }
+button.chat-quote { cursor: pointer; }
+button.chat-quote:hover { border-inline-start-color: rgb(var(--acc)); }
+.chat-quote strong, .chat-quote span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-quote span { opacity: .86; }
+.chat-quote-draft {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px 0;
+    flex: 0 0 auto;
+}
+.chat-quote-draft[hidden] { display: none; }
+.is-quote-target .bubble { outline: 2px solid rgb(var(--acc-soft)); outline-offset: 2px; }
 .msg-bubble {
     display: flex;
     flex-direction: column;

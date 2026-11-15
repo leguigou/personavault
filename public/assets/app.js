@@ -2903,6 +2903,21 @@
             chat.querySelector("[data-opening-questions]")?.remove();
         };
 
+        const quoteDraft = chat.querySelector("[data-quote-draft]");
+        const quotePreview = quoteDraft.querySelector("[data-quote-preview]");
+        let pendingQuote = null;
+        const setQuoteDraft = (quote) => {
+            pendingQuote = quote;
+            quoteDraft.hidden = !quote;
+            quotePreview.querySelector("[data-quote-text]").textContent = quote?.text || "";
+            if (stick) scrollBottom(false);
+            if (!jump.hidden) placeJump();
+        };
+        quoteDraft.querySelector("[data-quote-remove]").addEventListener("click", () => {
+            setQuoteDraft(null);
+            input.focus({ preventScroll: true });
+        });
+
         const renderMsg = (m) => {
             if (m.role === "memory") {
                 const line = document.createElement("div");
@@ -2957,6 +2972,21 @@
             }
             const holder = document.createElement("div");
             holder.className = "bubbles";
+            if (m.reply_to) {
+                const quote = document.createElement(m.reply_to.id ? "button" : "div");
+                quote.className = "chat-quote";
+                if (m.reply_to.id) {
+                    quote.type = "button";
+                    quote.dataset.quoteId = m.reply_to.id;
+                    quote.dataset.quoteBubble = m.reply_to.bubble;
+                }
+                const name = document.createElement("strong");
+                name.textContent = chat.dataset.name;
+                const text = document.createElement("span");
+                text.textContent = Array.from(m.reply_to.text).slice(0, 220).join("");
+                quote.append(name, text);
+                holder.appendChild(quote);
+            }
             if (img && content !== "") wrap.appendChild(img);
             parts.forEach((part, i) => {
                 if (m.role === "assistant" && part === "") return;
@@ -3053,12 +3083,12 @@
         paintDays();
 
         const olderBtn = chat.querySelector("[data-load-older]");
-        olderBtn?.addEventListener("click", async () => {
-            if (olderBtn.disabled) return;
+        let loadingOlder = null;
+        const loadOlder = async (limit) => {
             olderBtn.disabled = true;
             const before = parseInt(olderBtn.dataset.before, 10) || 0;
             try {
-                const r = await fetch(olderBtn.dataset.url + "?before=" + before + "&limit=50", {
+                const r = await fetch(olderBtn.dataset.url + "?before=" + before + "&limit=" + limit, {
                     headers: { "X-Requested-With": "XMLHttpRequest" },
                 });
                 const d = await r.json();
@@ -3069,7 +3099,7 @@
                 }
                 const prevH = scroll.scrollHeight;
                 const prevTop = scroll.scrollTop;
-                const first = scroll.querySelector(".msg, .msg-notice");
+                const first = scroll.querySelector(".msg, .msg-notice, .msg-memory");
                 const frag = document.createDocumentFragment();
                 d.messages.forEach((m) => frag.appendChild(renderMsg(m)));
                 scroll.insertBefore(frag, first || null);
@@ -3081,10 +3111,49 @@
                     olderBtn.textContent = tr("chat.load_older", d.left);
                     olderBtn.disabled = false;
                 }
-            } catch (e) {
+            } finally {
                 olderBtn.disabled = false;
-                notice(tr("common.error", { message: e.message }));
             }
+        };
+        const fetchOlder = (limit) => loadingOlder ??= loadOlder(limit).finally(() => { loadingOlder = null; });
+        olderBtn?.addEventListener("click", () => {
+            fetchOlder(50).catch(() => toast(tr("chat.load_failed")));
+        });
+
+        let quoteJump = 0;
+        let highlightTimer;
+        const jumpToQuote = async (id, bubble) => {
+            const revision = ++quoteJump;
+            const source = () => scroll.querySelector('.msg-bot[data-msg-id="' + id + '"]');
+            try {
+                while (revision === quoteJump && !source() && olderBtn?.isConnected && Number(olderBtn.dataset.before) > id) {
+                    await fetchOlder(100);
+                }
+            } catch {
+                if (revision === quoteJump) toast(tr("chat.load_failed"));
+                return;
+            }
+            if (revision !== quoteJump) return;
+            const message = source();
+            if (!message) {
+                toast(tr("chat.quote_unavailable"));
+                return;
+            }
+            const target = message.querySelector('[data-bubble-index="' + bubble + '"]') || message;
+            clearTimeout(highlightTimer);
+            scroll.querySelector(".is-quote-target")?.classList.remove("is-quote-target");
+            target.classList.add("is-quote-target");
+            stick = false;
+            target.scrollIntoView({ block: "center", behavior: "instant" });
+            syncJump();
+            highlightTimer = setTimeout(() => target.classList.remove("is-quote-target"), 2200);
+        };
+        quotePreview.addEventListener("click", () => {
+            if (pendingQuote) jumpToQuote(pendingQuote.id, pendingQuote.bubble);
+        });
+        scroll.addEventListener("click", (event) => {
+            const quote = event.target.closest("[data-quote-id]");
+            if (quote) jumpToQuote(Number(quote.dataset.quoteId), Number(quote.dataset.quoteBubble));
         });
 
         const notice = (text) => {
@@ -3872,6 +3941,7 @@
         const editUrl   = endpoint.replace(/\/send$/, "/msg-edit");
 
         const ICONS = {
+            reply: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 7-5 5 5 5m-5-5h9a5 5 0 0 1 5 5v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
             copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
             select: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6m-6 4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
             regen: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -4074,6 +4144,7 @@
             }
             const msg = reactionBubble.closest(".msg-bot");
             actions.replaceChildren();
+            actions.appendChild(toolBtn("reply", ICONS.reply, tr("chat.reply")));
             if (lastReply() === msg && scroll.querySelector(".msg-user[data-msg-id]")) {
                 actions.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
             }
@@ -4122,7 +4193,7 @@
             event.stopPropagation();
             if (!reactionBubble) return;
             const option = event.target.closest("[data-reaction-option]");
-            const action = event.target.closest("[data-regen], [data-del]");
+            const action = event.target.closest("[data-reply], [data-regen], [data-del]");
             if (option) {
                 const item = reactionBubble;
                 closeReactions(true);
@@ -4130,7 +4201,15 @@
             } else if (event.target.closest("[data-more-reactions]")) {
                 showReactions(true);
             } else if (action) {
-                const msg = reactionBubble.closest(".msg-bot");
+                const item = reactionBubble;
+                const msg = item.closest(".msg-bot");
+                if (action.hasAttribute("data-reply") && msg?.isConnected) {
+                    closeReactions();
+                    setQuoteDraft({ id: Number(msg.dataset.msgId), version: Number(msg.dataset.versionId || 0),
+                        bubble: Number(item.dataset.bubbleIndex), text: item.querySelector(".bubble").textContent.trim() });
+                    input.focus({ preventScroll: true });
+                    return;
+                }
                 closeReactions(true);
                 if (!msg?.isConnected) return;
                 if (action.hasAttribute("data-regen")) regenerate(msg);
@@ -4661,7 +4740,7 @@
                     const reaction = await saveReaction(next);
                     if (reaction) await send(null, "auto", false, false, null, null, reaction);
                 } else if (next) {
-                    await send(next.text, "auto", true, false, null, null, null, next.attachment);
+                    await send(next.text, "auto", true, false, null, null, null, next.attachment, next.quote);
                 } else {
                     maintenancePending = false;
                     const data = await compressMemory();
@@ -4682,14 +4761,15 @@
             const text = input.value.trim();
             if (text === "" && !pendingFile) return;
             const attachment = pendingFile ? { file: pendingFile, shrink: pendingShrink } : null;
-            chatQueue.push({ text, attachment });
+            chatQueue.push({ text, attachment, quote: pendingQuote });
             input.value = "";
+            setQuoteDraft(null);
             grow();
             clearAttach();
             processChatQueue();
         };
 
-        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, reaction = null, attachment = null) => {
+        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, reaction = null, attachment = null, quote = null) => {
             const text = regen || reaction ? "" : (overrideText ?? input.value.trim());
             if (!regen && !reaction && text === "" && !attachment) return;
             if (busy || opening) return;
@@ -4698,9 +4778,10 @@
                 if (busy) return;
                 if (!regen && !reaction && input.value.trim() === text) {
                     input.value = "";
+                    if (pendingQuote === quote) setQuoteDraft(null);
                     grow();
                 }
-                const retry = send(text, "fallback", echo, regen, regenMid, regenReply, reaction, attachment);
+                const retry = send(text, "fallback", echo, regen, regenMid, regenReply, reaction, attachment, quote);
                 if (attachment && pendingFile === attachment.file) clearAttach();
                 retry.finally(processChatQueue);
             };
@@ -4712,6 +4793,7 @@
                 userEl?.remove();
                 if (!regen && !reaction && !input.value) {
                     input.value = text;
+                    if (quote && !pendingQuote) setQuoteDraft(quote);
                     grow();
                 }
                 if (attachment && !pendingFile) {
@@ -4725,7 +4807,7 @@
             if (!regen && !reaction) {
                 clearIntro();
                 if (echo) {
-                    userEl = renderMsg({ role: "user", content: text, at: new Date().toISOString() });
+                    userEl = renderMsg({ role: "user", content: text, reply_to: quote, at: new Date().toISOString() });
                     scroll.appendChild(userEl);
                 }
                 scrollBottom(true, true);
@@ -4907,6 +4989,11 @@
                 const fd = new FormData();
                 fd.append("_token", token);
                 fd.append("message", text);
+                if (quote) {
+                    fd.append("reply_to", String(quote.id));
+                    fd.append("reply_bubble", String(quote.bubble));
+                    fd.append("reply_version", String(quote.version));
+                }
                 if (mode === "fallback") fd.append("fallback", "1");
                 if (regen) fd.append("regen", "1");
                 if (regen && regenMid) fd.append("regen_mid", String(regenMid));

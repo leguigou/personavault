@@ -198,6 +198,13 @@ http.createServer(async (req, res) => {
                 : JSON.stringify({ message: 'Tu as déjà développé une pellicule argentique ?', questions: ['Tu photographies quoi en ce moment ?'] });
         } else if (last.endsWith('Test du seuil de découpage')) {
             text = 'mot '.repeat(14) + 'mot. ' + 'suite '.repeat(9) + 'suite. Dernière phrase.';
+        } else if (j.stream && last.endsWith('Le départ est fixé à 17 heures.')) {
+            text = 'Je peux te suggérer plusieurs itinéraires pour demain. Je te propose le train méridien pour ce voyage.';
+        } else if (j.stream && last.endsWith('Oui, cite cette bulle.')) {
+            text = last.includes('répond à ce passage de ton message') && last.includes('"Je te propose le train méridien pour ce voyage."')
+                && last.includes('Échanges qui précédaient ce message') && last.includes('Utilisateur : Le départ est fixé à 17 heures.')
+                && last.includes('Réserve toujours le train méridien en avance.')
+                ? 'Le passage cité, son contexte et le souvenir sont disponibles.' : 'Il manque des éléments pour comprendre la citation.';
         } else if (system.includes('le sujet concret des derniers échanges') && last.includes('volcans en Islande')) {
             text = 'Volcans en Islande';
         } else if (j.stream && last.includes('Extraits web :') && last.includes('7 rue Exemple')) {
