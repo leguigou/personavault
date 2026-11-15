@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 14);
+define('PV_SCHEMA_VERSION', 15);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -228,6 +228,11 @@ function migrate(PDO $pdo): void
             $pdo->exec('UPDATE personas SET klipy_formats = 1 WHERE spontaneous_gifs = 1');
             $pdo->exec('ALTER TABLE messages RENAME COLUMN gif_url TO klipy_url');
             $pdo->exec('ALTER TABLE reply_versions RENAME COLUMN gif_url TO klipy_url');
+        }
+        if ($version < 15) {
+            add_column_if_missing($pdo, 'messages', 'reply_to_id', 'INTEGER NOT NULL DEFAULT 0');
+            add_column_if_missing($pdo, 'messages', 'reply_to_bubble', 'INTEGER NOT NULL DEFAULT 0');
+            add_column_if_missing($pdo, 'messages', 'reply_quote', "TEXT NOT NULL DEFAULT ''");
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);

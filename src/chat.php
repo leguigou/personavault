@@ -206,6 +206,44 @@ function fetch_messages(int $conversationId, int $limit = 0, int $beforeId = 0, 
     return $stmt->fetchAll();
 }
 
+const CHAT_REPLY_QUOTE_MAX = 6000;
+
+/** Citation enregistrée avec la réponse, même si le message d’origine disparaît. */
+function chat_reply_quote(array $message): ?array
+{
+    $text = (string) ($message['reply_quote'] ?? '');
+    return $text === '' ? null : [
+        'id' => (int) $message['reply_to_id'],
+        'bubble' => (int) $message['reply_to_bubble'],
+        'text' => $text,
+    ];
+}
+
+function chat_reply_context(array $quote, array $previous, int $budget): string
+{
+    $label = "L’utilisateur répond à ce passage de ton message :\n";
+    $quoted = chat_fit_text(json_encode($quote['text'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+        max(1, intdiv($budget * 2, 3) - chat_estimate_tokens($label)));
+    if ($quoted === '') {
+        return '';
+    }
+    $block = $label . $quoted;
+    $heading = "\nÉchanges qui précédaient ce message :\n";
+    $perMessage = intdiv(max(0, $budget - chat_estimate_tokens($block . $heading)), max(1, count($previous)));
+    if ($perMessage > 12) {
+        $lines = [];
+        foreach ($previous as $message) {
+            $role = $message['role'] === 'user' ? 'Utilisateur' : 'Toi';
+            $content = trim($message['content'] . ($message['image'] !== '' ? ' [photo jointe]' : ''));
+            $lines[] = chat_fit_text($role . ' : ' . $content, $perMessage - 1);
+        }
+        if ($lines) {
+            $block .= $heading . implode("\n", $lines);
+        }
+    }
+    return $block;
+}
+
 
 /* --------------------------------------------------------------- mémoire */
 
@@ -1753,7 +1791,7 @@ function chat_auto_title(int $cid, bool $rewrite = false): ?string
  *                            lui est renvoyée (sinon « décris-la » dans le message suivant ne
  *                            pouvait rien donner : seul le texte des anciens messages partait)
  */
-function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null, string $addressOverride = '', ?array $webResults = null): array
+function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null, string $addressOverride = '', ?array $webResults = null, ?array $quote = null, array $quoteHistory = []): array
 {
     $limits = chat_token_budget($conv);
     $budget = $limits['input'] - 8; // enveloppes des messages système et utilisateur
@@ -1786,6 +1824,11 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $factsOn = (int) ($conv['memory_enabled'] ?? 1) === 1 && (int) ($conv['facts_enabled'] ?? 1) === 1;
     $context = [];
     $contextRoom = max(0, $budget - chat_estimate_tokens($system) - chat_estimate_tokens($text) - 12);
+    $replyContext = '';
+    if ($quote !== null) {
+        $replyContext = chat_reply_context($quote, $quoteHistory, min(540, intdiv($contextRoom * 2, 3)));
+        $contextRoom -= chat_estimate_tokens($replyContext);
+    }
     $web = '';
     if ($webResults) {
         $snippets = array_map(static fn (array $result): string => $result['title'] . ' — ' . $result['description'], $webResults);
@@ -1801,7 +1844,8 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     }
 
     $pid = (int) $persona['id'];
-    $facts = $factsOn ? array_merge(facts_relevant($pid, $userMessage), facts_relevant($pid, $userMessage, 3, 'story')) : [];
+    $memoryQuery = $quote === null ? $userMessage : trim($userMessage . ' ' . mb_substr($quote['text'], 0, 420));
+    $facts = $factsOn ? array_merge(facts_relevant($pid, $memoryQuery), facts_relevant($pid, $memoryQuery, 3, 'story')) : [];
     $factsText = facts_context($facts);
     if ($factsText !== '') {
         $context[] = $factsText;
@@ -1809,7 +1853,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
 
     // rappel d'échanges d'autres conversations avec le même persona
     try {
-        $recall = $factsOn ? chat_recall_snippets((int) $persona['id'], $userMessage, (int) $conv['id'], 3,
+        $recall = $factsOn ? chat_recall_snippets((int) $persona['id'], $memoryQuery, (int) $conv['id'], 3,
             chat_uses_summary($conv) ? (int) $conv['last_compressed_id'] : 0) : [];
     } catch (Throwable $e) {
         $recall = [];
@@ -1830,7 +1874,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     }
     $memoryRoom = $reactionTarget !== null ? $contextRoom : min($limits['memory'] - $summaryCost, $contextRoom - chat_estimate_tokens($time));
     $memory = chat_fit_text(implode("\n\n", $context), $memoryRoom);
-    $contextBlock = "<contexte>\n" . trim($time . "\n\n" . $memory . "\n\n" . $web) . "\n</contexte>";
+    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $replyContext, $memory, $web]))) . "\n</contexte>";
 
     $text = $contextBlock . "\n\n" . $text;
     $used = chat_estimate_tokens($system) + chat_estimate_tokens($text);

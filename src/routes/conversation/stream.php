@@ -55,6 +55,7 @@ if ($action === 'stream' && $method === 'POST') {
     };
 
     $reactionTarget = null;
+    $quote = null;
     $userMsgId = 0;
     if ($reactionOnly) {
         $stmt = db()->prepare("SELECT * FROM messages
@@ -80,7 +81,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     if ($regen) {
-        $ust = db()->prepare("SELECT id, content, image FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
+        $ust = db()->prepare("SELECT id, content, image, reply_to_id, reply_to_bubble, reply_quote FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
         $ust->execute([$cid]);
         $lastUser = $ust->fetch();
         if (!$lastUser) {
@@ -90,6 +91,7 @@ if ($action === 'stream' && $method === 'POST') {
         $text      = (string) $lastUser['content'];
         $userMsgId = (int) $lastUser['id'];
         $regenImage = (string) $lastUser['image'];
+        $quote = chat_reply_quote($lastUser);
         $stmt = db()->prepare("SELECT MAX(id) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?");
         $stmt->execute([$cid, $userMsgId]);
         $previousReplyId = (int) $stmt->fetchColumn();
@@ -101,6 +103,23 @@ if ($action === 'stream' && $method === 'POST') {
         }
         $sse(['start' => true, 'regen' => true, 'user_id' => $userMsgId, 'after_id' => max($userMsgId, $previousReplyId)]);
     }
+
+    if (!$regen && !$reactionOnly && isset($_POST['reply_to'])) {
+        $replyId = filter_var($_POST['reply_to'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $replyBubble = filter_var($_POST['reply_bubble'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+        $replyVersion = filter_var($_POST['reply_version'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+        $stmt = db()->prepare("SELECT * FROM messages WHERE id = ? AND conversation_id = ? AND role = 'assistant'");
+        $stmt->execute([$replyId, $cid]);
+        $source = $stmt->fetch();
+        $bubbles = $source ? chat_message_bubbles($source) : [];
+        if ($replyId === false || $replyBubble === false || $replyVersion === false || !$source
+            || (int) $source['version_id'] !== $replyVersion || trim($bubbles[$replyBubble] ?? '') === '') {
+            $sse(['error' => t('error.message.reply_source'), 'kind' => 'reply_source']);
+            exit;
+        }
+        $quote = ['id' => $replyId, 'bubble' => $replyBubble, 'text' => mb_substr($bubbles[$replyBubble], 0, CHAT_REPLY_QUOTE_MAX)];
+    }
+    $quoteHistory = !empty($quote['id']) ? fetch_messages($cid, 3, $quote['id'], true) : [];
 
     if ($ping()) {
         exit;
@@ -192,14 +211,16 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     if (!$regen && !$reactionOnly) {
-        $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image) VALUES (?, "user", ?, ?)');
-        $ins->execute([$cid, $text, $imageBase]);
+        $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image, reply_to_id, reply_to_bubble, reply_quote)
+            VALUES (?, "user", ?, ?, ?, ?, ?)');
+        $ins->execute([$cid, $text, $imageBase, $quote['id'] ?? 0, $quote['bubble'] ?? 0, $quote['text'] ?? '']);
         $userMsgId = (int) db()->lastInsertId();
         $sse(['start' => true, 'user' => [
             'id'      => $userMsgId,
             'role'    => 'user',
             'content' => $text,
             'image'   => $imageBase,
+            'reply_to' => $quote,
         ]]);
     }
 
@@ -211,7 +232,7 @@ if ($action === 'stream' && $method === 'POST') {
     if (($useMcp || $searchKey !== '') && !$reactionOnly && $mediaRequest === null && $text !== '') {
         $searchModel = $mode === 'fallback' ? llm_config() : chat_llm_config_for($conv);
         if ($mode !== 'fallback' || $searchModel['key'] !== '') {
-            $query = chat_web_query($history, $text, $searchModel, $ping);
+            $query = chat_web_query($history, $quote === null ? $text : $text . "\nEn réponse à : " . mb_substr($quote['text'], 0, 420), $searchModel, $ping);
             if ($ping()) {
                 exit;
             }
@@ -226,7 +247,7 @@ if ($action === 'stream' && $method === 'POST') {
             }
         }
     }
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget, $address, $webResults);
+    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget, $address, $webResults, $quote, $quoteHistory);
     $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
     $sentAny = false;
     $requestedUrl = '';

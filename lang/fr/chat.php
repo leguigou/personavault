@@ -88,6 +88,8 @@ return [
     'chat.composer.placeholder'     => 'Écris un message…',
     'chat.composer.label'           => 'Message',
     'chat.composer.send'            => 'Envoyer',
+    'chat.composer.reply_to'        => 'Répondre à {name}',
+    'chat.composer.reply_remove'    => 'Retirer la citation',
     'chat.foot.no_model'            => 'Aucun modèle de discussion joignable — vérifie LM Studio dans les réglages.',
 
     // --- panneau « contexte et réglages »

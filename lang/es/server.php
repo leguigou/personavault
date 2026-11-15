@@ -86,6 +86,7 @@ return [
     'error.memory.other_persona'  => 'Este recuerdo pertenece a otro persona.',
     'error.message.empty'         => 'El mensaje no puede estar vacío.',
     'error.message.not_found'     => 'Mensaje no encontrado.',
+    'error.message.reply_source'  => 'El mensaje citado ha cambiado o ya no está disponible. Quita la cita o selecciona el fragmento de nuevo.',
     'error.message.not_yours'     => 'Solo puedes modificar tus propios mensajes.',
     'error.message.empty_send'    => 'Mensaje vacío.',
     'error.chat.generation_in_progress' => 'Ya se está generando una respuesta en esta conversación. Inténtalo de nuevo en un momento.',

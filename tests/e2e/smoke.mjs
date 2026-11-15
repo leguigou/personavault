@@ -717,6 +717,35 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         'le chargement authentifié masque le jeton dans les erreurs renvoyées par LM Studio');
     expect((await load('unloaded')).ok, 'le chargement manuel transmet le jeton enregistré à LM Studio');
 }
+{
+    const submit = (path, form) => http(path, { method: 'POST', form: { _token: csrf, ...form } });
+    const path = (await submit('/chat/1/new', { mode: 'with-memory' })).headers.get('location');
+    await submit('/settings/chat', { chat_provider: 'lmstudio', chat_base_url: testLlmBase + '/v1', chat_model: 'fake-model',
+        chat_split_enabled: '1', chat_split_words: '8', chat_split_position: 'before', chat_split_max_bubbles: '2' });
+    await submit('/memories', { content: 'Réserve toujours le train méridien en avance.' });
+    const turn = async (conv, fields) => (await (await submit(conv + '/stream', fields)).text())
+        .split('\n').filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6)));
+    const target = (await turn(path, { message: 'Le départ est fixé à 17 heures.' })).find((event) => event.done).reply;
+    const quote = { reply_to: target.id, reply_bubble: '1', reply_version: target.version_id };
+    expect(target.split_points.length === 1, 'le message du persona comporte deux bulles');
+    expect((await turn('/chat/1', { message: 'Hors conversation', ...quote })).some((event) => event.kind === 'reply_source'),
+        'une citation ne peut pas viser un message d’une autre discussion');
+    const sent = await turn(path, { message: 'Oui, cite cette bulle.', ...quote, reply_text: 'Faux passage fourni par le client' });
+    const saved = sent.find((event) => event.start)?.user?.reply_to;
+    const answer = sent.find((event) => event.done)?.reply?.content ?? '';
+    expect(saved?.id === target.id && saved.bubble === 1 && saved.text === 'Je te propose le train méridien pour ce voyage.'
+        && answer.includes('son contexte et le souvenir sont disponibles'), 'la bulle exacte, les messages précédents et les souvenirs sont fournis au modèle');
+    const listed = await (await http(path + '/messages')).json();
+    const page = await (await http(path)).text();
+    expect(listed.messages.some((message) => message.reply_to?.text === saved?.text)
+        && page.includes(`data-quote-id="${target.id}" data-quote-bubble="1"`), 'la citation reste cliquable après rechargement');
+    const regen = await turn(path, { regen: '1' });
+    expect(regen.find((event) => event.done)?.reply?.content.includes('son contexte et le souvenir sont disponibles'),
+        'la régénération recharge la citation et le contexte de la réponse');
+    await submit(path + '/msg-delete', { mid: target.id });
+    const afterDelete = await (await http(path + '/messages')).json();
+    expect(afterDelete.messages.some((message) => message.reply_to?.text === saved?.text), 'la citation reste lisible après suppression de la source');
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

@@ -89,6 +89,7 @@ return [
     'error.memory.other_persona'  => 'Ce souvenir appartient à un autre persona.',
     'error.message.empty'         => 'Le message ne peut pas être vide.',
     'error.message.not_found'     => 'Message introuvable.',
+    'error.message.reply_source'  => 'Le message cité a changé ou n’est plus disponible. Retire la citation ou sélectionne de nouveau le passage.',
     'error.message.not_yours'     => 'Seuls tes propres messages sont modifiables.',
     'error.message.empty_send'    => 'Message vide.',
     'error.chat.generation_in_progress' => 'Une réponse est déjà en cours dans cette discussion. Réessaie dans un instant.',

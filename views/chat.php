@@ -188,6 +188,13 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                         if (!$photoOnly) echo $photo;
                         ?>
                         <div class="bubbles">
+                            <?php if ($quote = chat_reply_quote($m)): ?>
+                                <?php $tag = $quote['id'] > 0 ? 'button' : 'div'; ?>
+                                <<?= $tag ?> class="chat-quote"<?php if ($quote['id'] > 0): ?> type="button" data-quote-id="<?= $quote['id'] ?>" data-quote-bubble="<?= $quote['bubble'] ?>"<?php endif; ?>>
+                                    <strong><?= e($persona['name']) ?></strong>
+                                    <span><?= e(mb_substr($quote['text'], 0, 220)) ?></span>
+                                </<?= $tag ?>>
+                            <?php endif; ?>
                             <?php foreach ($bubbles as $index => $part): ?>
                                 <?php if ($role === 'assistant' && $part === '') continue; ?>
                                 <div class="msg-bubble" data-bubble-index="<?= $index ?>" data-reaction="<?= e($bubbleReactions[$index] ?? '') ?>">
@@ -225,6 +232,15 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
         </div>
 
         <p class="chat-queue" data-chat-queue role="status" hidden></p>
+        <div class="chat-quote-draft" data-quote-draft hidden>
+            <button type="button" class="chat-quote" data-quote-preview>
+                <strong><?= e(t('chat.composer.reply_to', ['name' => $persona['name']])) ?></strong>
+                <span data-quote-text></span>
+            </button>
+            <button type="button" class="icon-btn" data-quote-remove aria-label="<?= e(t('chat.composer.reply_remove')) ?>" title="<?= e(t('chat.composer.reply_remove')) ?>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+        </div>
         <form class="chat-composer" data-chat-form>
             <div class="chat-field">
                 <button class="chat-attach" type="button" data-attach hidden aria-label="<?= e(t('chat.composer.attach')) ?>" title="<?= e(t('chat.composer.attach')) ?>">

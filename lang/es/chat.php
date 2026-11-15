@@ -87,6 +87,8 @@ return [
     'chat.composer.placeholder'     => 'Escribe un mensaje…',
     'chat.composer.label'           => 'Mensaje',
     'chat.composer.send'            => 'Enviar',
+    'chat.composer.reply_to'        => 'Responder a {name}',
+    'chat.composer.reply_remove'    => 'Quitar la cita',
     'chat.foot.no_model'            => 'Ningún modelo de chat disponible: revisa LM Studio en los ajustes.',
 
     // --- panel «contexto y ajustes»

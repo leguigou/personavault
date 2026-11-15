@@ -276,6 +276,9 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                     'reaction' => $first, 'bubble_reactions' => chat_encode_reactions($reactions),
                     'klipy_url' => klipy_media_url($message['klipy_url'] ?? $message['gif_url'] ?? ''),
                     'reaction_reply' => $fields['role'] === 'assistant' && !empty($message['reaction_reply']) ? 1 : 0,
+                    'reply_to_id' => $fields['role'] === 'user' ? ($assistantIds[backup_id($message['reply_to_id'] ?? null)] ?? 0) : 0,
+                    'reply_to_bubble' => $fields['role'] === 'user' ? max(0, (int) ($message['reply_to_bubble'] ?? 0)) : 0,
+                    'reply_quote' => $fields['role'] === 'user' ? mb_substr(backup_str($message['reply_quote'] ?? ''), 0, CHAT_REPLY_QUOTE_MAX) : '',
                 ]);
                 if ($sourceId) {
                     $messageIds[$sourceId] = $mid;

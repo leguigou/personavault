@@ -86,6 +86,7 @@ return [
     'error.memory.other_persona'  => 'This memory belongs to another persona.',
     'error.message.empty'         => 'The message can’t be empty.',
     'error.message.not_found'     => 'Message not found.',
+    'error.message.reply_source'  => 'The quoted message has changed or is no longer available. Remove the quote or select the passage again.',
     'error.message.not_yours'     => 'Only your own messages can be edited.',
     'error.message.empty_send'    => 'Empty message.',
     'error.chat.generation_in_progress' => 'A reply is already being generated in this conversation. Try again shortly.',
