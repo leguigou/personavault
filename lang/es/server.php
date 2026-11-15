@@ -113,6 +113,7 @@ return [
     'error.llm.api'               => 'Error de la API ({code}): {message}',
     'error.llm.model_error'       => 'Error del modelo: {message}',
     'error.llm.empty'             => 'Respuesta vacía del modelo.',
+    'error.llm.stream_cut'        => 'Se interrumpió la respuesta del modelo. Puedes reintentar desde tu último mensaje enviado.',
     'error.llm.json_retry'        => 'formato JSON rechazado, nuevo intento con otro formato',
     'error.llm.no_key'            => 'No hay ninguna clave API guardada.',
     'error.llm.no_json'           => 'El modelo no ha devuelto un JSON utilizable.',

@@ -135,7 +135,8 @@ return [
     'js.chat.send'                => 'Enviar',
     'js.chat.choose_image'        => 'Elige una imagen (jpg, png, webp).',
     'js.chat.interrupted'         => 'Respuesta interrumpida: {message}',
-    'js.chat.empty_reply'         => 'Respuesta vacía.',
+    'js.chat.connection_lost'     => 'Se perdió la conexión durante la respuesta. Si quedó incompleta, reintenta desde tu último mensaje.',
+    'js.chat.output_limit'        => 'La respuesta alcanzó el límite de longitud del personaje.',
     'js.chat.aborted'             => 'Generación interrumpida.',
 
     // estado de LM Studio y carga del modelo

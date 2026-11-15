@@ -242,6 +242,8 @@ http.createServer(async (req, res) => {
                     // Laisser le temps à un autre onglet de lire la réponse encore active.
                     const timer = setTimeout(() => res.end('data: {"error":{"message":"Échec simulé"}}\n\n'), 1200);
                     res.on('close', () => clearTimeout(timer));
+                } else if (mode === 'cut') {
+                    return res.end();
                 } else {
                     const timer = setTimeout(() => res.end('data: [DONE]\n\n'), 10000);
                     res.on('close', () => clearTimeout(timer));

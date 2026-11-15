@@ -49,7 +49,7 @@ function llm_ready(): bool
  * même quand le modèle n'émet rien : s'il renvoie true, la requête est coupée et la
  * fonction renvoie le texte déjà reçu avec 'aborted' => true (sans exception).
  *
- * @return array{content:string, model:string, prompt_tokens:int, completion_tokens:int, ms:int, aborted:bool}
+ * @return array{content:string, model:string, prompt_tokens:int, completion_tokens:int, ms:int, aborted:bool, finish_reason:string}
  * @throws RuntimeException
  */
 function llm_stream(array $messages, array $cfg, array $options, callable $onDelta): array
@@ -86,17 +86,23 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
     $rawHead   = '';
     $streamErr = '';
     $aborted   = false;
+    $finished  = false;
+    $finishReason = '';
     $shouldAbort = isset($options['should_abort']) && is_callable($options['should_abort'])
         ? $options['should_abort'] : null;
 
     // traite une ligne SSE complète
-    $handleLine = static function (string $line) use (&$content, &$usage, &$used, &$streamErr, $onDelta): void {
+    $handleLine = static function (string $line) use (&$content, &$usage, &$used, &$streamErr, &$finished, &$finishReason, $onDelta): void {
         $line = rtrim($line, "\r");
         if (!str_starts_with($line, 'data:')) {
             return;
         }
         $payload = trim(substr($line, 5));
-        if ($payload === '' || $payload === '[DONE]') {
+        if ($payload === '[DONE]') {
+            $finished = true;
+            return;
+        }
+        if ($payload === '') {
             return;
         }
         $json = json_decode($payload, true);
@@ -116,6 +122,11 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
         }
         if (!empty($json['usage'])) {
             $usage = $json['usage'];
+        }
+        $reason = $json['choices'][0]['finish_reason'] ?? '';
+        if (is_string($reason) && $reason !== '') {
+            $finishReason = $reason;
+            $finished = true;
         }
         $delta = $json['choices'][0]['delta']['content'] ?? '';
         if (is_string($delta) && $delta !== '') {
@@ -173,6 +184,7 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
         'completion_tokens' => (int) ($usage['completion_tokens'] ?? 0),
         'ms'                => (int) round((microtime(true) - $t0) * 1000),
         'aborted'           => $aborted,
+        'finish_reason'     => $finishReason,
     ];
 
     // journal (Réglages › Journal) : une entrée par appel, quelle qu'en soit l'issue
@@ -197,6 +209,11 @@ function llm_stream(array $messages, array $cfg, array $options, callable $onDel
     if ($streamErr !== '') {
         $log('error', $streamErr);
         throw new RuntimeException(t('error.llm.model_error', ['message' => mb_substr($streamErr, 0, 300)]));
+    }
+    if (!$finished && trim($content) !== '') {
+        $message = t('error.llm.stream_cut');
+        $log('error', $message);
+        throw new RuntimeException($message);
     }
     if (trim($content) === '') {
         $log('error', t('error.llm.empty'));
