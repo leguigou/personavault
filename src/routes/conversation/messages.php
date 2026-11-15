@@ -173,27 +173,23 @@ if ($action === 'react' && $method === 'POST') {
             return null;
         }
         $reactions = chat_bubble_reactions($message, $bubbles);
-        $changed = ($reactions[$bubble] ?? '') !== $reaction;
-        $revision = $changed && $reaction !== '' ? bin2hex(random_bytes(8)) : '';
-        if ($changed) {
-            $pending = chat_pending_reactions($message['reaction_pending']);
+        if (($reactions[$bubble] ?? '') !== $reaction) {
             if ($reaction === '') {
-                unset($reactions[$bubble], $pending[$bubble]);
+                unset($reactions[$bubble]);
             } else {
                 $reactions[$bubble] = $reaction;
-                $pending[$bubble] = $revision;
             }
             $first = $reactions[0] ?? '';
             unset($reactions[0]);
             $extra = chat_encode_reactions($reactions);
-            $pdo->prepare('UPDATE messages SET reaction = ?, bubble_reactions = ?, reaction_pending = ? WHERE id = ?')
-                ->execute([$first, $extra, chat_encode_reactions($pending), $mid]);
+            $pdo->prepare('UPDATE messages SET reaction = ?, bubble_reactions = ? WHERE id = ?')
+                ->execute([$first, $extra, $mid]);
             if ($version > 0) {
                 $pdo->prepare('UPDATE reply_versions SET reaction = ?, bubble_reactions = ? WHERE id = ?')
                     ->execute([$first, $extra, $version]);
             }
         }
-        return ['ok' => true, 'bubble' => $bubble, 'reaction' => $reaction, 'reply' => $revision !== '', 'revision' => $revision];
+        return ['ok' => true, 'bubble' => $bubble, 'reaction' => $reaction, 'reply' => false];
     });
     if ($result === null) {
         http_response_code(409);

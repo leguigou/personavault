@@ -1463,7 +1463,17 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
     flex: 0 0 auto;
 }
 .chat-more { position: relative; flex: 0 0 auto; }
-.chat-more summary { list-style: none; cursor: pointer; }
+.chat-more summary {
+    list-style: none;
+    cursor: pointer;
+    border-radius: 50%;
+    border-color: rgba(var(--ink), .19);
+    background: rgba(var(--ink), .15);
+    color: var(--text);
+}
+.chat-more summary:is(:hover, :focus-visible), .chat-more[open] summary {
+    background: rgba(var(--ink), .22);
+}
 .chat-more summary::-webkit-details-marker { display: none; }
 .chat-more-panel {
     position: absolute;

@@ -95,7 +95,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
             </button>
             <details class="chat-more" data-chat-more>
                 <summary class="icon-btn" aria-label="<?= e(t('chat.find.menu')) ?>" title="<?= e(t('chat.find.menu')) ?>">
-                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
+                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="5" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="19" r="1.9" fill="currentColor"/></svg>
                 </summary>
                 <div class="chat-more-panel">
                     <button type="button" class="chat-menu-action" data-find-open>

@@ -108,21 +108,17 @@ function chat_bubble_reactions(array $message, ?array $bubbles = null): array
     return $keys;
 }
 
-function chat_pending_reactions(string $stored): array
-{
-    if ($stored === '') {
-        return [];
-    }
-    $pending = json_decode($stored, true);
-    return is_array($pending) ? $pending : [0 => $stored];
-}
-
 function chat_encode_reactions(array $reactions): string
 {
     return $reactions ? json_encode((object) $reactions, JSON_THROW_ON_ERROR) : '';
 }
 
 function chat_affectionate_bubbles(array $message): array
+{
+    return chat_user_reaction_signals($message, CHAT_AFFECTIONATE_REACTIONS, 320);
+}
+
+function chat_user_reaction_signals(array $message, ?array $allowed = null, int $quoteLength = 160): array
 {
     if ($message['role'] !== 'assistant' || (empty($message['reaction']) && empty($message['bubble_reactions']))) {
         return [];
@@ -131,19 +127,12 @@ function chat_affectionate_bubbles(array $message): array
     $reactions = chat_bubble_reactions($message, $bubbles);
     $lines = [];
     foreach ($reactions as $index => $key) {
-        if (in_array($key, CHAT_AFFECTIONATE_REACTIONS, true)) {
-            $quote = mb_substr(trim($bubbles[$index]), 0, 320);
+        if ($allowed === null || in_array($key, $allowed, true)) {
+            $quote = mb_substr(trim($bubbles[$index]), 0, $quoteLength);
             $lines[] = 'Réaction de l’utilisateur : ' . implode(' — ', CHAT_REACTIONS[$key]) . ' sur « ' . $quote . ' »';
         }
     }
     return $lines;
-}
-
-function chat_reaction_context(array $message, int $maxTokens): string
-{
-    $quote = chat_shorten_middle(trim($message['content']), $maxTokens);
-    return implode(' — ', CHAT_REACTIONS[$message['reaction']]) . ' | Bulle du personnage : '
-        . json_encode($quote, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 }
 
 /** Attend trois nouveaux messages avant de permettre une autre réaction du personnage. */
@@ -160,6 +149,7 @@ function chat_reaction_instructions(bool $canReact): string
         . "Un 👍 veut dire « ok » ou marque un accord simple. Pour un 👎 ou 😡, accueille calmement le désaccord "
         . "ou la frustration si le sujet s’y prête ; demande ce qui a gêné si c’est utile, sans supposer la cause. "
         . "Un cœur, un bisou ou un visage amoureux indique une affection dont le sens dépend de votre relation. "
+        . "Un émoji isolé ne suffit pas à établir une préférence durable, un accord important ou un changement de relation. "
         . "Tiens compte de ces signaux naturellement, sans commenter chaque clic ni répéter les émojis. "
         . "Utilise les émojis avec parcimonie et intègre-les à une phrase, selon ton style habituel.";
     if ($canReact) {

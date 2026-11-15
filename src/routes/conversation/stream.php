@@ -11,11 +11,16 @@ if ($action === 'stream' && $method === 'POST') {
     csrf_check_json();
     session_write_close(); // le flux peut durer plusieurs minutes : on libère la session
     $regen = ((string) ($_POST['regen'] ?? '')) === '1';
-    $reactionMid = $regen ? 0 : max(0, (int) ($_POST['reaction_mid'] ?? 0));
-    $reactionOnly = $reactionMid > 0;
+    // Un onglet ouvert avant la mise à jour peut encore demander cette ancienne relance.
+    if (!$regen && (int) ($_POST['reaction_mid'] ?? 0) > 0) {
+        header('Content-Type: text/event-stream; charset=utf-8');
+        header('Cache-Control: no-cache, no-transform');
+        echo "data: {\"done\":true,\"skipped\":true}\n\n";
+        exit;
+    }
     $text  = trim((string) ($_POST['message'] ?? ''));
-    $hasImage = !$regen && !$reactionOnly && upload_present($_FILES['image'] ?? null);
-    if (!$regen && !$reactionOnly && $text === '' && !$hasImage) {
+    $hasImage = !$regen && upload_present($_FILES['image'] ?? null);
+    if (!$regen && $text === '' && !$hasImage) {
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => t('error.message.empty_send')]);
@@ -54,32 +59,8 @@ if ($action === 'stream' && $method === 'POST') {
         return connection_aborted() !== 0;
     };
 
-    $reactionTarget = null;
     $quote = null;
     $userMsgId = 0;
-    if ($reactionOnly) {
-        $stmt = db()->prepare("SELECT * FROM messages
-                                WHERE conversation_id = ? AND id = ? AND role = 'assistant'
-                                  AND version_id = ? AND reaction_pending <> ''");
-        $bubble = filter_var($_POST['reaction_bubble'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
-        $revision = $_POST['reaction_revision'] ?? '';
-        $key = chat_reaction_key($_POST['reaction'] ?? '', 'assistant');
-        $stmt->execute([$cid, $reactionMid, (int) ($_POST['reaction_version'] ?? 0)]);
-        $message = $stmt->fetch();
-        $bubbles = $message ? chat_message_bubbles($message) : [];
-        if ($bubble === false || !isset($bubbles[$bubble]) || $key === '' || !is_string($revision)
-            || (chat_pending_reactions($message['reaction_pending'])[$bubble] ?? null) !== $revision
-            || (chat_bubble_reactions($message, $bubbles)[$bubble] ?? '') !== $key) {
-            $sse(['done' => true, 'skipped' => true]);
-            exit;
-        }
-        $reactionTarget = ['id' => $reactionMid, 'bubble' => $bubble, 'revision' => $revision,
-            'content' => $bubbles[$bubble], 'reaction' => $key];
-        $text = '';
-        $afterId = (int) db()->query('SELECT MAX(id) FROM messages WHERE conversation_id = ' . $cid)->fetchColumn();
-        $sse(['start' => true, 'after_id' => $afterId]);
-    }
-
     if ($regen) {
         $ust = db()->prepare("SELECT id, content, image, reply_to_id, reply_to_bubble, reply_quote FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
         $ust->execute([$cid]);
@@ -104,7 +85,7 @@ if ($action === 'stream' && $method === 'POST') {
         $sse(['start' => true, 'regen' => true, 'user_id' => $userMsgId, 'after_id' => max($userMsgId, $previousReplyId)]);
     }
 
-    if (!$regen && !$reactionOnly && isset($_POST['reply_to'])) {
+    if (!$regen && isset($_POST['reply_to'])) {
         $replyId = filter_var($_POST['reply_to'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $replyBubble = filter_var($_POST['reply_bubble'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
         $replyVersion = filter_var($_POST['reply_version'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
@@ -142,7 +123,7 @@ if ($action === 'stream' && $method === 'POST') {
         exit;
     }
 
-    if (!$regen && !$reactionOnly) {
+    if (!$regen) {
         try {
             $mem = chat_memory_stats($cid, $conv);
             // même critère que chat_compress : les messages pas encore résumés
@@ -177,7 +158,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     // uniquement ce qui n'est pas déjà dans le résumé (+ léger recouvrement)
-    $history = $reactionOnly ? [] : fetch_context_messages($cid, $conv);
+    $history = fetch_context_messages($cid, $conv);
     if ($regen) {
         // régénérer (ou rejouer après modification) un message avec photo : on la renvoie
         if ($regenImage !== '') {
@@ -197,11 +178,11 @@ if ($action === 'stream' && $method === 'POST') {
             break;
         }
     }
-    $canReact = !$regen && !$reactionOnly && chat_can_react($cid);
-    $trackRelationship = !$reactionOnly && relationship_memory_on($conv);
+    $canReact = !$regen && chat_can_react($cid);
+    $trackRelationship = relationship_memory_on($conv);
     $address = $trackRelationship ? relationship_direct_address($text) : '';
     $relationshipRevision = $trackRelationship ? (int) relationship_state((int) $persona['id'])['revision'] : 0;
-    $mediaRequest = !$reactionOnly ? klipy_requested_media($text) : null;
+    $mediaRequest = klipy_requested_media($text);
 
     if ($ping()) {
         if (!$regen && $imageBase !== '') {
@@ -210,7 +191,7 @@ if ($action === 'stream' && $method === 'POST') {
         exit;
     }
 
-    if (!$regen && !$reactionOnly) {
+    if (!$regen) {
         $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image, reply_to_id, reply_to_bubble, reply_quote)
             VALUES (?, "user", ?, ?, ?, ?, ?)');
         $ins->execute([$cid, $text, $imageBase, $quote['id'] ?? 0, $quote['bubble'] ?? 0, $quote['text'] ?? '']);
@@ -229,7 +210,7 @@ if ($action === 'stream' && $method === 'POST') {
     $searchKey = chat_web_search_key();
     $searchMcp = $mode === 'auto' ? chat_web_mcp_config() : null;
     $useMcp = $searchMcp !== null;
-    if (($useMcp || $searchKey !== '') && !$reactionOnly && $mediaRequest === null && $text !== '') {
+    if (($useMcp || $searchKey !== '') && $mediaRequest === null && $text !== '') {
         $searchModel = $mode === 'fallback' ? llm_config() : chat_llm_config_for($conv);
         if ($mode !== 'fallback' || $searchModel['key'] !== '') {
             $query = chat_web_query($history, $quote === null ? $text : $text . "\nEn réponse à : " . mb_substr($quote['text'], 0, 420), $searchModel, $ping);
@@ -247,7 +228,7 @@ if ($action === 'stream' && $method === 'POST') {
             }
         }
     }
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $reactionTarget, $address, $webResults, $quote, $quoteHistory);
+    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $address, $webResults, $quote, $quoteHistory);
     $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
     $sentAny = false;
     $requestedUrl = '';
@@ -317,7 +298,7 @@ if ($action === 'stream' && $method === 'POST') {
         }
     } catch (Throwable $e) {
         $kind = $e instanceof LlmUnavailable ? $e->kind : 'error';
-        if (!$sentAny && !$regen && !$reactionOnly && $imageBase === '') {
+        if (!$sentAny && !$regen && $imageBase === '') {
             // rien n'a été produit : on retire le message pour permettre un nouvel essai propre
             db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$userMsgId]);
         }
@@ -325,7 +306,7 @@ if ($action === 'stream' && $method === 'POST') {
             'error' => public_error($e),
             'kind' => $kind,
             'partial' => $sentAny,
-            'kept_user' => !$regen && !$reactionOnly && ($sentAny || $imageBase !== ''),
+            'kept_user' => !$regen && ($sentAny || $imageBase !== ''),
         ]);
         exit;
     }
@@ -333,13 +314,13 @@ if ($action === 'stream' && $method === 'POST') {
     $aborted = !empty($res['aborted']);
     if ($aborted) {
         $res['content'] = trim((string) $res['content']);
-        if ($res['content'] === '' || $reactionOnly) {
+        if ($res['content'] === '') {
             exit;
         }
     }
 
     $res['klipy_url'] = $aborted ? '' : $requestedUrl;
-    if (!$aborted && !$reactionOnly && !$regen && $mediaRequest === null) {
+    if (!$aborted && !$regen && $mediaRequest === null) {
         $res['klipy_url'] = chat_spontaneous_klipy(
             $cid, $persona, $conv, $text, $res['content'],
             modelConfig: $res['provider'] === 'fallback' ? llm_config() : null
@@ -363,18 +344,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     try {
-        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $reactionOnly, $userMsgId, $res, $splitPoints, $aborted, $conv, $reactionTarget, $trackRelationship, $address, $relationshipRevision): array {
-            if ($reactionOnly) {
-                $active = $pdo->prepare('SELECT reaction_pending FROM messages WHERE id = ?');
-                $active->execute([$reactionTarget['id']]);
-                $pending = chat_pending_reactions((string) $active->fetchColumn());
-                if (($pending[$reactionTarget['bubble']] ?? null) !== $reactionTarget['revision']) {
-                    return [0, null, null, 0, false];
-                }
-                unset($pending[$reactionTarget['bubble']]);
-                $pdo->prepare('UPDATE messages SET reaction_pending = ? WHERE id = ?')
-                    ->execute([chat_encode_reactions($pending), $reactionTarget['id']]);
-            }
+        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv, $trackRelationship, $address, $relationshipRevision): array {
             if ($regen) {
                 // L'ancienne réponse reste visible jusqu'à la validation de la transaction.
                 reply_version_archive($cid, $userMsgId);
@@ -382,11 +352,11 @@ if ($action === 'stream' && $method === 'POST') {
                     ->execute([$cid, $userMsgId]);
             }
 
-            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points, reaction_reply, klipy_url)
-                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?, ?, ?)')
+            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points, klipy_url)
+                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?, ?)')
                 ->execute([
                     $cid, $res['content'], $res['model'], (int) $res['prompt_tokens'], (int) $res['completion_tokens'],
-                    (int) $res['ms'], $splitPoints ? json_encode($splitPoints) : '', $reactionOnly ? 1 : 0,
+                    (int) $res['ms'], $splitPoints ? json_encode($splitPoints) : '',
                     $res['klipy_url'],
                 ]);
             $assistantId = (int) $pdo->lastInsertId();
@@ -430,11 +400,7 @@ if ($action === 'stream' && $method === 'POST') {
             return [$assistantId, $versions, $notice, $versionId, $relationshipPending];
         });
     } catch (Throwable $e) {
-        $sse(['error' => public_error($e), 'kind' => 'error', 'kept_user' => !$regen && !$reactionOnly]);
-        exit;
-    }
-    if ($assistantId === 0) {
-        $sse(['done' => true, 'skipped' => true]);
+        $sse(['error' => public_error($e), 'kind' => 'error', 'kept_user' => !$regen]);
         exit;
     }
     if ($aborted) {
@@ -453,7 +419,7 @@ if ($action === 'stream' && $method === 'POST') {
             'split_points' => $splitPoints,
             'versions' => $versions,
             'version_id' => $versionId,
-            'reaction_reply' => $reactionOnly,
+            'reaction_reply' => false,
             'klipy_url' => $res['klipy_url'],
         ],
         'user_reaction' => $res['reaction'] !== '' ? ['id' => $userMsgId, 'reaction' => $res['reaction']] : null,

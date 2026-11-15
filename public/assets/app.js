@@ -4428,20 +4428,10 @@
             (picker.querySelector('[aria-pressed="true"]') || picker.firstElementChild)?.focus({ preventScroll: true });
         };
 
-        const queueReactionSave = (item, key) => {
+        const saveReaction = async (item, key) => {
             const msg = item.closest(".msg-bot");
-            if (!msg || item.dataset.reacting || msg.dataset.switching) return;
+            if (!msg?.isConnected || item.dataset.reacting || msg.dataset.switching) return;
             item.dataset.reacting = "1";
-            chatQueue.push({ item, key });
-            processChatQueue();
-        };
-
-        const saveReaction = async ({ item, key }) => {
-            const msg = item.closest(".msg-bot");
-            if (!msg?.isConnected) {
-                delete item.dataset.reacting;
-                return;
-            }
             const mid = msg.dataset.msgId;
             const version = msg.dataset.versionId || "0";
             const bubble = item.dataset.bubbleIndex;
@@ -4453,9 +4443,6 @@
                 if (!data.ok) throw new Error(data.error || tr("chat.reaction_error"));
                 if (data.reaction) recordReactionUse(data.reaction);
                 paintReaction(item, data.reaction, true, true);
-                if (data.reply) {
-                    return { mid, version, bubble, key: data.reaction, revision: data.revision };
-                }
             } catch (err) {
                 notice(err.message || tr("chat.reaction_error"));
             } finally {
@@ -4471,7 +4458,7 @@
             if (option) {
                 const item = reactionBubble;
                 closeReactions(true);
-                queueReactionSave(item, option.dataset.reactionOption);
+                saveReaction(item, option.dataset.reactionOption);
             } else if (event.target.closest("[data-more-reactions]")) {
                 showReactions(true);
             } else if (action) {
@@ -5010,11 +4997,8 @@
             try {
                 const next = chatQueue.shift();
                 paintQueueStatus();
-                if (next?.item) {
-                    const reaction = await saveReaction(next);
-                    if (reaction) await send(null, "auto", false, false, null, null, reaction);
-                } else if (next) {
-                    await send(next.text, "auto", true, false, null, null, null, next.attachment, next.quote);
+                if (next) {
+                    await send(next.text, "auto", true, false, null, null, next.attachment, next.quote);
                 } else {
                     maintenancePending = false;
                     const data = await compressMemory();
@@ -5043,19 +5027,19 @@
             processChatQueue();
         };
 
-        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, reaction = null, attachment = null, quote = null) => {
-            const text = regen || reaction ? "" : (overrideText ?? input.value.trim());
-            if (!regen && !reaction && text === "" && !attachment) return;
+        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, attachment = null, quote = null) => {
+            const text = regen ? "" : (overrideText ?? input.value.trim());
+            if (!regen && text === "" && !attachment) return;
             if (busy || opening) return;
 
             const tryFallback = () => {
                 if (busy) return;
-                if (!regen && !reaction && input.value.trim() === text) {
+                if (!regen && input.value.trim() === text) {
                     input.value = "";
                     if (pendingQuote === quote) setQuoteDraft(null);
                     grow();
                 }
-                const retry = send(text, "fallback", echo, regen, regenMid, regenReply, reaction, attachment, quote);
+                const retry = send(text, "fallback", echo, regen, regenMid, regenReply, attachment, quote);
                 if (attachment && pendingFile === attachment.file) clearAttach();
                 retry.finally(processChatQueue);
             };
@@ -5065,7 +5049,7 @@
             let userEl = null;
             const restoreDraft = () => {
                 userEl?.remove();
-                if (!regen && !reaction && !input.value) {
+                if (!regen && !input.value) {
                     input.value = text;
                     if (quote && !pendingQuote) setQuoteDraft(quote);
                     grow();
@@ -5078,7 +5062,7 @@
                     if (attachPreview) attachPreview.hidden = false;
                 }
             };
-            if (!regen && !reaction) {
+            if (!regen) {
                 clearIntro();
                 if (echo) {
                     userEl = renderMsg({ role: "user", content: text, reply_to: quote, at: new Date().toISOString() });
@@ -5088,7 +5072,7 @@
             }
             typing();
 
-            if (!reaction && mode === "auto" && lastStatus && lastStatus.reachable === false) {
+            if (mode === "auto" && lastStatus && lastStatus.reachable === false) {
                 document.getElementById("chat-typing")?.remove();
                 setStreaming(false);
                 restoreDraft();
@@ -5149,10 +5133,6 @@
                     const d = await fetch(url, { signal: AbortSignal.timeout(1000) }).then((r) => r.json()).catch(() => null);
                     if (d?.ok && !d.generating) {
                         for (const msg of d.messages) {
-                            if (reaction) {
-                                if (msg.id > afterId && msg.reaction_reply) return msg;
-                                continue;
-                            }
                             if (msg.id === userId && msg.reaction) paintUserReaction(msg);
                             if (msg.id <= userId) continue;
                             if (msg.role === "user") break;
@@ -5272,13 +5252,6 @@
                 if (regen) fd.append("regen", "1");
                 if (regen && regenMid) fd.append("regen_mid", String(regenMid));
                 if (regen && regenReply) fd.append("regen_reply", String(regenReply));
-                if (reaction) {
-                    fd.append("reaction_mid", reaction.mid);
-                    fd.append("reaction_version", reaction.version);
-                    fd.append("reaction_bubble", reaction.bubble);
-                    fd.append("reaction_revision", reaction.revision);
-                    fd.append("reaction", reaction.key);
-                }
                 if (attachment) {
                     const file = (await attachment.shrink?.catch(() => null)) || attachment.file;
                     fd.append("image", file, file.name || "photo.jpg");
@@ -5320,7 +5293,6 @@
                     let failed = "";
                     let failedKind = "error";
                     let keptUser = false;
-                    let skipped = false;
 
                     for (;;) {
                         const { value, done } = await reader.read();
@@ -5367,7 +5339,6 @@
                                 if (evt.relationship_pending) scheduleRelationship(300000);
                                 finalNotice = evt.notice || null;
                                 mediaNotice = evt.media_notice || "";
-                                skipped = evt.skipped === true;
                                 if (evt.user_reaction) paintUserReaction(evt.user_reaction);
                             } else if (evt.error) {
                                 failed = evt.error;
@@ -5378,10 +5349,6 @@
                     }
 
                     document.getElementById("chat-typing")?.remove();
-                    if (skipped) {
-                        clearLive();
-                        return;
-                    }
                     if (failed) {
                         clearLive();
                         if (!keptUser) restoreDraft();
@@ -5389,7 +5356,7 @@
                             const recovered = await recoverReply();
                             if (recovered) {
                                 settleLive(recovered);
-                                if (!reaction) maintenancePending = true;
+                                maintenancePending = true;
                                 scrollBottom();
                                 return;
                             }
@@ -5411,7 +5378,7 @@
                 }
 
                 scrollBottom();
-                if (!reaction) maintenancePending = true;
+                maintenancePending = true;
             } catch (err) {
                 document.getElementById("chat-typing")?.remove();
                 clearInterval(probe);
@@ -5436,7 +5403,7 @@
                 setStreaming(false);
                 syncSend();
                 // sur téléphone, redonner le focus ouvrirait le clavier à chaque réponse
-                if (!reaction && !matchMedia("(pointer: coarse)").matches) input.focus({ preventScroll: true });
+                if (!matchMedia("(pointer: coarse)").matches) input.focus({ preventScroll: true });
                 processChatQueue();
             }
         };
