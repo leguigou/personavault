@@ -348,34 +348,53 @@
         });
     });
 
-    const klipyTest = document.querySelector("[data-klipy-test]");
-    const klipyKeyInput = klipyTest?.form.elements.klipy_api_key;
-    klipyKeyInput?.addEventListener("input", () => {
-        klipyTest.textContent = klipyKeyInput.value.trim() ? klipyTest.dataset.enteredLabel : klipyTest.dataset.defaultLabel;
-        klipyTest.form.querySelector("[data-klipy-status]").hidden = true;
-    });
-    klipyTest?.addEventListener("click", async () => {
-        const status = klipyTest.form.querySelector("[data-klipy-status]");
-        const { _token } = klipyTest.form.elements;
-        const key = klipyKeyInput.value;
-        klipyTest.disabled = true;
-        status.hidden = false;
-        status.className = "llm-status";
-        status.textContent = tr("settings.test_connecting");
-        try {
-            const body = new URLSearchParams({ _token: _token.value, klipy_api_key: key });
-            const response = await fetch("/settings/klipy/test", { method: "POST", body });
-            const result = await response.json();
-            if (klipyKeyInput.value !== key) return;
-            status.classList.add(response.ok && result.ok ? "is-ok" : "is-ko");
-            status.textContent = result.message || tr("settings.test_failed");
-        } catch {
-            if (klipyKeyInput.value !== key) return;
-            status.classList.add("is-ko");
-            status.textContent = tr("settings.test_failed");
-        } finally {
-            klipyTest.disabled = false;
-        }
+    document.querySelectorAll("[data-connection-test]").forEach((button) => {
+        const fields = (button.dataset.testFields || "").split(/\s+/).filter(Boolean)
+            .map((name) => button.form.elements.namedItem(name));
+        const status = document.getElementById(button.getAttribute("aria-controls"));
+        const label = button.textContent;
+        const updateLabel = () => {
+            button.textContent = button.dataset.enteredLabel && fields[0].value.trim()
+                ? button.dataset.enteredLabel : label;
+        };
+        let revision = 0;
+        fields.forEach((field) => field.addEventListener(field.tagName === "SELECT" ? "change" : "input", () => {
+            revision++;
+            status.hidden = true;
+            if (!button.disabled) updateLabel();
+        }));
+        button.addEventListener("click", async () => {
+            const body = new URLSearchParams({ _token: button.form.elements._token.value });
+            fields.forEach((field) => body.set(field.name, field.value));
+            const started = revision;
+            button.disabled = true;
+            button.textContent = tr("settings.test_running");
+            status.hidden = false;
+            status.className = "llm-status";
+            status.textContent = tr("settings.test_connecting");
+            try {
+                const response = await fetch(button.dataset.connectionTest, { method: "POST", body });
+                const result = await response.json();
+                if (started !== revision || fields.some((field) => body.get(field.name) !== field.value)) {
+                    status.hidden = true;
+                    return;
+                }
+                const ok = response.ok && result.ok;
+                status.classList.add(ok ? "is-ok" : "is-ko");
+                status.textContent = result.message || result.error || (ok
+                    ? tr("settings.test_ok", { model: result.modele, ms: result.ms }) : tr("settings.test_failed"));
+            } catch {
+                if (started !== revision || fields.some((field) => body.get(field.name) !== field.value)) {
+                    status.hidden = true;
+                    return;
+                }
+                status.classList.add("is-ko");
+                status.textContent = tr("settings.test_failed");
+            } finally {
+                button.disabled = false;
+                updateLabel();
+            }
+        });
     });
 
     /* consigne de la conversation : enregistrée sans recharger la page */
@@ -2177,34 +2196,6 @@
         providerSel?.addEventListener("change", () => applyPreset(true));
         applyPreset(false);
 
-        const testBtn = settingsForm.querySelector("[data-llm-test]");
-        const status = settingsForm.querySelector("[data-llm-status]");
-        testBtn?.addEventListener("click", async () => {
-            const original = testBtn.textContent;
-            testBtn.classList.add("is-busy");
-            testBtn.disabled = true;
-            testBtn.textContent = tr("settings.test_running");
-            status.className = "llm-status";
-            status.textContent = tr("settings.test_connecting");
-
-            try {
-                const fd = new FormData(settingsForm);
-                const res = await fetch("/settings/test", { method: "POST", body: fd });
-                const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
-                if (!res.ok || !data.ok) throw new Error(data.error || tr("settings.test_failed"));
-                status.className = "llm-status is-ok";
-                status.innerHTML = `<span class="dot dot-ok"></span><span></span>`;
-                status.lastElementChild.textContent = tr("settings.test_ok", { model: data.modele, ms: data.ms });
-            } catch (err) {
-                status.className = "llm-status is-ko";
-                status.innerHTML = `<span class="dot dot-ko"></span><span></span>`;
-                status.lastElementChild.textContent = err.message;
-            } finally {
-                testBtn.classList.remove("is-busy");
-                testBtn.disabled = false;
-                testBtn.textContent = original;
-            }
-        });
     }
 
 

@@ -648,6 +648,15 @@ function e(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function secret_preview(string $secret): string
+{
+    if ($secret === '') {
+        return '';
+    }
+    $visible = min(4, intdiv(max(0, mb_strlen($secret) - 4), 2));
+    return $visible > 0 ? mb_substr($secret, 0, $visible) . '********' . mb_substr($secret, -$visible) : '********';
+}
+
 function redirect(string $path): never
 {
     header('Location: ' . $path, true, 303);

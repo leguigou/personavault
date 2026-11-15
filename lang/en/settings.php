@@ -12,7 +12,17 @@ return [
     'settings.chat.klipy_test_unavailable' => 'Unable to verify the key. KLIPY is unreachable or returned an unexpected response.',
     'settings.chat.klipy_test_empty' => 'KLIPY responded, but no usable GIF was found.',
     'settings.chat.klipy_empty' => 'No key saved',
-    'settings.chat.klipy_saved' => 'Saved key',
+    'settings.api_key_saved' => 'Saved key',
+    'settings.connection.mcp_title' => 'MCP search through LM Studio',
+    'settings.connection.mcp_missing' => 'No MCP search tool is configured.',
+    'settings.connection.search_ok' => 'Connection successful. The search returned sources.',
+    'settings.connection.search_empty' => 'The service responded, but the search returned no usable sources.',
+    'settings.connection.rejected' => 'Access denied (HTTP {status}). Check the key or token and its permissions.',
+    'settings.connection.limit' => 'Request limit reached. Try again later.',
+    'settings.connection.http_error' => 'The service rejected the request (HTTP {status}). Check its configuration.',
+    'settings.connection.unavailable' => 'Service unavailable or unexpected response.',
+    'settings.connection.invalid_key' => 'The key or token contains an invalid character.',
+    'settings.chat.brave_key' => 'Brave Search API key',
     'settings.chat.klipy_key' => 'KLIPY API key',
     'settings.chat.klipy_help' => 'Enables spontaneous media according to each conversation’s settings. Only search keywords are sent to KLIPY.',
     'settings.chat.klipy_clear' => 'Clear the KLIPY key',
@@ -59,7 +69,6 @@ return [
     'settings.ia.provider_hint' => 'For the AI to analyse the main photo when writing a prompt, pick a model that reads images (ChatGPT, Grok, Gemini, Mistral Pixtral…). DeepSeek reads text only. OpenRouter gives access to all these models with a single key: the model name is “provider/model” (e.g. google/gemini-2.5-flash).',
     'settings.ia.api_key'       => 'API key',
     'settings.ia.api_key_keep'  => 'Leave empty to keep the key',
-    'settings.ia.api_key_saved_help' => 'A key is already saved. Enter a new one to replace it.',
     'settings.ia.api_key_help'  => 'Stored in the app’s local database, never displayed in plain text.',
     'settings.ia.status_ready'  => 'Ready · {model}',
     'settings.ia.status_no_key' => 'No key saved',
@@ -81,9 +90,8 @@ return [
         'other' => '{n} models detected · ★ = recommended for chatting.',
     ],
     'settings.chat.model_manual' => 'Server unreachable: type the model name by hand.',
-    'settings.chat.api_key'     => 'API key (optional)',
-    'settings.chat.api_key_saved_placeholder' => 'Key saved — leave empty',
-    'settings.chat.api_key_placeholder' => 'empty for LM Studio',
+    'settings.chat.api_key'     => 'API key or access token',
+    'settings.chat.api_key_placeholder' => 'Required if the server enforces authentication',
     'settings.chat.memory_title' => 'Reasoning and memory',
     'settings.chat.reasoning'   => 'Model reasoning',
     'settings.chat.reasoning_none'   => 'Off (recommended)',
@@ -242,8 +250,8 @@ return [
             <p>It is usually a remote service (DeepSeek, OpenAI, OpenRouter…). Data is only sent
             when you click an AI action.</p>',
     'settings.info.api_key_label'     => 'API key',
-    'settings.info.api_key_html'      => '<p>The key is stored in the app’s local database and is <strong>never shown again</strong>
-            on the page. Leave the field empty to keep the current key.</p>
+    'settings.info.api_key_html'      => '<p>The key is stored in the app’s local database. Only a masked preview appears.
+            Leave the field empty to keep the current key.</p>
             <p>The “Test connection” button only sends the saved key to the saved address: if you
             change the address, enter the key again.</p>',
     'settings.info.chat_model_label'  => 'chat model',

@@ -215,14 +215,50 @@ await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_fo
         'assistant : la relecture d’une fiche existante ne propose que les ajouts autorisés');
     await post('/p/sherlock-holmes/delete');
 }
-await post('/settings', { provider: 'deepseek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', api_key: '' });
+const testLlmBase = `http://127.0.0.1:${llmPort}`;
+await post('/settings', { provider: 'custom', base_url: testLlmBase + '/remote/v1', model: 'fake-model', api_key: 'llm-test-secret' });
 await post('/settings/chat', { chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`, chat_model: 'fake-model',
+    chat_api_key: 'lms-test-token',
     chat_memory_threshold: '600', chat_memory_target: '300', chat_split_words: '50', chat_split_max_bubbles: '1',
     facts_frequency: 'each', chat_title_model: 'chat', chat_user_profile_enabled: '1', chat_user_profile: 'Je préfère les voyages en train.' });
 const profileSettings = await (await http('/settings')).text();
+expect(/name="api_key"[^>]*>\s*<small>\s*[^<]+<code>llm-\*{8}cret<\/code>/.test(profileSettings)
+    && /name="chat_api_key"[^>]*>\s*<small>[^<]+<code>lms-\*{8}oken<\/code>/.test(profileSettings)
+    && /Clé API Brave Search<\/h3>\s*<p class="hint">[^<]+<code>test\*{8}-key<\/code>/.test(profileSettings)
+    && !['llm-test-secret', 'lms-test-token', 'test-search-key'].some((secret) => profileSettings.includes(secret)),
+    'les réglages montrent uniquement un aperçu des clés IA, LM Studio et Brave Search');
 expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     && profileSettings.includes('id="chat-user-profile-field" data-show-if="chat_user_profile_enabled=1">')
     && profileSettings.includes('Je préfère les voyages en train.'), 'la présentation globale est enregistrée et affichée quand elle est activée');
+
+{
+    const ping = (path, form = {}, origin = base) => http(path, { method: 'POST', form: { _token: csrf, ...form }, origin });
+    expect(['/settings/test', '/settings/chat/test', '/settings/brave/test'].every((path) =>
+        profileSettings.includes(`data-connection-test="${path}"`)), 'les réglages proposent les tests des services configurés');
+    const chat = { chat_base_url: testLlmBase + '/v1', chat_model: 'fake-model' };
+    const remote = await ping('/settings/test', { base_url: testLlmBase + '/remote/v1', model: 'fake-model' });
+    expect(remote.headers.get('cache-control') === 'no-store' && (await remote.json()).ok,
+        'le fournisseur IA répond avec la clé enregistrée');
+    expect((await (await ping('/settings/chat/test', chat)).json()).ok, 'LM Studio répond avec le jeton enregistré');
+    const refused = await (await ping('/settings/chat/test', { ...chat, chat_api_key: 'jeton-refuse-secret' })).text();
+    const exchanged = await (await http('/settings/logs')).text();
+    expect(refused.includes('401') && !refused.includes('jeton-refuse-secret') && !exchanged.includes('jeton-refuse-secret'),
+        'un fournisseur qui réaffiche le jeton refusé ne le divulgue ni dans la réponse ni dans le journal');
+    const otherUrl = await ping('/settings/chat/test', { ...chat, chat_base_url: testLlmBase + '/V1' });
+    expect(otherUrl.status === 400 && (await otherUrl.text()).includes('Adresse différente'),
+        'le jeton enregistré reste lié à l’adresse configurée, casse du chemin comprise');
+    const redirect = await ping('/settings/chat/test', { ...chat, chat_base_url: testLlmBase + '/redirect/v1', chat_api_key: 'lms-test-token' });
+    expect(redirect.status === 400 && (await redirect.text()).includes('307'), 'le test ne suit pas une redirection du fournisseur');
+    expect((await (await ping('/settings/brave/test', { url: testLlmBase + '/redirect/v1' })).json()).ok,
+        'Brave Search est testé avec la clé et l’adresse côté serveur');
+    expect((await ping('/settings/brave/test', { _token: 'invalide' })).status === 419, 'le diagnostic exige un jeton CSRF valide');
+    if (peer) {
+        const mcpPage = await (await http('/settings', { origin: peer })).text();
+        expect(mcpPage.includes('data-connection-test="/settings/mcp/test"')
+            && (await (await ping('/settings/mcp/test', {}, peer)).json()).ok,
+        'le test MCP exécute l’outil avec le jeton LM Studio enregistré');
+    }
+}
 
 {
     const chatPost = (path, form = {}, options = {}) => http(path, { method: 'POST', form: { _token: csrf, ...form }, ...options });
@@ -582,7 +618,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         chat_model: 'fake-model', klipy_api_key: 'test-gif-key',
     });
     expect(saved.headers.get('location') === '/settings#chat'
-        && (await (await http('/settings')).text()).includes('data-default-label="Tester la clé enregistrée"'),
+        && /data-connection-test="\/settings\/klipy\/test"[^>]*>\s*Tester la clé enregistrée\s*<\/button>/.test(await (await http('/settings')).text()),
         'après enregistrement, les réglages Discussion proposent de tester la clé enregistrée');
     const rejected = await testKlipy('rejected-test-key');
     expect(!rejected.ok && rejected.message.includes('401') && !rejected.message.includes('rejected-test-key')
@@ -627,7 +663,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect((await celebrate(clipChat))?.klipy_url?.endsWith('.mp4')
         && /<video[^>]*controls[^>]*preload="none"/.test(await (await http(clipChat)).text()), 'les clips se lisent à la demande');
     const settings = await (await http('/settings')).text();
-    expect(settings.includes('test********-key') && !settings.includes('test-gif-key'),
+    expect(/name="klipy_api_key"[^>]*>\s*<small>[^<]+<code>test\*{8}-key<\/code>/.test(settings) && !settings.includes('test-gif-key'),
         'la clé KLIPY est identifiable sans exposer sa valeur complète');
 }
 {
@@ -662,6 +698,24 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
             && reply.includes('https://example.com/mcp-toulon') && !reply.includes('invented'),
             'le chat local utilise le MCP LM Studio en priorité et conserve les liens réellement retournés');
     }
+}
+{
+    const modelControl = `http://127.0.0.1:${llmPort}/test/model-state`;
+    const load = async (state) => {
+        await fetch(modelControl, { method: 'POST', body: state });
+        const started = await (await http('/chat/1/load', { method: 'POST', form: { _token: csrf } })).json();
+        expect(started.ok && started.started, 'le chargement manuel démarre en arrière-plan');
+        for (let i = 0; i < 60; i++) {
+            const result = await (await http('/chat/1/load-result')).json();
+            if (result.done) return result;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        throw new Error('Le chargement manuel ne renvoie pas son résultat.');
+    };
+    const refused = await load('refused');
+    expect(!refused.ok && refused.error.includes('Permissions insuffisantes') && !refused.error.includes('lms-test-token'),
+        'le chargement authentifié masque le jeton dans les erreurs renvoyées par LM Studio');
+    expect((await load('unloaded')).ok, 'le chargement manuel transmet le jeton enregistré à LM Studio');
 }
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));

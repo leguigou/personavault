@@ -205,11 +205,9 @@ if ($action === 'stream' && $method === 'POST') {
 
     $mode    = ((string) ($_POST['fallback'] ?? '')) === '1' ? 'fallback' : 'auto';
     $webResults = null;
-    $searchKey = trim((string) config('chat_web_search_key', getenv('BRAVE_SEARCH_API_KEY') ?: ''));
-    $searchMcp = (array) config('chat_web_lmstudio_mcp', []);
-    $mcpId = trim((string) ($searchMcp['id'] ?? ''));
-    $mcpTool = trim((string) ($searchMcp['tool'] ?? ''));
-    $useMcp = $mode === 'auto' && str_starts_with($mcpId, 'mcp/') && $mcpTool !== '';
+    $searchKey = chat_web_search_key();
+    $searchMcp = $mode === 'auto' ? chat_web_mcp_config() : null;
+    $useMcp = $searchMcp !== null;
     if (($useMcp || $searchKey !== '') && !$reactionOnly && $mediaRequest === null && $text !== '') {
         $searchModel = $mode === 'fallback' ? llm_config() : chat_llm_config_for($conv);
         if ($mode !== 'fallback' || $searchModel['key'] !== '') {
@@ -220,7 +218,7 @@ if ($action === 'stream' && $method === 'POST') {
             if ($query !== '') {
                 $sse(['phase' => 'web_search']);
                 $webResults = $useMcp
-                    ? chat_web_lmstudio_results($query, $searchModel, $mcpId, $mcpTool, $ping)
+                    ? chat_web_lmstudio_results($query, $searchModel, $searchMcp['id'], $searchMcp['tool'], $ping)
                     : chat_web_results($query, $searchKey, $ping);
                 if ($ping()) {
                     exit;

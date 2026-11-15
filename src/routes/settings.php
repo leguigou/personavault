@@ -112,14 +112,21 @@ if ($path === '/settings') {
     $chatCfg    = chat_llm_config_raw();
     $chatModels = chat_models($chatCfg['base_url'], $chatCfg['key']); // un seul appel réseau
     $llmCfg     = llm_config();
+    $keyPreviews = [
+        'llm' => secret_preview($llmCfg['key']),
+        'chat' => secret_preview($chatCfg['key']),
+        'klipy' => secret_preview(setting('klipy_api_key')),
+        'brave' => secret_preview(chat_web_search_key()),
+    ];
+    unset($llmCfg['key'], $chatCfg['key']);
     render('settings', [
         'title'      => t('nav.settings'),
         'llm'        => $llmCfg,
-        'hasKey'     => $llmCfg['key'] !== '',
+        'keyPreviews' => $keyPreviews,
+        'searchMcp' => chat_web_mcp_config(),
         'chat'       => $chatCfg,
         'chatModels'     => $chatModels,
         'chatModelList'  => chat_models_ordered($chatModels),
-        'chatHasKey' => $chatCfg['key'] !== '',
         'chatReasoning' => setting('chat_reasoning_effort', 'none'),
         'style'         => ui_style(),
         'backupStats'   => [
@@ -260,43 +267,68 @@ if ($path === '/settings/klipy/test' && $method === 'POST') {
     exit;
 }
 
-if ($path === '/settings/test' && $method === 'POST') {
+if ($method === 'POST' && in_array($path, ['/settings/test', '/settings/chat/test', '/settings/brave/test', '/settings/mcp/test'], true)) {
     csrf_check_json();
     session_write_close();
     header('Content-Type: application/json; charset=utf-8');
-    $stored  = llm_config();
-    $key     = trim((string) ($_POST['api_key'] ?? ''));
-    $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? '')), '/');
-    // la clé ENREGISTRÉE n'est envoyée qu'à l'adresse enregistrée : tester une autre
-    // adresse exige de saisir la clé (évite de l'exfiltrer vers un serveur quelconque)
-    $sameUrl = $baseUrl !== '' && strcasecmp($baseUrl, rtrim($stored['base_url'], '/')) === 0;
-    $cfg     = [
-        'base_url' => $baseUrl,
-        'model'    => trim((string) ($_POST['model'] ?? '')),
-        'key'      => $key !== '' ? $key : ($sameUrl ? $stored['key'] : ''),
-    ];
+    header('Cache-Control: no-store');
+    $field = static fn (string $name): string => is_string($_POST[$name] ?? null) ? trim($_POST[$name]) : '';
     try {
-        if (!preg_match('#^https?://#i', $baseUrl)) {
+        if ($path === '/settings/brave/test' || $path === '/settings/mcp/test') {
+            $query = 'Tour Eiffel Paris site officiel';
+            if ($path === '/settings/brave/test') {
+                $key = chat_web_search_key();
+                if ($key === '') {
+                    throw new RuntimeException(t('error.llm.no_key'));
+                }
+                $results = chat_web_results($query, $key, null, true);
+            } else {
+                $cfg = chat_llm_config();
+                $integration = chat_web_mcp_config();
+                if ($cfg['key'] === '') {
+                    throw new RuntimeException(t('error.llm.no_key'));
+                }
+                if ($cfg['model'] === '') {
+                    throw new RuntimeException(t('error.llm.no_model'));
+                }
+                if ($integration === null) {
+                    throw new RuntimeException(t('settings.connection.mcp_missing'));
+                }
+                $results = chat_web_lmstudio_results($query, $cfg, $integration['id'], $integration['tool'], null, true);
+            }
+            if (!$results) {
+                throw new RuntimeException(t('settings.connection.search_empty'));
+            }
+            echo json_encode(['ok' => true, 'message' => t('settings.connection.search_ok')], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $isChat = $path === '/settings/chat/test';
+        $prefix = $isChat ? 'chat_' : '';
+        $stored = $isChat ? chat_llm_config_raw() : llm_config();
+        $baseUrl = rtrim($field($prefix . 'base_url'), '/');
+        $model = $field($prefix . 'model');
+        $key = $field($prefix . 'api_key');
+        if (!preg_match('#^https?://#i', $baseUrl) || !filter_var($baseUrl, FILTER_VALIDATE_URL)) {
             throw new RuntimeException(t('error.settings.url_scheme'));
         }
-        if ($cfg['key'] === '' && $key === '' && !$sameUrl && $stored['key'] !== '') {
+        if ($key === '' && $stored['key'] !== '' && $baseUrl !== rtrim($stored['base_url'], '/')) {
             throw new RuntimeException(t('error.settings.test_other_url'));
         }
-        $t0  = microtime(true);
-        llm_log_context(['purpose' => 'test']);
-        $out = llm_chat([
-            ['role' => 'system', 'content' => 'Tu réponds uniquement par le mot OK.'],
-            ['role' => 'user', 'content' => 'ping'],
-        ], false, 30, $cfg);
-        echo json_encode([
-            'ok'      => true,
-            'ms'      => (int) round((microtime(true) - $t0) * 1000),
-            'modele'  => $cfg['model'],
-            'reponse' => mb_substr(trim($out), 0, 40),
-        ], JSON_UNESCAPED_UNICODE);
-    } catch (Throwable $e) {
+        $key = $key !== '' ? $key : $stored['key'];
+        if (!$isChat && $key === '') {
+            throw new RuntimeException(t('error.llm.no_key'));
+        }
+        if ($model === '') {
+            throw new RuntimeException(t('error.llm.no_model'));
+        }
+        $ms = llm_test_connection($baseUrl, $model, $key);
+        echo json_encode(['ok' => true, 'ms' => $ms, 'modele' => $model], JSON_UNESCAPED_UNICODE);
+    } catch (RuntimeException $e) {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
+        $status = $e->getCode();
+        $message = $e->getMessage() ?: service_connection_error($status);
+        echo json_encode(['ok' => false, 'error' => $message], JSON_UNESCAPED_UNICODE);
     }
     exit;
 }
