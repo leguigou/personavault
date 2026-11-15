@@ -1791,18 +1791,14 @@ function chat_auto_title(int $cid, bool $rewrite = false): ?string
  *                            lui est renvoyée (sinon « décris-la » dans le message suivant ne
  *                            pouvait rien donner : seul le texte des anciens messages partait)
  */
-function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, ?array $reactionTarget = null, string $addressOverride = '', ?array $webResults = null, ?array $quote = null, array $quoteHistory = []): array
+function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, string $addressOverride = '', ?array $webResults = null, ?array $quote = null, array $quoteHistory = []): array
 {
     $limits = chat_token_budget($conv);
     $budget = $limits['input'] - 8; // enveloppes des messages système et utilisateur
-    if ($reactionTarget !== null) {
-        $conv['memory_enabled'] = 0;
-        $history = [];
-    }
     $conv['summary'] = chat_fit_text((string) ($conv['summary'] ?? ''), intdiv($limits['memory'], 2));
     $summaryCost = (int) ($conv['memory_enabled'] ?? 1) === 1 && $conv['summary'] !== ''
         ? chat_estimate_tokens($conv['summary']) : 0;
-    $text = $reactionTarget !== null ? '[Réaction à ton message]' : ($userMessage !== '' ? $userMessage : ($imageDataUrl ? 'Regarde cette photo.' : ''));
+    $text = $userMessage !== '' ? $userMessage : ($imageDataUrl ? 'Regarde cette photo.' : '');
     $text = chat_fit_text($text, intdiv($budget, 2));
     // 1) Partie système en tête : fiche, consigne de jeu et résumé, puis format de réponse.
     //    LM Studio / llama.cpp peuvent réutiliser le préfixe commun entre les tours.
@@ -1835,15 +1831,15 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $web = chat_fit_text("Extraits web :\n" . implode("\n", $snippets), min(420, intdiv($contextRoom * 2, 3)));
         $contextRoom -= chat_estimate_tokens($web);
     }
-    $time = $reactionTarget === null ? chat_fit_text(chat_time_context($conv, $history), min(256, intdiv($contextRoom, 2))) : '';
-    if ($reactionTarget !== null) {
-        $context[] = "L’utilisateur vient de réagir à la bulle citée ci-dessous. "
-            . "Réponds brièvement en personnage en te fondant uniquement sur le texte de cette bulle et la réaction indiquée. "
-            . "Pour 👍, reste dans le registre du simple accord.\n"
-            . chat_reaction_context($reactionTarget, $contextRoom);
-    }
+    $time = chat_fit_text(chat_time_context($conv, $history), min(256, intdiv($contextRoom, 2)));
 
     $pid = (int) $persona['id'];
+    if ($factsOn) {
+        $recentReactions = array_merge([], ...array_map('chat_user_reaction_signals', array_slice($history, -12)));
+        if ($recentReactions) {
+            $context[] = "Réactions récentes dans cette conversation :\n" . implode("\n", array_slice($recentReactions, -4));
+        }
+    }
     $memoryQuery = $quote === null ? $userMessage : trim($userMessage . ' ' . mb_substr($quote['text'], 0, 420));
     $facts = $factsOn ? array_merge(facts_relevant($pid, $memoryQuery), facts_relevant($pid, $memoryQuery, 3, 'story')) : [];
     $factsText = facts_context($facts);
@@ -1872,7 +1868,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
             . "(sers-t'en comme de souvenirs, ne les cite pas mot pour mot, ne les mentionne pas comme "
             . "des « extraits ») :\n" . implode("\n", $lines);
     }
-    $memoryRoom = $reactionTarget !== null ? $contextRoom : min($limits['memory'] - $summaryCost, $contextRoom - chat_estimate_tokens($time));
+    $memoryRoom = min($limits['memory'] - $summaryCost, $contextRoom - chat_estimate_tokens($time));
     $memory = chat_fit_text(implode("\n\n", $context), $memoryRoom);
     $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $replyContext, $memory, $web]))) . "\n</contexte>";
 

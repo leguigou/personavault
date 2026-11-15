@@ -228,18 +228,6 @@ http.createServer(async (req, res) => {
                 delta('IF d’un clin d’œil]');
             } else if (last.endsWith('Test du réglage de réflexion')) {
                 delta(`Niveau reçu : ${j.reasoning_effort}.`);
-            } else if (last.endsWith('[Réaction à ton message]')) {
-                const target = last.match(/Bulle du personnage : (".*")/)?.[1];
-                const quote = target ? JSON.parse(target) : '';
-                const tone = last.includes('😡 — colère') ? 'colère' : last.includes('👍 — accord') ? 'accord simple' : 'autre';
-                const responseNumber = quote.match(/^Réponse (\d+)/)?.[1];
-                if (j.messages.length !== 2 || system.includes('Mémoire de la conversation')) {
-                    delta('La discussion a été transmise avec la réaction.');
-                } else if (responseNumber) {
-                    delta(`Réaction à la réponse ${responseNumber} (${tone}).`);
-                } else {
-                    delta(quote);
-                }
             } else if (last.endsWith('Merci, tu as été adorable avec moi.')) {
                 if (system.includes('[reaction:choix]')) {
                     for (const part of ['\n[re', 'action:', 'heart', ']', '\n', '\n']) delta(part);

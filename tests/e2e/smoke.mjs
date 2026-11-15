@@ -363,15 +363,8 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
             const react = async (bubble, reaction) => (await chatPost(privateChat + '/react', { mid: reply.id, bubble, reaction })).json();
             const first = await react(0, 'like');
             const second = await react(1, 'heart');
-            const follow = async (saved, bubble = saved.bubble) => (await (await chatPost(privateChat + '/stream', {
-                reaction_mid: reply.id, reaction_bubble: bubble, reaction: saved.reaction, reaction_revision: saved.revision,
-            })).text()).split('\n').filter((line) => line.startsWith('data: '))
-                .map((line) => JSON.parse(line.slice(6))).find((event) => event.done);
-            expect(first.reply && second.reply && (await follow(second, 0))?.skipped,
-                'une révision de réaction est liée à sa bulle');
-            expect((await follow(second))?.reply?.content === 'Dernière phrase.'
-                && (await follow(first))?.reply?.content === reply.content.slice(0, reply.split_points[0]).trim(),
-                'deux réactions à la même réponse utilisent chacune le texte de leur bulle');
+            expect(first.ok && second.ok && !first.reply && !second.reply,
+                'les réactions de chaque bulle sont enregistrées sans réponse automatique');
             const load = async () => (await (await http(privateChat + '/messages')).json()).messages.find((m) => m.id === reply.id);
             expect((await load())?.bubble_reactions?.[1] === 'heart' && (await load())?.bubble_reactions?.[0] === 'like',
                 'les réactions aux deux bulles survivent au rechargement');
@@ -404,11 +397,25 @@ expect(/name="chat_user_profile_enabled"[^>]*\bchecked/.test(profileSettings)
     const path = (await chatPost('/chat/1/new', { mode: 'with-memory' })).headers.get('location');
     const request = (message) => turn(path, message);
     const analyze = () => chatPost(path + '/relationship');
-    expect((await request('Vous pouvez me tutoyer, s’il vous plaît ?'))?.relationship_pending,
+    const greeting = await request('Vous pouvez me tutoyer, s’il vous plaît ?');
+    expect(greeting?.relationship_pending,
         'un échange terminé déclenche le traitement de la relation');
     expect((await (await http(profile)).text()).includes('value="tu" selected'), 'la demande de tutoiement est mémorisée immédiatement');
+    const mark = (reaction) => chatPost(path + '/react', {
+        mid: greeting.reply.id, version_id: greeting.reply.version_id, reaction,
+    });
+    const reaction = await (await mark('angry')).json();
+    expect(reaction.reaction === 'angry' && reaction.reply === false, 'la réaction est conservée sans réponse automatique');
     await analyze();
+    const analysisLogs = await (await http('/settings/logs')).text();
+    expect(analysisLogs.includes('reactions_utilisateur') && analysisLogs.includes('😡 — colère ou frustration'),
+        'l’analyse relationnelle reçoit la réaction et sa bulle');
+    expect(!(await (await http(profile)).text()).includes('En cours'), 'une réaction isolée n’ouvre pas de désaccord');
     await request('Je suis fâché à propos de la photo.');
+    const chatLogs = await (await http('/settings/logs')).text();
+    expect(chatLogs.includes('Réactions récentes dans cette conversation') && chatLogs.includes('😡 — colère ou frustration'),
+        'le tour écrit suivant reçoit le ton de la réaction');
+    await mark('');
     await analyze();
     let page = await (await http(profile)).text();
     expect(page.includes('Désaccord à propos de la photo') && page.includes('En cours') && page.includes('?message='),
@@ -518,9 +525,6 @@ if (peer) {
     const turn = (sse) => sse.split('\n').filter((line) => line.startsWith('data: '))
         .map((line) => JSON.parse(line.slice(6))).find((event) => event.done);
     const react = async (mid, reaction, version_id = 0) => (await chat(1, 'react', { mid, reaction, version_id })).json();
-    const followReaction = async (mid, saved) => (await chat(1, 'stream', {
-        reaction_mid: mid, reaction: saved.reaction, reaction_revision: saved.revision,
-    })).text();
 
     const previous = await recent(1);
     const target = previous.find((m) => m.id === 2);
@@ -528,16 +532,18 @@ if (peer) {
     const wrongChat = await chat(2, 'react', { mid: target.id, reaction: 'angry' });
     expect(wrongChat.status === 409, 'une réaction ne peut pas viser le message d’une autre discussion');
     const angry = await react(target.id, 'angry');
-    const result = turn(await followReaction(target.id, angry));
+    const legacy = await (await chat(1, 'stream', {
+        reaction_mid: target.id, reaction: 'angry', reaction_revision: angry.revision ?? 'ancienne-revision',
+    })).text();
     const after = await recent(1);
-    expect(result?.reply?.content === 'Réaction à la réponse 2 (colère).' && result.reply.reaction_reply
-        && after.length === previous.length + 1 && after.find((m) => m.id === target.id)?.reaction === 'angry'
+    expect(angry.ok && !angry.reply && turn(legacy)?.skipped && !legacy.includes('"delta"')
+        && after.length === previous.length && after.find((m) => m.id === target.id)?.reaction === 'angry'
         && JSON.stringify(await recent(2)) === JSON.stringify(otherBefore),
-        'une réaction négative à un ancien message relance sa discussion sur le bon sujet');
-    expect(turn(await followReaction(target.id, angry))?.skipped, 'une même réaction ne lance qu’une réponse');
+        'une réaction à un ancien message ne relance pas le persona, même avec un ancien client');
     const like = await react(target.id, 'like');
-    expect(turn(await followReaction(target.id, like))?.reply?.content === 'Réaction à la réponse 2 (accord simple).',
-        'le pouce en haut est transmis comme un accord simple');
+    const afterLike = await recent(1);
+    expect(like.ok && !like.reply && afterLike.length === previous.length && afterLike.find((m) => m.id === target.id)?.reaction === 'like',
+        'remplacer une réaction ne crée aucun message');
     expect(!(await react(target.id, '')).reply && !(await recent(1)).find((m) => m.id === target.id)?.reaction,
         'retirer une réaction ne déclenche pas une nouvelle réponse');
 
