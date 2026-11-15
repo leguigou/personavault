@@ -93,22 +93,80 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                     aria-controls="chat-settings" aria-label="<?= e(t('chat.head.context_memory')) ?>">
                 <span data-ctx-ring><?= chat_ring($memory, 32) ?></span>
             </button>
-            <button type="button" class="icon-btn" data-open-settings="conversation" aria-expanded="false"
-                    aria-controls="chat-settings" title="<?= e(t('chat.head.settings')) ?>" aria-label="<?= e(t('chat.head.settings')) ?>">
-                <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-            </button>
-            <?php if (!(int) $persona['archived']): ?>
-                <form method="post" action="/chat/<?= (int) $conv['id'] ?>/new" data-new-chat
-                      data-title="<?= e(t('chat.head.new')) ?>" data-help="<?= e(t('chat.new.help')) ?>"
-                      data-fresh="<?= e(t('chat.new.fresh')) ?>" data-continue="<?= e(t('chat.new.continue')) ?>">
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
-                    <input type="hidden" name="mode" value="fresh">
-                    <button type="submit" class="icon-btn" aria-haspopup="dialog" title="<?= e(t('chat.head.new')) ?>" aria-label="<?= e(t('chat.head.new')) ?>">
-                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6M16 5l3 3m-9 6 3.6-.8 6-6a2.1 2.1 0 0 0-3-3l-6 6L10 14Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <details class="chat-more" data-chat-more>
+                <summary class="icon-btn" aria-label="<?= e(t('chat.find.menu')) ?>" title="<?= e(t('chat.find.menu')) ?>">
+                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
+                </summary>
+                <div class="chat-more-panel">
+                    <button type="button" class="chat-menu-action" data-find-open>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        <?= e(t('chat.find.open')) ?>
                     </button>
-                </form>
-            <?php endif; ?>
+                    <button type="button" class="chat-menu-action" data-open-settings="conversation" aria-expanded="false"
+                            aria-controls="chat-settings" title="<?= e(t('chat.head.settings')) ?>" aria-label="<?= e(t('chat.head.settings')) ?>">
+                        <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                        <?= e(t('chat.head.settings')) ?>
+                    </button>
+                    <?php if (!(int) $persona['archived']): ?>
+                        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/new" data-new-chat
+                              data-title="<?= e(t('chat.head.new')) ?>" data-help="<?= e(t('chat.new.help')) ?>"
+                              data-fresh="<?= e(t('chat.new.fresh')) ?>" data-continue="<?= e(t('chat.new.continue')) ?>">
+                            <input type="hidden" name="_token" value="<?= e($token) ?>">
+                            <input type="hidden" name="mode" value="fresh">
+                            <button type="submit" class="chat-menu-action" aria-haspopup="dialog" title="<?= e(t('chat.head.new')) ?>" aria-label="<?= e(t('chat.head.new')) ?>">
+                                <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6M16 5l3 3m-9 6 3.6-.8 6-6a2.1 2.1 0 0 0-3-3l-6 6L10 14Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                <?= e(t('chat.head.new')) ?>
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            </details>
         </header>
+
+        <section class="chat-find" data-chat-find data-timezone="<?= e(chat_now()->getTimezone()->getName()) ?>" hidden
+                 role="search" aria-label="<?= e(t('chat.find.open')) ?>">
+            <header class="chat-find-head">
+                <button type="button" class="icon-btn" data-find-close aria-label="<?= e(t('chat.find.close')) ?>">
+                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="chat-find-field">
+                    <input type="text" inputmode="search" enterkeyhint="search" autocomplete="off" maxlength="160" data-find-input
+                           aria-label="<?= e(t('chat.find.placeholder')) ?>" placeholder="<?= e(t('chat.find.placeholder')) ?>">
+                    <button type="button" class="icon-btn" data-find-clear aria-label="<?= e(t('chat.find.clear')) ?>" hidden>
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    </button>
+                </div>
+            </header>
+            <div class="chat-find-list" data-find-list>
+                <p class="chat-find-message" data-find-message role="status"><?= e(t('chat.find.placeholder')) ?></p>
+                <ul data-find-results></ul>
+                <button type="button" class="btn btn-ghost btn-sm" data-find-more hidden><?= e(t('chat.find.more')) ?></button>
+            </div>
+            <div class="chat-find-reading" data-find-reading hidden>
+                <div class="chat-scroll" data-find-thread></div>
+                <div class="chat-find-steps">
+                    <button type="button" class="icon-btn" data-find-step="1" aria-label="<?= e(t('chat.find.older')) ?>" title="<?= e(t('chat.find.older')) ?>">
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button type="button" class="icon-btn" data-find-step="-1" aria-label="<?= e(t('chat.find.newer')) ?>" title="<?= e(t('chat.find.newer')) ?>">
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="chat-find-date" id="chat-find-date" data-find-date hidden>
+                <label for="chat-find-day"><?= e(t('chat.find.date')) ?></label>
+                <input id="chat-find-day" class="input" type="date" data-find-day>
+                <button type="button" class="btn btn-ghost btn-sm" data-find-day-clear><?= e(t('chat.find.clear_date')) ?></button>
+            </div>
+            <footer class="chat-find-footer">
+                <button type="button" class="icon-btn" data-find-date-toggle aria-expanded="false" aria-controls="chat-find-date"
+                        aria-label="<?= e(t('chat.find.date')) ?>" title="<?= e(t('chat.find.date')) ?>">
+                    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 3v5m8-5v5M4 11h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </button>
+                <span data-find-count role="status"></span>
+                <button type="button" class="chat-find-mode" data-find-mode hidden><?= e(t('js.chat.find.thread')) ?></button>
+            </footer>
+        </section>
 
         <div class="chat-scroll" data-scroll data-gallery data-gallery-name="<?= e(slugify((string) $persona['name'])) ?>-chat">
             <?php if ($sourceExcerpt !== false): ?>

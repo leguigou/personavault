@@ -2918,7 +2918,7 @@
             input.focus({ preventScroll: true });
         });
 
-        const renderMsg = (m) => {
+        const renderMsg = (m, interactive = true) => {
             if (m.role === "memory") {
                 const line = document.createElement("div");
                 line.className = "msg-memory";
@@ -2973,9 +2973,10 @@
             const holder = document.createElement("div");
             holder.className = "bubbles";
             if (m.reply_to) {
-                const quote = document.createElement(m.reply_to.id ? "button" : "div");
+                const linked = interactive && m.reply_to.id;
+                const quote = document.createElement(linked ? "button" : "div");
                 quote.className = "chat-quote";
-                if (m.reply_to.id) {
+                if (linked) {
                     quote.type = "button";
                     quote.dataset.quoteId = m.reply_to.id;
                     quote.dataset.quoteBubble = m.reply_to.bubble;
@@ -3002,9 +3003,9 @@
                 }
                 item.appendChild(b);
                 holder.appendChild(item);
-                if (wrap.dataset.msgId && m.role === "assistant" && !b.hidden) prepareReactionBubble(b);
-                if (wrap.dataset.msgId && m.role === "user") prepareUserBubble(b.hidden ? img : b);
-                paintReaction(item, m.bubble_reactions?.[i] ?? (i === 0 ? m.reaction : ""), m.role === "assistant");
+                if (interactive && wrap.dataset.msgId && m.role === "assistant" && !b.hidden) prepareReactionBubble(b);
+                if (interactive && wrap.dataset.msgId && m.role === "user") prepareUserBubble(b.hidden ? img : b);
+                paintReaction(item, m.bubble_reactions?.[i] ?? (i === 0 ? m.reaction : ""), m.role === "assistant", false, interactive);
             });
             if (m.klipy_url) {
                 const figure = document.createElement("figure");
@@ -3030,6 +3031,279 @@
             wrap.appendChild(holder);
             return wrap;
         };
+
+        const moreMenu = chat.querySelector("[data-chat-more]");
+        const search = chat.querySelector("[data-chat-find]");
+        const find = (name) => search.querySelector("[data-find-" + name + "]");
+        const queryInput = find("input");
+        const dateInput = find("day");
+        const resultList = find("results");
+        const list = find("list");
+        const thread = find("thread");
+        const steps = [...search.querySelectorAll("[data-find-step]")];
+        const modeButton = find("mode");
+        const moreResults = find("more");
+        const findMessage = find("message");
+        const count = find("count");
+        const chatUrl = endpoint.replace(/\/send$/, "");
+        const timeZone = search.dataset.timezone;
+        const dateFormat = new Intl.DateTimeFormat(LOCALE, { timeZone, dateStyle: "medium" });
+        const timeFormat = new Intl.DateTimeFormat(LOCALE, { timeZone, timeStyle: "short" });
+        let locked = [];
+        let query = "";
+        let results = [];
+        let total = 0;
+        let index = 0;
+        let reading = false;
+        let timer;
+        let resultRequest = null;
+        let windowRequest = null;
+
+        const paintFind = () => {
+            list.hidden = reading;
+            find("reading").hidden = !reading;
+            count.textContent = reading && total ? tr("chat.find.position", { index: fmt(index + 1), total: fmt(total) })
+                : total ? tr("chat.find.count", { n: total, count: fmt(total) }) : "";
+            modeButton.textContent = reading ? tr("chat.find.list") : tr("chat.find.thread");
+            modeButton.hidden = !results.length;
+            find("date-toggle").classList.toggle("is-active", Boolean(dateInput.value));
+            find("day-clear").disabled = !dateInput.value;
+            moreResults.hidden = !results.length || results.length >= total;
+            moreResults.disabled = Boolean(resultRequest);
+            steps.forEach((button) => {
+                const next = index + Number(button.dataset.findStep);
+                button.disabled = next < 0 || next >= total || Boolean(resultRequest);
+            });
+        };
+        const markedText = (text) => {
+            const mark = document.createElement("mark");
+            mark.textContent = text;
+            return mark;
+        };
+        const appendResults = (rows) => {
+            const frag = document.createDocumentFragment();
+            const today = dateFormat.format(Date.now());
+            for (const result of rows) {
+                const row = document.createElement("li");
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "chat-find-result";
+                button.dataset.findIndex = results.length;
+                results.push(result);
+                const mine = result.role === "user";
+                const name = mine ? tr("chat.find.me") : chat.dataset.name;
+                const avatar = document.createElement("span");
+                avatar.className = "chat-avatar";
+                avatar.setAttribute("aria-hidden", "true");
+                if (mine) avatar.textContent = Array.from(name)[0];
+                else avatar.innerHTML = avatarHTML;
+                const details = document.createElement("span");
+                const head = document.createElement("span");
+                head.className = "chat-find-result-head";
+                const author = document.createElement("strong");
+                author.textContent = name;
+                const when = document.createElement("time");
+                when.dateTime = result.at;
+                const date = new Date(result.at);
+                const day = dateFormat.format(date);
+                const time = timeFormat.format(date);
+                when.textContent = day === today ? time : day;
+                when.title = day + " · " + time;
+                head.append(author, when);
+                const excerpt = document.createElement("span");
+                excerpt.className = "chat-find-excerpt";
+                const chars = Array.from(result.excerpt);
+                if (result.match_at === null) excerpt.textContent = result.excerpt;
+                else {
+                    const end = result.match_at + result.match_length;
+                    excerpt.append(chars.slice(0, result.match_at).join(""), markedText(chars.slice(result.match_at, end).join("")), chars.slice(end).join(""));
+                }
+                details.append(head, excerpt);
+                button.append(avatar, details);
+                row.appendChild(button);
+                frag.appendChild(row);
+            }
+            resultList.appendChild(frag);
+        };
+        const loadResults = async () => {
+            if (resultRequest) return;
+            const request = new AbortController();
+            resultRequest = request;
+            const params = new URLSearchParams({ q: query, date: dateInput.value, offset: results.length });
+            paintFind();
+            try {
+                const response = await fetch(chatUrl + "/find-messages?" + params, { signal: request.signal });
+                if (!response.ok) throw Error();
+                const data = await response.json();
+                if (request !== resultRequest) return;
+                appendResults(data.results);
+                total = data.results.length ? data.total : results.length;
+                findMessage.textContent = results.length ? "" : tr("chat.find.empty");
+            } catch {
+                if (!request.signal.aborted) {
+                    (reading ? thread : findMessage).textContent = tr("chat.find.failed");
+                }
+            } finally {
+                if (request === resultRequest) {
+                    resultRequest = null;
+                    paintFind();
+                }
+            }
+        };
+        const resetFind = (debounce = false) => {
+            clearTimeout(timer);
+            resultRequest?.abort();
+            windowRequest?.abort();
+            resultRequest = null;
+            windowRequest = null;
+            results = [];
+            total = index = 0;
+            query = queryInput.value.trim();
+            reading = false;
+            resultList.replaceChildren();
+            thread.replaceChildren();
+            list.scrollTop = 0;
+            find("clear").hidden = !queryInput.value;
+            const filtered = query || dateInput.value;
+            findMessage.textContent = filtered ? tr("chat.find.loading") : queryInput.placeholder;
+            paintFind();
+            if (filtered) timer = setTimeout(loadResults, debounce ? 220 : 0);
+        };
+        const showWindow = (messages) => {
+            const pattern = query ? new RegExp(query.replace(/[.*+?^$(){}|[\]\\]/g, "\\$&"), "giu") : null;
+            const frag = document.createDocumentFragment();
+            let previousDay;
+            for (const message of messages) {
+                const date = new Date(message.at);
+                const day = dateFormat.format(date);
+                if (day !== previousDay) {
+                    const label = document.createElement("div");
+                    label.className = "chat-day";
+                    label.textContent = day;
+                    frag.appendChild(label);
+                    previousDay = day;
+                }
+                const item = renderMsg(message, false);
+                if (pattern) for (const bubble of item.querySelectorAll(".msg-bubble > .bubble")) {
+                    const text = bubble.textContent;
+                    const matches = [...text.matchAll(pattern)];
+                    if (!matches.length) continue;
+                    const parts = [];
+                    let from = 0;
+                    for (const match of matches) {
+                        parts.push(text.slice(from, match.index), markedText(match[0]));
+                        from = match.index + match[0].length;
+                    }
+                    bubble.replaceChildren(...parts, text.slice(from));
+                }
+                emphasizeIn(item);
+                const when = document.createElement("time");
+                when.dateTime = message.at;
+                when.textContent = timeFormat.format(date);
+                when.className = "msg-time";
+                item.querySelector(".bubbles").appendChild(when);
+                frag.appendChild(item);
+            }
+            thread.replaceChildren(frag);
+        };
+        const goToResult = async (next) => {
+            if (next < 0 || next >= total) return;
+            const currentResults = results;
+            if (next >= results.length) await loadResults();
+            const result = results[next];
+            if (!result || search.hidden || currentResults !== results) return;
+            index = next;
+            reading = true;
+            resultList.querySelector("[aria-current]")?.removeAttribute("aria-current");
+            resultList.querySelector('[data-find-index="' + next + '"]')?.setAttribute("aria-current", "true");
+            paintFind();
+            const target = () => thread.querySelector('[data-msg-id="' + result.id + '"]');
+            windowRequest?.abort();
+            if (!target()) {
+                const request = new AbortController();
+                windowRequest = request;
+                thread.textContent = tr("chat.find.loading");
+                try {
+                    const response = await fetch(chatUrl + "/message-window?id=" + result.id, { signal: request.signal });
+                    if (!response.ok) throw Error();
+                    const data = await response.json();
+                    if (request.signal.aborted) return;
+                    showWindow(data.messages);
+                } catch {
+                    if (!request.signal.aborted) thread.textContent = tr("chat.find.failed");
+                    return;
+                }
+            }
+            thread.querySelector(".is-find-current")?.classList.remove("is-find-current");
+            const item = target();
+            item?.classList.add("is-find-current");
+            (item?.querySelector("mark")?.closest(".msg-bubble") || item)?.scrollIntoView({ block: "center", behavior: "instant" });
+        };
+        const closeSearch = () => {
+            search.hidden = true;
+            clearTimeout(timer);
+            resultRequest?.abort();
+            windowRequest?.abort();
+            locked.forEach((node) => { node.inert = false; });
+            moreMenu.querySelector("summary").focus();
+        };
+        moreMenu.querySelector("[data-find-open]").addEventListener("click", () => {
+            search.hidden = false;
+            locked = [...chat.children].filter((node) => node !== search && !node.inert);
+            locked.forEach((node) => { node.inert = true; });
+            resetFind();
+            queryInput.focus();
+        });
+        moreMenu.querySelector("[data-open-settings]").addEventListener("click", () => { moreMenu.open = false; });
+        document.addEventListener("click", (event) => {
+            if (!moreMenu.contains(event.target) || event.target.closest(".chat-menu-action")) moreMenu.open = false;
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key !== "Escape") return;
+            if (!search.hidden) closeSearch();
+            else if (moreMenu.open) {
+                moreMenu.open = false;
+                moreMenu.querySelector("summary").focus();
+            }
+        });
+        find("close").addEventListener("click", closeSearch);
+        queryInput.addEventListener("input", () => resetFind(true));
+        queryInput.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" || event.isComposing) return;
+            event.preventDefault();
+            clearTimeout(timer);
+            if (!results.length && (query || dateInput.value)) loadResults();
+            queryInput.blur();
+        });
+        find("clear").addEventListener("click", () => { queryInput.value = ""; resetFind(); queryInput.focus(); });
+        find("date-toggle").addEventListener("click", () => {
+            const panel = find("date");
+            panel.hidden = !panel.hidden;
+            find("date-toggle").setAttribute("aria-expanded", String(!panel.hidden));
+            if (!panel.hidden) dateInput.focus();
+        });
+        dateInput.addEventListener("change", () => resetFind());
+        find("day-clear").addEventListener("click", () => { dateInput.value = ""; resetFind(); });
+        moreResults.addEventListener("click", loadResults);
+        resultList.addEventListener("click", (event) => {
+            const row = event.target.closest("[data-find-index]");
+            if (!row) return;
+            queryInput.blur();
+            goToResult(Number(row.dataset.findIndex));
+            modeButton.focus({ preventScroll: true });
+        });
+        steps.forEach((button) => button.addEventListener("click", () => goToResult(index + Number(button.dataset.findStep))));
+        modeButton.addEventListener("click", () => {
+            if (reading) {
+                reading = false;
+                windowRequest?.abort();
+                paintFind();
+                resultList.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest", behavior: "instant" });
+            } else {
+                queryInput.blur();
+                goToResult(index);
+            }
+        });
 
         /* séparateurs de jour (« Aujourd'hui », « Hier », « lun. 3 nov. ») entre les messages,
            dans la langue et le fuseau du téléphone ; recalculés à chaque ajout de messages */
@@ -4047,7 +4321,7 @@
             bubble.setAttribute("aria-description", tr("chat.react"));
         };
 
-        const paintReaction = (item, key, bot, animate = false) => {
+        const paintReaction = (item, key, bot, animate = false, interactive = true) => {
             item.dataset.reaction = Object.hasOwn(reactions, key) ? key : "";
             const oldChip = item.querySelector(".msg-reaction-chip");
             const focused = oldChip === document.activeElement;
@@ -4056,9 +4330,9 @@
                 if (focused) item.querySelector(".bubble")?.focus({ preventScroll: true });
                 return;
             }
-            const chip = document.createElement(bot ? "button" : "span");
+            const chip = document.createElement(bot && interactive ? "button" : "span");
             chip.className = "msg-reaction-chip";
-            if (bot) {
+            if (bot && interactive) {
                 chip.type = "button";
                 reactionTrigger(chip);
             } else {
