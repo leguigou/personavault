@@ -113,6 +113,7 @@ return [
     'error.llm.api'               => 'API error ({code}): {message}',
     'error.llm.model_error'       => 'Model error: {message}',
     'error.llm.empty'             => 'Empty response from the model.',
+    'error.llm.stream_cut'        => 'The model stream was cut off. You can retry from your last sent message.',
     'error.llm.json_retry'        => 'JSON format refused, retrying with another format',
     'error.llm.no_key'            => 'No API key saved.',
     'error.llm.no_json'           => 'The model didn’t return usable JSON.',

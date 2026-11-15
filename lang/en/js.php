@@ -135,7 +135,8 @@ return [
     'js.chat.send'                => 'Send',
     'js.chat.choose_image'        => 'Choose an image (jpg, png, webp).',
     'js.chat.interrupted'         => 'Reply interrupted: {message}',
-    'js.chat.empty_reply'         => 'Empty reply.',
+    'js.chat.connection_lost'     => 'Connection lost during the reply. If it is incomplete, retry from your last message.',
+    'js.chat.output_limit'        => 'The reply reached the persona’s length limit.',
     'js.chat.aborted'             => 'Generation stopped.',
 
     // LM Studio status and model loading

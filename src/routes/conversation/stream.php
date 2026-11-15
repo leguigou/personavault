@@ -230,6 +230,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
     $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $address, $webResults, $quote, $quoteHistory);
     $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
+    $built['messages'][0]['content'] .= ' Privilégie une réponse concise et termine ta dernière phrase dans le budget de sortie.';
     $sentAny = false;
     $requestedUrl = '';
     $mediaNotice = '';
@@ -409,6 +410,7 @@ if ($action === 'stream' && $method === 'POST') {
 
     $out = [
         'done'  => true,
+        'finish_reason' => $res['finish_reason'],
         'relationship_pending' => $relationshipPending,
         'media_notice' => $mediaNotice,
         'reply' => [

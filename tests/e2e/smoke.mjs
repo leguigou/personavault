@@ -493,6 +493,11 @@ if (peer) {
     expect(!afterFailure.messages.some((m) => m.content === 'Envoi concurrent'), 'l’envoi refusé ne crée aucun message');
     expect(JSON.stringify(currentReply(afterFailure)) === JSON.stringify(old), 'un échec après un delta préserve la version sélectionnée et son identifiant');
 
+    const cut = await startRegen('cut', old.id);
+    await readUntil(cut, 'Le flux du modèle a été coupé');
+    expect(JSON.stringify(currentReply(await waitForStop())) === JSON.stringify(old),
+        'une fin de flux sans marqueur ne valide pas la réponse partielle');
+
     const silentAbort = new AbortController();
     const silent = await startRegen('silent', old.id, silentAbort.signal);
     await readUntil(silent, '"start"');
@@ -554,7 +559,8 @@ if (peer) {
     const first = await (await chat(1, 'stream', kindness)).text();
     const second = await (await chat(1, 'stream', kindness)).text();
     const userReaction = turn(first)?.user_reaction;
-    expect(userReaction?.reaction === 'heart' && !first.includes('[re') && !second.includes('[re') && !turn(second)?.user_reaction
+    expect(userReaction?.reaction === 'heart' && turn(first)?.finish_reason === 'length'
+        && !first.includes('[re') && !second.includes('[re') && !turn(second)?.user_reaction
         && turn(first)?.reply?.content === 'Ça me touche. Hier soir, j’ai vraiment'
         && (await recent(1)).find((m) => m.id === userReaction.id)?.reaction === 'heart',
         'la réaction du personnage survit à une réponse tronquée, reste invisible dans le texte et respecte le délai');

@@ -4262,6 +4262,7 @@
         };
         const reactionUrl = endpoint.replace(/\/send$/, "/react");
         const chatQueue = [];
+        const reactionQueue = new Map();
         let processingQueue = false;
         let maintenancePending = false;
         const reactionPopover = document.createElement("div");
@@ -4409,7 +4410,8 @@
                 option.dataset.reactionOption = key;
                 option.title = label;
                 option.setAttribute("aria-label", option.title);
-                option.setAttribute("aria-pressed", String(reactionBubble.dataset.reaction === key));
+                const selected = reactionQueue.get(reactionBubble) ?? reactionBubble.dataset.reaction;
+                option.setAttribute("aria-pressed", String(selected === key));
                 picker.appendChild(option);
             }
             if (!expanded) {
@@ -4428,23 +4430,35 @@
             (picker.querySelector('[aria-pressed="true"]') || picker.firstElementChild)?.focus({ preventScroll: true });
         };
 
-        const saveReaction = async (item, key) => {
+        const fetchChatJson = async (url, options, timeout) => {
+            const request = new AbortController();
+            const timer = setTimeout(() => request.abort(), timeout);
+            try {
+                const response = await fetch(url, { ...options, signal: request.signal });
+                return await response.json();
+            } finally {
+                clearTimeout(timer);
+            }
+        };
+
+        const saveReaction = async (item, wanted) => {
             const msg = item.closest(".msg-bot");
             if (!msg?.isConnected || item.dataset.reacting || msg.dataset.switching) return;
             item.dataset.reacting = "1";
             const mid = msg.dataset.msgId;
             const version = msg.dataset.versionId || "0";
             const bubble = item.dataset.bubbleIndex;
-            const wanted = item.dataset.reaction === key ? "" : key;
             try {
                 const body = new URLSearchParams({ _token: token, mid, version_id: version, bubble, reaction: wanted });
-                const response = await fetch(reactionUrl, { method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" } });
-                const data = await response.json();
-                if (!data.ok) throw new Error(data.error || tr("chat.reaction_error"));
+                const data = await fetchChatJson(reactionUrl, { method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" } }, 15000);
+                if (!data.ok) {
+                    notice(data.error || tr("chat.reaction_error"));
+                    return;
+                }
                 if (data.reaction) recordReactionUse(data.reaction);
                 paintReaction(item, data.reaction, true, true);
-            } catch (err) {
-                notice(err.message || tr("chat.reaction_error"));
+            } catch {
+                notice(tr("chat.reaction_error"));
             } finally {
                 delete item.dataset.reacting;
             }
@@ -4458,7 +4472,12 @@
             if (option) {
                 const item = reactionBubble;
                 closeReactions(true);
-                saveReaction(item, option.dataset.reactionOption);
+                if (item.dataset.reacting) return;
+                const key = option.dataset.reactionOption;
+                const current = reactionQueue.get(item) ?? item.dataset.reaction;
+                const wanted = current === key ? "" : key;
+                reactionQueue.set(item, wanted);
+                processChatQueue();
             } else if (event.target.closest("[data-more-reactions]")) {
                 showReactions(true);
             } else if (action) {
@@ -4992,12 +5011,17 @@
 
         const processChatQueue = async () => {
             paintQueueStatus();
-            if (busy || opening || processingQueue || fbModal?.hidden === false || (!chatQueue.length && !maintenancePending)) return;
+            if (busy || opening || processingQueue || fbModal?.hidden === false || (!reactionQueue.size && !chatQueue.length && !maintenancePending)) return;
             processingQueue = true;
             try {
-                const next = chatQueue.shift();
-                paintQueueStatus();
-                if (next) {
+                if (reactionQueue.size) {
+                    // Laisser le flux se terminer avant d'ouvrir la requête de réaction.
+                    const [item, wanted] = reactionQueue.entries().next().value;
+                    reactionQueue.delete(item);
+                    await saveReaction(item, wanted);
+                } else if (chatQueue.length) {
+                    const next = chatQueue.shift();
+                    paintQueueStatus();
                     await send(next.text, "auto", true, false, null, null, next.attachment, next.quote);
                 } else {
                     maintenancePending = false;
@@ -5129,8 +5153,9 @@
             // Après une coupure, retrouver la réponse de ce tour par ses identifiants.
             const recoverReply = async () => {
                 const url = endpoint.replace(/\/send$/, "/messages") + "?limit=10&generation=1";
-                for (let i = 0; i < 12; i++) {
-                    const d = await fetch(url, { signal: AbortSignal.timeout(1000) }).then((r) => r.json()).catch(() => null);
+                const deadline = Date.now() + 20000;
+                while (Date.now() < deadline) {
+                    const d = await fetchChatJson(url, {}, 2500).catch(() => null);
                     if (d?.ok && !d.generating) {
                         for (const msg of d.messages) {
                             if (msg.id === userId && msg.reaction) paintUserReaction(msg);
@@ -5294,7 +5319,8 @@
                     let failedKind = "error";
                     let keptUser = false;
 
-                    for (;;) {
+                    let finishReason = "";
+                    stream: for (;;) {
                         const { value, done } = await reader.read();
                         if (done) break;
                         buf += dec.decode(value, { stream: true });
@@ -5336,18 +5362,22 @@
                                 }
                             } else if (evt.done) {
                                 finalReply = evt.reply || null;
+                                finishReason = evt.finish_reason || "";
                                 if (evt.relationship_pending) scheduleRelationship(300000);
                                 finalNotice = evt.notice || null;
                                 mediaNotice = evt.media_notice || "";
                                 if (evt.user_reaction) paintUserReaction(evt.user_reaction);
+                                break stream;
                             } else if (evt.error) {
                                 failed = evt.error;
                                 failedKind = evt.kind || "error";
                                 keptUser = evt.kept_user === true;
+                                break stream;
                             }
                         }
                     }
 
+                    reader.cancel().catch(() => {});
                     document.getElementById("chat-typing")?.remove();
                     if (failed) {
                         clearLive();
@@ -5370,11 +5400,12 @@
                         return;
                     }
                     if (!finalReply) {
-                        throw new Error(tr("chat.empty_reply"));
+                        throw new Error(tr("chat.connection_lost"));
                     }
                     settleLive(finalReply);
                     if (finalNotice) notice(finalNotice.content);
                     if (mediaNotice) notice(mediaNotice);
+                    if (finishReason === "length") notice(tr("chat.output_limit"));
                 }
 
                 scrollBottom();
@@ -5388,7 +5419,8 @@
                 else clearLive();
                 if (!userId) restoreDraft();
                 if (err.name === "AbortError") notice(tr("chat.aborted"));
-                else if (!reply) notice(tr("common.error", { message: err.message }));
+                else if (err instanceof TypeError || reply) notice(tr("chat.connection_lost"));
+                else notice(tr("common.error", { message: err.message }));
                 scrollBottom();
             } finally {
                 [live, ...bubbleEls].filter(Boolean).forEach((b) => {
