@@ -20,6 +20,7 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
 </a>
 
 <div class="duo-live" data-duo-live data-id="<?= $id ?>" data-token="<?= e($token) ?>"
+     data-gauge-colors="<?= e(json_encode(duo_gauge_colors())) ?>"
      data-names="<?= e(json_encode($names, JSON_UNESCAPED_UNICODE)) ?>">
     <script type="application/json" data-duo-initial><?= json_encode($state, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 
@@ -69,7 +70,7 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
                         <div class="duo-gauge duo-gauge-<?= $k ?>" data-duo-gauge="<?= $w ?>-<?= $k ?>">
                             <span class="duo-gauge-label"><?= e($label) ?></span>
                             <span class="duo-gauge-track" role="meter" aria-label="<?= e($label) ?>"
-                                  aria-valuemin="<?= $k === 'friendship' ? -100 : 0 ?>" aria-valuemax="100" aria-valuenow="0">
+                                  aria-valuemin="<?= $k === 'anger' ? 0 : -100 ?>" aria-valuemax="100" aria-valuenow="0">
                                 <span class="duo-gauge-fill"></span>
                             </span>
                             <span class="duo-gauge-value">0</span>
@@ -78,6 +79,14 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
                     <p class="duo-feel-reason" data-duo-reason="<?= $w ?>"></p>
                 </div>
             <?php endforeach; ?>
+            <div class="duo-legend">
+                <p class="duo-feel-title"><?= e(t('duo.legend')) ?></p>
+                <ul class="duo-legend-list">
+                    <?php foreach (duo_emotions() as $key => $emotion): ?>
+                        <li><span class="duo-dot" style="--mood: <?= e($emotion['color']) ?>" aria-hidden="true"></span><?= e(duo_emotion_label($key)) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
             <p class="hint"><?= e(t('duo.feelings.help')) ?></p>
         </div>
 
