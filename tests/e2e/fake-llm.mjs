@@ -49,6 +49,12 @@ const reply = (sys) => {
             story: [{ content: 'Camille prépare une exposition à Lyon', category: 'projet', source: 2 }] });
     }
     if (/titre très court/i.test(sys)) return 'Voyage en train';
+    if (/maître du jeu d'une discussion entre deux personnages/.test(sys)) {
+        return JSON.stringify({ humeur_a: { mot: 'joyeuse', intensite: 60, tonalite: 'positive' },
+            humeur_b: { mot: 'vexé', intensite: 40, tonalite: 'negative' },
+            lien_a_b: { amitie: 25, amour: 4, colere: 0, raison: 'Ils rient ensemble' },
+            lien_b_a: { amitie: -3, amour: 0, colere: 6, raison: 'Il se sent moqué' }, avance: false, relance: 'Un orage éclate dehors.' });
+    }
     return 'Réponse de test du faux modèle. Une seconde phrase pour avoir du texte.';
 };
 

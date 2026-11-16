@@ -40,6 +40,14 @@ function backup_add_conversations(ZipArchive $zip, string $root, array &$stats):
         'memories' => $memories,
         'relationships' => $pdo->query('SELECT persona_id, address, automatic FROM relationships ORDER BY persona_id')->fetchAll(),
         'relationship_entries' => $pdo->query('SELECT * FROM relationship_entries ORDER BY id')->fetchAll(),
+        // discussions entre personas, humeurs et ressentis (src/duo.php)
+        'persona_moods' => $pdo->query('SELECT * FROM persona_moods ORDER BY persona_id')->fetchAll(),
+        'persona_bonds' => $pdo->query('SELECT * FROM persona_bonds ORDER BY persona_id, other_id')->fetchAll(),
+        'duo_sessions' => array_map(static function (array $session) use ($pdo): array {
+            $lines = $pdo->prepare('SELECT kind, speaker, content, ms, created_at FROM duo_lines WHERE session_id = ? ORDER BY id');
+            $lines->execute([$session['id']]);
+            return $session + ['lines' => $lines->fetchAll()];
+        }, $pdo->query('SELECT * FROM duo_sessions ORDER BY id')->fetchAll()),
     ]);
     $max = (int) config('zip_max_entry_size', 40 * 1024 * 1024);
     if (strlen($data) > $max) {
@@ -214,7 +222,73 @@ function backup_restore_conversations(ZipArchive $zip, array $index, string $roo
                 'updated_at' => backup_str($row['updated_at'] ?? $now, 40),
             ]);
         }
+        backup_restore_duo($pdo, $data, $personaIds);
     });
+}
+
+/**
+ * Discussions entre personas, humeurs et ressentis. Une humeur ou un lien déjà présent est
+ * gardé ; une discussion qui était en cours revient en pause (rien ne repart tout seul).
+ */
+function backup_restore_duo(PDO $pdo, array $data, array $personaIds): void
+{
+    $pid = static fn (mixed $id): int => (int) ($personaIds[backup_id($id)] ?? 0);
+    $int = static fn (mixed $v, int $min, int $max): int => max($min, min($max, is_numeric($v) ? (int) $v : 0));
+
+    $mood = $pdo->prepare('INSERT INTO persona_moods (persona_id, mood, intensity, tone, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING');
+    foreach ((array) ($data['persona_moods'] ?? []) as $row) {
+        if (is_array($row) && ($id = $pid($row['persona_id'] ?? null))) {
+            $tone = in_array($row['tone'] ?? '', ['positive', 'neutre', 'negative'], true) ? $row['tone'] : 'neutre';
+            $mood->execute([$id, mb_substr(backup_str($row['mood'] ?? ''), 0, 40), $int($row['intensity'] ?? 0, 0, 100), $tone,
+                $int($row['updated_at'] ?? 0, 0, PHP_INT_MAX)]);
+        }
+    }
+    $bond = $pdo->prepare('INSERT INTO persona_bonds (persona_id, other_id, friendship, love, anger, reason, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING');
+    foreach ((array) ($data['persona_bonds'] ?? []) as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        [$a, $b] = [$pid($row['persona_id'] ?? null), $pid($row['other_id'] ?? null)];
+        if ($a && $b && $a !== $b) {
+            $bond->execute([$a, $b, $int($row['friendship'] ?? 0, -100, 100), $int($row['love'] ?? 0, 0, 100),
+                $int($row['anger'] ?? 0, 0, 100), mb_substr(backup_str($row['reason'] ?? ''), 0, 200), $int($row['updated_at'] ?? 0, 0, PHP_INT_MAX)]);
+        }
+    }
+    foreach ((array) ($data['duo_sessions'] ?? []) as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        [$a, $b] = [$pid($row['persona_a'] ?? null), $pid($row['persona_b'] ?? null)];
+        if (!$a || !$b || $a === $b) {
+            continue;
+        }
+        $status = in_array($row['status'] ?? '', ['paused', 'done', 'stopped', 'error'], true) ? $row['status'] : 'paused';
+        $sid = backup_insert_row($pdo, 'duo_sessions', [
+            'persona_a' => $a, 'persona_b' => $b,
+            'topic' => mb_substr(backup_str($row['topic'] ?? ''), 0, DUO_TEXT_MAX),
+            'goal_a' => mb_substr(backup_str($row['goal_a'] ?? ''), 0, DUO_TEXT_MAX),
+            'goal_b' => mb_substr(backup_str($row['goal_b'] ?? ''), 0, DUO_TEXT_MAX),
+            'target' => $int($row['target'] ?? 12, 2, DUO_MAX_TURNS), 'status' => $status,
+            'end_reason' => mb_substr(backup_str($row['end_reason'] ?? ''), 0, 300),
+            'error' => mb_substr(backup_str($row['error'] ?? ''), 0, 300),
+            'model' => mb_substr(backup_str($row['model'] ?? ''), 0, 200),
+            'analyzed' => $int($row['analyzed'] ?? 0, 0, DUO_MAX_TURNS),
+            'created_at' => backup_str($row['created_at'] ?? gmdate('Y-m-d H:i:s'), 40),
+        ]);
+        foreach (array_slice((array) ($row['lines'] ?? []), 0, 4 * DUO_MAX_TURNS) as $line) {
+            $kind = $line['kind'] ?? '';
+            $content = $line['content'] ?? '';
+            if (!is_array($line) || !in_array($kind, ['line', 'direction', 'event', 'mood'], true) || !is_string($content) || trim($content) === '') {
+                continue;
+            }
+            backup_insert_row($pdo, 'duo_lines', [
+                'session_id' => $sid, 'kind' => $kind, 'speaker' => $int($line['speaker'] ?? -1, -1, 1),
+                'content' => mb_substr($content, 0, DUO_LINE_MAX), 'ms' => $int($line['ms'] ?? 0, 0, 3600000),
+                'created_at' => backup_str($line['created_at'] ?? gmdate('Y-m-d H:i:s'), 40),
+            ]);
+        }
+    }
 }
 
 /** Les fichiers sont préparés avant la transaction, puis nettoyés si l'insertion échoue. */

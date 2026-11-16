@@ -23,70 +23,142 @@ if ($path === '/settings/logs/clear' && $method === 'POST') {
     redirect('/settings/logs');
 }
 
-/* --- essai de discussion entre deux personas (rien n'est écrit dans les conversations) --- */
+/* --- discussions entre deux personas (menées en arrière-plan, rien dans les conversations) --- */
 if ($path === '/settings/duo' && $method === 'GET') {
     render('duo', [
         'title'    => t('duo.title'),
         'personas' => db()->query('SELECT id, name, tagline, avatar FROM personas WHERE archived = 0 ORDER BY name COLLATE NOCASE')->fetchAll(),
+        'sessions' => db()->query("SELECT s.*, a.name AS name_a, a.avatar AS avatar_a, b.name AS name_b, b.avatar AS avatar_b,
+                (SELECT COUNT(*) FROM duo_lines l WHERE l.session_id = s.id AND l.kind = 'line') AS lines
+              FROM duo_sessions s JOIN personas a ON a.id = s.persona_a JOIN personas b ON b.id = s.persona_b
+             ORDER BY s.id DESC LIMIT 30")->fetchAll(),
     ]);
     exit;
 }
 
-if (($path === '/settings/duo/turn' || $path === '/settings/duo/report') && $method === 'POST') {
-    csrf_check_json();
-    session_write_close(); // une réplique peut prendre du temps : ne pas bloquer les autres pages
-    header('Content-Type: application/json; charset=utf-8');
+if ($path === '/settings/duo' && $method === 'POST') {
+    csrf_check();
     $a = (int) ($_POST['a'] ?? 0);
     $b = (int) ($_POST['b'] ?? 0);
-    $speakers = $a > 0 && $b > 0 && $a !== $b
-        ? [duo_speaker($a, (string) ($_POST['goal_a'] ?? '')), duo_speaker($b, (string) ($_POST['goal_b'] ?? ''))]
-        : [null, null];
-    if (!$speakers[0] || !$speakers[1]) {
-        http_response_code(422);
-        echo json_encode(['ok' => false, 'error' => t('duo.error.personas')], JSON_UNESCAPED_UNICODE);
-        exit;
+    if ($a <= 0 || $b <= 0 || $a === $b || !duo_speaker($a) || !duo_speaker($b)) {
+        flash('error', t('duo.error.personas'));
+        redirect('/settings/duo');
     }
-    $lines = duo_lines_from_input(json_decode((string) ($_POST['lines'] ?? '[]'), true));
-    $topic = mb_substr(trim((string) ($_POST['topic'] ?? '')), 0, DUO_TEXT_MAX);
-    $names = [(string) $speakers[0]['persona']['name'], (string) $speakers[1]['persona']['name']];
+    $id = duo_session_create($a, $b, (string) ($_POST['topic'] ?? ''), (string) ($_POST['goal_a'] ?? ''),
+        (string) ($_POST['goal_b'] ?? ''), (int) ($_POST['turns'] ?? 12));
+    duo_session_update($id, ['heartbeat_at' => time()]);
+    duo_spawn($id);
+    redirect('/settings/duo/' . $id);
+}
 
-    if ($path === '/settings/duo/report') {
-        echo json_encode([
-            'ok'       => true,
-            'metrics'  => duo_metrics($lines, $names),
-            'markdown' => duo_report([
-                'model' => mb_substr((string) ($_POST['model'] ?? ''), 0, 200), 'topic' => $topic,
-                'turns' => max(2, min(DUO_MAX_TURNS, (int) ($_POST['turns'] ?? 12))),
-                'goals' => [$speakers[0]['goal'], $speakers[1]['goal']],
-                'end'   => mb_substr((string) ($_POST['end'] ?? ''), 0, 300),
-                'error' => mb_substr((string) ($_POST['error'] ?? ''), 0, 300),
-            ], $names, $lines),
-        ], JSON_UNESCAPED_UNICODE);
+if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|tick|report|delete))?$#', $path, $m)) {
+    $duoId = (int) $m[1];
+    $action = $m[2] ?? '';
+    $s = duo_session($duoId);
+    if (!$s) {
+        if ($action === '' || $action === 'report') {
+            http_response_code(404);
+            render('notfound', ['title' => t('notfound.title')]);
+            exit;
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => t('duo.error.missing')], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $names = static function (array $s): array {
+        $st = db()->prepare('SELECT id, name, avatar, tagline FROM personas WHERE id IN (?, ?)');
+        $st->execute([(int) $s['persona_a'], (int) $s['persona_b']]);
+        $rows = array_column($st->fetchAll(), null, 'id');
+        return [$rows[(int) $s['persona_a']] ?? ['name' => '?', 'avatar' => '', 'tagline' => ''],
+            $rows[(int) $s['persona_b']] ?? ['name' => '?', 'avatar' => '', 'tagline' => '']];
+    };
+
+    if ($action === '' && $method === 'GET') {
+        $drive = !duo_kick($s);
+        render('duo_session', [
+            'title'   => t('duo.session_title'),
+            'session' => $s,
+            'people'  => $names($s),
+            'state'   => duo_state(duo_session($duoId) ?? $s) + ['drive' => $drive || !duo_can_spawn()],
+        ]);
         exit;
     }
 
-    if (count($lines) >= DUO_MAX_TURNS) {
-        http_response_code(422);
-        echo json_encode(['ok' => false, 'error' => t('duo.error.too_long')], JSON_UNESCAPED_UNICODE);
+    if ($action === 'report' && $method === 'GET') {
+        $people = $names($s);
+        $pn = [(string) $people[0]['name'], (string) $people[1]['name']];
+        $feelings = [];
+        foreach ([0, 1] as $w) {
+            $pid = (int) $s[$w === 0 ? 'persona_a' : 'persona_b'];
+            $oid = (int) $s[$w === 0 ? 'persona_b' : 'persona_a'];
+            $mood = duo_mood($pid);
+            $bond = duo_bond($pid, $oid);
+            $feelings[] = t('duo.feelings.line', [
+                'name' => $pn[$w], 'other' => $pn[1 - $w], 'mood' => $mood['mood'] !== '' ? $mood['mood'] : t('duo.mood.neutral'),
+                'friendship' => $bond['friendship'], 'love' => $bond['love'], 'anger' => $bond['anger'],
+            ]);
+        }
+        $md = duo_report([
+            'model' => (string) $s['model'], 'topic' => (string) $s['topic'], 'turns' => (int) $s['target'],
+            'goals' => [(string) $s['goal_a'], (string) $s['goal_b']], 'end' => (string) $s['end_reason'],
+            'error' => (string) $s['error'], 'feelings' => $feelings,
+        ], $pn, duo_session_lines($duoId));
+        header('Content-Type: text/markdown; charset=utf-8');
+        header('Content-Disposition: attachment; filename="discussion-' . $duoId . '.md"');
+        echo $md;
         exit;
     }
-    $cfg = duo_llm_config();
-    if ((string) $cfg['model'] === '') {
-        http_response_code(503);
-        echo json_encode(['ok' => false, 'error' => t('error.llm.no_model')], JSON_UNESCAPED_UNICODE);
+
+    if ($action === 'delete' && $method === 'POST') {
+        csrf_check();
+        duo_control($duoId, 'stop');
+        db()->prepare('DELETE FROM duo_sessions WHERE id = ?')->execute([$duoId]);
+        flash('ok', t('duo.deleted'));
+        redirect('/settings/duo');
+    }
+
+    header('Content-Type: application/json; charset=utf-8');
+    if ($action === 'state' && $method === 'GET') {
+        session_write_close();
+        $drive = !duo_kick($s);
+        echo json_encode(duo_state(duo_session($duoId) ?? $s, (int) ($_GET['after'] ?? 0)) + ['drive' => $drive || !duo_can_spawn()],
+            JSON_UNESCAPED_UNICODE);
         exit;
     }
-    @set_time_limit(240);
-    try {
-        $turn = duo_turn($speakers, $lines, $topic, $cfg);
-    } catch (Throwable $e) {
-        http_response_code(502);
-        echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
+    if (in_array($action, ['control', 'direction', 'tick'], true) && $method === 'POST') {
+        csrf_check_json();
+        session_write_close();
+        if ($action === 'control') {
+            $op = (string) ($_POST['op'] ?? '');
+            $wasRunning = $s['status'] === 'running';
+            $s = duo_control($duoId, $op);
+            if (!$s) {
+                http_response_code(422);
+                echo json_encode(['ok' => false, 'error' => t('duo.error.action')], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            if (!$wasRunning && $s['status'] === 'running') { // relancée : un worker reprend l'échange
+                duo_session_update($duoId, ['heartbeat_at' => time()]);
+                duo_spawn($duoId);
+            }
+        } elseif ($action === 'direction') {
+            $text = trim((string) ($_POST['text'] ?? ''));
+            if ($text === '') {
+                http_response_code(422);
+                echo json_encode(['ok' => false, 'error' => t('duo.error.direction')], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            duo_direction($duoId, $text, (int) ($_POST['target'] ?? -1));
+        } else {
+            // le serveur ne peut pas lancer de processus : le navigateur mène l'échange
+            @set_time_limit(400);
+            duo_step($duoId);
+        }
+        echo json_encode(duo_state(duo_session($duoId) ?? $s, (int) ($_POST['after'] ?? 0)) + ['drive' => !duo_can_spawn()],
+            JSON_UNESCAPED_UNICODE);
         exit;
     }
-    echo json_encode(['ok' => true, 'model' => (string) $cfg['model'], 'name' => $names[$turn['speaker']]] + $turn
-        + ['end' => $turn['ended'] ? t('duo.end.closed', ['name' => $names[$turn['speaker']]]) : ''], JSON_UNESCAPED_UNICODE);
-    exit;
 }
 
 if ($path === '/settings/prompts' && $method === 'POST') {

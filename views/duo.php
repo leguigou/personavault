@@ -1,10 +1,22 @@
 <?php
-/** @var array $personas */
+/** @var array $personas @var array $sessions */
 /*
- * Essai de discussion entre deux personas : choix des participants, échange réplique par
- * réplique (le navigateur demande chaque réplique), puis indicateurs et rapport à télécharger.
+ * Discussions entre deux personas : nouvelle discussion (choix des participants, sujet,
+ * objectifs, longueur) et liste des discussions précédentes.
  */
 $token = csrf_token();
+$avatar = static function (string $file, string $name): string {
+    return $file !== ''
+        ? '<img src="' . e(media_url($file)) . '" alt="" loading="lazy">'
+        : '<span class="avatar-fallback"><span>' . e(initials($name)) . '</span></span>';
+};
+$statusLabel = static fn (string $st): string => match ($st) {
+    'running' => t('duo.status.running'),
+    'paused'  => t('duo.status.paused'),
+    'done'    => t('duo.status.done'),
+    'stopped' => t('duo.status.stopped'),
+    default   => t('duo.status.error'),
+};
 ?>
 <a class="back" href="/settings#chat">
     <svg viewBox="0 0 24 24" class="ico"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -20,11 +32,38 @@ $token = csrf_token();
 
 <p class="hint duo-intro"><?= e(t('duo.intro')) ?></p>
 
-<div class="duo" data-duo data-token="<?= e($token) ?>">
+<?php if ($sessions): ?>
+    <section class="duo-sessions" aria-labelledby="duo-sessions-title">
+        <h2 id="duo-sessions-title"><?= e(t('duo.sessions')) ?></h2>
+        <ul class="duo-session-list">
+            <?php foreach ($sessions as $s): ?>
+                <li>
+                    <a class="duo-session-link" href="/settings/duo/<?= (int) $s['id'] ?>">
+                        <span class="duo-pair" aria-hidden="true">
+                            <span class="duo-avatar"><?= $avatar((string) $s['avatar_a'], (string) $s['name_a']) ?></span>
+                            <span class="duo-avatar"><?= $avatar((string) $s['avatar_b'], (string) $s['name_b']) ?></span>
+                        </span>
+                        <span class="duo-session-text">
+                            <strong><?= e(t('duo.pair', ['a' => $s['name_a'], 'b' => $s['name_b']])) ?></strong>
+                            <small><?= e(trim((string) $s['topic']) !== '' ? (string) $s['topic'] : t('duo.report.free')) ?></small>
+                        </span>
+                        <span class="duo-badge is-<?= e((string) $s['status']) ?>"><?= e($statusLabel((string) $s['status'])) ?> · <?= (int) $s['lines'] ?>/<?= (int) $s['target'] ?></span>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+<?php endif; ?>
+
+<div class="duo" data-duo>
     <?php if (count($personas) < 2): ?>
         <div class="empty-state"><p><?= e(t('duo.need_two')) ?></p></div>
     <?php else: ?>
-    <form class="card-form duo-setup" data-duo-form novalidate>
+    <form class="card-form duo-setup" method="post" action="/settings/duo" data-duo-form>
+        <h2><?= e(t('duo.new')) ?></h2>
+        <input type="hidden" name="_token" value="<?= e($token) ?>">
+        <input type="hidden" name="a" value="" data-duo-input="0">
+        <input type="hidden" name="b" value="" data-duo-input="1">
         <div class="duo-slots">
             <?php foreach ([0, 1] as $slot): ?>
                 <button type="button" class="duo-slot" data-duo-slot="<?= $slot ?>" aria-label="<?= e(t('duo.slot_clear')) ?>" disabled>
@@ -45,13 +84,7 @@ $token = csrf_token();
             <?php foreach ($personas as $p): ?>
                 <li data-duo-item data-duo-text="<?= e(mb_strtolower($p['name'] . ' ' . $p['tagline'])) ?>">
                     <button type="button" class="duo-pick" data-duo-pick="<?= (int) $p['id'] ?>" data-name="<?= e($p['name']) ?>" aria-pressed="false">
-                        <span class="duo-avatar" data-duo-avatar aria-hidden="true">
-                            <?php if ($p['avatar']): ?>
-                                <img src="<?= e(media_url($p['avatar'])) ?>" alt="" loading="lazy">
-                            <?php else: ?>
-                                <span class="avatar-fallback"><span><?= e(initials($p['name'])) ?></span></span>
-                            <?php endif; ?>
-                        </span>
+                        <span class="duo-avatar" data-duo-avatar aria-hidden="true"><?= $avatar((string) $p['avatar'], (string) $p['name']) ?></span>
                         <span class="duo-pick-text">
                             <strong><?= e($p['name']) ?></strong>
                             <?php if (trim((string) $p['tagline']) !== ''): ?><small><?= e($p['tagline']) ?></small><?php endif; ?>
@@ -79,53 +112,12 @@ $token = csrf_token();
         </div>
         <label class="field duo-turns">
             <span><?= e(t('duo.turns')) ?></span>
-            <input class="input" type="number" inputmode="numeric" name="turns" min="2" max="<?= DUO_MAX_TURNS ?>" step="1" value="12">
+            <input class="input" type="number" inputmode="numeric" name="turns" min="2" max="<?= DUO_MAX_TURNS ?>" step="1" value="20">
         </label>
         <p class="hint"><?= e(t('duo.privacy')) ?></p>
         <div class="form-actions">
             <button class="btn btn-primary" type="submit" data-duo-start disabled><?= e(t('duo.start')) ?></button>
         </div>
     </form>
-
-    <section class="duo-run" data-duo-run hidden>
-        <header class="duo-run-head">
-            <p class="duo-status" data-duo-status role="status" aria-live="polite"></p>
-            <button type="button" class="btn btn-ghost btn-sm" data-duo-stop><?= e(t('duo.stop')) ?></button>
-        </header>
-        <ol class="duo-thread" data-duo-thread></ol>
-
-        <div class="duo-report" data-duo-report hidden>
-            <h2><?= e(t('duo.metrics.title')) ?></h2>
-            <div class="duo-table-wrap">
-                <table class="duo-table">
-                    <thead>
-                        <tr>
-                            <th scope="col"><span class="sr-only"><?= e(t('duo.metrics.persona')) ?></span></th>
-                            <th scope="col"><?= e(t('duo.metrics.lines')) ?></th>
-                            <th scope="col"><?= e(t('duo.metrics.words')) ?></th>
-                            <th scope="col"><?= e(t('duo.metrics.repeats')) ?></th>
-                            <th scope="col"><?= e(t('duo.metrics.agreements')) ?></th>
-                            <th scope="col"><?= e(t('duo.metrics.time')) ?></th>
-                        </tr>
-                    </thead>
-                    <tbody data-duo-metrics></tbody>
-                </table>
-            </div>
-            <p class="hint" data-duo-voice></p>
-            <p class="hint"><?= e(t('duo.metrics.help')) ?></p>
-
-            <h2><?= e(t('duo.check.title')) ?></h2>
-            <ul class="duo-checklist">
-                <?php foreach (duo_checklist() as $item): ?>
-                    <li><label class="check"><input type="checkbox"><span><?= e($item) ?></span></label></li>
-                <?php endforeach; ?>
-            </ul>
-
-        </div>
-        <div class="form-actions" data-duo-after hidden>
-            <button type="button" class="btn btn-primary" data-duo-download hidden><?= e(t('duo.download')) ?></button>
-            <button type="button" class="btn btn-ghost" data-duo-again><?= e(t('duo.again')) ?></button>
-        </div>
-    </section>
     <?php endif; ?>
 </div>

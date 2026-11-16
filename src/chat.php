@@ -1435,7 +1435,12 @@ function chat_gap_duration(int $seconds): string
  * Bloc de contexte temporel injecté dans le prompt système :
  * date/heure réelle, silence écoulé, et rappel du dernier sujet si la pause est longue.
  */
-function chat_time_context(array $conv, array $history): string
+/**
+ * Contexte temporel (date, heure, silence écoulé, dernier sujet après une longue pause).
+ * $skipSpontaneous : le « dernier sujet » ignore les messages spontanés du persona (relances),
+ * pour qu'une relance ne reprenne pas la précédente.
+ */
+function chat_time_context(array $conv, array $history, bool $skipSpontaneous = false): string
 {
     $now    = chat_now();
     $jours  = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -1463,7 +1468,17 @@ function chat_time_context(array $conv, array $history): string
 
     // reprise après une vraie pause : on rappelle le dernier sujet, sans le réciter
     if ($gap >= 6 * 3600) {
-        $topic = mb_substr(trim((string) ($last['content'] ?? '')), 0, 160);
+        $topicSource = $last;
+        if ($skipSpontaneous) {
+            $topicSource = null;
+            for ($i = count($history) - 1; $i >= 0; $i--) {
+                if (in_array($history[$i]['role'], ['user', 'assistant'], true) && empty($history[$i]['spontaneous'])) {
+                    $topicSource = $history[$i];
+                    break;
+                }
+            }
+        }
+        $topic = mb_substr(trim((string) ($topicSource['content'] ?? '')), 0, 160);
         $summary = (int) ($conv['memory_enabled'] ?? 1) === 1 ? trim((string) ($conv['summary'] ?? '')) : '';
         if ($topic === '' && $summary !== '') {
             foreach (preg_split('/\R/', $summary) ?: [] as $line) {

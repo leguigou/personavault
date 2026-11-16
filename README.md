@@ -310,23 +310,34 @@ et ce qui revient (réponse ou erreur), avec la durée et les tokens. La clé d'
 enregistrée ; les photos sont remplacées par leur taille. Table `llm_logs` (migration v6), vidée
 par le bouton « Vider le journal ».
 
-### Essai de discussion entre deux personas
+### Discussions entre personas
 
-Avant de développer les discussions de groupe, **Réglages › Essai de discussion** (`/settings/duo`)
-fait parler deux personas de la bibliothèque entre eux, avec le vrai modèle, pour juger la qualité
-sur pièce. Le navigateur demande une réplique à la fois ; à la fin, la page affiche des indicateurs,
-une grille de lecture et propose le rapport en Markdown. Même moteur en ligne de commande :
+**Réglages › Discussions entre personas** (`/settings/duo`) fait parler deux personas de la
+bibliothèque entre eux :
+
+- **menée par le serveur** : `bin/duo-worker.php` est lancé en arrière-plan et enchaîne les répliques
+  (pause de 2 à 5 s entre deux) ; la discussion continue page ou téléphone fermés. Si le processus
+  s'arrête (serveur redémarré), il est relancé à l'ouverture de la page ou par `bin/followup.php`.
+  Si le serveur interdit les commandes système (`exec`), la page mène l'échange tant qu'elle est ouverte ;
+- **barre fixe** en haut de la page : humeurs, avancement, Pause / Reprendre / +10 répliques / Arrêter,
+  ressentis, consigne au maître du jeu, rapport ; points animés pendant qu'un persona écrit ;
+- **consignes au maître du jeu** : secrètes, pour les deux personas ou un seul ; elles orientent les
+  4 répliques suivantes ;
+- **humeurs et ressentis, comme dans les Sims** : toutes les 4 répliques, une analyse met à jour l'humeur
+  de chacun et ce qu'il ressent pour l'autre (amitié de -100 à 100, amour et colère de 0 à 100, par petits
+  pas). Ils sont conservés (`persona_moods`, `persona_bonds`) et repris à la discussion suivante ;
+  l'humeur et la colère retombent avec le temps. Si l'échange tourne en rond, l'analyse le relance ;
+- rien n'est ajouté aux conversations ; les appels apparaissent dans le journal (« Discussion entre personas »).
+  Les discussions, humeurs et ressentis sont inclus dans les sauvegardes ZIP ; une discussion en cours
+  revient en pause à la restauration.
+
+Chaque persona parle avec sa fiche, son prompt système et sa consigne de jeu, sans rien sur
+l'utilisateur. Même moteur en ligne de commande, sans enregistrement (rapport dans `storage/duo-tests/`) :
 
 ```bash
 php bin/duo-test.php camille-lefebvre hugo-bernard --sujet="Partir vivre à la campagne" --tours=12 \
     --objectif-a="Convaincre Hugo de partir" --objectif-b="Défendre la vie en ville"
 ```
-
-Chaque persona parle avec sa fiche, son prompt système et sa consigne de jeu, sans rien sur
-l'utilisateur. L'échange est écrit dans `storage/duo-tests/` (Markdown) avec quelques indicateurs
-(redites, approbations, vocabulaire commun aux deux voix) et une grille de lecture. Rien n'est
-ajouté aux conversations ; seul le journal des appels au modèle garde une trace. Le modèle utilisé
-est celui déjà chargé dans LM Studio (sinon celui des Réglages), ou `--modele=…`.
 
 ### Relances spontanées (tâche planifiée)
 

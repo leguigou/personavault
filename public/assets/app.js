@@ -5507,24 +5507,16 @@
     }
 
 
-    /* ------------------------------------------ essai de discussion à deux */
-    /* Réglages › Essai de discussion : le navigateur demande une réplique à la fois
-       (une page qui attendrait tout l'échange serait coupée), garde l'échange et le
-       renvoie à chaque tour. Rien n'est enregistré dans les conversations. */
+    /* ---------------------------------- discussions entre personas : création */
+    /* Réglages › Discussions entre personas : choix des deux participants (liste avec
+       avatar et recherche), envoyé avec le formulaire. */
     const duo = document.querySelector("[data-duo]");
     const duoForm = duo?.querySelector("[data-duo-form]");
     if (duo && duoForm) {
-        const run = duo.querySelector("[data-duo-run]");
-        const thread = duo.querySelector("[data-duo-thread]");
-        const status = duo.querySelector("[data-duo-status]");
-        const stopBtn = duo.querySelector("[data-duo-stop]");
-        const report = duo.querySelector("[data-duo-report]");
         const startBtn = duo.querySelector("[data-duo-start]");
         const picks = [...duo.querySelectorAll("[data-duo-pick]")];
         const slots = [...duo.querySelectorAll("[data-duo-slot]")];
-        const chosen = [null, null]; // boutons des personas choisis
-        let state = null;
-        let markdown = "";
+        const chosen = [null, null];
 
         const paint = () => {
             slots.forEach((slot, i) => {
@@ -5536,6 +5528,7 @@
                     : Object.assign(document.createElement("span"), { className: "duo-avatar-empty", textContent: String(i + 1) }));
                 slot.disabled = !pick;
                 slot.classList.toggle("is-filled", !!pick);
+                duo.querySelector(`[data-duo-input="${i}"]`).value = pick ? pick.dataset.duoPick : "";
                 const goal = duo.querySelector(`[data-duo-goal-label="${i}"]`);
                 if (goal) goal.textContent = pick ? tr("duo.goal_of", { name: pick.dataset.name }) : (i ? tr("duo.goal_b") : tr("duo.goal_a"));
             });
@@ -5553,7 +5546,6 @@
             const at = chosen.indexOf(pick);
             if (at >= 0) chosen[at] = null;
             else if (!chosen[0]) chosen[0] = pick;
-            else if (!chosen[1]) chosen[1] = pick;
             else chosen[1] = pick; // deux déjà choisis : remplace le second
             paint();
         }));
@@ -5570,143 +5562,229 @@
             });
             duo.querySelector("[data-duo-nomatch]").hidden = shown > 0;
         });
+        duoForm.addEventListener("submit", (e) => {
+            if (!chosen[0] || !chosen[1]) e.preventDefault();
+            else startBtn.disabled = true;
+        });
+        paint();
+    }
 
-        const post = async (url, extra = {}) => {
+    /* ---------------------------------- discussions entre personas : en direct */
+    /* La discussion est menée par le serveur (elle continue page fermée) : la page
+       interroge son état toutes les 2 s, affiche les nouvelles lignes, les humeurs et
+       les ressentis, et envoie pause / reprise / prolongation / arrêt / consignes.
+       Si le serveur ne peut pas lancer de processus (drive), la page mène l'échange. */
+    const live = document.querySelector("[data-duo-live]");
+    if (live) {
+        const id = live.dataset.id;
+        const names = JSON.parse(live.dataset.names || "[]");
+        const thread = live.querySelector("[data-duo-thread]");
+        const statusEl = live.querySelector("[data-duo-status]");
+        let state = JSON.parse(live.querySelector("[data-duo-initial]")?.textContent || "{}");
+        let lastId = 0;
+        let busy = false;
+        let timer = 0;
+        let ticking = false;
+
+        const avatarOf = (who) => live.querySelector(`[data-duo-avatar-of="${who}"]`)?.firstElementChild?.cloneNode(true);
+        const nearBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+
+        const lineEl = (line) => {
+            const li = document.createElement("li");
+            if (line.kind === "line") {
+                li.className = "duo-line duo-line-" + line.speaker;
+                const avatar = document.createElement("span");
+                avatar.className = "duo-avatar";
+                avatar.setAttribute("aria-hidden", "true");
+                const img = avatarOf(line.speaker);
+                if (img) avatar.append(img);
+                const body = document.createElement("div");
+                body.className = "duo-line-body";
+                const name = document.createElement("strong");
+                name.textContent = names[line.speaker] || "";
+                const text = document.createElement("p");
+                text.textContent = line.text;
+                body.append(name, text);
+                li.append(avatar, body);
+            } else {
+                li.className = "duo-note duo-note-" + line.kind;
+                li.textContent = line.kind === "direction"
+                    ? (line.speaker >= 0 ? tr("duo.note_direction_to", { name: names[line.speaker] || "", text: line.text })
+                        : tr("duo.note_direction", { text: line.text }))
+                    : line.kind === "event" ? tr("duo.note_event", { text: line.text })
+                        : tr("duo.note_mood", { name: names[line.speaker] || "", mood: line.text });
+            }
+            return li;
+        };
+
+        const typingEl = (who) => {
+            const li = document.createElement("li");
+            li.className = "duo-line duo-line-" + who + " duo-typing typing";
+            li.setAttribute("aria-label", tr("duo.writing", { name: names[who] || "" }));
+            const avatar = document.createElement("span");
+            avatar.className = "duo-avatar";
+            const img = avatarOf(who);
+            if (img) avatar.append(img);
+            const body = document.createElement("div");
+            body.className = "duo-line-body";
+            const dots = document.createElement("div");
+            dots.className = "bubble";
+            dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+            body.append(dots);
+            li.append(avatar, body);
+            return li;
+        };
+
+        const toneOf = (tone) => (tone === "positive" ? "is-positive" : tone === "negative" ? "is-negative" : "is-neutral");
+
+        const paint = (st, newLines) => {
+            const stick = nearBottom();
+            thread.querySelector(".duo-typing")?.remove();
+            (newLines || []).forEach((line) => {
+                if (line.id <= lastId) return;
+                thread.append(lineEl(line));
+                lastId = line.id;
+            });
+            if (st.status === "running" && st.writing >= 0) thread.append(typingEl(st.writing));
+            if (stick && ((newLines || []).length || st.writing >= 0)) window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+
+            // humeurs et ressentis
+            (st.people || []).forEach((p, w) => {
+                const mood = live.querySelector(`[data-duo-mood="${w}"]`);
+                mood.className = "duo-mood " + toneOf(p.mood.tone);
+                mood.textContent = p.mood.mood ? p.mood.mood : tr("duo.mood_neutral");
+                live.querySelector(`[data-duo-avatar-of="${w}"]`).className = "duo-avatar duo-who-avatar " + toneOf(p.mood.tone);
+                const values = { friendship: p.bond.friendship, love: p.bond.love, anger: p.bond.anger };
+                Object.entries(values).forEach(([k, v]) => {
+                    const g = live.querySelector(`[data-duo-gauge="${w}-${k}"]`);
+                    if (!g) return;
+                    g.querySelector(".duo-gauge-track").setAttribute("aria-valuenow", String(v));
+                    const fill = g.querySelector(".duo-gauge-fill");
+                    if (k === "friendship") {
+                        fill.style.left = v >= 0 ? "50%" : (50 + v / 2) + "%";
+                        fill.style.width = Math.abs(v) / 2 + "%";
+                        g.classList.toggle("is-negative", v < 0);
+                    } else {
+                        fill.style.left = "0";
+                        fill.style.width = v + "%";
+                    }
+                    g.querySelector(".duo-gauge-value").textContent = (k === "friendship" && v > 0 ? "+" : "") + v;
+                });
+                live.querySelector(`[data-duo-reason="${w}"]`).textContent = p.bond.reason || "";
+            });
+
+            // statut et boutons
+            const text = {
+                running: st.writing >= 0 ? tr("duo.st_writing", { name: names[st.writing] || "", n: st.count + 1, total: st.target })
+                    : tr("duo.st_running", { n: st.count, total: st.target }),
+                paused: st.error ? tr("duo.st_paused_error", { error: st.error }) : tr("duo.st_paused", { n: st.count, total: st.target }),
+                done: st.end || tr("duo.st_done", st.count),
+                stopped: st.end || tr("duo.st_stopped"),
+                error: tr("duo.st_error", { error: st.error }),
+            }[st.status] || "";
+            statusEl.textContent = text;
+            live.dataset.status = st.status;
+            const show = {
+                pause: st.status === "running",
+                resume: st.status === "paused" || st.status === "error",
+                extend: true,
+                stop: st.status === "running" || st.status === "paused" || st.status === "error",
+            };
+            live.querySelectorAll("[data-duo-op]").forEach((b) => { b.hidden = !show[b.dataset.duoOp]; });
+        };
+
+        const post = async (path, form = {}) => {
             const fd = new FormData();
-            fd.append("_token", duo.dataset.token);
-            fd.append("a", chosen[0].dataset.duoPick);
-            fd.append("b", chosen[1].dataset.duoPick);
-            fd.append("topic", state.topic);
-            fd.append("goal_a", state.goals[0]);
-            fd.append("goal_b", state.goals[1]);
-            fd.append("lines", JSON.stringify(state.lines.map(({ text, ms }) => ({ text, ms }))));
-            Object.entries(extra).forEach(([k, v]) => fd.append(k, String(v)));
-            const res = await fetch(url, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+            fd.append("_token", live.dataset.token);
+            fd.append("after", String(lastId));
+            Object.entries(form).forEach(([k, v]) => fd.append(k, String(v)));
+            const res = await fetch(`/settings/duo/${id}/${path}`, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
             const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
             if (!res.ok || !data.ok) throw new Error(data.error || tr("duo.failed"));
             return data;
         };
 
-        const addLine = (line) => {
-            const pick = chosen[line.speaker];
-            const li = document.createElement("li");
-            li.className = "duo-line duo-line-" + line.speaker;
-            const avatar = document.createElement("span");
-            avatar.className = "duo-avatar";
-            avatar.setAttribute("aria-hidden", "true");
-            avatar.append(pick.querySelector("[data-duo-avatar]").firstElementChild.cloneNode(true));
-            const body = document.createElement("div");
-            body.className = "duo-line-body";
-            const name = document.createElement("strong");
-            name.textContent = pick.dataset.name;
-            const text = document.createElement("p");
-            text.textContent = line.text;
-            body.append(name, text);
-            li.append(avatar, body);
-            thread.append(li);
-            li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        const apply = (data) => {
+            state = data;
+            paint(data, data.lines);
+            schedule();
         };
 
-        const finish = async () => {
-            stopBtn.hidden = true;
-            status.textContent = state.error ? tr("duo.stopped_error", { error: state.error })
-                : state.end || (state.stopped ? tr("duo.stopped") : tr("duo.done", state.lines.length));
-            duo.querySelector("[data-duo-after]").hidden = false;
-            if (!state.lines.length) return;
+        const poll = async () => {
+            if (busy) return;
+            busy = true;
             try {
-                const data = await post("/settings/duo/report", {
-                    turns: state.turns, model: state.model, end: state.end, error: state.error,
-                });
-                markdown = data.markdown;
-                const tbody = duo.querySelector("[data-duo-metrics]");
-                tbody.replaceChildren(...Object.values(data.metrics.per).map((p) => {
-                    const tr_ = document.createElement("tr");
-                    const th = document.createElement("th");
-                    th.scope = "row";
-                    th.textContent = p.name;
-                    tr_.append(th, ...[p.lines, fmt1(p.avg_words), p.repeats, p.agreements, fmt1(p.avg_s) + " s"].map((v) => {
-                        const td = document.createElement("td");
-                        td.textContent = String(v);
-                        return td;
-                    }));
-                    return tr_;
-                }));
-                duo.querySelector("[data-duo-voice]").textContent = tr("duo.voice", { n: data.metrics.voice_overlap });
-                duo.querySelector("[data-duo-download]").hidden = false;
-                report.hidden = false;
+                const res = await fetch(`/settings/duo/${id}/state?after=${lastId}`, { cache: "no-store", headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await res.json();
+                if (data.ok) {
+                    state = data;
+                    paint(data, data.lines);
+                }
+            } catch (e) {
+                // réseau coupé (téléphone en veille…) : on réessaie au prochain tour
+            } finally {
+                busy = false;
+            }
+            // serveur sans processus d'arrière-plan : la page demande elle-même la réplique suivante
+            if (state.drive && state.status === "running" && state.writing < 0 && !ticking && state.now >= state.next_at) {
+                ticking = true;
+                post("tick").then((d) => { state = d; paint(d, d.lines); }).catch(() => {}).finally(() => { ticking = false; schedule(); });
+            }
+            schedule();
+        };
+
+        const schedule = () => {
+            clearTimeout(timer);
+            const active = state.status === "running";
+            timer = setTimeout(poll, document.hidden ? 15000 : active ? 2000 : 8000);
+        };
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+
+        live.querySelectorAll("[data-duo-op]").forEach((b) => b.addEventListener("click", async () => {
+            const op = b.dataset.duoOp;
+            if (op === "stop" && !(await pvModal.confirm(tr("duo.confirm_stop"), { ok: tr("duo.confirm_stop_ok") }))) return;
+            b.disabled = true;
+            try {
+                apply(await post("control", { op }));
             } catch (err) {
                 toast(tr("common.error", { message: err.message }), true);
+            } finally {
+                b.disabled = false;
             }
-        };
+        }));
 
-        duoForm.addEventListener("submit", async (e) => {
+        live.querySelectorAll("[data-duo-toggle]").forEach((b) => b.addEventListener("click", () => {
+            const panel = live.querySelector(`[data-duo-panel="${b.dataset.duoToggle}"]`);
+            const open = panel.hidden;
+            live.querySelectorAll("[data-duo-panel]").forEach((p) => { p.hidden = true; });
+            live.querySelectorAll("[data-duo-toggle]").forEach((t) => t.setAttribute("aria-expanded", "false"));
+            panel.hidden = !open;
+            b.setAttribute("aria-expanded", open ? "true" : "false");
+            if (open) panel.querySelector("input[name=text]")?.focus();
+        }));
+
+        const direction = live.querySelector("[data-duo-direction]");
+        direction?.addEventListener("submit", async (e) => {
             e.preventDefault();
-            if (!chosen[0] || !chosen[1]) return;
-            const turns = Math.max(2, Math.min(Number(duoForm.elements.turns.max) || 40, Number(duoForm.elements.turns.value) || 12));
-            state = {
-                topic: duoForm.elements.topic.value.trim(),
-                goals: [duoForm.elements.goal_a.value.trim(), duoForm.elements.goal_b.value.trim()],
-                turns, lines: [], model: "", end: "", error: "", stopped: false,
-            };
-            markdown = "";
-            thread.replaceChildren();
-            report.hidden = true;
-            duo.querySelector("[data-duo-after]").hidden = true;
-            duo.querySelector("[data-duo-download]").hidden = true;
-            duo.querySelectorAll(".duo-checklist input").forEach((c) => { c.checked = false; });
-            duoForm.hidden = true;
-            run.hidden = false;
-            stopBtn.hidden = false;
-            run.scrollIntoView({ block: "start", behavior: "smooth" });
-
-            while (state.lines.length < state.turns && !state.stopped) {
-                const next = chosen[state.lines.length % 2];
-                status.textContent = tr("duo.writing", { name: next.dataset.name, n: state.lines.length + 1, total: state.turns });
-                try {
-                    const data = await post("/settings/duo/turn");
-                    if (state.stopped) break;
-                    state.model = data.model;
-                    state.lines.push({ speaker: data.speaker, text: data.text, ms: data.ms });
-                    addLine(data);
-                    if (data.ended) {
-                        state.end = data.end;
-                        break;
-                    }
-                } catch (err) {
-                    state.error = err.message;
-                    break;
-                }
+            const input = direction.elements.text;
+            if (!input.value.trim()) return;
+            const button = direction.querySelector("button[type=submit]");
+            button.disabled = true;
+            try {
+                apply(await post("direction", { text: input.value.trim(), target: direction.elements.target.value }));
+                input.value = "";
+                toast(tr("duo.direction_sent"));
+            } catch (err) {
+                toast(tr("common.error", { message: err.message }), true);
+            } finally {
+                button.disabled = false;
             }
-            await finish();
         });
 
-        stopBtn.addEventListener("click", () => {
-            if (!state) return;
-            state.stopped = true;
-            stopBtn.hidden = true;
-            status.textContent = tr("duo.stopping");
-        });
-
-        duo.querySelector("[data-duo-download]")?.addEventListener("click", () => {
-            if (!markdown) return;
-            const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
-            const a = Object.assign(document.createElement("a"), {
-                href: url,
-                download: "essai-" + new Date().toISOString().slice(0, 16).replace(/[T:]/g, "-") + ".md",
-            });
-            document.body.append(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        });
-
-        duo.querySelector("[data-duo-again]")?.addEventListener("click", () => {
-            run.hidden = true;
-            duoForm.hidden = false;
-            duoForm.scrollIntoView({ block: "start", behavior: "smooth" });
-        });
-
-        paint();
+        paint(state, state.lines);
+        window.scrollTo({ top: document.documentElement.scrollHeight });
+        schedule();
+        if (state.drive) poll();
     }
 
     /* ------------------------------------------------- purge mémoire LM Studio */

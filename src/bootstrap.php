@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 16);
+define('PV_SCHEMA_VERSION', 17);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -243,6 +243,9 @@ function migrate(PDO $pdo): void
                 SELECT MAX(m.id) FROM messages m JOIN conversations c ON c.id = m.conversation_id
                  WHERE c.last_followup_at <> '' AND m.role = 'assistant' AND m.created_at = c.last_followup_at
                  GROUP BY m.conversation_id)");
+        }
+        if ($version < 17) {
+            migrate_v17($pdo);
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -546,6 +549,61 @@ function migrate_v10(PDO $pdo): void
         user_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_relationship_queue ON relationship_queue(persona_id, reply_id)");
+}
+
+/**
+ * v17 : discussions entre deux personas (menées en arrière-plan), et ce que chaque persona
+ * ressent, conservé d'une discussion à l'autre : humeur du moment, liens avec les autres.
+ */
+function migrate_v17(PDO $pdo): void
+{
+    $pdo->exec("CREATE TABLE IF NOT EXISTS duo_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        persona_a INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+        persona_b INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+        topic TEXT NOT NULL DEFAULT '',
+        goal_a TEXT NOT NULL DEFAULT '',
+        goal_b TEXT NOT NULL DEFAULT '',
+        target INTEGER NOT NULL DEFAULT 12,
+        status TEXT NOT NULL DEFAULT 'running',
+        end_reason TEXT NOT NULL DEFAULT '',
+        error TEXT NOT NULL DEFAULT '',
+        model TEXT NOT NULL DEFAULT '',
+        writing INTEGER NOT NULL DEFAULT -1,
+        heartbeat_at INTEGER NOT NULL DEFAULT 0,
+        next_at INTEGER NOT NULL DEFAULT 0,
+        analyzed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_duo_sessions_status ON duo_sessions(status, id)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS duo_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL REFERENCES duo_sessions(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL DEFAULT 'line',
+        speaker INTEGER NOT NULL DEFAULT -1,
+        content TEXT NOT NULL,
+        ms INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_duo_lines_session ON duo_lines(session_id, id)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS persona_moods (
+        persona_id INTEGER PRIMARY KEY REFERENCES personas(id) ON DELETE CASCADE,
+        mood TEXT NOT NULL DEFAULT '',
+        intensity INTEGER NOT NULL DEFAULT 0,
+        tone TEXT NOT NULL DEFAULT 'neutre',
+        updated_at INTEGER NOT NULL DEFAULT 0
+    )");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS persona_bonds (
+        persona_id INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+        other_id INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+        friendship INTEGER NOT NULL DEFAULT 0,
+        love INTEGER NOT NULL DEFAULT 0,
+        anger INTEGER NOT NULL DEFAULT 0,
+        reason TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (persona_id, other_id)
+    )");
 }
 
 /** v11 : réactions aux bulles qui suivent la première. */
