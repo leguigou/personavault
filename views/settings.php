@@ -420,6 +420,11 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
                     <input class="input" type="number" inputmode="numeric" name="chat_followup_min_gap_hours" min="1" max="168" step="1" value="<?= (int) setting('chat_followup_min_gap_hours', '12') ?>">
                     <small><?= e(t('settings.followup.gap_help')) ?></small>
                 </label>
+                <label class="field">
+                    <span><?= e(t('settings.followup.streak')) ?></span>
+                    <input class="input" type="number" inputmode="numeric" name="chat_followup_max_streak" min="1" max="5" step="1" value="<?= (int) setting('chat_followup_max_streak', '2') ?>">
+                    <small><?= e(t('settings.followup.streak_help')) ?></small>
+                </label>
                 <div class="field">
                     <span><?= e(t('settings.followup.hours')) ?></span>
                     <div class="hours-range">
@@ -579,6 +584,16 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
         <span class="settings-logs-text">
             <strong><?= e(t('logs.link_title')) ?></strong>
             <small><?= e(t('logs.link_text')) ?></small>
+        </span>
+        <svg class="settings-logs-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+
+    <!-- essai : deux personas discutent entre eux (rien n'est écrit dans les conversations) -->
+    <a class="settings-logs-link" href="/settings/duo">
+        <span class="settings-logs-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h10v7H8l-4 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 10h6v7l-3-2h-5v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+        <span class="settings-logs-text">
+            <strong><?= e(t('duo.link_title')) ?></strong>
+            <small><?= e(t('duo.link_text')) ?></small>
         </span>
         <svg class="settings-logs-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>

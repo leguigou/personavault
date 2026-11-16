@@ -72,6 +72,7 @@ if [ "$SMOKE" -ne 0 ]; then
     exit "$SMOKE"
 fi
 php "$HERE/followup.php" "$WORK"
+php "$HERE/duo.php" "$WORK"
 
 # statut + type de contenu + libellé (sans l'empreinte)
 statuses() { awk '{ $3 = ""; print }' "$1"; }

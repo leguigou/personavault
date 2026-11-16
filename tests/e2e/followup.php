@@ -60,3 +60,54 @@ if ($followup['klipy_url'] !== 'https://static.klipy.com/test/celebrate.gif') {
     throw new RuntimeException('La relance doit pouvoir joindre un GIF sans demande de l’utilisateur.');
 }
 echo "OK : GIF spontané ajouté à la relance sans demande de l’utilisateur.\n";
+
+// Relances suivantes : le persona voit ses relances précédentes et s'arrête sans réponse.
+$age = static function () use ($pdo, $cid): void {
+    $pdo->prepare("UPDATE messages SET created_at = datetime('now', '-7 hours') WHERE conversation_id = ? AND created_at > datetime('now', '-7 hours')")
+        ->execute([$cid]);
+    $pdo->prepare("UPDATE conversations SET last_followup_at = datetime('now', '-13 hours') WHERE id = ?")->execute([$cid]);
+};
+$run = static function () use ($command): void {
+    passthru($command, $status);
+    if ($status !== 0) {
+        exit($status);
+    }
+};
+$followupRequests = static function () use ($query, $cid): array {
+    $query->execute([$cid]);
+    return $query->fetchAll(PDO::FETCH_COLUMN);
+};
+$spontaneous = static function () use ($pdo, $cid): int {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND spontaneous = 1");
+    $stmt->execute([$cid]);
+    return (int) $stmt->fetchColumn();
+};
+if ($spontaneous() !== 1) {
+    throw new RuntimeException('La relance doit être marquée comme message spontané.');
+}
+
+$age();
+$run();
+$requests = $followupRequests();
+$system = json_decode($requests[1] ?? '[]', true, 512, JSON_THROW_ON_ERROR)[0]['content'] ?? '';
+$first = trim(preg_replace('/\s+/u', ' ', (string) $followup['content']));
+if (count($requests) !== 2 || $spontaneous() !== 2
+    || !str_contains($system, 'Tes derniers messages spontanés') || !str_contains($system, mb_substr($first, 0, 200))) {
+    throw new RuntimeException('La deuxième relance doit partir et rappeler la précédente pour éviter les redites.');
+}
+echo "OK : la relance suivante voit les précédentes pour ne pas les répéter.\n";
+
+$age();
+$run();
+if (count($followupRequests()) !== 2 || $spontaneous() !== 2) {
+    throw new RuntimeException('Après deux relances sans réponse, le persona doit attendre l’utilisateur.');
+}
+echo "OK : pas de troisième relance d’affilée sans réponse.\n";
+
+$insert->execute([$cid, 'user', 'Me revoilà !', '-7 hours']);
+$age();
+$run();
+if (count($followupRequests()) !== 3 || $spontaneous() !== 3) {
+    throw new RuntimeException('Une réponse de l’utilisateur doit permettre de nouvelles relances.');
+}
+echo "OK : une réponse de l’utilisateur relance le compte.\n";

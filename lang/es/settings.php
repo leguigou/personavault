@@ -331,6 +331,8 @@ return [
             Guarda tus copias de seguridad fuera del servidor.</p>',
     'settings.followup.gap'       => 'Tiempo entre dos mensajes (horas)',
     'settings.followup.gap_help'  => 'En una misma conversación, no habrá otro mensaje antes de este plazo, aunque el silencio continúe.',
+    'settings.followup.streak'      => 'Mensajes seguidos sin respuesta',
+    'settings.followup.streak_help' => 'Después, la persona espera tu respuesta antes de volver a escribirte.',
     'settings.single_model.label' => 'Un solo modelo a la vez en LM Studio',
     'settings.single_model.hint' => 'Con cada cambio de modelo (otra conversación, otro persona, un modelo de prueba), los demás modelos se descargan antes de cargar el nuevo: la memoria no se satura. Desactívelo solo si su equipo puede mantener varios modelos cargados.',
     'settings.idle_unload.label' => 'Liberar la memoria de LM Studio tras una inactividad de',

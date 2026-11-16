@@ -1084,7 +1084,13 @@ function chat_estimate_tokens(string $text): int
 }
 
 /** Prompt système = prompts « système » de la fiche + fiche + consigne de session. */
-function chat_system_prompt(array $persona, array $personaPrompts, array $conv, array $facts = [], string $addressOverride = ''): string
+/**
+ * Identité d'un persona pour le modèle : son prompt système (ou une consigne par défaut),
+ * sa fiche et sa consigne de jeu. Rien sur l'utilisateur : réutilisable quand le persona
+ * parle à un autre persona.
+ * @return array<int, string>
+ */
+function chat_persona_identity(array $persona, array $personaPrompts, string $directive = ''): array
 {
     $parts = [];
     $system = '';
@@ -1124,10 +1130,16 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
         $parts[] = "Fiche du personnage (contexte factuel, ne la récite pas) :\n" . implode("\n", $lines);
     }
 
-    $directive = trim((string) ($conv['directive'] ?? ''));
+    $directive = trim($directive);
     if ($directive !== '') {
         $parts[] = 'Consigne de jeu : ' . $directive;
     }
+    return $parts;
+}
+
+function chat_system_prompt(array $persona, array $personaPrompts, array $conv, array $facts = [], string $addressOverride = ''): string
+{
+    $parts = chat_persona_identity($persona, $personaPrompts, (string) ($conv['directive'] ?? ''));
 
     if (setting('chat_user_profile_enabled', '0') === '1') {
         $profile = trim(setting('chat_user_profile', ''));

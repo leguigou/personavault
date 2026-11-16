@@ -310,6 +310,24 @@ et ce qui revient (réponse ou erreur), avec la durée et les tokens. La clé d'
 enregistrée ; les photos sont remplacées par leur taille. Table `llm_logs` (migration v6), vidée
 par le bouton « Vider le journal ».
 
+### Essai de discussion entre deux personas
+
+Avant de développer les discussions de groupe, **Réglages › Essai de discussion** (`/settings/duo`)
+fait parler deux personas de la bibliothèque entre eux, avec le vrai modèle, pour juger la qualité
+sur pièce. Le navigateur demande une réplique à la fois ; à la fin, la page affiche des indicateurs,
+une grille de lecture et propose le rapport en Markdown. Même moteur en ligne de commande :
+
+```bash
+php bin/duo-test.php camille-lefebvre hugo-bernard --sujet="Partir vivre à la campagne" --tours=12 \
+    --objectif-a="Convaincre Hugo de partir" --objectif-b="Défendre la vie en ville"
+```
+
+Chaque persona parle avec sa fiche, son prompt système et sa consigne de jeu, sans rien sur
+l'utilisateur. L'échange est écrit dans `storage/duo-tests/` (Markdown) avec quelques indicateurs
+(redites, approbations, vocabulaire commun aux deux voix) et une grille de lecture. Rien n'est
+ajouté aux conversations ; seul le journal des appels au modèle garde une trace. Le modèle utilisé
+est celui déjà chargé dans LM Studio (sinon celui des Réglages), ou `--modele=…`.
+
 ### Relances spontanées (tâche planifiée)
 
 Les messages spontanés sont envoyés par un script à lancer régulièrement, par exemple toutes les
