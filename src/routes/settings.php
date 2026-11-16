@@ -45,13 +45,13 @@ if ($path === '/settings/duo' && $method === 'POST') {
         redirect('/settings/duo');
     }
     $id = duo_session_create($a, $b, (string) ($_POST['topic'] ?? ''), (string) ($_POST['goal_a'] ?? ''),
-        (string) ($_POST['goal_b'] ?? ''), (int) ($_POST['turns'] ?? 12));
+        (string) ($_POST['goal_b'] ?? ''), (int) ($_POST['turns'] ?? 12), (string) ($_POST['scene'] ?? ''));
     duo_session_update($id, ['heartbeat_at' => time()]);
     duo_spawn($id);
     redirect('/settings/duo/' . $id);
 }
 
-if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|tick|report|delete))?$#', $path, $m)) {
+if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|direction-clear|tick|report|delete))?$#', $path, $m)) {
     $duoId = (int) $m[1];
     $action = $m[2] ?? '';
     $s = duo_session($duoId);
@@ -127,7 +127,7 @@ if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|tick|report|de
             JSON_UNESCAPED_UNICODE);
         exit;
     }
-    if (in_array($action, ['control', 'direction', 'tick'], true) && $method === 'POST') {
+    if (in_array($action, ['control', 'direction', 'direction-clear', 'tick'], true) && $method === 'POST') {
         csrf_check_json();
         session_write_close();
         if ($action === 'control') {
@@ -151,6 +151,8 @@ if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|tick|report|de
                 exit;
             }
             duo_direction($duoId, $text, (int) ($_POST['target'] ?? -1));
+        } elseif ($action === 'direction-clear') {
+            duo_direction_clear($duoId, (int) ($_POST['target'] ?? -1));
         } else {
             // le serveur ne peut pas lancer de processus : le navigateur mène l'échange
             @set_time_limit(400);

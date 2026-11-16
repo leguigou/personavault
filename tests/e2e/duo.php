@@ -32,16 +32,22 @@ foreach ($requests as $request) {
     $alternates = $alternates && end($roles) === 'user';
 }
 $second = $requests[1][0]['content'] ?? '';
-if (count($requests) !== 5 || !$alternates
+// le faux modèle répond toujours la même phrase : à partir de la 3e réplique, chacune
+// recommence comme la précédente du même persona et est régénérée une fois (5 + 3 appels)
+$last = end($requests);
+$lastUser = (string) (end($last)['content'] ?? '');
+if (count($requests) !== 8 || !$alternates
+    || !str_contains($lastUser, '[Maître du jeu : ta réplique précédente commençait par « Réponse de test ». Commence autrement.]')
     || substr_count($report, '**Camille Lefebvre** : ') !== 3 || substr_count($report, '**Hugo Bernard** : ') !== 2
     || !str_contains($requests[0][0]['content'] ?? '', 'Tu es Camille.')
-    || !str_contains($requests[0][0]['content'] ?? '', 'tu discutes par messagerie avec Hugo Bernard')
+    || !str_contains($requests[0][0]['content'] ?? '', 'Tu échanges avec Hugo Bernard')
+    || !str_contains($requests[0][0]['content'] ?? '', 'Lieu et situation en ce moment : Vous discutez par messages')
     || !str_contains($second, 'Ton objectif dans cet échange') || !str_contains($second, 'Défendre la ville')
     || str_contains($second, 'Tu es Camille.') || str_contains($second, 'interlocuteur')
     || (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() !== $messagesBefore) {
     throw new RuntimeException("L'essai doit alterner les deux voix, chacune avec sa fiche, sans rien écrire dans les conversations.");
 }
-echo "OK : essai de discussion à deux voix, alterné, sans trace dans les conversations.\n";
+echo "OK : essai de discussion à deux voix, alterné, débuts répétés régénérés, sans trace dans les conversations.\n";
 
 // Sauvegarde : les discussions entre personas, humeurs et ressentis font l'aller-retour.
 $session = $pdo->query("SELECT * FROM duo_sessions WHERE status = 'done' ORDER BY id LIMIT 1")->fetch();

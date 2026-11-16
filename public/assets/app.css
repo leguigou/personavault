@@ -4719,6 +4719,14 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 }
 .duo-gauge.is-negative .duo-gauge-fill { border-radius: 8px 0 0 8px; }
 .duo-mj-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.duo-scene { margin: 0; font-size: 12.5px; line-height: 1.4; color: rgb(var(--acc-pale)); }
+.duo-directions { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.duo-directions:empty { display: none; }
+.duo-directions li {
+    display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border-radius: 12px;
+    border: 1px dashed rgba(var(--acc), .4); background: rgba(var(--acc), .08); font-size: 12.5px;
+}
+.duo-directions li span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .duo-mj-row .input[name="text"] { flex: 1 1 200px; min-width: 0; }
 .duo-mj-target { flex: 0 1 150px; min-width: 0; }
 
@@ -4744,16 +4752,19 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 }
 .duo-note-direction { color: rgb(var(--acc-pale)); background: rgba(var(--acc), .1); border: 1px dashed rgba(var(--acc), .4); }
 .duo-note-event { color: #fcd34d; background: rgba(251, 191, 36, .08); border: 1px dashed rgba(251, 191, 36, .32); }
+.duo-note-scene { color: #a5f3fc; background: rgba(34, 211, 238, .08); border: 1px dashed rgba(34, 211, 238, .35); }
 .duo-note-mood { display: inline-flex; align-items: center; gap: 7px; border: 1px solid color-mix(in srgb, var(--mood, #d4d4d8) 35%, transparent); }
 .duo-legend { display: grid; gap: 6px; }
 .duo-legend-list { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
 .duo-legend-list li { display: inline-flex; align-items: center; gap: 6px; }
 html[data-mode="light"] .duo-badge.is-running { color: #065f46; }
 html[data-mode="light"] .duo-badge.is-paused, html[data-mode="light"] .duo-note-event { color: #92400e; }
+html[data-mode="light"] .duo-note-scene { color: #155e75; }
 html[data-mode="light"] .duo-actions .duo-stop { color: #be123c; }
 @media (prefers-color-scheme: light) {
     html[data-mode="auto"] .duo-badge.is-running { color: #065f46; }
     html[data-mode="auto"] .duo-badge.is-paused, html[data-mode="auto"] .duo-note-event { color: #92400e; }
+    html[data-mode="auto"] .duo-note-scene { color: #155e75; }
     html[data-mode="auto"] .duo-actions .duo-stop { color: #be123c; }
 }
 @media (max-width: 420px) {
