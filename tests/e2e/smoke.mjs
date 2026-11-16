@@ -778,6 +778,35 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const afterDelete = await (await http(path + '/messages')).json();
     expect(afterDelete.messages.some((message) => message.reply_to?.text === saved?.text), 'la citation reste lisible après suppression de la source');
 }
+// --- essai de discussion à deux : page, une réplique à la fois, rapport ; rien dans les conversations
+{
+    const page = await http('/settings/duo');
+    const html = await page.text();
+    await record('GET /settings/duo', { status: page.status, headers: page.headers, text: async () => html });
+    const id = (name) => (html.match(new RegExp('data-duo-pick="(\\d+)" data-name="' + name + '"')) || [])[1];
+    const [a, b] = [id('Camille Lefebvre'), id('Hugo Bernard')];
+    expect(a && b && html.includes('/media/'), 'la page liste les personas avec leur avatar');
+    const chats = async () => ((await (await http('/chat')).text()).match(/href="\/chat\/\d+"/g) || []).length;
+    const before = await chats();
+    const ask = async (u, form) => http(u, { method: 'POST', form: { _token: csrf, a, b, topic: 'La campagne', ...form } });
+    const duoLines = [];
+    for (let i = 0; i < 3; i++) {
+        const r = await ask('/settings/duo/turn', { goal_b: 'Défendre la ville', lines: JSON.stringify(duoLines) });
+        const d = await r.json();
+        expect(r.status === 200 && d.ok && d.speaker === i % 2 && d.text !== '', 'la réplique ' + (i + 1) + ' alterne les deux voix');
+        duoLines.push({ text: d.text, ms: d.ms });
+    }
+    const logs = await (await http('/settings/logs')).text();
+    expect(logs.includes('Défendre la ville') && logs.includes('tu discutes par messagerie avec Camille Lefebvre'),
+        'chaque voix reçoit la consigne de l’échange et son objectif');
+    const rep = await (await ask('/settings/duo/report', { lines: JSON.stringify(duoLines), turns: '3', model: 'test' })).json();
+    expect(rep.ok && rep.markdown.includes('**Hugo Bernard** : ') && rep.metrics.per[0].lines === 2 && rep.metrics.per[1].lines === 1,
+        'le rapport reprend l’échange et ses indicateurs');
+    const same = await ask('/settings/duo/turn', { b: a });
+    const forged = await http('/settings/duo/turn', { method: 'POST', form: { _token: 'mauvais', a, b } });
+    expect(same.status === 422 && forged.status === 419, 'deux personas différents et un jeton valide sont exigés');
+    expect(await chats() === before, 'l’essai n’ajoute rien aux conversations');
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

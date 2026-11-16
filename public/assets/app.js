@@ -5507,6 +5507,208 @@
     }
 
 
+    /* ------------------------------------------ essai de discussion à deux */
+    /* Réglages › Essai de discussion : le navigateur demande une réplique à la fois
+       (une page qui attendrait tout l'échange serait coupée), garde l'échange et le
+       renvoie à chaque tour. Rien n'est enregistré dans les conversations. */
+    const duo = document.querySelector("[data-duo]");
+    const duoForm = duo?.querySelector("[data-duo-form]");
+    if (duo && duoForm) {
+        const run = duo.querySelector("[data-duo-run]");
+        const thread = duo.querySelector("[data-duo-thread]");
+        const status = duo.querySelector("[data-duo-status]");
+        const stopBtn = duo.querySelector("[data-duo-stop]");
+        const report = duo.querySelector("[data-duo-report]");
+        const startBtn = duo.querySelector("[data-duo-start]");
+        const picks = [...duo.querySelectorAll("[data-duo-pick]")];
+        const slots = [...duo.querySelectorAll("[data-duo-slot]")];
+        const chosen = [null, null]; // boutons des personas choisis
+        let state = null;
+        let markdown = "";
+
+        const paint = () => {
+            slots.forEach((slot, i) => {
+                const pick = chosen[i];
+                const avatar = slot.querySelector("[data-duo-slot-avatar]");
+                slot.querySelector("[data-duo-slot-name]").textContent = pick ? pick.dataset.name : tr("duo.slot_empty");
+                avatar.replaceChildren(pick
+                    ? pick.querySelector("[data-duo-avatar]").firstElementChild.cloneNode(true)
+                    : Object.assign(document.createElement("span"), { className: "duo-avatar-empty", textContent: String(i + 1) }));
+                slot.disabled = !pick;
+                slot.classList.toggle("is-filled", !!pick);
+                const goal = duo.querySelector(`[data-duo-goal-label="${i}"]`);
+                if (goal) goal.textContent = pick ? tr("duo.goal_of", { name: pick.dataset.name }) : (i ? tr("duo.goal_b") : tr("duo.goal_a"));
+            });
+            picks.forEach((pick) => {
+                const at = chosen.indexOf(pick);
+                pick.setAttribute("aria-pressed", at >= 0 ? "true" : "false");
+                const badge = pick.querySelector("[data-duo-badge]");
+                badge.hidden = at < 0;
+                badge.textContent = at < 0 ? "" : String(at + 1);
+            });
+            startBtn.disabled = !(chosen[0] && chosen[1]);
+        };
+
+        picks.forEach((pick) => pick.addEventListener("click", () => {
+            const at = chosen.indexOf(pick);
+            if (at >= 0) chosen[at] = null;
+            else if (!chosen[0]) chosen[0] = pick;
+            else if (!chosen[1]) chosen[1] = pick;
+            else chosen[1] = pick; // deux déjà choisis : remplace le second
+            paint();
+        }));
+        slots.forEach((slot, i) => slot.addEventListener("click", () => { chosen[i] = null; paint(); }));
+
+        const search = duo.querySelector("[data-duo-search]");
+        search?.addEventListener("input", () => {
+            const q = search.value.trim().toLowerCase();
+            let shown = 0;
+            duo.querySelectorAll("[data-duo-item]").forEach((item) => {
+                const hit = !q || item.dataset.duoText.includes(q);
+                item.hidden = !hit;
+                shown += hit ? 1 : 0;
+            });
+            duo.querySelector("[data-duo-nomatch]").hidden = shown > 0;
+        });
+
+        const post = async (url, extra = {}) => {
+            const fd = new FormData();
+            fd.append("_token", duo.dataset.token);
+            fd.append("a", chosen[0].dataset.duoPick);
+            fd.append("b", chosen[1].dataset.duoPick);
+            fd.append("topic", state.topic);
+            fd.append("goal_a", state.goals[0]);
+            fd.append("goal_b", state.goals[1]);
+            fd.append("lines", JSON.stringify(state.lines.map(({ text, ms }) => ({ text, ms }))));
+            Object.entries(extra).forEach(([k, v]) => fd.append(k, String(v)));
+            const res = await fetch(url, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+            const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+            if (!res.ok || !data.ok) throw new Error(data.error || tr("duo.failed"));
+            return data;
+        };
+
+        const addLine = (line) => {
+            const pick = chosen[line.speaker];
+            const li = document.createElement("li");
+            li.className = "duo-line duo-line-" + line.speaker;
+            const avatar = document.createElement("span");
+            avatar.className = "duo-avatar";
+            avatar.setAttribute("aria-hidden", "true");
+            avatar.append(pick.querySelector("[data-duo-avatar]").firstElementChild.cloneNode(true));
+            const body = document.createElement("div");
+            body.className = "duo-line-body";
+            const name = document.createElement("strong");
+            name.textContent = pick.dataset.name;
+            const text = document.createElement("p");
+            text.textContent = line.text;
+            body.append(name, text);
+            li.append(avatar, body);
+            thread.append(li);
+            li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        };
+
+        const finish = async () => {
+            stopBtn.hidden = true;
+            status.textContent = state.error ? tr("duo.stopped_error", { error: state.error })
+                : state.end || (state.stopped ? tr("duo.stopped") : tr("duo.done", state.lines.length));
+            duo.querySelector("[data-duo-after]").hidden = false;
+            if (!state.lines.length) return;
+            try {
+                const data = await post("/settings/duo/report", {
+                    turns: state.turns, model: state.model, end: state.end, error: state.error,
+                });
+                markdown = data.markdown;
+                const tbody = duo.querySelector("[data-duo-metrics]");
+                tbody.replaceChildren(...Object.values(data.metrics.per).map((p) => {
+                    const tr_ = document.createElement("tr");
+                    const th = document.createElement("th");
+                    th.scope = "row";
+                    th.textContent = p.name;
+                    tr_.append(th, ...[p.lines, fmt1(p.avg_words), p.repeats, p.agreements, fmt1(p.avg_s) + " s"].map((v) => {
+                        const td = document.createElement("td");
+                        td.textContent = String(v);
+                        return td;
+                    }));
+                    return tr_;
+                }));
+                duo.querySelector("[data-duo-voice]").textContent = tr("duo.voice", { n: data.metrics.voice_overlap });
+                duo.querySelector("[data-duo-download]").hidden = false;
+                report.hidden = false;
+            } catch (err) {
+                toast(tr("common.error", { message: err.message }), true);
+            }
+        };
+
+        duoForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!chosen[0] || !chosen[1]) return;
+            const turns = Math.max(2, Math.min(Number(duoForm.elements.turns.max) || 40, Number(duoForm.elements.turns.value) || 12));
+            state = {
+                topic: duoForm.elements.topic.value.trim(),
+                goals: [duoForm.elements.goal_a.value.trim(), duoForm.elements.goal_b.value.trim()],
+                turns, lines: [], model: "", end: "", error: "", stopped: false,
+            };
+            markdown = "";
+            thread.replaceChildren();
+            report.hidden = true;
+            duo.querySelector("[data-duo-after]").hidden = true;
+            duo.querySelector("[data-duo-download]").hidden = true;
+            duo.querySelectorAll(".duo-checklist input").forEach((c) => { c.checked = false; });
+            duoForm.hidden = true;
+            run.hidden = false;
+            stopBtn.hidden = false;
+            run.scrollIntoView({ block: "start", behavior: "smooth" });
+
+            while (state.lines.length < state.turns && !state.stopped) {
+                const next = chosen[state.lines.length % 2];
+                status.textContent = tr("duo.writing", { name: next.dataset.name, n: state.lines.length + 1, total: state.turns });
+                try {
+                    const data = await post("/settings/duo/turn");
+                    if (state.stopped) break;
+                    state.model = data.model;
+                    state.lines.push({ speaker: data.speaker, text: data.text, ms: data.ms });
+                    addLine(data);
+                    if (data.ended) {
+                        state.end = data.end;
+                        break;
+                    }
+                } catch (err) {
+                    state.error = err.message;
+                    break;
+                }
+            }
+            await finish();
+        });
+
+        stopBtn.addEventListener("click", () => {
+            if (!state) return;
+            state.stopped = true;
+            stopBtn.hidden = true;
+            status.textContent = tr("duo.stopping");
+        });
+
+        duo.querySelector("[data-duo-download]")?.addEventListener("click", () => {
+            if (!markdown) return;
+            const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
+            const a = Object.assign(document.createElement("a"), {
+                href: url,
+                download: "essai-" + new Date().toISOString().slice(0, 16).replace(/[T:]/g, "-") + ".md",
+            });
+            document.body.append(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+
+        duo.querySelector("[data-duo-again]")?.addEventListener("click", () => {
+            run.hidden = true;
+            duoForm.hidden = false;
+            duoForm.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
+
+        paint();
+    }
+
     /* ------------------------------------------------- purge mémoire LM Studio */
     const purgeBtn = document.querySelector("[data-purge-lms]");
     if (purgeBtn) {

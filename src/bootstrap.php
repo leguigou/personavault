@@ -1391,6 +1391,7 @@ require_once __DIR__ . '/facts.php';
 require_once __DIR__ . '/relationships.php';
 require_once __DIR__ . '/backup.php';
 require_once __DIR__ . '/cards.php';
+require_once __DIR__ . '/duo.php';
 
 function render(string $view, array $data = []): void
 {

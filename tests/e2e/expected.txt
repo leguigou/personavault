@@ -96,5 +96,6 @@
 303 text/html  POST /p/smoke-test/delete
 200 application/zip  GET /backup/export.zip?conv=1
 303 text/html  POST /backup/import
+200 text/html  GET /settings/duo
 303 text/html  POST /logout
 303 text/html  GET / (après déconnexion)

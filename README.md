@@ -312,8 +312,10 @@ par le bouton « Vider le journal ».
 
 ### Essai de discussion entre deux personas
 
-Avant de développer les discussions de groupe, `bin/duo-test.php` fait parler deux personas de la
-bibliothèque entre eux, avec le vrai modèle, pour juger la qualité sur pièce :
+Avant de développer les discussions de groupe, **Réglages › Essai de discussion** (`/settings/duo`)
+fait parler deux personas de la bibliothèque entre eux, avec le vrai modèle, pour juger la qualité
+sur pièce. Le navigateur demande une réplique à la fois ; à la fin, la page affiche des indicateurs,
+une grille de lecture et propose le rapport en Markdown. Même moteur en ligne de commande :
 
 ```bash
 php bin/duo-test.php camille-lefebvre hugo-bernard --sujet="Partir vivre à la campagne" --tours=12 \
