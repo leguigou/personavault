@@ -131,13 +131,14 @@ if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|tick|report|de
         session_write_close();
         if ($action === 'control') {
             $op = (string) ($_POST['op'] ?? '');
+            $wasRunning = $s['status'] === 'running';
             $s = duo_control($duoId, $op);
             if (!$s) {
                 http_response_code(422);
                 echo json_encode(['ok' => false, 'error' => t('duo.error.action')], JSON_UNESCAPED_UNICODE);
                 exit;
             }
-            if ($s['status'] === 'running' && in_array($op, ['resume', 'extend'], true)) {
+            if (!$wasRunning && $s['status'] === 'running') { // relancée : un worker reprend l'échange
                 duo_session_update($duoId, ['heartbeat_at' => time()]);
                 duo_spawn($duoId);
             }

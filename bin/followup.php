@@ -162,7 +162,7 @@ foreach ($convs as $conv) {
     ) : [];
 
     $system = chat_system_prompt($persona, $prompts, $conv, $facts)
-        . "\n\n" . chat_time_context($conv, $history)
+        . "\n\n" . chat_time_context($conv, $history, true)
         . "\n\n" . str_replace(
             ['{persona}', '{gap}'],
             [(string) $persona['name'], chat_gap_duration($gap)],

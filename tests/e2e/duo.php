@@ -42,3 +42,26 @@ if (count($requests) !== 5 || !$alternates
     throw new RuntimeException("L'essai doit alterner les deux voix, chacune avec sa fiche, sans rien écrire dans les conversations.");
 }
 echo "OK : essai de discussion à deux voix, alterné, sans trace dans les conversations.\n";
+
+// Sauvegarde : les discussions entre personas, humeurs et ressentis font l'aller-retour.
+$session = $pdo->query("SELECT * FROM duo_sessions WHERE status = 'done' ORDER BY id LIMIT 1")->fetch();
+$bondBefore = $session ? $pdo->query('SELECT friendship FROM persona_bonds WHERE friendship <> 0 AND persona_id = ' . (int) $session['persona_a'])->fetch() : false;
+if (!$session || !$bondBefore) {
+    throw new RuntimeException('Le parcours doit laisser une discussion terminée et des ressentis à sauvegarder.');
+}
+$pdo->exec("UPDATE duo_sessions SET status = 'running' WHERE id = " . (int) $session['id']);
+$maxSession = (int) $pdo->query('SELECT MAX(id) FROM duo_sessions')->fetchColumn();
+$zip = backup_create_zip(true);
+$restored = backup_import_zip($zip['path']);
+@unlink($zip['path']);
+$copy = $pdo->prepare("SELECT s.*, (SELECT COUNT(*) FROM duo_lines l WHERE l.session_id = s.id AND l.kind = 'line') AS n
+                         FROM duo_sessions s WHERE s.id > ? AND s.topic = ? ORDER BY s.id LIMIT 1");
+$copy->execute([$maxSession, $session['topic']]);
+$copy = $copy->fetch();
+$bonds = $copy ? $pdo->query('SELECT friendship FROM persona_bonds WHERE persona_id = ' . (int) $copy['persona_a'])->fetchAll(PDO::FETCH_COLUMN) : [];
+$moods = $copy ? (int) $pdo->query('SELECT COUNT(*) FROM persona_moods WHERE persona_id IN (' . (int) $copy['persona_a'] . ', '
+    . (int) $copy['persona_b'] . ')')->fetchColumn() : 0;
+if ($restored['errors'] || !$copy || (int) $copy['n'] !== 5 || $copy['status'] !== 'paused' || !in_array((int) $bondBefore['friendship'], array_map('intval', $bonds), true) || $moods < 2) {
+    throw new RuntimeException('La sauvegarde doit restaurer discussions (en pause), humeurs et ressentis : ' . json_encode($restored['errors'], JSON_UNESCAPED_UNICODE));
+}
+echo "OK : discussions entre personas, humeurs et ressentis restaurés depuis une sauvegarde.\n";

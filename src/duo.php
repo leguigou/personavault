@@ -590,14 +590,22 @@ function duo_can_spawn(): bool
     return !in_array('exec', $disabled, true) && duo_php_cli() !== '';
 }
 
-/** Lance bin/duo-worker.php en arrière-plan pour cette discussion. */
+/**
+ * Lance bin/duo-worker.php en arrière-plan pour cette discussion.
+ * Le processus hériterait sinon des descripteurs du serveur web, dont le port d'écoute
+ * de `php -S` : un redémarrage du service échouerait (« adresse déjà utilisée ») tant
+ * qu'une discussion tourne. Le shell les ferme tous (au-delà de 0, 1, 2) avant de lancer
+ * PHP ; bash ferme aussi ceux au-delà de 9, que sh ne sait pas désigner.
+ */
 function duo_spawn(int $id): bool
 {
     if (!duo_can_spawn()) {
         return false;
     }
-    $cmd = 'nohup ' . escapeshellarg(duo_php_cli()) . ' ' . escapeshellarg(PV_ROOT . '/bin/duo-worker.php') . ' ' . $id
-        . ' > /dev/null 2>&1 &';
+    $shell = @is_executable('/bin/bash') ? '/bin/bash' : '/bin/sh';
+    $script = 'for f in /proc/$$/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done; '
+        . 'exec ' . escapeshellarg(duo_php_cli()) . ' ' . escapeshellarg(PV_ROOT . '/bin/duo-worker.php') . ' ' . $id;
+    $cmd = 'nohup ' . $shell . ' -c ' . escapeshellarg($script) . ' < /dev/null > /dev/null 2>&1 &';
     @exec($cmd, $out, $code);
     return $code === 0;
 }

@@ -328,7 +328,8 @@ bibliothèque entre eux :
   pas). Ils sont conservés (`persona_moods`, `persona_bonds`) et repris à la discussion suivante ;
   l'humeur et la colère retombent avec le temps. Si l'échange tourne en rond, l'analyse le relance ;
 - rien n'est ajouté aux conversations ; les appels apparaissent dans le journal (« Discussion entre personas »).
-  Les discussions, humeurs et ressentis ne sont pas encore inclus dans les sauvegardes ZIP.
+  Les discussions, humeurs et ressentis sont inclus dans les sauvegardes ZIP ; une discussion en cours
+  revient en pause à la restauration.
 
 Chaque persona parle avec sa fiche, son prompt système et sa consigne de jeu, sans rien sur
 l'utilisateur. Même moteur en ligne de commande, sans enregistrement (rapport dans `storage/duo-tests/`) :

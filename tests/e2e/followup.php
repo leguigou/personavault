@@ -92,8 +92,9 @@ $requests = $followupRequests();
 $system = json_decode($requests[1] ?? '[]', true, 512, JSON_THROW_ON_ERROR)[0]['content'] ?? '';
 $first = trim(preg_replace('/\s+/u', ' ', (string) $followup['content']));
 if (count($requests) !== 2 || $spontaneous() !== 2
-    || !str_contains($system, 'Tes derniers messages spontanés') || !str_contains($system, mb_substr($first, 0, 200))) {
-    throw new RuntimeException('La deuxième relance doit partir et rappeler la précédente pour éviter les redites.');
+    || !str_contains($system, 'Tes derniers messages spontanés') || !str_contains($system, mb_substr($first, 0, 200))
+    || !str_contains($system, 'Dernier sujet : « Je fête cette réussite à Lyon ! »')) {
+    throw new RuntimeException('La deuxième relance doit partir, rappeler la précédente et garder pour sujet le dernier vrai échange.');
 }
 echo "OK : la relance suivante voit les précédentes pour ne pas les répéter.\n";
 
