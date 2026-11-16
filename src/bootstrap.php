@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 15);
+define('PV_SCHEMA_VERSION', 16);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -233,6 +233,16 @@ function migrate(PDO $pdo): void
             add_column_if_missing($pdo, 'messages', 'reply_to_id', 'INTEGER NOT NULL DEFAULT 0');
             add_column_if_missing($pdo, 'messages', 'reply_to_bubble', 'INTEGER NOT NULL DEFAULT 0');
             add_column_if_missing($pdo, 'messages', 'reply_quote', "TEXT NOT NULL DEFAULT ''");
+        }
+        if ($version < 16) {
+            // messages écrits d'eux-mêmes par les personas (bin/followup.php) : compte des relances
+            // restées sans réponse et rappel des précédentes pour éviter les redites
+            add_column_if_missing($pdo, 'messages', 'spontaneous', 'INTEGER NOT NULL DEFAULT 0');
+            // seule la dernière relance de chaque conversation est repérable (heure enregistrée)
+            $pdo->exec("UPDATE messages SET spontaneous = 1 WHERE role = 'assistant' AND id IN (
+                SELECT MAX(m.id) FROM messages m JOIN conversations c ON c.id = m.conversation_id
+                 WHERE c.last_followup_at <> '' AND m.role = 'assistant' AND m.created_at = c.last_followup_at
+                 GROUP BY m.conversation_id)");
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);

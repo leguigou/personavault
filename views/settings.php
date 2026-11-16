@@ -420,6 +420,11 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
                     <input class="input" type="number" inputmode="numeric" name="chat_followup_min_gap_hours" min="1" max="168" step="1" value="<?= (int) setting('chat_followup_min_gap_hours', '12') ?>">
                     <small><?= e(t('settings.followup.gap_help')) ?></small>
                 </label>
+                <label class="field">
+                    <span><?= e(t('settings.followup.streak')) ?></span>
+                    <input class="input" type="number" inputmode="numeric" name="chat_followup_max_streak" min="1" max="5" step="1" value="<?= (int) setting('chat_followup_max_streak', '2') ?>">
+                    <small><?= e(t('settings.followup.streak_help')) ?></small>
+                </label>
                 <div class="field">
                     <span><?= e(t('settings.followup.hours')) ?></span>
                     <div class="hours-range">

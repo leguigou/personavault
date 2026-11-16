@@ -71,6 +71,8 @@ if ($hour < $from || $hour >= $to) {
 
 $idle   = max(1, (int) setting('chat_followup_idle_hours', '6'));
 $minGap = max(1, (int) setting('chat_followup_min_gap_hours', '12'));
+// relances d'affilée sans réponse de l'utilisateur : au-delà, on attend qu'il écrive
+$maxStreak = max(1, min(5, (int) setting('chat_followup_max_streak', '2')));
 
 $st = lms_status();
 if (!$st['reachable']) {
@@ -123,6 +125,16 @@ foreach ($convs as $conv) {
         }
     }
 
+    // sans réponse, les relances finiraient par se répondre à elles-mêmes : on s'arrête
+    $stmt = db()->prepare("SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND spontaneous = 1
+        AND id > (SELECT COALESCE(MAX(id), 0) FROM messages WHERE conversation_id = ? AND role = 'user')");
+    $stmt->execute([$cid, $cid]);
+    $streak = (int) $stmt->fetchColumn();
+    if ($streak >= $maxStreak) {
+        $verbose && $say("#{$cid} : {$streak} relance(s) déjà sans réponse (maximum {$maxStreak})");
+        continue;
+    }
+
     $stmt = db()->prepare('SELECT * FROM personas WHERE id = ?');
     $stmt->execute([(int) $conv['persona_id']]);
     $persona = $stmt->fetch();
@@ -147,7 +159,8 @@ foreach ($convs as $conv) {
             ['{persona}', '{gap}'],
             [(string) $persona['name'], chat_gap_duration($gap)],
             engine_prompt('followup')
-        );
+        )
+        . followup_no_repeat($cid);
 
     $messages = [['role' => 'system', 'content' => $system]];
     $lastUserMessage = '';
@@ -206,7 +219,7 @@ foreach ($convs as $conv) {
         $klipyUrl = chat_spontaneous_klipy($cid, $persona, $conv, $lastUserMessage, $text, modelConfig: $fuCfg);
         $pdo = db();
         $pdo->beginTransaction();
-        $ins = $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, klipy_url) VALUES (?, "assistant", ?, ?, ?)');
+        $ins = $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, klipy_url, spontaneous) VALUES (?, "assistant", ?, ?, ?, 1)');
         $ins->execute([$cid, $text, (string) ($res['model'] ?? ''), $klipyUrl]);
         $pdo->prepare('UPDATE conversations SET last_followup_at = datetime("now"), unread = 1, updated_at = datetime("now") WHERE id = ?')
             ->execute([$cid]);
@@ -227,3 +240,28 @@ foreach ($convs as $conv) {
 
 $beat('done', $sent);
 $say(plural($sent, 'relance', 'relances') . ($dry ? ($sent >= 2 ? ' simulées' : ' simulée') : ($sent >= 2 ? ' envoyées' : ' envoyée')));
+
+/**
+ * Rappel des dernières relances de la conversation, pour que la suivante ne les répète pas
+ * ('' s'il n'y en a pas encore).
+ */
+function followup_no_repeat(int $cid): string
+{
+    $stmt = db()->prepare("SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' AND spontaneous = 1
+                           ORDER BY id DESC LIMIT 3");
+    $stmt->execute([$cid]);
+    $previous = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $content) {
+        $content = trim(preg_replace('/\s+/u', ' ', (string) $content) ?? '');
+        if ($content !== '') {
+            $previous[] = '- « ' . mb_substr($content, 0, 200) . ' »';
+        }
+    }
+    if (!$previous) {
+        return '';
+    }
+    return "\n\nTes derniers messages spontanés dans cette conversation, du plus récent au plus ancien :\n"
+        . implode("\n", $previous)
+        . "\nN'en reprends ni le sujet ni les formulations. Parle d'autre chose, ou raconte une suite nouvelle "
+        . "de ce qui s'y passait.";
+}
