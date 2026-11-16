@@ -324,7 +324,8 @@ bibliothèque entre eux :
 - **consignes au maître du jeu** : secrètes, pour les deux personas ou un seul ; elles orientent les
   4 répliques suivantes ;
 - **humeurs et ressentis, comme dans les Sims** : toutes les 4 répliques, une analyse met à jour l'humeur
-  de chacun et ce qu'il ressent pour l'autre (amitié de -100 à 100, amour et colère de 0 à 100, par petits
+  de chacun, choisie dans une palette de 15 humeurs colorées à la manière des Sims (joie jaune, amour rose,
+  colère rouge, tristesse bleu foncé…) et précisée d'un mot, et ce qu'il ressent pour l'autre (amitié de -100 à 100, amour et colère de 0 à 100, par petits
   pas). Ils sont conservés (`persona_moods`, `persona_bonds`) et repris à la discussion suivante ;
   l'humeur et la colère retombent avec le temps. Si l'échange tourne en rond, l'analyse le relance ;
 - rien n'est ajouté aux conversations ; les appels apparaissent dans le journal (« Discussion entre personas »).

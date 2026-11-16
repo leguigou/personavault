@@ -4674,18 +4674,21 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 .duo-who { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .duo-who-1 { flex-direction: row-reverse; text-align: right; }
 .duo-who-avatar { width: 40px; height: 40px; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px rgba(var(--ink), .2); transition: box-shadow .3s; }
-.duo-who-avatar.is-positive { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #34d399; }
-.duo-who-avatar.is-negative { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #fb7185; }
+.duo-who-avatar.has-mood { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--mood, rgba(var(--ink), .2)); }
+/* pastille de couleur d'humeur (palette inspirée des Sims) */
+.duo-dot {
+    display: inline-block; flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--mood, #d4d4d8); box-shadow: 0 0 6px var(--mood, transparent); vertical-align: middle;
+}
 .duo-who-text { display: grid; gap: 3px; min-width: 0; }
 .duo-who-text strong { font-size: 13.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .duo-mood {
-    justify-self: start; max-width: 100%; padding: 2px 8px; border-radius: 999px; font-size: 11.5px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    background: rgba(var(--ink), .08); color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px; justify-self: start; max-width: 100%;
+    padding: 2px 9px 2px 7px; border-radius: 999px; font-size: 11.5px; overflow: hidden; white-space: nowrap;
+    border: 1px solid color-mix(in srgb, var(--mood, #d4d4d8) 45%, transparent);
+    background: color-mix(in srgb, var(--mood, #d4d4d8) 16%, transparent); color: var(--text);
 }
 .duo-who-1 .duo-mood { justify-self: end; }
-.duo-mood.is-positive { background: rgba(52, 211, 153, .15); color: #6ee7b7; }
-.duo-mood.is-negative { background: rgba(251, 113, 133, .15); color: #fda4af; }
 .duo-bar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .duo-status { margin: 0; flex: 1 1 160px; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
 .duo-actions { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -4737,13 +4740,17 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 }
 .duo-note-direction { color: rgb(var(--acc-pale)); background: rgba(var(--acc), .1); border: 1px dashed rgba(var(--acc), .4); }
 .duo-note-event { color: #fcd34d; background: rgba(251, 191, 36, .08); border: 1px dashed rgba(251, 191, 36, .32); }
-html[data-mode="light"] :is(.duo-badge.is-running, .duo-mood.is-positive) { color: #065f46; }
+.duo-note-mood { display: inline-flex; align-items: center; gap: 7px; border: 1px solid color-mix(in srgb, var(--mood, #d4d4d8) 35%, transparent); }
+.duo-legend { display: grid; gap: 6px; }
+.duo-legend-list { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+.duo-legend-list li { display: inline-flex; align-items: center; gap: 6px; }
+html[data-mode="light"] .duo-badge.is-running { color: #065f46; }
 html[data-mode="light"] .duo-badge.is-paused, html[data-mode="light"] .duo-note-event { color: #92400e; }
-html[data-mode="light"] .duo-mood.is-negative, html[data-mode="light"] .duo-actions .duo-stop { color: #be123c; }
+html[data-mode="light"] .duo-actions .duo-stop { color: #be123c; }
 @media (prefers-color-scheme: light) {
-    html[data-mode="auto"] :is(.duo-badge.is-running, .duo-mood.is-positive) { color: #065f46; }
+    html[data-mode="auto"] .duo-badge.is-running { color: #065f46; }
     html[data-mode="auto"] .duo-badge.is-paused, html[data-mode="auto"] .duo-note-event { color: #92400e; }
-    html[data-mode="auto"] .duo-mood.is-negative, html[data-mode="auto"] .duo-actions .duo-stop { color: #be123c; }
+    html[data-mode="auto"] .duo-actions .duo-stop { color: #be123c; }
 }
 @media (max-width: 420px) {
     .duo-slots { grid-template-columns: minmax(0, 1fr); }

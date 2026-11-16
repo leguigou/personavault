@@ -5613,6 +5613,15 @@
                         : tr("duo.note_direction", { text: line.text }))
                     : line.kind === "event" ? tr("duo.note_event", { text: line.text })
                         : tr("duo.note_mood", { name: names[line.speaker] || "", mood: line.text });
+                if (line.kind === "mood" && line.color) {
+                    // pastille de la couleur de l'humeur, comme au-dessus de la tête des Sims
+                    li.style.setProperty("--mood", line.color);
+                    const dot = document.createElement("span");
+                    dot.className = "duo-dot";
+                    dot.setAttribute("aria-hidden", "true");
+                    li.prepend(dot);
+                    li.title = line.label || "";
+                }
             }
             return li;
         };
@@ -5650,10 +5659,17 @@
 
             // humeurs et ressentis
             (st.people || []).forEach((p, w) => {
+                // humeur de la palette (couleur à la manière des Sims) + mot qui la précise
                 const mood = live.querySelector(`[data-duo-mood="${w}"]`);
+                const who = mood.closest(".duo-who");
+                who.style.setProperty("--mood", p.mood.color || "");
                 mood.className = "duo-mood " + toneOf(p.mood.tone);
-                mood.textContent = p.mood.mood ? p.mood.mood : tr("duo.mood_neutral");
-                live.querySelector(`[data-duo-avatar-of="${w}"]`).className = "duo-avatar duo-who-avatar " + toneOf(p.mood.tone);
+                const dot = document.createElement("span");
+                dot.className = "duo-dot";
+                dot.setAttribute("aria-hidden", "true");
+                mood.replaceChildren(dot, document.createTextNode(p.mood.mood || p.mood.label || tr("duo.mood_neutral")));
+                mood.title = p.mood.label || "";
+                live.querySelector(`[data-duo-avatar-of="${w}"]`).className = "duo-avatar duo-who-avatar has-mood";
                 const values = { friendship: p.bond.friendship, love: p.bond.love, anger: p.bond.anger };
                 Object.entries(values).forEach(([k, v]) => {
                     const g = live.querySelector(`[data-duo-gauge="${w}-${k}"]`);

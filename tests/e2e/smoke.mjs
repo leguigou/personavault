@@ -814,12 +814,16 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const spoken = done.lines.filter((l) => l.kind === 'line');
     expect(done.status === 'done' && spoken.length === 5 && spoken.every((l, i) => l.speaker === i % 2),
         'le serveur mène seul la discussion jusqu’au bout, les deux voix en alternance');
+    expect(done.people[0].mood.emotion === 'joie' && done.people[0].mood.color === '#facc15' && done.people[1].mood.emotion === 'colere'
+        && done.lines.some((l) => l.kind === 'mood' && l.emotion === 'colere' && l.color === '#ef4444' && l.text === 'vexé'),
+        'chaque humeur reçoit sa couleur de la palette, à la manière des Sims');
     expect(done.lines.some((l) => l.kind === 'mood' && l.text === 'joyeuse') && done.lines.some((l) => l.kind === 'event')
         && done.people[0].mood.mood === 'joyeuse' && done.people[0].bond.friendship === 20 && done.people[1].bond.anger === 12,
         'le maître du jeu met à jour humeurs et ressentis (variations bornées) et relance un échange qui piétine');
     const logs = await (await http('/settings/logs')).text();
     expect(logs.includes('Défendre la ville') && logs.includes('tu discutes par messagerie avec Camille Lefebvre')
-        && logs.includes('Un orage éclate dehors.') && logs.includes('Ton humeur en ce moment'),
+        && logs.includes('Un orage éclate dehors.') && logs.includes('Ton humeur en ce moment : joie')
+        && logs.includes('gene (gêne)'),
         'chaque voix reçoit la consigne, son objectif, la relance et son humeur');
     const report = await http(`/settings/duo/${sid}/report`);
     const md = await report.text();

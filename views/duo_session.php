@@ -78,6 +78,14 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
                     <p class="duo-feel-reason" data-duo-reason="<?= $w ?>"></p>
                 </div>
             <?php endforeach; ?>
+            <div class="duo-legend">
+                <p class="duo-feel-title"><?= e(t('duo.legend')) ?></p>
+                <ul class="duo-legend-list">
+                    <?php foreach (duo_emotions() as $key => $emotion): ?>
+                        <li><span class="duo-dot" style="--mood: <?= e($emotion['color']) ?>" aria-hidden="true"></span><?= e(duo_emotion_label($key)) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
             <p class="hint"><?= e(t('duo.feelings.help')) ?></p>
         </div>
 

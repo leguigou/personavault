@@ -235,12 +235,13 @@ function backup_restore_duo(PDO $pdo, array $data, array $personaIds): void
     $pid = static fn (mixed $id): int => (int) ($personaIds[backup_id($id)] ?? 0);
     $int = static fn (mixed $v, int $min, int $max): int => max($min, min($max, is_numeric($v) ? (int) $v : 0));
 
-    $mood = $pdo->prepare('INSERT INTO persona_moods (persona_id, mood, intensity, tone, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING');
+    $mood = $pdo->prepare('INSERT INTO persona_moods (persona_id, mood, emotion, intensity, tone, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+                           ON CONFLICT DO NOTHING');
     foreach ((array) ($data['persona_moods'] ?? []) as $row) {
         if (is_array($row) && ($id = $pid($row['persona_id'] ?? null))) {
             $tone = in_array($row['tone'] ?? '', ['positive', 'neutre', 'negative'], true) ? $row['tone'] : 'neutre';
-            $mood->execute([$id, mb_substr(backup_str($row['mood'] ?? ''), 0, 40), $int($row['intensity'] ?? 0, 0, 100), $tone,
-                $int($row['updated_at'] ?? 0, 0, PHP_INT_MAX)]);
+            $mood->execute([$id, mb_substr(backup_str($row['mood'] ?? ''), 0, 40), duo_emotion_key(backup_str($row['emotion'] ?? ''), $tone),
+                $int($row['intensity'] ?? 0, 0, 100), $tone, $int($row['updated_at'] ?? 0, 0, PHP_INT_MAX)]);
         }
     }
     $bond = $pdo->prepare('INSERT INTO persona_bonds (persona_id, other_id, friendship, love, anger, reason, updated_at)

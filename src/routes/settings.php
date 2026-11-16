@@ -95,7 +95,8 @@ if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|tick|report|de
             $mood = duo_mood($pid);
             $bond = duo_bond($pid, $oid);
             $feelings[] = t('duo.feelings.line', [
-                'name' => $pn[$w], 'other' => $pn[1 - $w], 'mood' => $mood['mood'] !== '' ? $mood['mood'] : t('duo.mood.neutral'),
+                'name' => $pn[$w], 'other' => $pn[1 - $w],
+                'mood' => $mood['label'] . ($mood['mood'] !== '' ? ' (' . $mood['mood'] . ')' : ''),
                 'friendship' => $bond['friendship'], 'love' => $bond['love'], 'anger' => $bond['anger'],
             ]);
         }
