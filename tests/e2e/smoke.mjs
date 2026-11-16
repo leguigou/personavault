@@ -778,7 +778,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const afterDelete = await (await http(path + '/messages')).json();
     expect(afterDelete.messages.some((message) => message.reply_to?.text === saved?.text), 'la citation reste lisible après suppression de la source');
 }
-// --- essai de discussion à deux : page, une réplique à la fois, rapport ; rien dans les conversations
+// --- discussions entre personas : menées en arrière-plan, humeurs et ressentis persistants
 {
     const page = await http('/settings/duo');
     const html = await page.text();
@@ -788,24 +788,67 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(a && b && html.includes('/media/'), 'la page liste les personas avec leur avatar');
     const chats = async () => ((await (await http('/chat')).text()).match(/href="\/chat\/\d+"/g) || []).length;
     const before = await chats();
-    const ask = async (u, form) => http(u, { method: 'POST', form: { _token: csrf, a, b, topic: 'La campagne', ...form } });
-    const duoLines = [];
-    for (let i = 0; i < 3; i++) {
-        const r = await ask('/settings/duo/turn', { goal_b: 'Défendre la ville', lines: JSON.stringify(duoLines) });
-        const d = await r.json();
-        expect(r.status === 200 && d.ok && d.speaker === i % 2 && d.text !== '', 'la réplique ' + (i + 1) + ' alterne les deux voix');
-        duoLines.push({ text: d.text, ms: d.ms });
-    }
+    const create = async (form) => http('/settings/duo', { method: 'POST', form: { _token: csrf, a, b, topic: 'La campagne', ...form } });
+    const sessionId = async (r) => ((r.headers.get('location') || '').match(/\/settings\/duo\/(\d+)$/) || [])[1];
+    const state = async (sid, after = 0) => (await http(`/settings/duo/${sid}/state?after=${after}`)).json();
+    const until = async (sid, ok, ms = 30000) => {
+        const end = Date.now() + ms;
+        let st = await state(sid);
+        while (!ok(st) && Date.now() < end) {
+            await new Promise((r) => setTimeout(r, 300));
+            st = await state(sid);
+        }
+        return st;
+    };
+    const control = async (sid, op) => (await http(`/settings/duo/${sid}/control`, { method: 'POST', form: { _token: csrf, op } })).json();
+
+    // une discussion complète, menée par le serveur sans que la page la demande
+    const created = await create({ goal_b: 'Défendre la ville', turns: '5' });
+    const sid = await sessionId(created);
+    expect(created.status === 303 && sid, 'la discussion est créée et ouvre sa page');
+    const livePage = await http('/settings/duo/' + sid);
+    const liveHtml = await livePage.text();
+    await record('GET /settings/duo/{id}', { status: livePage.status, headers: livePage.headers, text: async () => liveHtml });
+    expect(liveHtml.includes('data-duo-bar') && liveHtml.includes('data-duo-op="pause"'), 'la page a sa barre de commandes');
+    const done = await until(sid, (st) => st.status === 'done');
+    const spoken = done.lines.filter((l) => l.kind === 'line');
+    expect(done.status === 'done' && spoken.length === 5 && spoken.every((l, i) => l.speaker === i % 2),
+        'le serveur mène seul la discussion jusqu’au bout, les deux voix en alternance');
+    expect(done.lines.some((l) => l.kind === 'mood' && l.text === 'joyeuse') && done.lines.some((l) => l.kind === 'event')
+        && done.people[0].mood.mood === 'joyeuse' && done.people[0].bond.friendship === 20 && done.people[1].bond.anger === 12,
+        'le maître du jeu met à jour humeurs et ressentis (variations bornées) et relance un échange qui piétine');
     const logs = await (await http('/settings/logs')).text();
-    expect(logs.includes('Défendre la ville') && logs.includes('tu discutes par messagerie avec Camille Lefebvre'),
-        'chaque voix reçoit la consigne de l’échange et son objectif');
-    const rep = await (await ask('/settings/duo/report', { lines: JSON.stringify(duoLines), turns: '3', model: 'test' })).json();
-    expect(rep.ok && rep.markdown.includes('**Hugo Bernard** : ') && rep.metrics.per[0].lines === 2 && rep.metrics.per[1].lines === 1,
-        'le rapport reprend l’échange et ses indicateurs');
-    const same = await ask('/settings/duo/turn', { b: a });
-    const forged = await http('/settings/duo/turn', { method: 'POST', form: { _token: 'mauvais', a, b } });
-    expect(same.status === 422 && forged.status === 419, 'deux personas différents et un jeton valide sont exigés');
-    expect(await chats() === before, 'l’essai n’ajoute rien aux conversations');
+    expect(logs.includes('Défendre la ville') && logs.includes('tu discutes par messagerie avec Camille Lefebvre')
+        && logs.includes('Un orage éclate dehors.') && logs.includes('Ton humeur en ce moment'),
+        'chaque voix reçoit la consigne, son objectif, la relance et son humeur');
+    const report = await http(`/settings/duo/${sid}/report`);
+    const md = await report.text();
+    expect(report.status === 200 && md.includes('**Hugo Bernard** : ') && md.includes('joyeuse'), 'le rapport reprend l’échange et les ressentis');
+
+    // une nouvelle discussion entre les mêmes personas reprend humeurs et ressentis
+    const again = await sessionId(await create({ turns: '40' }));
+    const paused = await control(again, 'pause');
+    expect(paused.status === 'paused' && paused.people[0].bond.friendship === 20, 'la discussion se met en pause ; les ressentis sont repris');
+    const dir = await (await http(`/settings/duo/${again}/direction`, { method: 'POST', form: { _token: csrf, text: 'Hugo devient jaloux', target: '1' } })).json();
+    expect(dir.ok && dir.lines.some((l) => l.kind === 'direction' && l.speaker === 1), 'la consigne au maître du jeu est enregistrée');
+    const extended = await control(again, 'extend');
+    expect(extended.target === 50 && extended.status === 'paused', 'la discussion peut être prolongée');
+    await control(again, 'resume');
+    const resumed = await until(again, (st) => st.count >= 2);
+    expect(resumed.count >= 2, 'la reprise relance la discussion');
+    const logs2 = await (await http('/settings/logs')).text();
+    expect(logs2.includes('Hugo devient jaloux'), 'la consigne arrive dans la consigne du persona visé');
+    const stopped = await control(again, 'stop');
+    expect(stopped.status === 'stopped', 'la discussion peut être arrêtée');
+    const list = await (await http('/settings/duo')).text();
+    expect(list.includes(`href="/settings/duo/${again}"`), 'les discussions sont listées');
+
+    const same = await create({ b: a });
+    const forged = await http(`/settings/duo/${sid}/control`, { method: 'POST', form: { _token: 'mauvais', op: 'pause' } });
+    expect(same.headers.get('location') === '/settings/duo' && forged.status === 419, 'deux personas différents et un jeton valide sont exigés');
+    expect(await chats() === before, 'les discussions entre personas n’ajoutent rien aux conversations');
+    const del = await http(`/settings/duo/${again}/delete`, { method: 'POST', form: { _token: csrf } });
+    expect(del.status === 303 && (await http('/settings/duo/' + again)).status === 404, 'une discussion peut être supprimée');
 }
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));

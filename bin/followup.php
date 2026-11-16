@@ -53,6 +53,14 @@ $beat = static function (string $reason, int $sent = 0) use ($dry): void {
     set_setting('followup_last_result', json_encode(['reason' => $reason, 'sent' => $sent]));
 };
 
+// discussions entre personas en cours dont le processus s'est arrêté (serveur redémarré…)
+try {
+    $revived = duo_revive_stale();
+    $revived && $say(plural($revived, 'discussion entre personas relancée', 'discussions entre personas relancées'));
+} catch (Throwable $e) {
+    $say('relance des discussions entre personas impossible : ' . $e->getMessage());
+}
+
 if (setting('chat_followup_enabled', '1') !== '1') {
     $verbose && $say('relances spontanées désactivées');
     $beat('disabled');

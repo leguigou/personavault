@@ -36,7 +36,7 @@ if (count($requests) !== 5 || !$alternates
     || substr_count($report, '**Camille Lefebvre** : ') !== 3 || substr_count($report, '**Hugo Bernard** : ') !== 2
     || !str_contains($requests[0][0]['content'] ?? '', 'Tu es Camille.')
     || !str_contains($requests[0][0]['content'] ?? '', 'tu discutes par messagerie avec Hugo Bernard')
-    || !str_contains($second, 'Ce que tu veux dans cet échange : Défendre la ville')
+    || !str_contains($second, 'Ton objectif dans cet échange') || !str_contains($second, 'Défendre la ville')
     || str_contains($second, 'Tu es Camille.') || str_contains($second, 'interlocuteur')
     || (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() !== $messagesBefore) {
     throw new RuntimeException("L'essai doit alterner les deux voix, chacune avec sa fiche, sans rien écrire dans les conversations.");

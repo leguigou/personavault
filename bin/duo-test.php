@@ -9,7 +9,7 @@
  *
  * Options :
  *   --sujet="…"         sujet de départ (défaut : discussion libre)
- *   --tours=12          nombre total de répliques, 2 à 40 (défaut 12)
+ *   --tours=12          nombre total de répliques, 2 à 200 (défaut 12)
  *   --objectif-a="…"    ce que veut le premier persona dans l'échange (facultatif)
  *   --objectif-b="…"    ce que veut le second persona (facultatif)
  *   --modele=…          modèle à utiliser (défaut : celui déjà chargé dans LM Studio,

@@ -97,5 +97,6 @@
 200 application/zip  GET /backup/export.zip?conv=1
 303 text/html  POST /backup/import
 200 text/html  GET /settings/duo
+200 text/html  GET /settings/duo/{id}
 303 text/html  POST /logout
 303 text/html  GET / (après déconnexion)
