@@ -39,7 +39,7 @@ return [
     'duo.feelings.towards'     => '{name} hacia {other}',
     'duo.feelings.title'       => 'Sentimientos al final',
     'duo.feelings.line'        => '{name}: humor {mood}; hacia {other}: amistad {friendship}, amor {love}, enfado {anger}',
-    'duo.feelings.help'        => 'El director de juego los actualiza cada 4 réplicas y se conservan para las próximas conversaciones. El humor y el enfado se calman con el tiempo.',
+    'duo.feelings.help'        => 'Las barras parten del centro: hacia la derecha en positivo, hacia la izquierda en negativo. El director de juego las actualiza cada 4 réplicas y se conservan para las próximas conversaciones; el humor y el enfado se calman con el tiempo.',
     'duo.gauge.friendship'     => 'Amistad',
     'duo.gauge.love'           => 'Amor',
     'duo.gauge.anger'          => 'Enfado',

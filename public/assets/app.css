@@ -4707,13 +4707,17 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 .duo-gauge { display: grid; grid-template-columns: 64px minmax(0, 1fr) 38px; align-items: center; gap: 8px; font-size: 12px; }
 .duo-gauge-label { color: var(--muted); }
 .duo-gauge-value { text-align: right; font-variant-numeric: tabular-nums; }
-.duo-gauge-track { position: relative; height: 8px; border-radius: 8px; background: rgba(var(--ink), .08); overflow: hidden; }
-.duo-gauge-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: 8px; transition: width .5s, left .5s; }
-.duo-gauge-friendship .duo-gauge-track::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(var(--ink), .25); }
-.duo-gauge-friendship .duo-gauge-fill { background: #34d399; }
-.duo-gauge-friendship.is-negative .duo-gauge-fill { background: #94a3b8; }
-.duo-gauge-love .duo-gauge-fill { background: #f472b6; }
-.duo-gauge-anger .duo-gauge-fill { background: #fb923c; }
+.duo-gauge-track { position: relative; height: 8px; border-radius: 8px; background: rgba(var(--ink), .08); }
+/* barres à la Sims : le milieu vaut 0, la barre se remplit vers la droite en positif
+   et vers la gauche en négatif ; couleur prise dans la palette des humeurs (--fill) */
+.duo-gauge-track { height: 10px; }
+.duo-gauge-track::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: rgba(var(--ink), .35); }
+.duo-gauge-fill {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 0; background: var(--fill, rgba(var(--ink), .3));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--fill, transparent) 55%, transparent);
+    border-radius: 0 8px 8px 0; transition: width .5s, left .5s, background-color .5s;
+}
+.duo-gauge.is-negative .duo-gauge-fill { border-radius: 8px 0 0 8px; }
 .duo-mj-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .duo-mj-row .input[name="text"] { flex: 1 1 200px; min-width: 0; }
 .duo-mj-target { flex: 0 1 150px; min-width: 0; }

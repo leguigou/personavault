@@ -39,7 +39,7 @@ return [
     'duo.feelings.towards'     => '{name} towards {other}',
     'duo.feelings.title'       => 'Feelings at the end',
     'duo.feelings.line'        => '{name}: mood {mood}; towards {other}: friendship {friendship}, love {love}, anger {anger}',
-    'duo.feelings.help'        => 'Updated by the game master every 4 lines and kept for the next conversations. Mood and anger fade over time.',
+    'duo.feelings.help'        => 'Bars start from the middle: to the right when positive, to the left when negative. Updated by the game master every 4 lines and kept for the next conversations; mood and anger fade over time.',
     'duo.gauge.friendship'     => 'Friendship',
     'duo.gauge.love'           => 'Love',
     'duo.gauge.anger'          => 'Anger',

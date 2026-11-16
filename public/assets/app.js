@@ -5578,6 +5578,7 @@
     if (live) {
         const id = live.dataset.id;
         const names = JSON.parse(live.dataset.names || "[]");
+        const gaugeColors = JSON.parse(live.dataset.gaugeColors || "{}");
         const thread = live.querySelector("[data-duo-thread]");
         const statusEl = live.querySelector("[data-duo-status]");
         let state = JSON.parse(live.querySelector("[data-duo-initial]")?.textContent || "{}");
@@ -5675,16 +5676,15 @@
                     const g = live.querySelector(`[data-duo-gauge="${w}-${k}"]`);
                     if (!g) return;
                     g.querySelector(".duo-gauge-track").setAttribute("aria-valuenow", String(v));
+                    // barre « à la Sims » : part du milieu, vers la droite en positif, vers la
+                    // gauche en négatif, dans la couleur de la palette des humeurs
                     const fill = g.querySelector(".duo-gauge-fill");
-                    if (k === "friendship") {
-                        fill.style.left = v >= 0 ? "50%" : (50 + v / 2) + "%";
-                        fill.style.width = Math.abs(v) / 2 + "%";
-                        g.classList.toggle("is-negative", v < 0);
-                    } else {
-                        fill.style.left = "0";
-                        fill.style.width = v + "%";
-                    }
-                    g.querySelector(".duo-gauge-value").textContent = (k === "friendship" && v > 0 ? "+" : "") + v;
+                    const colors = gaugeColors[k] || {};
+                    fill.style.left = v >= 0 ? "50%" : (50 + v / 2) + "%";
+                    fill.style.width = Math.abs(v) / 2 + "%";
+                    fill.style.setProperty("--fill", (v >= 0 ? colors.pos : colors.neg) || "");
+                    g.classList.toggle("is-negative", v < 0);
+                    g.querySelector(".duo-gauge-value").textContent = (v > 0 ? "+" : "") + v;
                 });
                 live.querySelector(`[data-duo-reason="${w}"]`).textContent = p.bond.reason || "";
             });

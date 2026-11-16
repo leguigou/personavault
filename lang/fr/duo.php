@@ -39,7 +39,7 @@ return [
     'duo.feelings.towards'     => '{name} envers {other}',
     'duo.feelings.title'       => 'Ressentis à la fin',
     'duo.feelings.line'        => '{name} : humeur {mood} ; envers {other} : amitié {friendship}, amour {love}, colère {anger}',
-    'duo.feelings.help'        => 'Mis à jour par le maître du jeu toutes les 4 répliques, et conservés pour les prochaines discussions. L’humeur et la colère retombent avec le temps.',
+    'duo.feelings.help'        => 'Les barres partent du milieu : vers la droite en positif, vers la gauche en négatif. Mises à jour par le maître du jeu toutes les 4 répliques et conservées pour les prochaines discussions ; l’humeur et la colère retombent avec le temps.',
     'duo.gauge.friendship'     => 'Amitié',
     'duo.gauge.love'           => 'Amour',
     'duo.gauge.anger'          => 'Colère',

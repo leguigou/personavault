@@ -65,3 +65,14 @@ if ($restored['errors'] || !$copy || (int) $copy['n'] !== 5 || $copy['status'] !
     throw new RuntimeException('La sauvegarde doit restaurer discussions (en pause), humeurs et ressentis : ' . json_encode($restored['errors'], JSON_UNESCAPED_UNICODE));
 }
 echo "OK : discussions entre personas, humeurs et ressentis restaurés depuis une sauvegarde.\n";
+
+// Ressentis : l'amour peut devenir négatif (rejet), borné à -100, et se dit en mots.
+$ids = $pdo->query("SELECT id FROM personas WHERE slug IN ('ines-morel', 'hugo-bernard') ORDER BY slug")->fetchAll(PDO::FETCH_COLUMN);
+$pdo->prepare('DELETE FROM persona_bonds WHERE persona_id = ? AND other_id = ?')->execute([$ids[0], $ids[1]]);
+duo_bond_apply((int) $ids[0], (int) $ids[1], ['amour' => -25], 'Il la trouve froide');
+$bond = duo_bond_apply((int) $ids[0], (int) $ids[1], ['amour' => -8, 'amitie' => 4], '');
+$text = duo_feelings_text(duo_mood((int) $ids[0]), $bond, 'Inès');
+if ($bond['love'] !== -18 || $bond['friendship'] !== 4 || !str_contains($text, 'pas du tout attiré') || duo_gauge_colors()['love']['neg'] === '') {
+    throw new RuntimeException('L’amour doit pouvoir devenir négatif (rejet), par pas bornés, et être transmis en mots.');
+}
+echo "OK : ressentis de -100 à 100 (rejet compris), transmis en mots.\n";

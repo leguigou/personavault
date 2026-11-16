@@ -252,7 +252,7 @@ function backup_restore_duo(PDO $pdo, array $data, array $personaIds): void
         }
         [$a, $b] = [$pid($row['persona_id'] ?? null), $pid($row['other_id'] ?? null)];
         if ($a && $b && $a !== $b) {
-            $bond->execute([$a, $b, $int($row['friendship'] ?? 0, -100, 100), $int($row['love'] ?? 0, 0, 100),
+            $bond->execute([$a, $b, $int($row['friendship'] ?? 0, -100, 100), $int($row['love'] ?? 0, -100, 100),
                 $int($row['anger'] ?? 0, 0, 100), mb_substr(backup_str($row['reason'] ?? ''), 0, 200), $int($row['updated_at'] ?? 0, 0, PHP_INT_MAX)]);
         }
     }
