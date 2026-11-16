@@ -554,20 +554,20 @@ function duo_step(int $id): string
         }
         duo_line_add($id, 'line', $turn['speaker'], $turn['text'], $turn['ms']);
         $count = count($lines) + 1;
-        $fields = ['writing' => -1, 'heartbeat_at' => time(), 'next_at' => time() + random_int(DUO_PAUSE_MIN, DUO_PAUSE_MAX)];
-        $finished = false;
-        if ($turn['ended']) {
-            $fields += ['status' => 'done', 'end_reason' => t('duo.end.closed', ['name' => $speakers[$turn['speaker']]['persona']['name']])];
-            $finished = true;
-        } elseif ($count >= (int) $now['target']) {
-            $fields += ['status' => 'done', 'end_reason' => t('duo.end.target')];
-            $finished = true;
-        }
-        duo_session_update($id, $fields);
+        duo_session_update($id, ['writing' => -1, 'heartbeat_at' => time(), 'next_at' => time() + random_int(DUO_PAUSE_MIN, DUO_PAUSE_MAX)]);
+        $endReason = $turn['ended'] ? t('duo.end.closed', ['name' => $speakers[$turn['speaker']]['persona']['name']])
+            : ($count >= (int) $now['target'] ? t('duo.end.target') : '');
+        $finished = $endReason !== '';
 
         if ($count - (int) $now['analyzed'] >= DUO_ANALYZE_EVERY || ($finished && $count > (int) $now['analyzed'])) {
             duo_analyze($id, $speakers, $cfg, !$finished);
             duo_session_update($id, ['analyzed' => $count, 'heartbeat_at' => time()]);
+        }
+        // « terminée » seulement après la dernière analyse (humeurs et ressentis à jour),
+        // et seulement si la discussion n'a pas été mise en pause ou arrêtée entre-temps
+        if ($finished) {
+            db()->prepare("UPDATE duo_sessions SET status = 'done', end_reason = ?, writing = -1, updated_at = datetime('now')
+                           WHERE id = ? AND status = 'running'")->execute([$endReason, $id]);
         }
         return 'wrote';
     } finally {

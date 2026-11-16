@@ -219,6 +219,11 @@ http.createServer(async (req, res) => {
             text = 'Je ne peux pas vérifier les horaires cette fois-ci.';
         } else {
             text = assist(system, String(j.messages?.[1]?.content ?? '')) ?? reply(system);
+            // analyse du maître du jeu volontairement lente, comme sur un vrai modèle : la page
+            // ne doit pas voir une discussion « terminée » avant que ses ressentis soient à jour
+            if (system.includes("maître du jeu d'une discussion entre deux personnages")) {
+                await new Promise((r) => setTimeout(r, 1200));
+            }
         }
         const usage = { prompt_tokens: 100, completion_tokens: 20 };
         if (j.stream) {
