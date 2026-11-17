@@ -29,6 +29,9 @@ $config = [
     // Import de sauvegarde ZIP
     'zip_max_entries'    => 5000,              // nombre d'entrées max
     'zip_max_entry_size' => 40 * 1024 * 1024,  // taille décompressée max par entrée
+    // humeur et ressentis des personas dans les conversations : analyse en arrière-plan toutes les
+    // 4 réponses environ (false : aucune analyse automatique ; les réglages à la main restent possibles)
+    'feelings_background' => true,
     'zip_max_total'      => 2 * 1024 * 1024 * 1024, // taille décompressée totale max
 
     // Assistant de création : quand on demande un personnage existant (livre, film, série…),

@@ -439,6 +439,12 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     fclose($chatLock);
+    // humeur et ressentis : analyse en arrière-plan toutes les FEEL_EVERY réponses (src/feelings.php) ;
+    // si le serveur ne peut pas lancer de processus, la page la demande elle-même
+    if (feel_due($cid)) {
+        $out['feelings_pending'] = true;
+        $out['feelings_drive'] = !feel_spawn($cid);
+    }
     $sse($out);
     if ($relationshipPending && function_exists('fastcgi_finish_request')) {
         fastcgi_finish_request();

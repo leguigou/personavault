@@ -4792,6 +4792,19 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 .duo-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(var(--acc), .5); }
 .duo-gauge-intensity .duo-gauge-track::after { display: none; }
 .duo-gauge-intensity .duo-gauge-fill { border-radius: 8px; }
+
+/* conversation : humeur du persona (en-tête) et ressentis envers l'utilisateur (panneau) */
+.chat-mood {
+    display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; padding: 1px 8px 1px 6px; border-radius: 999px;
+    vertical-align: middle; font-size: 11px; font-weight: 500; white-space: nowrap;
+    border: 1px solid color-mix(in srgb, var(--mood, #d4d4d8) 45%, transparent);
+    background: color-mix(in srgb, var(--mood, #d4d4d8) 16%, transparent); color: var(--text);
+}
+.chat-mood .duo-dot { width: 7px; height: 7px; }
+.chat-avatar.has-mood { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--mood); transition: box-shadow .3s; }
+.feel-box { display: grid; gap: 10px; }
+.duo-gauge.is-off { opacity: .45; }
+.duo-gauge.is-off .duo-slider { cursor: not-allowed; }
 html[data-mode="light"] .duo-badge.is-running { color: #065f46; }
 html[data-mode="light"] .duo-badge.is-paused, html[data-mode="light"] .duo-note-event { color: #92400e; }
 html[data-mode="light"] .duo-note-scene { color: #155e75; }

@@ -5364,6 +5364,7 @@
                                 finalReply = evt.reply || null;
                                 finishReason = evt.finish_reason || "";
                                 if (evt.relationship_pending) scheduleRelationship(300000);
+                                if (evt.feelings_pending) window.dispatchEvent(new CustomEvent("pv:feelings-pending", { detail: { drive: !!evt.feelings_drive } }));
                                 finalNotice = evt.notice || null;
                                 mediaNotice = evt.media_notice || "";
                                 if (evt.user_reaction) paintUserReaction(evt.user_reaction);
@@ -5877,6 +5878,148 @@
         window.scrollTo({ top: document.documentElement.scrollHeight });
         schedule();
         if (state.drive) poll();
+    }
+
+    /* ------------------------------ conversation : humeur et ressentis du persona */
+    /* Humeur (palette des humeurs) et ressentis envers l'utilisateur, propres à la conversation :
+       pastille et anneau dans l'en-tête, barres « à la Sims » réglables dans le panneau.
+       Après une réponse, si une analyse est due, on suit son résultat ; les changements
+       d'humeur et les réglages apparaissent en notes dans le fil. */
+    const feel = document.querySelector("[data-feel]");
+    if (feel) {
+        const url = feel.dataset.url;
+        const colors = JSON.parse(feel.dataset.gaugeColors || "{}");
+        const scroll = document.querySelector("[data-scroll]");
+        const head = document.querySelector(".chat-head");
+        let fstate = null;
+        let lastNotice = Math.max(0, ...[...document.querySelectorAll(".msg-notice[data-msg-id]")].map((n) => Number(n.dataset.msgId) || 0));
+        let followUntil = 0;
+        let timer = 0;
+
+        const paintGauge = (g, k, v, moodColor) => {
+            const fill = g.querySelector(".duo-gauge-fill");
+            if (k === "intensity") {
+                fill.style.left = "0";
+                fill.style.width = v + "%";
+                fill.style.setProperty("--fill", moodColor || "");
+                g.style.setProperty("--thumb", moodColor || "");
+                g.querySelector(".duo-gauge-value").textContent = String(v);
+                return;
+            }
+            const c = colors[k] || {};
+            fill.style.left = v >= 0 ? "50%" : (50 + v / 2) + "%";
+            fill.style.width = Math.abs(v) / 2 + "%";
+            fill.style.setProperty("--fill", (v >= 0 ? c.pos : c.neg) || "");
+            g.style.setProperty("--thumb", (v >= 0 ? c.pos : c.neg) || "");
+            g.classList.toggle("is-negative", v < 0);
+            g.querySelector(".duo-gauge-value").textContent = (v > 0 ? "+" : "") + v;
+        };
+
+        const paint = (st) => {
+            fstate = st;
+            const f = st.feelings;
+            // en-tête : pastille et anneau de l'humeur
+            const pill = head?.querySelector("[data-chat-mood]");
+            if (pill) {
+                pill.hidden = !(f.intensity > 0 && f.emotion !== "neutre");
+                pill.style.setProperty("--mood", f.color);
+                pill.querySelector("[data-chat-mood-text]").textContent = f.mood || f.label;
+                pill.title = f.label;
+            }
+            const avatar = head?.querySelector(".chat-avatar");
+            if (avatar) {
+                avatar.style.setProperty("--mood", f.color);
+                avatar.classList.toggle("has-mood", f.intensity > 0 && f.emotion !== "neutre");
+            }
+            // panneau : humeur, intensité, ressentis envers l'utilisateur
+            feel.querySelector("[data-feel-mood-label]").textContent = f.label;
+            feel.querySelectorAll("[data-feel-emotion]").forEach((b) => {
+                b.setAttribute("aria-checked", b.dataset.feelEmotion === f.emotion && f.intensity > 0 ? "true" : "false");
+            });
+            ["intensity", "friendship", "love", "anger"].forEach((k) => {
+                const g = feel.querySelector(`[data-feel-gauge="${k}"]`);
+                const slider = g?.querySelector(".duo-slider");
+                if (!g || (slider && (slider.dataset.dragging || document.activeElement === slider))) return;
+                slider.value = String(f[k]);
+                paintGauge(g, k, f[k], f.color);
+            });
+            feel.querySelector("[data-feel-reason]").textContent = f.reason || "";
+            // notes du fil : changements d'humeur, réglages
+            (st.notices || []).forEach((n) => {
+                if (n.id <= lastNotice || !scroll) return;
+                const div = document.createElement("div");
+                div.className = "msg-notice";
+                div.dataset.msgId = String(n.id);
+                div.textContent = n.text;
+                scroll.appendChild(div);
+                lastNotice = n.id;
+            });
+        };
+
+        const load = async () => {
+            try {
+                const res = await fetch(`${url}?after=${lastNotice}`, { cache: "no-store", headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await res.json();
+                if (data.ok) paint(data);
+            } catch (e) {
+                // réseau coupé : on réessaiera
+            }
+        };
+
+        const post = async (path, form) => {
+            const fd = new FormData();
+            fd.append("_token", feel.dataset.token);
+            fd.append("after", String(lastNotice));
+            Object.entries(form).forEach(([k, v]) => fd.append(k, String(v)));
+            const res = await fetch(path, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
+            const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
+            if (!res.ok || !data.ok) throw new Error(data.error || tr("duo.failed"));
+            paint(data);
+            return data;
+        };
+
+        // suivi de l'analyse lancée après une réponse (ou menée par la page si le serveur ne peut pas)
+        const follow = () => {
+            clearTimeout(timer);
+            if (Date.now() > followUntil) return;
+            timer = setTimeout(async () => {
+                await load();
+                if (fstate?.pending) follow();
+            }, 3000);
+        };
+        window.addEventListener("pv:feelings-pending", async (e) => {
+            if (e.detail?.drive) {
+                try { await post(url + "-analyze", {}); } catch (err) { /* sans effet : nouvel essai à la prochaine réponse */ }
+                return;
+            }
+            followUntil = Date.now() + 120000;
+            follow();
+        });
+
+        const save = async (values) => {
+            try {
+                await post(url, values);
+                toast(tr("feel.saved"));
+            } catch (err) {
+                toast(tr("common.error", { message: err.message }), true);
+            }
+        };
+        feel.querySelectorAll("[data-feel-slider]").forEach((slider) => {
+            const g = slider.closest("[data-feel-gauge]");
+            slider.addEventListener("pointerdown", () => { slider.dataset.dragging = "1"; });
+            slider.addEventListener("input", () => paintGauge(g, slider.dataset.feelSlider, Number(slider.value), fstate?.feelings?.color));
+            slider.addEventListener("change", async () => {
+                delete slider.dataset.dragging;
+                await save({ [slider.dataset.feelSlider]: slider.value });
+                slider.blur();
+            });
+        });
+        feel.querySelectorAll("[data-feel-emotion]").forEach((b) => b.addEventListener("click", () => {
+            const current = fstate?.feelings?.intensity || 0;
+            save({ emotion: b.dataset.feelEmotion, intensity: current > 0 ? current : 60 });
+        }));
+
+        load();
     }
 
     /* ------------------------------------------------- purge mémoire LM Studio */

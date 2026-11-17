@@ -30,6 +30,7 @@ function llm_log_purposes(): array
         'title'     => t('logs.purpose.title'),
         'followup'  => t('logs.purpose.followup'),
         'duo'       => t('logs.purpose.duo'),
+        'feelings'  => t('logs.purpose.feelings'),
         'opening'   => t('logs.purpose.opening'),
         'relationship' => t('logs.purpose.relationship'),
         'ai_prompt' => t('logs.purpose.ai_prompt'),

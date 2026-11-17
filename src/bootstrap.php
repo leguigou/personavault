@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 19);
+define('PV_SCHEMA_VERSION', 20);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -255,6 +255,16 @@ function migrate(PDO $pdo): void
             // discussions entre personas : lieu et situation du moment, dernière consigne appliquée
             add_column_if_missing($pdo, 'duo_sessions', 'scene', "TEXT NOT NULL DEFAULT ''");
             add_column_if_missing($pdo, 'duo_sessions', 'directed', 'INTEGER NOT NULL DEFAULT 0');
+        }
+        if ($version < 20) {
+            // humeur et ressentis du persona dans chaque conversation avec l'utilisateur (src/feelings.php)
+            $pdo->exec("CREATE TABLE IF NOT EXISTS conversation_feelings (
+                conversation_id INTEGER PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+                emotion TEXT NOT NULL DEFAULT '', mood TEXT NOT NULL DEFAULT '', intensity INTEGER NOT NULL DEFAULT 0,
+                mood_at INTEGER NOT NULL DEFAULT 0, friendship INTEGER NOT NULL DEFAULT 0, love INTEGER NOT NULL DEFAULT 0,
+                anger INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', bond_at INTEGER NOT NULL DEFAULT 0,
+                analyzed_id INTEGER NOT NULL DEFAULT 0
+            )");
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -1459,6 +1469,7 @@ require_once __DIR__ . '/relationships.php';
 require_once __DIR__ . '/backup.php';
 require_once __DIR__ . '/cards.php';
 require_once __DIR__ . '/duo.php';
+require_once __DIR__ . '/feelings.php';
 
 function render(string $view, array $data = []): void
 {

@@ -874,6 +874,21 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const del = await http(`/settings/duo/${again}/delete`, { method: 'POST', form: { _token: csrf } });
     expect(del.status === 303 && (await http('/settings/duo/' + again)).status === 404, 'une discussion peut être supprimée');
 }
+// --- conversation : humeur et ressentis du persona, réglables
+{
+    const page = await (await http('/chat/1')).text();
+    expect(page.includes('data-feel ') && page.includes('data-chat-mood'), 'la conversation affiche l’humeur et les ressentis');
+    const set = await (await http('/chat/1/feelings', { method: 'POST', form: { _token: csrf, emotion: 'colere', intensity: '80', love: '40' } })).json();
+    expect(set.ok && set.feelings.emotion === 'colere' && set.feelings.intensity === 80 && set.feelings.love === 40
+        && set.notices.some((n) => n.text.includes('40')), 'humeur et ressentis se règlent à la main, avec une note dans le fil');
+    const sent = await (await http('/chat/1/stream', { method: 'POST', form: { _token: csrf, message: 'Tu boudes ?' } })).text();
+    const logs = await (await http('/settings/logs')).text();
+    expect(sent.includes('"done"') && logs.includes('Ton humeur et tes sentiments dans cette conversation')
+        && logs.includes('colère (forte)') && logs.includes('tu ressens une vraie attirance'),
+        'l’humeur et les ressentis réglés arrivent dans le contexte de la réponse suivante');
+    const forged = await http('/chat/1/feelings', { method: 'POST', form: { _token: 'mauvais', emotion: 'joie' } });
+    expect(forged.status === 419, 'un jeton valide est exigé pour régler les ressentis');
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

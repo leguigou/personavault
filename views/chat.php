@@ -78,7 +78,10 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                     <?php endif; ?>
                 </div>
                 <div class="chat-id-text">
-                    <strong><?= e((string) $persona['name']) ?></strong>
+                    <strong><?= e((string) $persona['name']) ?>
+                        <!-- humeur du persona dans cette conversation (palette des humeurs) -->
+                        <span class="chat-mood" data-chat-mood hidden><span class="duo-dot" aria-hidden="true"></span><span data-chat-mood-text></span></span>
+                    </strong>
                     <span class="chat-model">
                         <i class="model-dot" data-model-dot data-state="idle" title="<?= e(t('chat.head.model_state')) ?>"></i>
                         <span data-model-name><?= e($model !== '' ? $model : t('chat.head.model_default')) ?></span>
@@ -344,6 +347,43 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <span><?= e(t('chat.sheet.ctx_tokens', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?></span>
                 <span data-threshold="<?= e($fmt((float) chat_memory_threshold())) ?>"><?= e(t('js.chat.ctx_auto_summary', ['n' => (int) $memory['compressions'], 'threshold' => $fmt((float) chat_memory_threshold())])) ?></span>
             </div>
+        </section>
+
+        <!-- humeur et ressentis du persona dans cette conversation (src/feelings.php) -->
+        <?php $feelRomance = !feel_persona_minor($persona); ?>
+        <section data-sheet-group="memory" class="feel-box" data-feel data-url="/chat/<?= (int) $conv['id'] ?>/feelings"
+                 data-token="<?= e($token) ?>" data-gauge-colors="<?= e(json_encode(duo_gauge_colors())) ?>">
+            <div class="mem-head"><h3><?= e(t('feel.title')) ?></h3></div>
+            <p class="duo-feel-title"><?= e(t('duo.feelings.mood_of', ['name' => (string) $persona['name']])) ?> :
+                <span class="duo-feel-mood" data-feel-mood-label></span></p>
+            <div class="duo-emotions" role="radiogroup" aria-label="<?= e(t('duo.feelings.mood_of', ['name' => (string) $persona['name']])) ?>">
+                <?php foreach (duo_emotions() as $key => $emotion): ?>
+                    <button type="button" class="duo-emotion" role="radio" aria-checked="false" style="--mood: <?= e($emotion['color']) ?>"
+                            data-feel-emotion="<?= e($key) ?>" title="<?= e(duo_emotion_label($key)) ?>" aria-label="<?= e(duo_emotion_label($key)) ?>"></button>
+                <?php endforeach; ?>
+            </div>
+            <?php
+            $feelGauges = ['intensity' => t('duo.gauge.intensity'), 'friendship' => t('duo.gauge.friendship'),
+                'love' => t('duo.gauge.love'), 'anger' => t('duo.gauge.anger')];
+            foreach ($feelGauges as $k => $label):
+                $min = $k === 'friendship' || $k === 'love' ? -100 : 0;
+                $off = $k === 'love' && !$feelRomance;
+            ?>
+                <?php if ($k === 'friendship'): ?>
+                    <p class="duo-feel-title"><?= e(t('feel.towards_you', ['name' => (string) $persona['name']])) ?></p>
+                <?php endif; ?>
+                <div class="duo-gauge duo-gauge-<?= $k ?><?= $off ? ' is-off' : '' ?>" data-feel-gauge="<?= $k ?>">
+                    <span class="duo-gauge-label"><?= e($label) ?></span>
+                    <span class="duo-gauge-track">
+                        <span class="duo-gauge-fill"></span>
+                        <input class="duo-slider" type="range" min="<?= $min ?>" max="100" step="1" value="0" data-feel-slider="<?= $k ?>"
+                               aria-label="<?= e($label) ?>"<?= $off ? ' disabled' : '' ?>>
+                    </span>
+                    <span class="duo-gauge-value">0</span>
+                </div>
+            <?php endforeach; ?>
+            <p class="duo-feel-reason" data-feel-reason></p>
+            <p class="hint"><?= e($feelRomance ? t('feel.help') : t('feel.help_minor')) ?></p>
         </section>
 
         <!-- modèle de CETTE conversation (pour tester), sans toucher au persona -->
