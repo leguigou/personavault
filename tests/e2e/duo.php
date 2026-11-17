@@ -37,7 +37,7 @@ $second = $requests[1][0]['content'] ?? '';
 $last = end($requests);
 $lastUser = (string) (end($last)['content'] ?? '');
 if (count($requests) !== 8 || !$alternates
-    || !str_contains($lastUser, '[Maître du jeu : ta réplique précédente commençait par « Réponse de test ». Commence autrement.]')
+    || !str_contains($lastUser, '[Maître du jeu : ta réplique précédente commençait par « Réponse de test » et finissait par « pour avoir du texte. ». Commence et termine autrement.]')
     || substr_count($report, '**Camille Lefebvre** : ') !== 3 || substr_count($report, '**Hugo Bernard** : ') !== 2
     || !str_contains($requests[0][0]['content'] ?? '', 'Tu es Camille.')
     || !str_contains($requests[0][0]['content'] ?? '', 'Tu échanges avec Hugo Bernard')

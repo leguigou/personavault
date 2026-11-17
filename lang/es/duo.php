@@ -72,7 +72,7 @@ return [
     'duo.metrics.agreements'   => 'Aprobaciones',
     'duo.metrics.time'         => 'Tiempo medio',
     'duo.metrics.voice'        => 'Vocabulario común a ambas voces: {n} % (cuanto más alto, más se parecen las dos personas).',
-    'duo.metrics.help'         => '«Ideas repetidas»: réplicas que comparten muchas palabras con una de las 4 anteriores de la misma persona. «Inicios repetidos»: réplicas que empiezan como la anterior. «Aprobaciones»: «tienes razón», «de acuerdo», «exacto»…',
+    'duo.metrics.help'         => '«Ideas repetidas»: réplicas que comparten muchas palabras con una de las 4 anteriores de la misma persona. «Inicios repetidos»: réplicas que empiezan como la anterior. «Aprobaciones»: «tienes razón», «de acuerdo», «exacto»… «Inicios / finales repetidos»: réplicas que empiezan o terminan como la anterior de la misma persona.',
     'duo.check.title'          => 'Guía de lectura',
     'duo.check.voices'         => 'Las dos voces se reconocen sin leer los nombres',
     'duo.check.disagree'       => 'Hay desacuerdos reales, no solo aprobaciones',
@@ -139,4 +139,5 @@ return [
     'js.duo.scene_now' => 'Escena: {text}',
     'js.duo.both' => 'Las dos',
     'js.duo.direction_remove' => 'Quitar',
+    'duo.metrics.closings' => 'Finales repetidos',
 ];
