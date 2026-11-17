@@ -1015,12 +1015,18 @@ function duo_can_spawn(): bool
  */
 function duo_spawn(int $id): bool
 {
+    return pv_spawn_script('bin/duo-worker.php', $id);
+}
+
+/** Lance un script de bin/ en arrière-plan avec un identifiant (même précautions que duo_spawn). */
+function pv_spawn_script(string $script, int $id): bool
+{
     if (!duo_can_spawn()) {
         return false;
     }
     $shell = @is_executable('/bin/bash') ? '/bin/bash' : '/bin/sh';
     $script = 'for f in /proc/$$/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done; '
-        . 'exec ' . escapeshellarg(duo_php_cli()) . ' ' . escapeshellarg(PV_ROOT . '/bin/duo-worker.php') . ' ' . $id;
+        . 'exec ' . escapeshellarg(duo_php_cli()) . ' ' . escapeshellarg(PV_ROOT . '/' . $script) . ' ' . $id;
     $cmd = 'nohup ' . $shell . ' -c ' . escapeshellarg($script) . ' < /dev/null > /dev/null 2>&1 &';
     @exec($cmd, $out, $code);
     return $code === 0;

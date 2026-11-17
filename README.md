@@ -310,6 +310,17 @@ et ce qui revient (réponse ou erreur), avec la durée et les tokens. La clé d'
 enregistrée ; les photos sont remplacées par leur taille. Table `llm_logs` (migration v6), vidée
 par le bouton « Vider le journal ».
 
+### Humeur et ressentis dans les conversations
+
+Dans chaque conversation, le persona a sa propre humeur (palette de 15 humeurs colorées) et ce qu'il
+ressent pour l'utilisateur (amitié et amour de -100 à 100, colère de 0 à 100), sans influence des autres
+conversations. Une analyse les met à jour toutes les 4 réponses environ (`bin/feelings.php`, lancé en
+arrière-plan ; `'feelings_background' => false` dans `config.local.php` la désactive) ; ils sont transmis
+dans le bloc de contexte de chaque réponse avec un comportement concret. L'en-tête de la conversation
+montre l'humeur (pastille et anneau), le panneau « Contexte et mémoire » permet de tout régler à la main ;
+changements d'humeur et réglages sont notés dans le fil. Une fiche qui indique moins de 18 ans n'a pas de
+sentiment amoureux envers l'utilisateur.
+
 ### Discussions entre personas
 
 **Réglages › Discussions entre personas** (`/settings/duo`) fait parler deux personas de la

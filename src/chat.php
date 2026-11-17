@@ -1897,7 +1897,9 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     }
     $memoryRoom = min($limits['memory'] - $summaryCost, $contextRoom - chat_estimate_tokens($time));
     $memory = chat_fit_text(implode("\n\n", $context), $memoryRoom);
-    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $replyContext, $memory, $web]))) . "\n</contexte>";
+    // humeur et ressentis du persona dans cette conversation (src/feelings.php)
+    $feelings = (int) ($conv['id'] ?? 0) > 0 ? feel_context((int) $conv['id'], $persona) : '';
+    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $feelings, $replyContext, $memory, $web]))) . "\n</contexte>";
 
     $text = $contextBlock . "\n\n" . $text;
     $used = chat_estimate_tokens($system) + chat_estimate_tokens($text);

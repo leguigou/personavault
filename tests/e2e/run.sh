@@ -42,6 +42,8 @@ return [
     'chat_web_search_key' => 'test-search-key',
     'chat_web_search_url' => 'http://127.0.0.1:$LLM_PORT/web/search',
     'chat_web_lmstudio_mcp' => getenv('PV_E2E_LMS_MCP') ? ['id' => 'mcp/test-search', 'tool' => 'web_search'] : [],
+    // humeur et ressentis : pas d'analyse en arrière-plan pendant le parcours (tests/e2e/feelings.php l'appelle directement)
+    'feelings_background' => false,
 ];
 PHP
 mkdir -p "$WORK/storage/uploads"
@@ -73,6 +75,7 @@ if [ "$SMOKE" -ne 0 ]; then
 fi
 php "$HERE/followup.php" "$WORK"
 php "$HERE/duo.php" "$WORK"
+php "$HERE/feelings.php" "$WORK"
 
 # statut + type de contenu + libellé (sans l'empreinte)
 statuses() { awk '{ $3 = ""; print }' "$1"; }

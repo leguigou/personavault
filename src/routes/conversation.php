@@ -41,5 +41,6 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+(?:\.(?:txt|md))?))?$#', $path, $m)) {
     require __DIR__ . '/conversation/memory.php';
     require __DIR__ . '/conversation/manage.php';
     require __DIR__ . '/conversation/export.php';
+    require __DIR__ . '/conversation/feelings.php';
     require __DIR__ . '/conversation/messages.php';
 }

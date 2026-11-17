@@ -7,6 +7,7 @@ function backup_add_conversations(ZipArchive $zip, string $root, array &$stats):
     $pdo = db();
     $messages = $pdo->prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id');
     $versions = $pdo->prepare('SELECT * FROM reply_versions WHERE conversation_id = ? ORDER BY id');
+    $feelings = $pdo->prepare('SELECT * FROM conversation_feelings WHERE conversation_id = ?');
     $conversations = $pdo->query('SELECT * FROM conversations ORDER BY id')->fetchAll();
     $media = [];
     foreach ($conversations as &$conversation) {
@@ -14,6 +15,9 @@ function backup_add_conversations(ZipArchive $zip, string $root, array &$stats):
         $conversation['messages'] = $messages->fetchAll();
         $versions->execute([$conversation['id']]);
         $conversation['reply_versions'] = $versions->fetchAll();
+        // humeur et ressentis du persona dans cette conversation (src/feelings.php)
+        $feelings->execute([$conversation['id']]);
+        $conversation['feelings'] = $feelings->fetch() ?: null;
 
         foreach ($conversation['messages'] as $message) {
             $image = (string) $message['image'];
@@ -403,6 +407,18 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 $messageIds[backup_id($conversation['facts_cursor'] ?? null)] ?? 0,
                 $cid,
             ]);
+            if (is_array($conversation['feelings'] ?? null)) {
+                $f = $conversation['feelings'];
+                $int = static fn (mixed $v, int $min, int $max): int => max($min, min($max, is_numeric($v) ? (int) $v : 0));
+                backup_insert_row($pdo, 'conversation_feelings', [
+                    'conversation_id' => $cid, 'emotion' => duo_emotion_key(backup_str($f['emotion'] ?? '')),
+                    'mood' => mb_substr(backup_str($f['mood'] ?? ''), 0, 40), 'intensity' => $int($f['intensity'] ?? 0, 0, 100),
+                    'mood_at' => $int($f['mood_at'] ?? 0, 0, PHP_INT_MAX), 'friendship' => $int($f['friendship'] ?? 0, -100, 100),
+                    'love' => $int($f['love'] ?? 0, -100, 100), 'anger' => $int($f['anger'] ?? 0, 0, 100),
+                    'reason' => mb_substr(backup_str($f['reason'] ?? ''), 0, 200), 'bond_at' => $int($f['bond_at'] ?? 0, 0, PHP_INT_MAX),
+                    'analyzed_id' => $messageIds[backup_id($f['analyzed_id'] ?? null)] ?? 0,
+                ]);
+            }
             return ['id' => $cid, 'persona_id' => $personaId, 'messages' => $assistantIds];
         });
     } catch (Throwable $e) {

@@ -49,6 +49,9 @@ const reply = (sys) => {
             story: [{ content: 'Camille prépare une exposition à Lyon', category: 'projet', source: 2 }] });
     }
     if (/titre très court/i.test(sys)) return 'Voyage en train';
+    if (/ressent pour l'utilisateur/.test(sys)) {
+        return JSON.stringify({ emotion: 'gene', mot: 'troublée', intensite: 55, amitie: 6, amour: 25, colere: 0, raison: 'Elle a apprécié le compliment' });
+    }
     if (/maître du jeu d'une discussion entre deux personnages/.test(sys)) {
         return JSON.stringify({ scene: 'Dans un café du centre-ville, un samedi soir', humeur_a: { emotion: 'joie', mot: 'joyeuse', intensite: 60 },
             humeur_b: { emotion: 'colere', mot: 'vexé', intensite: 40 },
