@@ -823,7 +823,8 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const logs = await (await http('/settings/logs')).text();
     expect(logs.includes('Défendre la ville') && logs.includes('Tu échanges avec Camille Lefebvre')
         && logs.includes('[Maître du jeu : Un orage éclate dehors.]') && logs.includes('Ton humeur en ce moment : joie')
-        && logs.includes('Lieu et situation en ce moment : Dans un café du centre-ville') && logs.includes('Commence autrement')
+        && logs.includes('Lieu et situation en ce moment : Dans un café du centre-ville') && logs.includes('Commence et termine autrement') && logs.includes('Agis : si vous avez décidé')
+        && logs.includes('ne lui donne jamais le prénom ou le surnom')
         && logs.includes('gene (gêne)'),
         'chaque voix reçoit la consigne, son objectif, la relance et son humeur');
     expect(done.scene === 'Dans un café du centre-ville, un samedi soir' && done.lines.some((l) => l.kind === 'scene')

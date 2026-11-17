@@ -72,7 +72,7 @@ return [
     'duo.metrics.agreements'   => 'Agreements',
     'duo.metrics.time'         => 'Average time',
     'duo.metrics.voice'        => 'Vocabulary shared by both voices: {n} % (the higher, the more alike the two personas sound).',
-    'duo.metrics.help'         => '“Reused ideas”: lines sharing many words with one of the same persona’s 4 previous lines. “Repeated openings”: lines starting like the previous one. “Agreements”: “you’re right”, “I agree”, “exactly”…',
+    'duo.metrics.help'         => '“Reused ideas”: lines sharing many words with one of the same persona’s 4 previous lines. “Repeated openings”: lines starting like the previous one. “Agreements”: “you’re right”, “I agree”, “exactly”… “Repeated openings / endings”: lines starting or ending like the same persona’s previous one.',
     'duo.check.title'          => 'Reading checklist',
     'duo.check.voices'         => 'Both voices stay recognisable without reading the names',
     'duo.check.disagree'       => 'There are real disagreements, not just approval',
@@ -139,4 +139,5 @@ return [
     'js.duo.scene_now' => 'Scene: {text}',
     'js.duo.both' => 'Both',
     'js.duo.direction_remove' => 'Remove',
+    'duo.metrics.closings' => 'Repeated endings',
 ];

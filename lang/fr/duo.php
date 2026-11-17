@@ -72,7 +72,7 @@ return [
     'duo.metrics.agreements'   => 'Approbations',
     'duo.metrics.time'         => 'Temps moyen',
     'duo.metrics.voice'        => 'Vocabulaire commun aux deux voix : {n} % (plus c’est haut, plus les deux personas parlent pareil).',
-    'duo.metrics.help'         => '« Idées reprises » : répliques qui partagent beaucoup de mots avec l’une des 4 précédentes du même persona. « Débuts répétés » : répliques qui commencent comme la précédente. « Approbations » : « tu as raison », « d’accord », « exactement »…',
+    'duo.metrics.help'         => '« Idées reprises » : répliques qui partagent beaucoup de mots avec l’une des 4 précédentes du même persona. « Débuts répétés » : répliques qui commencent comme la précédente. « Approbations » : « tu as raison », « d’accord », « exactement »… « Débuts / fins répétés » : répliques qui commencent ou finissent comme la précédente du même persona.',
     'duo.check.title'          => 'Grille de lecture',
     'duo.check.voices'         => 'Les deux voix restent reconnaissables sans lire les noms',
     'duo.check.disagree'       => 'Il y a de vrais désaccords, pas seulement des approbations',
@@ -139,4 +139,5 @@ return [
     'js.duo.scene_now' => 'Scène : {text}',
     'js.duo.both' => 'Les deux',
     'js.duo.direction_remove' => 'Retirer',
+    'duo.metrics.closings' => 'Fins répétées',
 ];
