@@ -50,7 +50,7 @@ const reply = (sys) => {
     }
     if (/titre très court/i.test(sys)) return 'Voyage en train';
     if (/maître du jeu d'une discussion entre deux personnages/.test(sys)) {
-        return JSON.stringify({ humeur_a: { emotion: 'joie', mot: 'joyeuse', intensite: 60 },
+        return JSON.stringify({ scene: 'Dans un café du centre-ville, un samedi soir', humeur_a: { emotion: 'joie', mot: 'joyeuse', intensite: 60 },
             humeur_b: { emotion: 'colere', mot: 'vexé', intensite: 40 },
             lien_a_b: { amitie: 25, amour: 4, colere: 0, raison: 'Ils rient ensemble' },
             lien_b_a: { amitie: -3, amour: 0, colere: 6, raison: 'Il se sent moqué' }, avance: false, relance: 'Un orage éclate dehors.' });
@@ -219,6 +219,11 @@ http.createServer(async (req, res) => {
             text = 'Je ne peux pas vérifier les horaires cette fois-ci.';
         } else {
             text = assist(system, String(j.messages?.[1]?.content ?? '')) ?? reply(system);
+            // analyse du maître du jeu volontairement lente, comme sur un vrai modèle : la page
+            // ne doit pas voir une discussion « terminée » avant que ses ressentis soient à jour
+            if (system.includes("maître du jeu d'une discussion entre deux personnages")) {
+                await new Promise((r) => setTimeout(r, 1200));
+            }
         }
         const usage = { prompt_tokens: 100, completion_tokens: 20 };
         if (j.stream) {

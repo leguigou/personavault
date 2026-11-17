@@ -97,6 +97,10 @@ $statusLabel = static fn (string $st): string => match ($st) {
         <p class="hint" data-duo-nomatch hidden><?= e(t('duo.no_match')) ?></p>
 
         <label class="field">
+            <span><?= e(t('duo.scene')) ?></span>
+            <input class="input" name="scene" maxlength="300" placeholder="<?= e(t('duo.scene_placeholder')) ?>">
+        </label>
+        <label class="field">
             <span><?= e(t('duo.topic')) ?></span>
             <input class="input" name="topic" maxlength="300" placeholder="<?= e(t('duo.topic_placeholder')) ?>">
         </label>

@@ -5613,7 +5613,9 @@
                     ? (line.speaker >= 0 ? tr("duo.note_direction_to", { name: names[line.speaker] || "", text: line.text })
                         : tr("duo.note_direction", { text: line.text }))
                     : line.kind === "event" ? tr("duo.note_event", { text: line.text })
-                        : tr("duo.note_mood", { name: names[line.speaker] || "", mood: line.text });
+                        : line.kind === "scene" ? tr("duo.note_scene", { text: line.text })
+                            : line.kind === "clear" ? (line.speaker >= 0 ? tr("duo.note_clear_to", { name: names[line.speaker] || "" }) : tr("duo.note_clear"))
+                                : tr("duo.note_mood", { name: names[line.speaker] || "", mood: line.text });
                 if (line.kind === "mood" && line.color) {
                     // pastille de la couleur de l'humeur, comme au-dessus de la tête des Sims
                     li.style.setProperty("--mood", line.color);
@@ -5688,6 +5690,33 @@
                 });
                 live.querySelector(`[data-duo-reason="${w}"]`).textContent = p.bond.reason || "";
             });
+
+            // lieu et situation du moment, consignes actives (retirables)
+            const scene = live.querySelector("[data-duo-scene]");
+            if (scene) scene.textContent = st.scene ? tr("duo.scene_now", { text: st.scene }) : "";
+            const dirList = live.querySelector("[data-duo-directions]");
+            if (dirList) {
+                dirList.replaceChildren(...(st.directions || []).map((d) => {
+                    const li = document.createElement("li");
+                    const label = document.createElement("span");
+                    label.textContent = (d.target >= 0 ? names[d.target] : tr("duo.both")) + " : " + d.text;
+                    const remove = document.createElement("button");
+                    remove.type = "button";
+                    remove.className = "btn btn-ghost btn-sm";
+                    remove.textContent = tr("duo.direction_remove");
+                    remove.addEventListener("click", async () => {
+                        remove.disabled = true;
+                        try {
+                            apply(await post("direction-clear", { target: d.target }));
+                        } catch (err) {
+                            toast(tr("common.error", { message: err.message }), true);
+                            remove.disabled = false;
+                        }
+                    });
+                    li.append(label, remove);
+                    return li;
+                }));
+            }
 
             // statut et boutons
             const text = {

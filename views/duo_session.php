@@ -56,6 +56,8 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
             </div>
         </div>
 
+        <p class="duo-scene" data-duo-scene></p>
+
         <div class="duo-bar-tabs">
             <button type="button" class="duo-tab" data-duo-toggle="feelings" aria-expanded="false" aria-controls="duo-feelings-<?= $id ?>"><?= e(t('duo.tab.feelings')) ?></button>
             <button type="button" class="duo-tab" data-duo-toggle="mj" aria-expanded="false" aria-controls="duo-mj-<?= $id ?>"><?= e(t('duo.tab.mj')) ?></button>
@@ -103,6 +105,7 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
                 <button class="btn btn-primary btn-sm" type="submit"><?= e(t('duo.mj.send')) ?></button>
             </div>
             <p class="hint"><?= e(t('duo.mj.help')) ?></p>
+            <ul class="duo-directions" data-duo-directions aria-label="<?= e(t('duo.mj.active')) ?>"></ul>
         </form>
     </div>
 

@@ -321,13 +321,18 @@ bibliothèque entre eux :
   Si le serveur interdit les commandes système (`exec`), la page mène l'échange tant qu'elle est ouverte ;
 - **barre fixe** en haut de la page : humeurs, avancement, Pause / Reprendre / +10 répliques / Arrêter,
   ressentis, consigne au maître du jeu, rapport ; points animés pendant qu'un persona écrit ;
-- **consignes au maître du jeu** : secrètes, pour les deux personas ou un seul ; elles orientent les
-  4 répliques suivantes ;
+- **consignes au maître du jeu** : secrètes, pour les deux personas ou un seul ; actives jusqu'à ce
+  qu'on les remplace ou les retire. Elles sont placées dans le dernier message envoyé au modèle, juste
+  avant la réplique à écrire (c'est là qu'il les écoute), et le maître du jeu les applique aussitôt à la scène ;
+- **scène** : lieu et situation du moment (« par messages » par défaut, ou précisés à la création),
+  mis à jour par le maître du jeu quand une consigne ou l'échange les font changer ;
 - **humeurs et ressentis, comme dans les Sims** : toutes les 4 répliques, une analyse met à jour l'humeur
   de chacun, choisie dans une palette de 15 humeurs colorées à la manière des Sims (joie jaune, amour rose,
   colère rouge, tristesse bleu foncé…) et précisée d'un mot, et ce qu'il ressent pour l'autre (amitié et amour de -100 à 100, colère de 0 à 100, par petits
   pas). Ils sont conservés (`persona_moods`, `persona_bonds`) et repris à la discussion suivante ;
-  l'humeur et la colère retombent avec le temps. Si l'échange tourne en rond, l'analyse le relance ;
+  l'humeur et la colère retombent avec le temps. Si l'échange tourne en rond, l'analyse le relance par un
+  événement nouveau de la scène (jamais une redite). Une réplique qui recommence comme la précédente du
+  même persona est régénérée une fois ;
 - rien n'est ajouté aux conversations ; les appels apparaissent dans le journal (« Discussion entre personas »).
   Les discussions, humeurs et ressentis sont inclus dans les sauvegardes ZIP ; une discussion en cours
   revient en pause à la restauration.

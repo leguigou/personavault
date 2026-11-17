@@ -821,10 +821,14 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         && done.people[0].mood.mood === 'joyeuse' && done.people[0].bond.friendship === 20 && done.people[1].bond.anger === 12,
         'le maître du jeu met à jour humeurs et ressentis (variations bornées) et relance un échange qui piétine');
     const logs = await (await http('/settings/logs')).text();
-    expect(logs.includes('Défendre la ville') && logs.includes('tu discutes par messagerie avec Camille Lefebvre')
-        && logs.includes('Un orage éclate dehors.') && logs.includes('Ton humeur en ce moment : joie')
+    expect(logs.includes('Défendre la ville') && logs.includes('Tu échanges avec Camille Lefebvre')
+        && logs.includes('[Maître du jeu : Un orage éclate dehors.]') && logs.includes('Ton humeur en ce moment : joie')
+        && logs.includes('Lieu et situation en ce moment : Dans un café du centre-ville') && logs.includes('Commence autrement')
         && logs.includes('gene (gêne)'),
         'chaque voix reçoit la consigne, son objectif, la relance et son humeur');
+    expect(done.scene === 'Dans un café du centre-ville, un samedi soir' && done.lines.some((l) => l.kind === 'scene')
+        && done.lines.filter((l) => l.kind === 'event').length === 1,
+        'le maître du jeu fait évoluer la scène et ne répète pas une relance déjà proposée');
     const report = await http(`/settings/duo/${sid}/report`);
     const md = await report.text();
     expect(report.status === 200 && md.includes('**Hugo Bernard** : ') && md.includes('joyeuse'), 'le rapport reprend l’échange et les ressentis');
@@ -841,7 +845,12 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const resumed = await until(again, (st) => st.count >= 2);
     expect(resumed.count >= 2, 'la reprise relance la discussion');
     const logs2 = await (await http('/settings/logs')).text();
-    expect(logs2.includes('Hugo devient jaloux'), 'la consigne arrive dans la consigne du persona visé');
+    expect(logs2.includes('[Maître du jeu, pour toi seul : Hugo devient jaloux'), 'la consigne arrive dans le dernier message du persona visé');
+    const kept = await state(again);
+    expect(kept.directions.length === 1 && kept.directions[0].target === 1, 'la consigne reste active tant qu’elle n’est pas retirée');
+    const cleared = await (await http(`/settings/duo/${again}/direction-clear`, { method: 'POST', form: { _token: csrf, target: '1' } })).json();
+    expect(cleared.ok && cleared.directions.length === 0 && cleared.lines.some((l) => l.kind === 'clear' && l.speaker === 1),
+        'la consigne peut être retirée');
     const stopped = await control(again, 'stop');
     expect(stopped.status === 'stopped', 'la discussion peut être arrêtée');
     const list = await (await http('/settings/duo')).text();

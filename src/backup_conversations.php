@@ -275,12 +275,13 @@ function backup_restore_duo(PDO $pdo, array $data, array $personaIds): void
             'error' => mb_substr(backup_str($row['error'] ?? ''), 0, 300),
             'model' => mb_substr(backup_str($row['model'] ?? ''), 0, 200),
             'analyzed' => $int($row['analyzed'] ?? 0, 0, DUO_MAX_TURNS),
+            'scene' => mb_substr(backup_str($row['scene'] ?? ''), 0, DUO_TEXT_MAX),
             'created_at' => backup_str($row['created_at'] ?? gmdate('Y-m-d H:i:s'), 40),
         ]);
         foreach (array_slice((array) ($row['lines'] ?? []), 0, 4 * DUO_MAX_TURNS) as $line) {
             $kind = $line['kind'] ?? '';
             $content = $line['content'] ?? '';
-            if (!is_array($line) || !in_array($kind, ['line', 'direction', 'event', 'mood'], true) || !is_string($content) || trim($content) === '') {
+            if (!is_array($line) || !in_array($kind, ['line', 'direction', 'event', 'mood', 'scene', 'clear'], true) || !is_string($content) || trim($content) === '') {
                 continue;
             }
             backup_insert_row($pdo, 'duo_lines', [

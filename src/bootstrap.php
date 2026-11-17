@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 18);
+define('PV_SCHEMA_VERSION', 19);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -250,6 +250,11 @@ function migrate(PDO $pdo): void
         if ($version < 18) {
             // humeur choisie dans une palette fermée (couleur à la manière des Sims)
             add_column_if_missing($pdo, 'persona_moods', 'emotion', "TEXT NOT NULL DEFAULT ''");
+        }
+        if ($version < 19) {
+            // discussions entre personas : lieu et situation du moment, dernière consigne appliquée
+            add_column_if_missing($pdo, 'duo_sessions', 'scene', "TEXT NOT NULL DEFAULT ''");
+            add_column_if_missing($pdo, 'duo_sessions', 'directed', 'INTEGER NOT NULL DEFAULT 0');
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
