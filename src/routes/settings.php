@@ -51,7 +51,7 @@ if ($path === '/settings/duo' && $method === 'POST') {
     redirect('/settings/duo/' . $id);
 }
 
-if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|direction-clear|tick|report|delete))?$#', $path, $m)) {
+if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|direction-clear|feelings|tick|report|delete))?$#', $path, $m)) {
     $duoId = (int) $m[1];
     $action = $m[2] ?? '';
     $s = duo_session($duoId);
@@ -127,7 +127,7 @@ if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|direction-clea
             JSON_UNESCAPED_UNICODE);
         exit;
     }
-    if (in_array($action, ['control', 'direction', 'direction-clear', 'tick'], true) && $method === 'POST') {
+    if (in_array($action, ['control', 'direction', 'direction-clear', 'feelings', 'tick'], true) && $method === 'POST') {
         csrf_check_json();
         session_write_close();
         if ($action === 'control') {
@@ -151,6 +151,9 @@ if (preg_match('#^/settings/duo/(\d+)(?:/(state|control|direction|direction-clea
                 exit;
             }
             duo_direction($duoId, $text, (int) ($_POST['target'] ?? -1));
+        } elseif ($action === 'feelings') {
+            $values = array_intersect_key($_POST, array_flip(['friendship', 'love', 'anger', 'emotion', 'intensity']));
+            duo_feelings_set($s, (int) ($_POST['who'] ?? 0), $values);
         } elseif ($action === 'direction-clear') {
             duo_direction_clear($duoId, (int) ($_POST['target'] ?? -1));
         } else {

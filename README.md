@@ -329,7 +329,12 @@ bibliothèque entre eux :
 - **humeurs et ressentis, comme dans les Sims** : toutes les 4 répliques, une analyse met à jour l'humeur
   de chacun, choisie dans une palette de 15 humeurs colorées à la manière des Sims (joie jaune, amour rose,
   colère rouge, tristesse bleu foncé…) et précisée d'un mot, et ce qu'il ressent pour l'autre (amitié et amour de -100 à 100, colère de 0 à 100, par petits
-  pas). Ils sont conservés (`persona_moods`, `persona_bonds`) et repris à la discussion suivante ;
+  pas). Ils sont conservés (`persona_moods`, `persona_bonds`) et repris à la discussion suivante.
+  Ils se règlent aussi à la main dans « Ressentis » : un point à glisser sur chaque barre, une couleur pour
+  l'humeur et son intensité. Le réglage est noté dans le fil et le rapport ; avant la réplique suivante, le
+  maître du jeu l'analyse sans le modifier et le fait vivre par une relance. L'humeur et les ressentis sont
+  transmis juste avant chaque réplique, avec un comportement concret (colère : phrases courtes et sèches…),
+  et une humeur forte ne bascule pas d'un coup vers l'opposé ;
   l'humeur et la colère retombent avec le temps. Si l'échange tourne en rond, l'analyse le relance par un
   événement nouveau de la scène (jamais une redite). Une réplique qui recommence comme la précédente du
   même persona est régénérée une fois. Le code repère aussi le piétinement (5 des 6 dernières répliques

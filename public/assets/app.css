@@ -4700,7 +4700,11 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
     border: 1px solid var(--border-soft); background: transparent; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer;
 }
 .duo-tab[aria-expanded="true"] { border-color: rgb(var(--acc)); background: rgba(var(--acc), .12); }
-.duo-panel { display: grid; gap: 12px; max-height: 46vh; overflow-y: auto; overscroll-behavior: contain; }
+.duo-panel {
+    display: grid; gap: 12px; overflow-y: auto; overscroll-behavior: contain;
+    /* la barre fixe + le panneau doivent rester au-dessus de la barre de navigation du bas */
+    max-height: max(180px, calc(100dvh - 420px));
+}
 .duo-feel { display: grid; gap: 6px; }
 .duo-feel-title { margin: 0; font-size: 13px; font-weight: 600; }
 .duo-feel-reason { margin: 0; color: var(--muted); font-size: 12px; font-style: italic; }
@@ -4711,7 +4715,10 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 /* barres à la Sims : le milieu vaut 0, la barre se remplit vers la droite en positif
    et vers la gauche en négatif ; couleur prise dans la palette des humeurs (--fill) */
 .duo-gauge-track { height: 10px; }
-.duo-gauge-track::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: rgba(var(--ink), .35); }
+.duo-gauge-track::after {
+    content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px;
+    background: rgba(var(--ink), .35); pointer-events: none; /* le trait du milieu ne doit pas capter le doigt */
+}
 .duo-gauge-fill {
     position: absolute; top: 0; bottom: 0; left: 50%; width: 0; background: var(--fill, rgba(var(--ink), .3));
     box-shadow: 0 0 8px color-mix(in srgb, var(--fill, transparent) 55%, transparent);
@@ -4754,9 +4761,37 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 .duo-note-event { color: #fcd34d; background: rgba(251, 191, 36, .08); border: 1px dashed rgba(251, 191, 36, .32); }
 .duo-note-scene { color: #a5f3fc; background: rgba(34, 211, 238, .08); border: 1px dashed rgba(34, 211, 238, .35); }
 .duo-note-mood { display: inline-flex; align-items: center; gap: 7px; border: 1px solid color-mix(in srgb, var(--mood, #d4d4d8) 35%, transparent); }
-.duo-legend { display: grid; gap: 6px; }
-.duo-legend-list { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
-.duo-legend-list li { display: inline-flex; align-items: center; gap: 6px; }
+.duo-note-adjust { color: rgb(var(--acc-pale)); background: rgba(var(--acc), .08); border: 1px solid rgba(var(--acc), .35); }
+
+/* réglage des humeurs : pastilles de la palette (choix) */
+.duo-emotions { display: flex; flex-wrap: wrap; gap: 8px; }
+.duo-emotion {
+    width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
+    background: var(--mood); box-shadow: inset 0 0 0 2px var(--bg);
+}
+.duo-emotion[aria-checked="true"] { border-color: var(--mood); box-shadow: inset 0 0 0 3px var(--bg), 0 0 10px var(--mood); }
+.duo-emotion:focus-visible { outline: 2px solid rgb(var(--acc)); outline-offset: 2px; }
+.duo-feel-mood { font-weight: 600; }
+
+/* curseurs : un point à glisser posé sur la barre (l'input range, transparent, porte le point) */
+.duo-slider {
+    position: absolute; left: 0; right: 0; top: 50%; width: 100%; height: 28px; margin: 0; transform: translateY(-50%);
+    background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; touch-action: pan-y; z-index: 2;
+}
+.duo-slider:focus { outline: none; }
+.duo-slider::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+.duo-slider::-moz-range-track { height: 28px; background: transparent; }
+.duo-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 20px; height: 20px; margin-top: 4px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--thumb, var(--fill, rgb(var(--acc)))); box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+}
+.duo-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    border: 3px solid var(--thumb, rgb(var(--acc))); box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+}
+.duo-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(var(--acc), .5); }
+.duo-gauge-intensity .duo-gauge-track::after { display: none; }
+.duo-gauge-intensity .duo-gauge-fill { border-radius: 8px; }
 html[data-mode="light"] .duo-badge.is-running { color: #065f46; }
 html[data-mode="light"] .duo-badge.is-paused, html[data-mode="light"] .duo-note-event { color: #92400e; }
 html[data-mode="light"] .duo-note-scene { color: #155e75; }

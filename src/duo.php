@@ -79,26 +79,27 @@ function duo_llm_config(string $model = ''): array
 /**
  * Palette des humeurs, inspirée des couleurs d'émotion des Sims : chaque humeur a sa
  * couleur, reconnaissable d'un coup d'œil, et une tonalité (anneau, repli).
- * @return array<string, array{color:string, tone:string, word:string}> word : le mot donné au modèle
+ * @return array<string, array{color:string, tone:string, word:string, how:string}> word : le mot donné au modèle ;
+ * how : ce que cette humeur change dans la façon de parler
  */
 function duo_emotions(): array
 {
     return [
-        'joie'          => ['color' => '#facc15', 'tone' => 'positive', 'word' => 'joie'],
-        'amour'         => ['color' => '#f472b6', 'tone' => 'positive', 'word' => 'amour'],
-        'confiance'     => ['color' => '#38bdf8', 'tone' => 'positive', 'word' => 'confiance'],
-        'inspiration'   => ['color' => '#2dd4bf', 'tone' => 'positive', 'word' => 'inspiration'],
-        'espieglerie'   => ['color' => '#84cc16', 'tone' => 'positive', 'word' => 'espièglerie'],
-        'energie'       => ['color' => '#f59e0b', 'tone' => 'positive', 'word' => 'énergie'],
-        'concentration' => ['color' => '#a78bfa', 'tone' => 'neutre', 'word' => 'concentration'],
-        'neutre'        => ['color' => '#d4d4d8', 'tone' => 'neutre', 'word' => 'neutre'],
-        'ennui'         => ['color' => '#71717a', 'tone' => 'neutre', 'word' => 'ennui'],
-        'gene'          => ['color' => '#fda4af', 'tone' => 'negative', 'word' => 'gêne'],
-        'stress'        => ['color' => '#ea580c', 'tone' => 'negative', 'word' => 'stress'],
-        'malaise'       => ['color' => '#a16207', 'tone' => 'negative', 'word' => 'malaise'],
-        'tristesse'     => ['color' => '#2563eb', 'tone' => 'negative', 'word' => 'tristesse'],
-        'peur'          => ['color' => '#7c3aed', 'tone' => 'negative', 'word' => 'peur'],
-        'colere'        => ['color' => '#ef4444', 'tone' => 'negative', 'word' => 'colère'],
+        'joie'          => ['color' => '#facc15', 'tone' => 'positive', 'word' => 'joie', 'how' => 'ton enjoué, légèreté, rires'],
+        'amour'         => ['color' => '#f472b6', 'tone' => 'positive', 'word' => 'amour', 'how' => 'tendresse, attention à l\'autre, compliments'],
+        'confiance'     => ['color' => '#38bdf8', 'tone' => 'positive', 'word' => 'confiance', 'how' => 'assurance, phrases nettes, tu prends l\'initiative'],
+        'inspiration'   => ['color' => '#2dd4bf', 'tone' => 'positive', 'word' => 'inspiration', 'how' => 'idées, images, enthousiasme créatif'],
+        'espieglerie'   => ['color' => '#84cc16', 'tone' => 'positive', 'word' => 'espièglerie', 'how' => 'taquineries, jeux de mots, petites provocations'],
+        'energie'       => ['color' => '#f59e0b', 'tone' => 'positive', 'word' => 'énergie', 'how' => 'rythme rapide, envie d\'agir tout de suite'],
+        'concentration' => ['color' => '#a78bfa', 'tone' => 'neutre', 'word' => 'concentration', 'how' => 'précision, peu de digressions'],
+        'neutre'        => ['color' => '#d4d4d8', 'tone' => 'neutre', 'word' => 'neutre', 'how' => ''],
+        'ennui'         => ['color' => '#71717a', 'tone' => 'neutre', 'word' => 'ennui', 'how' => 'réponses courtes, peu d\'intérêt, tu changes de sujet'],
+        'gene'          => ['color' => '#fda4af', 'tone' => 'negative', 'word' => 'gêne', 'how' => 'hésitations, tu esquives, tu bafouilles'],
+        'stress'        => ['color' => '#ea580c', 'tone' => 'negative', 'word' => 'stress', 'how' => 'nervosité, inquiétude, phrases hachées'],
+        'malaise'       => ['color' => '#a16207', 'tone' => 'negative', 'word' => 'malaise', 'how' => 'distance, tu évites le sujet, inconfort'],
+        'tristesse'     => ['color' => '#2563eb', 'tone' => 'negative', 'word' => 'tristesse', 'how' => 'peu d\'élan, réponses courtes, mélancolie'],
+        'peur'          => ['color' => '#7c3aed', 'tone' => 'negative', 'word' => 'peur', 'how' => 'méfiance, prudence, tu cherches à te protéger'],
+        'colere'        => ['color' => '#ef4444', 'tone' => 'negative', 'word' => 'colère', 'how' => 'phrases courtes et sèches, reproches, peu de patience'],
     ];
 }
 
@@ -175,6 +176,24 @@ function duo_mood(int $pid): array
     ];
 }
 
+/**
+ * Inertie de l'humeur : une humeur forte (50 et plus) ne bascule pas d'un coup vers une
+ * humeur de tonalité opposée ; elle baisse de 20 points et reste la même, sauf si elle
+ * était neutre. Renvoie [clé, mot, intensité] à enregistrer.
+ * @return array{0: string, 1: string, 2: int}
+ */
+function duo_mood_inertia(array $before, string $emotion, string $word, int $intensity): array
+{
+    $emotions = duo_emotions();
+    $emotion = duo_emotion_key($emotion);
+    $toneBefore = $emotions[$before['emotion']]['tone'] ?? 'neutre';
+    $toneAfter = $emotions[$emotion]['tone'];
+    if ($before['intensity'] >= 50 && $toneBefore !== 'neutre' && $toneAfter !== 'neutre' && $toneBefore !== $toneAfter) {
+        return [$before['emotion'], $before['mood'], max(0, $before['intensity'] - 20)];
+    }
+    return [$emotion, $word, $intensity];
+}
+
 function duo_mood_save(int $pid, string $mood, int $intensity, string $tone, string $emotion = ''): void
 {
     $mood = mb_substr(trim($mood), 0, 40);
@@ -201,6 +220,60 @@ function duo_bond(int $pid, int $other): array
         'reason' => (string) $row['reason'], 'known' => (int) $row['updated_at'] > 0];
 }
 
+/**
+ * Réglage par l'utilisateur de ce que ressent la voix $who d'une discussion : ressentis envers
+ * l'autre (amitié, amour, colère) et humeur (clé de la palette, intensité). Les valeurs sont
+ * enregistrées telles quelles, et le réglage est noté dans le fil : le maître du jeu l'analyse
+ * avant la réplique suivante (duo_step) et il figure dans le rapport.
+ * @return string résumé du réglage ('' si rien n'a changé)
+ */
+function duo_feelings_set(array $s, int $who, array $values): string
+{
+    $who = $who === 1 ? 1 : 0;
+    $pid = (int) $s[$who === 0 ? 'persona_a' : 'persona_b'];
+    $oid = (int) $s[$who === 0 ? 'persona_b' : 'persona_a'];
+    $bond = duo_bond($pid, $oid);
+    $mood = duo_mood($pid);
+    $changes = [];
+    $limits = ['friendship' => [-100, 100], 'love' => [-100, 100], 'anger' => [0, 100]];
+    $newBond = $bond;
+    foreach ($limits as $key => [$min, $max]) {
+        if (isset($values[$key]) && is_numeric($values[$key])) {
+            $v = max($min, min($max, (int) $values[$key]));
+            if ($v !== $bond[$key]) {
+                $label = match ($key) {
+                    'friendship' => t('duo.gauge.friendship'),
+                    'love'       => t('duo.gauge.love'),
+                    default      => t('duo.gauge.anger'),
+                };
+                $changes[] = $label . ' ' . $bond[$key] . ' → ' . $v;
+                $newBond[$key] = $v;
+            }
+        }
+    }
+    if ($newBond !== $bond) {
+        db()->prepare('INSERT INTO persona_bonds (persona_id, other_id, friendship, love, anger, reason, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(persona_id, other_id) DO UPDATE SET friendship = excluded.friendship, love = excluded.love,
+            anger = excluded.anger, reason = excluded.reason, updated_at = excluded.updated_at')
+            ->execute([$pid, $oid, $newBond['friendship'], $newBond['love'], $newBond['anger'], t('duo.adjust.reason'), time()]);
+    }
+    $emotion = isset($values['emotion']) ? strtolower(trim((string) $values['emotion'])) : $mood['emotion'];
+    $intensity = isset($values['intensity']) && is_numeric($values['intensity']) ? max(0, min(100, (int) $values['intensity'])) : $mood['intensity'];
+    if (isset(duo_emotions()[$emotion]) && ($emotion !== $mood['emotion'] || $intensity !== $mood['intensity'])) {
+        if ($emotion !== 'neutre' && $intensity === 0) {
+            $intensity = 60; // une humeur choisie sans intensité : nette par défaut
+        }
+        duo_mood_save($pid, $emotion === $mood['emotion'] ? $mood['mood'] : '', $intensity, 'neutre', $emotion);
+        $changes[] = t('duo.adjust.mood', ['mood' => duo_emotion_label($emotion), 'n' => $intensity]);
+    }
+    if (!$changes) {
+        return '';
+    }
+    $text = implode(', ', $changes);
+    duo_line_add((int) $s['id'], 'adjust', $who, $text);
+    return $text;
+}
+
 /** Applique des variations bornées (±10 par analyse) au lien de $pid envers $other. */
 function duo_bond_apply(int $pid, int $other, array $delta, string $reason): array
 {
@@ -223,7 +296,9 @@ function duo_feelings_text(array $mood, array $bond, string $otherName): string
     $lines = [];
     if ($mood['intensity'] > 0 && $mood['emotion'] !== 'neutre') {
         $level = $mood['intensity'] >= 70 ? 'forte' : ($mood['intensity'] >= 35 ? 'nette' : 'légère');
-        $lines[] = 'Ton humeur en ce moment : ' . duo_emotions()[$mood['emotion']]['word'] . " ({$level})" . ($mood['mood'] !== '' ? ", tu te sens {$mood['mood']}" : '') . '.';
+        $emotion = duo_emotions()[$mood['emotion']];
+        $lines[] = 'Ton humeur en ce moment : ' . $emotion['word'] . " ({$level})" . ($mood['mood'] !== '' ? ", tu te sens {$mood['mood']}" : '')
+            . ($emotion['how'] !== '' ? ' — ' . $emotion['how'] : '') . '.';
     }
     if ($bond['known']) {
         $f = $bond['friendship'];
@@ -250,7 +325,7 @@ function duo_feelings_text(array $mood, array $bond, string $otherName): string
         };
         $lines[] = 'Ce que tu ressens : ' . implode(', ', array_filter($parts)) . '.';
     }
-    return $lines ? implode("\n", $lines) . "\nLaisse ces sentiments colorer ta façon de parler, sans les nommer." : '';
+    return $lines ? implode(' ', $lines) . ' Ça doit se sentir dans ta réplique, sans le nommer.' : '';
 }
 
 /* -------------------------------------------------------- consigne et réplique */
@@ -630,8 +705,12 @@ function duo_context(array $s, array $speakers, array $rows): array
                     . ' — fais-le vivre dans ta réplique, sans le dire à ' . $speakers[1 - $who]['persona']['name'] . '.]';
             }
         }
+        $feelings = duo_feelings_text(duo_mood($pid), duo_bond($pid, $oid), (string) $speakers[1 - $who]['persona']['name']);
+        if ($feelings !== '') {
+            array_unshift($notes, '[Maître du jeu : ' . $feelings . ']');
+        }
         $out[$who] = [
-            'system' => duo_feelings_text(duo_mood($pid), duo_bond($pid, $oid), (string) $speakers[1 - $who]['persona']['name']),
+            'system' => '',
             'scene'  => (string) ($s['scene'] ?? ''),
             'note'   => implode("\n", $notes),
         ];
@@ -678,15 +757,22 @@ function duo_step(int $id): string
             return 'idle';
         }
         // consigne nouvelle (ou retirée) : le maître du jeu l'applique à la scène avant la réplique
+        // ou réglage des humeurs et ressentis par l'utilisateur : le maître du jeu l'analyse sans le
+        // modifier, et le fait vivre par une relance
         $lastDirection = 0;
+        $adjusts = [];
         foreach ($rows as $r) {
-            if ($r['kind'] === 'direction' || $r['kind'] === 'clear') {
+            if (in_array($r['kind'], ['direction', 'clear', 'adjust'], true)) {
                 $lastDirection = (int) $r['id'];
+            }
+            if ($r['kind'] === 'adjust' && (int) $r['id'] > (int) ($s['directed'] ?? 0)) {
+                $w = (int) $r['speaker'] === 1 ? 1 : 0;
+                $adjusts[] = $speakers[$w]['persona']['name'] . ' (envers ' . $speakers[1 - $w]['persona']['name'] . ') : ' . $r['content'];
             }
         }
         if ($lastDirection > (int) ($s['directed'] ?? 0)) {
             duo_session_update($id, ['heartbeat_at' => time(), 'model' => (string) $cfg['model']]);
-            duo_analyze($id, $speakers, $cfg, true, true);
+            duo_analyze($id, $speakers, $cfg, true, true, false, implode("\n", $adjusts));
             duo_session_update($id, ['directed' => $lastDirection, 'heartbeat_at' => time()]);
             $s = duo_session($id) ?? $s;
             $rows = duo_session_lines($id);
@@ -760,7 +846,8 @@ function duo_step(int $id): string
  * qu'ils ressentent l'un pour l'autre, et une relance si l'échange tourne en rond.
  * Une analyse illisible est ignorée (l'échange continue sans elle).
  */
-function duo_analyze(int $id, array $speakers, array $cfg, bool $mayRelaunch = true, bool $sceneOnly = false, bool $stuck = false): void
+function duo_analyze(int $id, array $speakers, array $cfg, bool $mayRelaunch = true, bool $sceneOnly = false, bool $stuck = false,
+    string $adjusted = ''): void
 {
     $s = duo_session($id);
     $rows = duo_session_lines($id);
@@ -828,7 +915,10 @@ function duo_analyze(int $id, array $speakers, array $cfg, bool $mayRelaunch = t
         . "\n\nDerniers échanges :\n" . ($recent ? implode("\n", $recent) : '(pas encore de réplique)')
         . ($stuck ? "\n\nALERTE : depuis " . DUO_STUCK_WINDOW . " répliques, les personnages pressent ou annoncent une action "
             . "sans qu'elle arrive. « avance » doit valoir false et « relance » doit faire arriver cette action maintenant, "
-            . "ou une réaction extérieure qui débloque la scène." : '');
+            . "ou une réaction extérieure qui débloque la scène." : '')
+        . ($adjusted !== '' ? "\n\nRÉGLAGES DE L'UTILISATEUR (nouvelles valeurs, à respecter telles quelles) :\n" . $adjusted
+            . "\n« relance » doit faire vivre ce changement dans la scène tout de suite : un geste, un souvenir, une remarque "
+            . "ou un événement qui explique ou montre ces nouveaux sentiments." : '');
 
     try {
         llm_log_context(['purpose' => 'duo']);
@@ -856,7 +946,9 @@ function duo_analyze(int $id, array $speakers, array $cfg, bool $mayRelaunch = t
             $emotion = strtolower(trim((string) ($mood['emotion'] ?? '')));
             if ($word !== '' || isset(duo_emotions()[$emotion])) {
                 $before = duo_mood($ids[$w]);
-                duo_mood_save($ids[$w], $word, (int) ($mood['intensite'] ?? 50), (string) ($mood['tonalite'] ?? 'neutre'), $emotion);
+                [$emotion, $word, $level] = duo_mood_inertia($before, $emotion !== '' ? $emotion : duo_emotion_key('', (string) ($mood['tonalite'] ?? 'neutre')),
+                    $word, (int) ($mood['intensite'] ?? 50));
+                duo_mood_save($ids[$w], $word, $level, 'neutre', $emotion);
                 $after = duo_mood($ids[$w]);
                 if ($before['emotion'] !== $after['emotion'] || $before['mood'] !== $after['mood']) {
                     // contenu : « clé|mot », pour colorer la note dans le fil
@@ -873,7 +965,7 @@ function duo_analyze(int $id, array $speakers, array $cfg, bool $mayRelaunch = t
 
     // relance : un événement nouveau, jamais une redite des précédentes
     $relaunch = mb_substr(trim((string) ($data['relance'] ?? '')), 0, DUO_TEXT_MAX);
-    if ($mayRelaunch && (($data['avance'] ?? true) === false || $stuck) && $relaunch !== '') {
+    if ($mayRelaunch && (($data['avance'] ?? true) === false || $stuck || $adjusted !== '') && $relaunch !== '') {
         $words = text_words($relaunch, 4);
         foreach ($previous as $old) {
             if (duo_overlap($words, text_words($old, 4)) >= 0.5) {
@@ -1083,6 +1175,7 @@ function duo_report(array $info, array $names, array $rows): string
             'event'     => '> _' . t('duo.note.event') . ' : ' . $l['content'] . "_\n\n",
             'scene'     => '> _' . t('duo.note.scene') . ' : ' . $l['content'] . "_\n\n",
             'clear'     => '> _' . t('duo.note.clear') . ($who >= 0 ? ' → ' . $names[$who] : '') . "_\n\n",
+            'adjust'    => '> _' . t('duo.note.adjust', ['name' => $names[$who] ?? '', 'text' => $l['content']]) . "_\n\n",
             'mood'      => '> _' . t('duo.note.mood', ['name' => $names[$who] ?? '', 'mood' => duo_mood_note((string) $l['content'])[1]]) . "_\n\n",
             default     => '',
         };
