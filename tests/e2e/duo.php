@@ -97,7 +97,7 @@ $a = duo_speaker('camille-lefebvre', 'Garder son budget');
 $b = duo_speaker('hugo-bernard');
 $ctx = duo_context(['scene' => ''], [$a, $b], []);
 $msgs = duo_messages($a, $b, 0, [], '', $ctx[0]);
-if (!str_contains((string) end($msgs)['content'], 'ton objectif reste « Garder son budget »') || $ctx[1]['note'] !== ''
+if (!str_contains((string) end($msgs)['content'], 'ton objectif reste « Garder son budget »') || str_contains($ctx[1]['note'], 'ton objectif reste')
     || !str_contains($msgs[0]['content'], 'ne cède pas à Hugo Bernard')) {
     throw new RuntimeException('L’objectif doit être tenu et rappelé dans le dernier message de la voix concernée.');
 }
@@ -118,3 +118,13 @@ if ($step !== 'wrote' || $eventAt === false || $eventAt < 6 || count(array_keys(
 }
 $pdo->prepare('DELETE FROM duo_sessions WHERE id = ?')->execute([$sid]);
 echo "OK : une discussion qui piétine est relancée aussitôt par le maître du jeu.\n";
+
+// Inertie : une humeur forte ne bascule pas d'un coup vers l'humeur opposée.
+$strong = ['emotion' => 'colere', 'intensity' => 80, 'mood' => 'furieuse'];
+$weak = ['emotion' => 'colere', 'intensity' => 40, 'mood' => 'agacée'];
+if (duo_mood_inertia($strong, 'joie', 'ravie', 70) !== ['colere', 'furieuse', 60]
+    || duo_mood_inertia($weak, 'joie', 'ravie', 70) !== ['joie', 'ravie', 70]
+    || duo_mood_inertia($strong, 'stress', 'tendue', 70) !== ['stress', 'tendue', 70]) {
+    throw new RuntimeException('Une humeur forte doit baisser progressivement au lieu de basculer vers l’opposé.');
+}
+echo "OK : inertie des humeurs fortes.\n";

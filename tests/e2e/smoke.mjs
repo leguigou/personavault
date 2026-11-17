@@ -841,6 +841,11 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(paused.status === 'paused' && paused.people[0].bond.friendship === 20, 'la discussion se met en pause ; les ressentis sont repris');
     const dir = await (await http(`/settings/duo/${again}/direction`, { method: 'POST', form: { _token: csrf, text: 'Hugo devient jaloux', target: '1' } })).json();
     expect(dir.ok && dir.lines.some((l) => l.kind === 'direction' && l.speaker === 1), 'la consigne au maître du jeu est enregistrée');
+    const adjusted = await (await http(`/settings/duo/${again}/feelings`, { method: 'POST',
+        form: { _token: csrf, who: '1', anger: '70', emotion: 'colere', intensity: '80' } })).json();
+    expect(adjusted.ok && adjusted.people[1].bond.anger === 70 && adjusted.people[1].mood.emotion === 'colere'
+        && adjusted.people[1].mood.intensity === 80 && adjusted.lines.some((l) => l.kind === 'adjust' && l.speaker === 1 && l.text.includes('70')),
+        'les ressentis et l’humeur se règlent à la main et le réglage est noté dans le fil');
     const extended = await control(again, 'extend');
     expect(extended.target === 50 && extended.status === 'paused', 'la discussion peut être prolongée');
     await control(again, 'resume');
@@ -848,7 +853,11 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(resumed.count >= 2, 'la reprise relance la discussion');
     const logs2 = await (await http('/settings/logs')).text();
     expect(logs2.includes('[Maître du jeu, pour toi seul : Hugo devient jaloux'), 'la consigne arrive dans le dernier message du persona visé');
+    expect(logs2.includes('nouvelles valeurs, à respecter telles quelles') && logs2.includes('colère (forte)')
+        && logs2.includes('phrases courtes et sèches'), 'le maître du jeu analyse le réglage et l’humeur réglée arrive dans le dernier message');
     const kept = await state(again);
+    expect(kept.people[1].bond.anger === 70 && kept.lines.some((l) => l.kind === 'event'),
+        'l’analyse respecte les valeurs réglées et les fait vivre par une relance');
     expect(kept.directions.length === 1 && kept.directions[0].target === 1, 'la consigne reste active tant qu’elle n’est pas retirée');
     const cleared = await (await http(`/settings/duo/${again}/direction-clear`, { method: 'POST', form: { _token: csrf, target: '1' } })).json();
     expect(cleared.ok && cleared.directions.length === 0 && cleared.lines.some((l) => l.kind === 'clear' && l.speaker === 1),

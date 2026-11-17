@@ -281,7 +281,7 @@ function backup_restore_duo(PDO $pdo, array $data, array $personaIds): void
         foreach (array_slice((array) ($row['lines'] ?? []), 0, 4 * DUO_MAX_TURNS) as $line) {
             $kind = $line['kind'] ?? '';
             $content = $line['content'] ?? '';
-            if (!is_array($line) || !in_array($kind, ['line', 'direction', 'event', 'mood', 'scene', 'clear'], true) || !is_string($content) || trim($content) === '') {
+            if (!is_array($line) || !in_array($kind, ['line', 'direction', 'event', 'mood', 'scene', 'clear', 'adjust'], true) || !is_string($content) || trim($content) === '') {
                 continue;
             }
             backup_insert_row($pdo, 'duo_lines', [

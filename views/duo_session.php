@@ -66,14 +66,34 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
 
         <div class="duo-panel" id="duo-feelings-<?= $id ?>" data-duo-panel="feelings" hidden>
             <?php foreach ([0, 1] as $w): ?>
-                <div class="duo-feel">
+                <div class="duo-feel" data-duo-feel="<?= $w ?>">
+                    <p class="duo-feel-title"><?= e(t('duo.feelings.mood_of', ['name' => $names[$w]])) ?> :
+                        <span class="duo-feel-mood" data-duo-mood-label="<?= $w ?>"></span></p>
+                    <div class="duo-emotions" role="radiogroup" aria-label="<?= e(t('duo.feelings.mood_of', ['name' => $names[$w]])) ?>">
+                        <?php foreach (duo_emotions() as $key => $emotion): ?>
+                            <button type="button" class="duo-emotion" role="radio" aria-checked="false" style="--mood: <?= e($emotion['color']) ?>"
+                                    data-duo-emotion="<?= $w ?>" data-key="<?= e($key) ?>" title="<?= e(duo_emotion_label($key)) ?>"
+                                    aria-label="<?= e(duo_emotion_label($key)) ?>"></button>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="duo-gauge duo-gauge-intensity" data-duo-gauge="<?= $w ?>-intensity">
+                        <span class="duo-gauge-label"><?= e(t('duo.gauge.intensity')) ?></span>
+                        <span class="duo-gauge-track">
+                            <span class="duo-gauge-fill"></span>
+                            <input class="duo-slider" type="range" min="0" max="100" step="1" value="0"
+                                   data-duo-slider="<?= $w ?>" data-key="intensity" aria-label="<?= e(t('duo.gauge.intensity')) ?>">
+                        </span>
+                        <span class="duo-gauge-value">0</span>
+                    </div>
+
                     <p class="duo-feel-title"><?= e(t('duo.feelings.towards', ['name' => $names[$w], 'other' => $names[1 - $w]])) ?></p>
                     <?php foreach (['friendship' => t('duo.gauge.friendship'), 'love' => t('duo.gauge.love'), 'anger' => t('duo.gauge.anger')] as $k => $label): ?>
                         <div class="duo-gauge duo-gauge-<?= $k ?>" data-duo-gauge="<?= $w ?>-<?= $k ?>">
                             <span class="duo-gauge-label"><?= e($label) ?></span>
-                            <span class="duo-gauge-track" role="meter" aria-label="<?= e($label) ?>"
-                                  aria-valuemin="<?= $k === 'anger' ? 0 : -100 ?>" aria-valuemax="100" aria-valuenow="0">
+                            <span class="duo-gauge-track">
                                 <span class="duo-gauge-fill"></span>
+                                <input class="duo-slider" type="range" min="<?= $k === 'anger' ? 0 : -100 ?>" max="100" step="1" value="0"
+                                       data-duo-slider="<?= $w ?>" data-key="<?= $k ?>" aria-label="<?= e($label . ' — ' . $names[$w]) ?>">
                             </span>
                             <span class="duo-gauge-value">0</span>
                         </div>
@@ -81,14 +101,6 @@ $names = [(string) $people[0]['name'], (string) $people[1]['name']];
                     <p class="duo-feel-reason" data-duo-reason="<?= $w ?>"></p>
                 </div>
             <?php endforeach; ?>
-            <div class="duo-legend">
-                <p class="duo-feel-title"><?= e(t('duo.legend')) ?></p>
-                <ul class="duo-legend-list">
-                    <?php foreach (duo_emotions() as $key => $emotion): ?>
-                        <li><span class="duo-dot" style="--mood: <?= e($emotion['color']) ?>" aria-hidden="true"></span><?= e(duo_emotion_label($key)) ?></li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
             <p class="hint"><?= e(t('duo.feelings.help')) ?></p>
         </div>
 
