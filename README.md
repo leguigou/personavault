@@ -332,7 +332,10 @@ bibliothèque entre eux :
   pas). Ils sont conservés (`persona_moods`, `persona_bonds`) et repris à la discussion suivante ;
   l'humeur et la colère retombent avec le temps. Si l'échange tourne en rond, l'analyse le relance par un
   événement nouveau de la scène (jamais une redite). Une réplique qui recommence comme la précédente du
-  même persona est régénérée une fois ;
+  même persona est régénérée une fois. Le code repère aussi le piétinement (5 des 6 dernières répliques
+  pressent ou annoncent une action qui n'arrive pas : « on y va », « tout de suite », « prépare-toi… ») et
+  fait relancer le maître du jeu aussitôt. Chaque persona garde son objectif (rappelé à chaque réplique) et
+  ne cède pas sans une vraie raison ;
 - rien n'est ajouté aux conversations ; les appels apparaissent dans le journal (« Discussion entre personas »).
   Les discussions, humeurs et ressentis sont inclus dans les sauvegardes ZIP ; une discussion en cours
   revient en pause à la restauration.

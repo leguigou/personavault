@@ -82,3 +82,39 @@ if ($bond['love'] !== -18 || $bond['friendship'] !== 4 || !str_contains($text, '
     throw new RuntimeException('L’amour doit pouvoir devenir négatif (rejet), par pas bornés, et être transmis en mots.');
 }
 echo "OK : ressentis de -100 à 100 (rejet compris), transmis en mots.\n";
+
+// Piétinement : repéré quand 5 des 6 dernières répliques pressent ou annoncent une action.
+$mk = static fn (array $texts): array => array_map(static fn ($t, $i) => ['speaker' => $i % 2, 'text' => $t, 'ms' => 0], $texts, array_keys($texts));
+$stuckLines = $mk(['On file à la caisse direct !', 'Allez on paye tout de suite', 'Oui on valide maintenant', 'On y va vite avant que je craque',
+    'Prépare-toi, je vais te raconter', 'Allez on finit ça vite']);
+$movingLines = $mk(['Elle coûte 80 euros, trop pour moi.', 'Regarde celle-ci, en promo à 35.', 'Le tissu gratte un peu.',
+    'La vendeuse dit qu’il reste ma taille.', 'Je l’essaie et je te montre.', 'Elle te va bien, mais la couleur ?']);
+if (!duo_stuck($stuckLines) || duo_stuck($movingLines) || duo_stuck(array_slice($stuckLines, 0, 5))) {
+    throw new RuntimeException('Le piétinement doit être repéré sur 6 répliques qui pressent une action, pas sur un échange qui avance.');
+}
+// Objectif : rappelé dans le dernier message de la voix concernée.
+$a = duo_speaker('camille-lefebvre', 'Garder son budget');
+$b = duo_speaker('hugo-bernard');
+$ctx = duo_context(['scene' => ''], [$a, $b], []);
+$msgs = duo_messages($a, $b, 0, [], '', $ctx[0]);
+if (!str_contains((string) end($msgs)['content'], 'ton objectif reste « Garder son budget »') || $ctx[1]['note'] !== ''
+    || !str_contains($msgs[0]['content'], 'ne cède pas à Hugo Bernard')) {
+    throw new RuntimeException('L’objectif doit être tenu et rappelé dans le dernier message de la voix concernée.');
+}
+echo "OK : piétinement repéré par le code, objectif rappelé à chaque réplique.\n";
+
+// De bout en bout : une discussion qui piétine reçoit une relance avant la réplique suivante.
+$sid = duo_session_create((int) $a['persona']['id'], (int) $b['persona']['id'], 'Achats', '', '', 10);
+foreach ($stuckLines as $l) {
+    duo_line_add($sid, 'line', $l['speaker'], $l['text']);
+}
+duo_session_update($sid, ['analyzed' => 6, 'heartbeat_at' => time()]);
+$step = duo_step($sid);
+$kinds = array_column(duo_session_lines($sid), 'kind');
+$eventAt = array_search('event', $kinds, true);
+if ($step !== 'wrote' || $eventAt === false || $eventAt < 6 || count(array_keys($kinds, 'line', true)) !== 7
+    || array_search('line', array_slice($kinds, $eventAt), true) === false) {
+    throw new RuntimeException('Une discussion qui piétine doit recevoir une relance du maître du jeu avant la réplique suivante : ' . implode(',', $kinds));
+}
+$pdo->prepare('DELETE FROM duo_sessions WHERE id = ?')->execute([$sid]);
+echo "OK : une discussion qui piétine est relancée aussitôt par le maître du jeu.\n";
