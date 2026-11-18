@@ -208,6 +208,9 @@ return [
     // --- discussion : textes enregistrés en base (titre par défaut, notices)
     'labels.chat.default_title'   => 'Discussion avec {name}',
     'labels.chat.memory_updated'  => 'Mémoire mise à jour : {facts}',
+    'labels.chat.memory_failed'   => 'Je n’ai pas pu m’en souvenir : {reason}. Réessaie, ou ajoute-le toi-même dans ses souvenirs.',
+    'labels.facts_fail.nothing'   => 'le modèle n’a rien trouvé à retenir',
+    'labels.facts_fail.error'     => 'le modèle n’a pas répondu ({error})',
     'labels.chat.fallback_notice' => 'Réponse générée par {model} ({provider}), LM Studio non utilisé.',
     'labels.chat.web_sources' => 'Sources web',
 

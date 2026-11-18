@@ -563,6 +563,20 @@ try {
     $check($none('facts_explicit_request', ['Tu te souviens de ce jour ?', 'Je me souviens de ce concert', 'Do you remember that day?', '¿Recuerdas aquel día?', 'J’aime le jazz', 'I like jazz', 'Me gusta el jazz']),
         'demande de mémorisation : une question « tu te souviens ? » n’en est pas une (3 langues)');
 
+    // demande explicite qui ne peut pas aboutir : le dire dans la conversation, une seule fois
+    db()->prepare('INSERT INTO conversations (persona_id, title, facts_enabled) VALUES (?, ?, 0)')->execute([$pid, 'sans souvenirs']);
+    $cid3 = (int) db()->lastInsertId();
+    $ins->execute([$cid3, 'user', 'Tu me promets que tu seras toujours vraie avec moi']);
+    $ins->execute([$cid3, 'assistant', 'Je te le promets.']);
+    $personaRow = db()->query('SELECT * FROM personas WHERE id = ' . (int) $pid)->fetch();
+    $convRow = static fn (): array => db()->query('SELECT * FROM conversations WHERE id = ' . $cid3)->fetch();
+    $rem1 = facts_remember($cid3, $convRow(), $personaRow);
+    $rem2 = facts_remember($cid3, $convRow(), $personaRow);
+    $check(str_contains((string) ($rem1['memory_msg']['content'] ?? ''), t('labels.facts_skip.disabled_here'))
+        && !isset($rem2['memory_msg']), 'mémoire : une demande explicite impossible est signalée une seule fois');
+    $ins->execute([$cid3, 'user', 'J’aime le jazz']);
+    $check(!isset(facts_remember($cid3, $convRow(), $personaRow)['memory_msg']), 'mémoire : rien de signalé sans demande explicite');
+
     // mots vides : une phrase faite uniquement d'indices de rappel ne cherche rien
     $ins->execute([$cid2, 'user', 'I remember we talked about it yesterday']);
     $ins->execute([$cid2, 'user', 'Hablamos de eso, ¿te acuerdas? La última vez']);
