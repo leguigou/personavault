@@ -137,3 +137,23 @@ if (array_intersect_key($seen, array_flip(['anecdote', 'proposition', 'decouvert
     throw new RuntimeException('Les types des 3 derniers réveils ne doivent pas revenir : ' . implode(',', array_keys($seen)));
 }
 echo "OK : réveils variés (nouvelles de l’utilisateur, types qui tournent, dernier sujet seulement pour un rebond).\n";
+
+// Petite attention quelques minutes après une réponse du persona : envoyée seulement si la
+// réponse est toujours le dernier message, sans repousser la relance habituelle.
+set_setting('chat_attention_delay', '0');
+$pdo->prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', 'Bonne soirée !')")->execute([$cid]);
+$pdo->prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'assistant', 'Merci, à toi aussi !')")->execute([$cid]);
+$before = (string) $pdo->query("SELECT last_followup_at FROM conversations WHERE id = $cid")->fetchColumn();
+$attention = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($appDir . '/bin/attention.php') . ' ' . $cid;
+$first = trim((string) shell_exec($attention));
+$second = trim((string) shell_exec($attention)); // le dernier message est maintenant spontané
+$requests = $followupRequests();
+$system = json_decode(end($requests) ?: '[]', true, 512, JSON_THROW_ON_ERROR)[0]['content'] ?? '';
+$last = $pdo->query("SELECT role, spontaneous FROM messages WHERE conversation_id = $cid ORDER BY id DESC LIMIT 1")->fetch();
+$after = (string) $pdo->query("SELECT last_followup_at FROM conversations WHERE id = $cid")->fetchColumn();
+if ($first !== 'sent' || $second !== 'moved' || count($requests) !== 5 || !str_contains($system, 'petite attention')
+    || $last['role'] !== 'assistant' || (int) $last['spontaneous'] !== 1 || $after !== $before) {
+    throw new RuntimeException("Petite attention : $first / $second / " . count($requests));
+}
+set_setting('chat_attention_delay', '');
+echo "OK : petite attention après une réponse, une seule fois, sans repousser la relance habituelle.\n";

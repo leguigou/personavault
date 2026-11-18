@@ -335,6 +335,8 @@ return [
     'settings.followup.gap_help'  => 'Dans une même conversation, pas de nouvelle relance avant ce délai, même si le silence continue.',
     'settings.followup.streak'      => 'Relances d’affilée sans réponse',
     'settings.followup.streak_help' => 'Au-delà, le persona attend que tu lui répondes avant de t’écrire à nouveau.',
+    'settings.followup.attention' => 'Petite attention après une réponse (%)',
+    'settings.followup.attention_help' => 'Chance qu’il/elle t’envoie un petit mot de lui-même 3 à 7 min après avoir répondu, si tu n’as pas réécrit. 0 = jamais. Le serveur doit pouvoir lancer des tâches en arrière-plan.',
     'settings.single_model.label' => 'Un seul modèle à la fois dans LM Studio',
     'settings.single_model.hint' => 'À chaque changement de modèle (autre conversation, autre persona, modèle de test), les autres modèles sont déchargés avant de charger le nouveau : la mémoire ne sature pas. Désactivez-le seulement si votre machine peut garder plusieurs modèles chargés.',
     'settings.idle_unload.label' => 'Libérer la mémoire de LM Studio après une inactivité de',
