@@ -531,6 +531,55 @@ try {
     set_setting('facts_frequency', 'off');
     $check(facts_should_run(10, true) !== '', 'mode « jamais »');
     set_setting('facts_frequency', 'each');
+    set_setting('facts_every', '6');
+    db()->prepare('DELETE FROM settings WHERE key = ?')->execute(['facts_frequency']);
+    unset($GLOBALS['pv_settings_cache']);
+    $check(facts_settings()['frequency'] === 'every' && facts_settings()['every'] === 6, 'par défaut : tous les 6 messages');
+    set_setting('facts_frequency', 'each');
+
+    echo PHP_EOL . '— souvenirs : doublons reformulés et faits venus du persona' . PHP_EOL;
+    $sig = static fn (string $s, array $ignore = []): array => facts_signature($s, $ignore);
+    $check(facts_similar($sig('Guillaume vit à Toulon'), $sig('L\'utilisateur s\'appelle Guillaume et vit à Toulon')),
+        'doublon : « vit à Toulon » ⊂ « s’appelle Guillaume et vit à Toulon »');
+    $check(!facts_similar($sig('Guillaume aime le jazz'), $sig('Guillaume n\'aime pas le jazz')), 'pas un doublon : négation');
+    $check(!facts_similar($sig('Guillaume a 30 ans'), $sig('Guillaume a 31 ans')), 'pas un doublon : nombre différent');
+    $check(!facts_similar($sig('Guillaume vit à Toulon'), $sig('Guillaume vit à Lyon')), 'pas un doublon : autre ville');
+    $check(facts_similar($sig('Eva a promis d\'être sincère avec Guillaume', ['eva']), $sig('Le personnage a promis à Guillaume d\'être sincère', ['eva'])),
+        'doublon : prénom du persona ou « le personnage », même promesse');
+
+    db()->prepare("INSERT INTO personas (slug, name) VALUES ('eva-test', 'Eva Test')")->execute();
+    $pidM = (int) db()->lastInsertId();
+    db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$pidM, 'mémoire triée']);
+    $cidM = (int) db()->lastInsertId();
+    $ins->execute([$cidM, 'user', 'Coucou']);
+    $u1 = (int) db()->lastInsertId();
+    $ins->execute([$cidM, 'assistant', 'Coucou Guillaume ! Ta journée commence bien à Toulon ?']);
+    $a1 = (int) db()->lastInsertId();
+    $ins->execute([$cidM, 'user', 'Je m\'appelle Guillaume et je vis à Toulon']);
+    $u2 = (int) db()->lastInsertId();
+    $ins->execute([$cidM, 'assistant', 'Je suis célibataire, mon dernier ex était très possessif.']);
+    $a2 = (int) db()->lastInsertId();
+    $srcM = db()->query("SELECT * FROM messages WHERE id IN ($u1, $a1, $u2, $a2) ORDER BY id")->fetchAll();
+    $saveM = static fn (array $json): array => facts_save_extraction($cidM, $pidM, $json, $srcM, facts_list($pidM, '', 40));
+    $contentsM = static fn (string $subject): array => db()->query("SELECT content FROM user_memories WHERE persona_id = $pidM AND subject = '$subject' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+
+    $saveM(['memories' => [['source' => 2, 'category' => 'fait', 'content' => 'Guillaume vit à Toulon']]]);
+    $check($contentsM('user') === [], 'un fait sur l’utilisateur tiré d’un message du persona est refusé');
+    $saveM(['memories' => [['source' => 3, 'category' => 'fait', 'content' => 'Guillaume vit à Toulon']]]);
+    $res = $saveM(['memories' => [['source' => 3, 'category' => 'fait', 'content' => 'L\'utilisateur s\'appelle Guillaume et vit à Toulon']]]);
+    $check($contentsM('user') === ['L\'utilisateur s\'appelle Guillaume et vit à Toulon'] && $res['added'] === [] && $res['updated'] === 1,
+        'reformulation plus complète : remplace l’ancien souvenir au lieu d’en ajouter un');
+    $saveM(['memories' => [['source' => 3, 'category' => 'fait', 'content' => 'Guillaume vit à Toulon']]]);
+    $check(count($contentsM('user')) === 1, 'reformulation sans information nouvelle : ignorée');
+
+    $saveM(['story' => [
+        ['source' => 4, 'category' => 'fait', 'content' => 'Eva est célibataire'],
+        ['source' => 4, 'category' => 'fait', 'content' => 'Son dernier ex était possessif'],
+        ['source' => 4, 'category' => 'fait', 'content' => 'Eva gère ses réseaux cet après-midi'],
+    ]]);
+    $check(count($contentsM('story')) === 2, 'histoire du persona : 2 souvenirs au plus par analyse');
+    $saveM(['story' => [['source' => 4, 'category' => 'fait', 'content' => 'Le personnage est célibataire']]]);
+    $check(count($contentsM('story')) === 2, 'histoire du persona : même fait avec « le personnage » au lieu du prénom → ignoré');
 
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');

@@ -335,8 +335,8 @@ if ($path === '/settings/chat' && $method === 'POST') {
     set_setting('chat_followup_to', (string) max(1, min(24, (int) ($_POST['chat_followup_to'] ?? 23))));
 
     // souvenirs durables : quand et avec quel modèle les extraire
-    $ff = (string) ($_POST['facts_frequency'] ?? 'each');
-    set_setting('facts_frequency', in_array($ff, ['each', 'every', 'explicit', 'off'], true) ? $ff : 'each');
+    $ff = (string) ($_POST['facts_frequency'] ?? 'every');
+    set_setting('facts_frequency', in_array($ff, ['each', 'every', 'explicit', 'off'], true) ? $ff : 'every');
     set_setting('facts_every', (string) max(2, min(30, (int) ($_POST['facts_every'] ?? 6))));
     $ft = (string) ($_POST['facts_timing'] ?? 'now');
     set_setting('facts_timing', in_array($ft, ['now', 'idle'], true) ? $ft : 'now');

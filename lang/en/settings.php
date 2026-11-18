@@ -152,7 +152,7 @@ return [
     'settings.facts.frequency'  => 'Frequency',
     'settings.facts.frequency_aria' => 'Extraction frequency',
     'settings.facts.freq_each'  => 'After each exchange',
-    'settings.facts.freq_every' => 'Every N messages',
+    'settings.facts.freq_every' => 'Every N messages (recommended)',
     'settings.facts.freq_explicit' => 'Only on request (“remember that…”)',
     'settings.facts.freq_off'   => 'Never',
     'settings.facts.every'      => 'Number of new messages',
@@ -290,7 +290,8 @@ return [
     'settings.info.facts_frequency_label' => 'frequency',
     'settings.info.facts_frequency_html'  => '<p><strong>After each exchange</strong>: the most responsive, but one model call per reply.</p>
             <p><strong>Every N messages</strong>: groups several exchanges into a single call. Nothing is lost,
-            all messages since the last extraction are analyzed.</p>
+            all messages since the last extraction are analyzed. Recommended: with several exchanges in view,
+            the model tells what really matters from passing details better.</p>
             <p><strong>Only on request</strong>: only when you write “remember that…”, “don’t forget…”.</p>
             <p><strong>Never</strong>: no new automatic memories (existing ones are still used).</p>',
     'settings.info.facts_timing_label' => 'extraction timing',

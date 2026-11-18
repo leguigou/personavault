@@ -1625,7 +1625,7 @@
                     el.textContent = !on || max <= 1 ? tr("settings.sum_split_off")
                         : tr("settings.sum_split", { max, words: val("chat_split_words")?.value || "" });
                 } else if (el.dataset.foldSum === "facts") {
-                    const f = val("facts_frequency")?.value || "each";
+                    const f = val("facts_frequency")?.value || "every";
                     const t = val("facts_timing")?.value === "idle" && f !== "explicit" ? [tr("settings.sum_facts_idle")] : [];
                     const m = val("facts_model")?.value === "remote" ? tr("settings.sum_facts_remote") : tr("settings.sum_facts_local");
                     el.textContent = f === "off" ? tr("settings.sum_facts_off")
