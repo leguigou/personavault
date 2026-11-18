@@ -597,6 +597,19 @@ try {
         'humeur : la cause trouvée par l’analyse est transmise au persona');
     $check(feel_reason_manual('Set by you') && feel_reason_manual('Ajustado por ti') && !feel_reason_manual('Il l’a fait rire'),
         'humeur : réglage à la main reconnu dans toutes les langues');
+    $angryReply = 'Franchement, tu me casses les pieds avec tes questions de politesse. ' . str_repeat('Le stage était une plaie, je suis vannée. ', 6);
+    $analysisLines = feel_analysis_lines([
+        ['role' => 'assistant', 'content' => $angryReply],
+        ['role' => 'user', 'content' => "ok ok, je laisse tomber.\ndésolé de t'avoir embêtée"],
+        ['role' => 'notice', 'content' => 'Eva est maintenant exaspérée'],
+    ], 'Eva');
+    $check(str_contains($analysisLines, "Utilisateur : ok ok, je laisse tomber. désolé de t'avoir embêtée")
+        && str_contains($analysisLines, '(contexte) Eva venait de dire : « Franchement, tu me casses les pieds')
+        && !str_contains($analysisLines, 'Eva : ') && !str_contains($analysisLines, 'exaspérée')
+        && mb_strlen(explode("\n", $analysisLines)[0]) < 200,
+        'analyse : les répliques du persona sont du contexte court, seuls les messages de l’utilisateur sont à juger');
+    $check(feel_analysis_lines([['role' => 'assistant', 'content' => 'Coucou, tu dors ?']], 'Eva') === '',
+        'analyse : rien à juger sans message de l’utilisateur');
     $angry = ['emotion' => 'colere', 'mood' => '', 'intensity' => 85];
     $check(feel_mood_step($angry, 'colere', 'exaspérée', 30) === ['colere', 'exaspérée', 65],
         'humeur : colère 85 → l’analyse propose 30, elle descend à 65 seulement');
