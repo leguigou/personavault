@@ -45,3 +45,17 @@ if (!feel_persona_minor($minor) || feel_persona_minor($persona) || feel_get($cid
     throw new RuntimeException('Une fiche de moins de 18 ans ne doit pas recevoir de sentiment amoureux.');
 }
 echo "OK : humeur et ressentis par conversation (analyse, réglage, contexte, garde-fou d’âge).\n";
+
+// Âge minimum réglable (18 par défaut, de 18 à 25) ; seul l'attribut « Âge » compte.
+$withAge = static fn (string $age): array => ['meta' => json_encode([['k' => 'Âge', 'v' => $age]]), 'tagline' => 'Barman, 3 ans d’expérience'];
+$noAge = ['meta' => '[]', 'tagline' => 'Barman, 3 ans d’expérience'];
+$checks = [feel_min_age() === 18, !feel_persona_minor($withAge('20')), !feel_persona_minor($noAge)];
+set_setting('romance_min_age', '21');
+$checks = [...$checks, feel_min_age() === 21, feel_persona_minor($withAge('20 ans')), !feel_persona_minor($withAge('21')), !feel_persona_minor($noAge)];
+set_setting('romance_min_age', '15');
+$checks[] = feel_min_age() === 18;
+set_setting('romance_min_age', '18');
+if (in_array(false, $checks, true)) {
+    throw new RuntimeException('Âge minimum : 18 par défaut, réglable sans descendre sous 18, accroche jamais lue : ' . json_encode($checks));
+}
+echo "OK : âge minimum réglable (18 à 25), lu seulement dans l’attribut « Âge ».\n";

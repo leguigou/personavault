@@ -327,6 +327,7 @@ if ($path === '/settings/chat' && $method === 'POST') {
     set_setting('chat_split_delay_max', (string) $dmax);
 
     set_setting('chat_followup_enabled', !empty($_POST['chat_followup_enabled']) ? '1' : '0');
+    set_setting('romance_min_age', (string) max(18, min(25, (int) ($_POST['romance_min_age'] ?? 18))));
     set_setting('chat_followup_idle_hours', (string) max(1, min(72, (int) ($_POST['chat_followup_idle_hours'] ?? 6))));
     set_setting('chat_followup_min_gap_hours', (string) max(1, min(168, (int) ($_POST['chat_followup_min_gap_hours'] ?? 12))));
     set_setting('chat_followup_max_streak', (string) max(1, min(5, (int) ($_POST['chat_followup_max_streak'] ?? 2))));
