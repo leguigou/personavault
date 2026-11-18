@@ -11,24 +11,11 @@ declare(strict_types=1);
  * (bin/feelings.php, en arrière-plan) ; l'utilisateur peut aussi les régler à la main.
  * Ils sont transmis dans le bloc <contexte> du dernier message, avec un comportement
  * concret. Changements d'humeur et réglages sont notés dans le fil (messages « notice »).
- *
- * Seule limite : un persona dont l'attribut « Âge » de la fiche déclare un nombre inférieur
- * à FEEL_MIN_AGE n'a pas de sentiment amoureux envers l'utilisateur (barre « amour » désactivée,
- * rien de romantique dans le contexte). Aucune autre source n'est lue : ni l'accroche, ni la
- * description, ni les autres attributs.
  */
 
 const FEEL_EVERY = 4;
+const FEEL_MIN_AGE = 15;
 
-/** Âge minimum pour les sentiments amoureux envers l'utilisateur (attribut « Âge » de la fiche). */
-const FEEL_MIN_AGE = 18;
-
-/**
- * Âge déclaré dans la fiche, lu UNIQUEMENT dans l'attribut « Âge ».
- * Aucune autre source n'est consultée : l'accroche, la description et les autres attributs
- * ne sont jamais interprétés, donc une durée (« depuis 3 ans ») ne peut pas être prise pour
- * un âge et une fiche ne peut pas être verrouillée par erreur.
- */
 function feel_persona_age(array $persona): ?int
 {
     foreach (json_list($persona['meta'] ?? '[]') as $row) {
