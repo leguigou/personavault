@@ -597,6 +597,15 @@ try {
         'humeur : la cause trouvée par l’analyse est transmise au persona');
     $check(feel_reason_manual('Set by you') && feel_reason_manual('Ajustado por ti') && !feel_reason_manual('Il l’a fait rire'),
         'humeur : réglage à la main reconnu dans toutes les langues');
+    $angry = ['emotion' => 'colere', 'mood' => '', 'intensity' => 85];
+    $check(feel_mood_step($angry, 'colere', 'exaspérée', 30) === ['colere', 'exaspérée', 65],
+        'humeur : colère 85 → l’analyse propose 30, elle descend à 65 seulement');
+    $check(feel_mood_step($angry, 'neutre', '', 0) === ['colere', '', 65], 'humeur : une colère forte ne redevient pas neutre d’un coup');
+    $check(feel_mood_step($angry, 'joie', 'ravie', 80) === ['colere', '', 65], 'humeur : une colère forte ne devient pas joie d’un coup');
+    $check(feel_mood_step(['emotion' => 'colere', 'mood' => '', 'intensity' => 40], 'neutre', '', 0)[0] === 'neutre',
+        'humeur : une colère légère peut retomber au neutre');
+    $check(feel_mood_step(['emotion' => 'neutre', 'mood' => '', 'intensity' => 0], 'colere', 'vexée', 70) === ['colere', 'vexée', 70],
+        'humeur : depuis le neutre, un échange peut suffire à fâcher');
 
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
