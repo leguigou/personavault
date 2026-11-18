@@ -581,6 +581,23 @@ try {
     $saveM(['story' => [['source' => 4, 'category' => 'fait', 'content' => 'Le personnage est célibataire']]]);
     $check(count($contentsM('story')) === 2, 'histoire du persona : même fait avec « le personnage » au lieu du prénom → ignoré');
 
+    echo PHP_EOL . '— humeur : réglage à la main et cause transmise' . PHP_EOL;
+    $personaM = db()->query("SELECT * FROM personas WHERE id = $pidM")->fetch();
+    for ($i = 0; $i < FEEL_EVERY; $i++) {
+        $ins->execute([$cidM, 'assistant', 'Réponse ' . $i]);
+    }
+    $check(feel_due($cidM), 'humeur : analyse due après ' . FEEL_EVERY . ' réponses');
+    feel_set($cidM, $personaM, ['friendship' => '75', 'anger' => '85']);
+    $check(!feel_due($cidM) && feel_get($cidM, $personaM)['friendship'] === 75,
+        'humeur : après un réglage à la main, l’analyse attend de nouvelles réponses au lieu de le défaire');
+    $ctx = feel_context($cidM, $personaM);
+    $check(str_contains($ctx, 'colère') && !str_contains($ctx, 'Ce qui l\'explique'), 'humeur : « Réglé par vous » n’est pas donné comme cause');
+    feel_save($cidM, ['reason' => 'Guillaume s’est moqué de son métier']);
+    $check(str_contains(feel_context($cidM, $personaM), 'Ce qui l\'explique, d\'après vos derniers échanges : Guillaume s’est moqué de son métier.'),
+        'humeur : la cause trouvée par l’analyse est transmise au persona');
+    $check(feel_reason_manual('Set by you') && feel_reason_manual('Ajustado por ti') && !feel_reason_manual('Il l’a fait rire'),
+        'humeur : réglage à la main reconnu dans toutes les langues');
+
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
     set_setting('chat_title_model', 'off');

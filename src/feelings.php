@@ -98,10 +98,25 @@ function feel_context(int $cid, array $persona): string
         ['friendship' => $f['friendship'], 'love' => $f['love'], 'anger' => $f['anger'], 'known' => $f['known']],
         'ton interlocuteur'
     );
+    // la cause trouvée par l'analyse : sans elle, le modèle joue une colère ou une tristesse « de catalogue »
+    if ($text !== '' && $f['reason'] !== '' && !feel_reason_manual($f['reason'])) {
+        $text .= ' Ce qui l\'explique, d\'après vos derniers échanges : ' . rtrim($f['reason'], '. ') . '.';
+    }
     if (!$f['romance']) {
         $text = trim($text . ' Aucune séduction ni romance avec ton interlocuteur.');
     }
     return $text !== '' ? "Ton humeur et tes sentiments dans cette conversation (à faire sentir, sans les citer) : " . $text : '';
+}
+
+/** La raison enregistrée est-elle celle d'un réglage à la main (« Réglé par vous », quelle que soit la langue) ? */
+function feel_reason_manual(string $reason): bool
+{
+    foreach (array_keys(i18n_available()) as $lang) {
+        if ($reason === (string) (i18n_messages($lang)['duo.adjust.reason'] ?? '')) {
+            return true;
+        }
+    }
+    return $reason === t('duo.adjust.reason');
 }
 
 /** Note dans le fil (message « notice », hors historique envoyé au modèle). */
@@ -154,6 +169,11 @@ function feel_set(int $cid, array $persona, array $values): string
     if (!$changes) {
         return '';
     }
+    // l'analyse automatique attend FEEL_EVERY nouvelles réponses : elle ne juge pas les messages
+    // écrits AVANT le réglage, qui le déferaient aussitôt
+    $last = db()->prepare('SELECT COALESCE(MAX(id), 0) FROM messages WHERE conversation_id = ?');
+    $last->execute([$cid]);
+    $fields['analyzed_id'] = (int) $last->fetchColumn();
     feel_save($cid, $fields);
     $text = implode(', ', $changes);
     feel_notice($cid, t('feel.notice.adjust', ['name' => (string) $persona['name'], 'text' => $text]));
@@ -221,6 +241,7 @@ function feel_analyze(int $cid): bool
             return false;
         }
         $lastId = (int) end($history)['id'];
+        $before = feel_row($cid);
         $f = feel_get($cid, $persona);
         $name = (string) $persona['name'];
         $lines = [];
@@ -250,6 +271,12 @@ function feel_analyze(int $cid): bool
             $data = llm_json((string) $res['content']);
         } catch (Throwable $e) {
             feel_save($cid, ['analyzed_id' => $lastId]); // pas de nouvelle tentative en boucle
+            return false;
+        }
+
+        // réglage à la main pendant l'appel au modèle : il l'emporte, l'analyse est abandonnée
+        $now = feel_row($cid);
+        if ((int) $now['bond_at'] !== (int) $before['bond_at'] || (int) $now['mood_at'] !== (int) $before['mood_at']) {
             return false;
         }
 
