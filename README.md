@@ -31,6 +31,11 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Souvenirs persistants par personnage (recherche FTS5), partagés entre toutes ses discussions,
   avec une trace visible « mémoire mise à jour » sous l'échange. Fréquence, moment et modèle
   d'extraction réglables.
+- Recherche d'informations : quand ta question appelle une information réelle, le persona va la
+  chercher avant de répondre, sur internet (SearXNG, Brave ou LM Studio), Wikipédia ou la météo
+  (Open-Meteo). SearXNG, Wikipédia et Open-Meteo ne demandent aucune clé. Une **ligne bleue avec un globe** montre la
+  source et la requête. Activable dans les réglages, sur chaque persona et dans chaque discussion
+  (voir [Recherche d'informations](#recherche-dinformations-sans-clé--searxng-wikipédia-météo)).
 - Relance spontanée : le personnage peut écrire de lui-même après plusieurs heures de silence
   (nécessite une tâche planifiée, voir plus bas).
 - **Votre relation**, accessible depuis la fiche du persona : accords, tutoiement ou vouvoiement,
@@ -54,7 +59,8 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Titres de discussion générés automatiquement.
 - Export d'une conversation (réglages de la discussion › Exporter) : texte brut, Markdown
   ou page imprimable (`/chat/{id}/print`) à « Enregistrer en PDF » depuis le navigateur.
-- Réglages par personnage : modèle, température, longueur, fenêtre de contexte, consigne.
+- Réglages par personnage : modèle, température, longueur, fenêtre de contexte, consigne,
+  recherche d'informations autorisée ou non.
 
 ### Sauvegarde
 - Export ZIP : un dossier par personnage (`persona.json`, `prompts.json`, photos).
@@ -455,6 +461,18 @@ return [
 
 La clé API du fournisseur distant est stockée en base, dans la table `settings`.
 
+Recherche d'informations : l'adresse SearXNG et les cases Wikipédia / météo se règlent dans
+l'interface (table `settings` : `web_enabled`, `web_searxng_url`, `web_wikipedia`, `web_weather`).
+Dans `config.local.php`, seulement si besoin :
+
+```php
+    'chat_web_search_key'   => '...',                     // Brave Search, si pas de SearXNG
+    'chat_web_lmstudio_mcp' => ['id' => 'mcp/…', 'tool' => '…'], // outil de recherche LM Studio
+    'assist_lookup_url'     => 'https://{lang}.wikipedia.org/w/api.php', // '' coupe Wikipédia
+    'web_weather_geo_url'   => 'https://geocoding-api.open-meteo.com/v1/search',
+    'web_weather_url'       => 'https://api.open-meteo.com/v1/forecast',
+```
+
 ---
 
 ## Données
@@ -464,7 +482,7 @@ La clé API du fournisseur distant est stockée en base, dans la table `settings
 | `personas` | nom, accroche, description, portrait, tags, attributs, favori, archivé |
 | `photos` | galerie par personnage (`storage/uploads/<base>.webp` + `.thumb.webp`) |
 | `prompts` | titre, type, contenu |
-| `conversations` / `messages` | discussions, bulles, images envoyées |
+| `conversations` / `messages` | discussions, bulles, images envoyées ; lignes d'information (`memory`, `notice`, `web` pour une recherche), jamais renvoyées au modèle |
 | `user_memories` | souvenirs persistants (+ index FTS5) |
 | `login_attempts` | échecs de connexion récents (limitation) |
 
@@ -493,6 +511,7 @@ personavault/
 │   ├── i18n.php            # traductions : t(), langue, pluriels
 │   ├── llm.php             # client OpenAI-compatible (streaming inclus)
 │   ├── chat.php            # moteur de discussion, mémoire, bulles
+│   ├── chat_web.php        # recherche d'informations : SearXNG, Brave, LM Studio, Wikipédia, météo
 │   ├── facts.php           # souvenirs + recherche FTS5
 │   ├── prompts.php         # prompts internes éditables
 │   ├── backup.php          # export / import ZIP
@@ -557,6 +576,8 @@ bash tests/e2e/run.sh       # l'app réelle : toutes les routes, avec un faux mo
 (`tests/e2e/seed.php`) et un faux modèle déterministe (`tests/e2e/fake-llm.mjs`) : la vraie base
 n'est jamais touchée. Il vérifie les statuts de ~60 requêtes (`tests/e2e/expected.txt`), quelques
 contenus clés (recherche, compression, souvenirs, flux de réponse) et l'absence d'avertissement PHP.
+Le faux serveur simule aussi Brave, SearXNG, Wikipédia et Open-Meteo : aucun appel réseau réel
+pendant les tests.
 
 Avant / après un refactoring, pour vérifier que **rien** ne change (contenus compris) :
 
