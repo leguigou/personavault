@@ -5119,10 +5119,18 @@
             let splitTimer = null;
             let userId = 0;
             let afterId = 0;
+            // rythme d'écriture : mesuré sur la première bulle (mots par seconde), puis appliqué
+            // aux bulles suivantes, qui s'écrivent mot à mot au lieu d'apparaître d'un bloc
+            let firstDeltaAt = 0;
+            let wordRate = 0;
+            const revealAt = [];
+            let revealTicker = null;
 
             const clearLive = () => {
                 clearTimeout(splitTimer);
                 splitTimer = null;
+                clearInterval(revealTicker);
+                revealTicker = null;
                 [live, ...bubbleEls].forEach((b) => b?.closest(".msg")?.remove());
             };
 
@@ -5206,42 +5214,76 @@
                 return cut;
             };
 
-            const paintParts = () => {
+            // les n premiers mots d'un texte (espaces et ponctuation d'origine conservés)
+            const firstWords = (t, n) => {
+                const re = /\S+/g;
+                let m;
+                let k = 0;
+                while ((m = re.exec(t))) {
+                    if (++k === n) return t.slice(0, m.index + m[0].length);
+                }
+                return t;
+            };
+            const bubbleText = (i) => {
                 const bounds = [0, ...cuts, streamed.length];
+                return streamed.slice(bounds[i] ?? 0, bounds[i + 1] ?? streamed.length).trim();
+            };
+            // mots qu'une bulle suivante peut déjà montrer, au rythme mesuré
+            const allowedWords = (i) => (i < 1 || wordRate <= 0 ? Infinity
+                : Math.floor(((performance.now() - (revealAt[i] || 0)) / 1000) * wordRate) + 1);
+            // la bulle a-t-elle rattrapé tout le texte reçu pour elle ?
+            const caughtUp = (i) => countWords(bubbleText(i)) <= allowedWords(i);
+
+            const paintParts = () => {
                 bubbleEls.forEach((el, i) => {
                     if (!el) return;
-                    const s = bounds[i] ?? 0;
-                    const e = bounds[i + 1] ?? streamed.length;
-                    el.textContent = streamed.slice(s, e).trim();
+                    const t = bubbleText(i);
+                    el.textContent = i >= 1 && wordRate > 0 ? firstWords(t, allowedWords(i)) : t;
                 });
             };
 
+            /* découpe en bulles : la fin de la bulle en cours est fixée dès qu'une fin de phrase
+               arrive ; la bulle suivante n'apparaît (trois points, pause, puis écriture mot à mot)
+               qu'une fois la bulle en cours entièrement écrite */
             const maybeSplit = () => {
-                if (!splitOn || bubbleEls.length >= splitMax) return;
-                if (splitTimer || cuts.length >= bubbleEls.length) return;
-                const start = cuts.length ? cuts[cuts.length - 1] : 0;
-                const seg = streamed.slice(start);
-                if (countWords(seg) < splitWords) return;
-
-                const cut = cutInSegment(seg);
-                if (cut <= 0) return;
-
-                cuts.push(start + cut);
-                paintParts();
-
-                if (!splitTimer) {
-                    const delay = splitDmin + Math.random() * (splitDmax - splitDmin);
-
-                    // le personnage « écrit » la suite : trois points pendant la pause
-                    typing();
-
-                    splitTimer = setTimeout(() => {
-                        bubbleEls.push(startLiveBubble());
-                        paintParts();
-                        splitTimer = null;
-                        scrollBottom(false);
-                    }, delay * 1000);
+                if (!splitOn) return;
+                // 1. fixer la fin de la bulle en cours
+                if (cuts.length < bubbleEls.length && bubbleEls.length < splitMax) {
+                    const start = cuts.length ? cuts[cuts.length - 1] : 0;
+                    const seg = streamed.slice(start);
+                    if (countWords(seg) >= splitWords) {
+                        const cut = cutInSegment(seg);
+                        if (cut > 0) {
+                            // fin de la première bulle : rythme d'écriture du modèle, en mots par seconde
+                            if (!cuts.length && firstDeltaAt) {
+                                const seconds = (performance.now() - firstDeltaAt) / 1000;
+                                wordRate = Math.min(20, Math.max(2, seconds > 0.3 ? countWords(streamed) / seconds : 8));
+                            }
+                            cuts.push(start + cut);
+                            paintParts();
+                        }
+                    }
                 }
+                // 2. la bulle en cours est fixée et entièrement écrite : la suivante arrive après une pause
+                const last = bubbleEls.length - 1;
+                if (splitTimer || cuts.length <= last || (last >= 1 && !caughtUp(last))) return;
+                const delay = splitDmin + Math.random() * (splitDmax - splitDmin);
+                typing(); // le personnage « écrit » la suite : trois points pendant la pause
+                splitTimer = setTimeout(() => {
+                    bubbleEls.push(startLiveBubble());
+                    revealAt[bubbleEls.length - 1] = performance.now();
+                    paintParts();
+                    splitTimer = null;
+                    scrollBottom(false);
+                    // la nouvelle bulle s'écrit mot à mot, même si le texte est déjà arrivé
+                    if (!revealTicker && wordRate > 0) {
+                        revealTicker = setInterval(() => {
+                            maybeSplit();
+                            paintParts();
+                            scrollBottom(false);
+                        }, 60);
+                    }
+                }, delay * 1000);
             };
 
             const paintStream = () => {
@@ -5345,6 +5387,7 @@
                                     loadingLabel("");
                                 }
                                 if (!live) live = startLiveBubble();
+                                if (!firstDeltaAt) firstDeltaAt = performance.now();
                                 streamed += evt.delta;
                                 paintStream();
                             } else if (evt.phase === "loading") {
@@ -5404,6 +5447,21 @@
                     if (!finalReply) {
                         throw new Error(tr("chat.connection_lost"));
                     }
+                    await new Promise((resolve) => {
+                        const until = performance.now() + 90000;
+                        const step = () => {
+                            if (!splitOn || wordRate <= 0 || controller?.signal.aborted || performance.now() > until) return resolve();
+                            maybeSplit();
+                            paintParts();
+                            scrollBottom(false);
+                            const last = bubbleEls.length - 1;
+                            if (splitTimer || (last >= 1 && !caughtUp(last))) setTimeout(step, 60);
+                            else resolve();
+                        };
+                        step();
+                    });
+                    clearInterval(revealTicker);
+                    revealTicker = null;
                     settleLive(finalReply);
                     if (finalNotice) notice(finalNotice.content);
                     if (mediaNotice) notice(mediaNotice);
