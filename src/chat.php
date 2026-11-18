@@ -1860,6 +1860,9 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $contextRoom -= chat_estimate_tokens($web);
     }
     $time = chat_fit_text(chat_time_context($conv, $history), min(256, intdiv($contextRoom, 2)));
+    // emploi du temps : seulement l'activité du moment et la suivante (src/planning.php)
+    $planning = chat_fit_text(planning_context($personaPrompts, (int) $persona['id']), 160);
+    $contextRoom -= chat_estimate_tokens($planning);
 
     $pid = (int) $persona['id'];
     if ($factsOn) {
@@ -1900,7 +1903,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $memory = chat_fit_text(implode("\n\n", $context), $memoryRoom);
     // humeur et ressentis du persona dans cette conversation (src/feelings.php)
     $feelings = (int) ($conv['id'] ?? 0) > 0 ? feel_context((int) $conv['id'], $persona) : '';
-    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $feelings, $replyContext, $memory, $web]))) . "\n</contexte>";
+    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $planning, $feelings, $replyContext, $memory, $web]))) . "\n</contexte>";
 
     $text = $contextBlock . "\n\n" . $text;
     $used = chat_estimate_tokens($system) + chat_estimate_tokens($text);

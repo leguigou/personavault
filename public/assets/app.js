@@ -668,10 +668,72 @@
         }, true);
 
         /* ---- état général */
+        /* ---- planning : aperçu de l'activité à un jour et une heure, lignes incomprises */
+        const plan = pe.querySelector("[data-pe-plan]");
+        const planDay = plan?.querySelector("[data-pe-plan-day]");
+        const planTime = plan?.querySelector("[data-pe-plan-time]");
+        const planOut = plan?.querySelector("[data-pe-plan-out]");
+        const planErrors = plan?.querySelector("[data-pe-plan-errors]");
+        let planTimer = 0;
+        let planSig = "";
+        let planCtrl = null;
+        const planSetNow = () => {
+            const d = new Date();
+            planDay.value = String(d.getDay() || 7);
+            planTime.value = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+            planSig = "";
+        };
+        const planRefresh = async () => {
+            const sig = [body.value, planDay.value, planTime.value].join("\u0001");
+            if (sig === planSig) return;
+            planSig = sig;
+            planCtrl?.abort();
+            planCtrl = new AbortController();
+            const fd = new FormData();
+            fd.append("_token", form.querySelector("[name=_token]").value);
+            fd.append("body", body.value);
+            fd.append("day", planDay.value);
+            fd.append("time", planTime.value);
+            try {
+                const res = await fetch(plan.dataset.pePlan, { method: "POST", body: fd, signal: planCtrl.signal, headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await res.json();
+                if (!res.ok || !data.ok) throw new Error(data.error || "");
+                const st = data.state;
+                const parts = [];
+                if (!st) {
+                    parts.push(el("span", "", tr("planning.empty")));
+                } else {
+                    parts.push(el("strong", "", st.now ? st.now : tr("planning.free")));
+                    if (st.choices > 1) parts.push(el("small", "", " " + tr("planning.drawn", { n: st.choices })));
+                    if (st.next_at) parts.push(el("span", "pe-plan-next", tr("planning.next", { at: st.next_at, next: st.next || tr("planning.free") })));
+                    if (st.surprise) parts.push(el("span", "pe-plan-next", tr("planning.surprise")));
+                }
+                planOut.replaceChildren(...parts);
+                planErrors.replaceChildren(...(data.errors || []).map((er) => el("li", "", tr("planning.error", { n: er.line, text: er.text }))));
+            } catch (e) {
+                if (e.name !== "AbortError") planOut.textContent = tr("planning.unavailable");
+            }
+        };
+        const paintPlan = () => {
+            if (!plan) return;
+            const on = kindNow() === "planning";
+            const was = !plan.hidden;
+            plan.hidden = !on;
+            if (!on) return;
+            if (!was || !planTime.value) planSetNow();
+            clearTimeout(planTimer);
+            planTimer = setTimeout(planRefresh, 350);
+        };
+        plan?.querySelector("[data-pe-plan-now]").addEventListener("click", () => {
+            planSetNow();
+            planRefresh();
+        });
+
         const paint = () => {
             pe.querySelector(".pe-head")?.setAttribute("data-kind", kindNow());
             kindSel.dataset.kind = kindNow();
             if (ai) paintAi();
+            paintPlan();
         };
         const setBusy = (on, mode) => {
             pe.classList.toggle("is-ai-busy", on);
@@ -700,6 +762,7 @@
             video: () => tr("studio.chips_video"),
             negative: () => tr("studio.chips_negative"),
             system: () => tr("studio.chips_system"),
+            planning: () => tr("studio.chips_planning"),
             other: () => tr("studio.chips_other"),
         };
         const STARTERS = {
@@ -707,6 +770,7 @@
             video: () => tr("studio.start_video"),
             negative: () => tr("studio.start_negative"),
             system: () => tr("studio.start_system"),
+            planning: () => tr("studio.start_planning"),
             other: () => tr("studio.start_other"),
         };
         const split = (s) => s.split("|").map((x) => x.trim()).filter(Boolean);

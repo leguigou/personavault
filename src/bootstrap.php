@@ -990,6 +990,7 @@ function prompt_kinds(): array
         'negative' => t('labels.prompt_kind.negative'),
         'video'    => t('labels.prompt_kind.video'),
         'system'   => t('labels.prompt_kind.system'),
+        'planning' => t('labels.prompt_kind.planning'),
         'other'    => t('labels.prompt_kind.other'),
     ];
 }
@@ -1480,6 +1481,7 @@ require_once __DIR__ . '/cards.php';
 require_once __DIR__ . '/duo.php';
 require_once __DIR__ . '/feelings.php';
 require_once __DIR__ . '/followup.php';
+require_once __DIR__ . '/planning.php';
 
 function render(string $view, array $data = []): void
 {

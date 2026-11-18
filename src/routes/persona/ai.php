@@ -27,6 +27,32 @@ if ($action === 'ai-directive' && $method === 'POST') {
     exit;
 }
 
+/* --- aperçu d'un planning dans l'éditeur : activité à un jour et une heure, lignes incomprises --- */
+if ($action === 'planning-preview' && $method === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    csrf_check_json();
+    session_write_close();
+    $body = mb_substr((string) ($_POST['body'] ?? ''), 0, 20000);
+    $at = chat_now();
+    $day = (int) ($_POST['day'] ?? 0);
+    if ($day >= 1 && $day <= 7) {
+        $at = $at->modify('+' . (($day - (int) $at->format('N') + 7) % 7) . ' days');
+    }
+    if (preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($_POST['time'] ?? ''), $m)) {
+        $at = $at->setTime(min(23, (int) $m[1]), min(59, (int) $m[2]));
+    }
+    $state = planning_now($body, $pid, $at);
+    echo json_encode([
+        'ok'     => true,
+        'state'  => $state,
+        'errors' => planning_parse($body)['errors'],
+        'day'    => (int) $at->format('N'),
+        'time'   => $at->format('H:i'),
+        'date'   => $at->format('Y-m-d'),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /* --- rédiger / améliorer un prompt avec l'IA (éditeur de prompt) --- */
 if ($action === 'ai-prompt' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
