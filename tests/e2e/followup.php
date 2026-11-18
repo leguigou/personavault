@@ -174,3 +174,25 @@ if (!str_contains($movedOut, 'petite attention — moved') || count($followupReq
 }
 set_setting('chat_attention_chance', '20');
 echo "OK : petite attention envoyée par la tâche planifiée après une réponse, une seule fois, annulée si l’utilisateur a écrit.\n";
+
+// Planning : pas de relance pendant que le persona dort ; sinon son activité du moment est transmise.
+$personaId = (int) chat_conv_effective($cid)['persona_id'];
+$pdo->prepare("INSERT INTO prompts (persona_id, kind, title, body) VALUES (?, 'planning', 'Semaine', 'Tous les jours : dort')")->execute([$personaId]);
+$planId = (int) $pdo->lastInsertId();
+$pdo->exec("UPDATE messages SET created_at = datetime(created_at, '-2 days') WHERE conversation_id = $cid");
+$pdo->exec("UPDATE conversations SET last_followup_at = '' WHERE id = $cid");
+$count = count($followupRequests());
+$runOutput();
+if (count($followupRequests()) !== $count) {
+    throw new RuntimeException('Pas de relance pendant que le persona dort d’après son planning.');
+}
+$pdo->prepare("UPDATE prompts SET body = 'Tous les jours : peinture à l’atelier' WHERE id = ?")->execute([$planId]);
+$runOutput();
+$requests = $followupRequests();
+$system = json_decode(end($requests) ?: '[]', true, 512, JSON_THROW_ON_ERROR)[0]['content'] ?? '';
+if (count($requests) !== $count + 1 || !str_contains($system, 'En ce moment : peinture à l’atelier.')) {
+    throw new RuntimeException('La relance doit connaître l’activité du moment d’après le planning.');
+}
+$pdo->prepare('DELETE FROM prompts WHERE id = ?')->execute([$planId]);
+echo "OK : planning — pas de relance pendant le sommeil, activité du moment transmise.\n";
+

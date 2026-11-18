@@ -139,7 +139,8 @@ function followup_model_config(array $status): ?array
  * Génère et enregistre un message spontané. $pick : type imposé (sinon tiré par followup_pick).
  * Le message n'est enregistré que si la conversation n'a pas bougé pendant la génération.
  * @return array{status:string, kind:string, text:string, error:string}
- *         status : sent, dry (simulation), skip (conversation changée) ou error
+ *         status : sent, dry (simulation), skip (conversation changée), asleep (dort d'après
+ *         son planning) ou error
  */
 function followup_send(array $conv, array $persona, array $history, int $gap, array $cfg, ?array $pick = null, bool $dry = false): array
 {
@@ -148,6 +149,13 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
     $stmt = db()->prepare('SELECT * FROM prompts WHERE persona_id = ?');
     $stmt->execute([(int) $persona['id']]);
     $prompts = $stmt->fetchAll();
+
+    // emploi du temps (src/planning.php) : pas de message spontané pendant son sommeil
+    $planState = planning_now(planning_body($prompts), (int) $persona['id'], chat_now());
+    if ($planState !== null && $planState['sleeping']) {
+        return ['status' => 'asleep', 'kind' => (string) ($pick['kind'] ?? ''), 'text' => '', 'error' => ''];
+    }
+    $planning = planning_context($prompts, (int) $persona['id']);
 
     $conv = chat_with_persona($conv, $persona);
     // genre de message imposé (nouvelles, anecdote, souvenir, proposition…), différent des
@@ -165,6 +173,7 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
 
     $system = chat_system_prompt($persona, $prompts, $conv, $facts)
         . "\n\n" . chat_time_context($conv, $history, true, $pick['topic'])
+        . ($planning !== '' ? "\n\n" . $planning : '')
         . ($feelings !== '' ? "\n\n" . $feelings : '')
         . "\n\n" . str_replace(
             ['{persona}', '{gap}'],

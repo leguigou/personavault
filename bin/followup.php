@@ -161,6 +161,8 @@ foreach ($convs as $conv) {
     } elseif ($r['status'] === 'sent') {
         $say("#{$cid} ({$persona['name']}) relance « {$r['kind']} » envoyée après " . chat_gap_duration($gap) . ' : ' . mb_substr($r['text'], 0, 90));
         $sent++;
+    } elseif ($r['status'] === 'asleep') {
+        $verbose && $say("#{$cid} : {$persona['name']} dort d'après son planning — pas de relance");
     } elseif ($r['error'] !== '') {
         $say("#{$cid} : " . $r['error']);
     }

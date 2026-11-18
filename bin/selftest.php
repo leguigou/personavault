@@ -786,6 +786,44 @@ try {
     $check(chat_split_points($firstSentence . "\n🔥 🫱🏽‍🫲🏻 🇫🇷 1️⃣", 15, 2) === []
         && chat_split_points($firstSentence . '2026', 15, 2) === [mb_strlen($firstSentence)],
         'bulles : rattache les émojis seuls au texte et conserve les nombres');
+    echo PHP_EOL . '— planning du persona' . PHP_EOL;
+    $plan = "Lun–Ven 9h–18h : travail à la galerie\nMar 19h–21h : yoga avec Inès\n"
+        . "Sam matin : marché avec Léa / footing / grasse matinée\nSam après-midi : sport 50% / shopping 30% / ciné 20%\n"
+        . "Ven soir : parfois apéro avec les collègues\nDim : famille\nNuit 0h–7h : dort\nVen 22h-2h : sortie\nn'importe quoi ici";
+    $parsed = planning_parse($plan);
+    $check(count($parsed['entries']) === 8 && array_column($parsed['errors'], 'line') === [9],
+        'planning : lignes reconnues, ligne incomprise signalée avec son numéro');
+    $check(planning_parse_when('du lundi au vendredi de 9h à 18h') === ['days' => [1, 2, 3, 4, 5], 'from' => 540, 'to' => 1080]
+        && planning_parse_when('Sábado por la mañana')['days'] === [6] && planning_parse_when('Weekdays 9:00-17:00')['to'] === 1020
+        && planning_parse_when('Lundi et jeudi soir')['days'] === [1, 4] && planning_parse_when('Mer 14h')['to'] === 900,
+        'planning : jours, plages, heures et moments (français, anglais, espagnol)');
+    $at = static fn (string $d): DateTimeImmutable => new DateTimeImmutable($d, new DateTimeZone('Europe/Paris'));
+    $check(planning_now($plan, 7, $at('2026-11-17 19:30'))['now'] === 'yoga avec Inès'
+        && planning_now($plan, 7, $at('2026-11-16 10:00'))['next_at'] === '18h',
+        'planning : la ligne la plus précise l’emporte, avec l’activité suivante');
+    $check(planning_now($plan, 7, $at('2026-11-22 03:00'))['sleeping'] === true,
+        'planning : une plage horaire passe avant « toute la journée » (dort, pas « famille »)');
+    $check(planning_now($plan, 7, $at('2026-11-21 01:00'))['now'] === 'sortie',
+        'planning : une soirée qui passe minuit continue le lendemain');
+    $draw = planning_now($plan, 7, $at('2026-11-21 09:00'))['now'];
+    $check($draw === planning_now($plan, 7, $at('2026-11-21 11:30'))['now'],
+        'planning : le tirage du jour reste le même toute la matinée');
+    $seen = [];
+    $apero = 0;
+    for ($w = 0; $w < 60; $w++) {
+        $seen[planning_now($plan, 7, $at('2026-11-21 10:00')->modify("+$w week"))['now']] = true;
+        $apero += planning_now($plan, 7, $at('2026-11-20 20:00')->modify("+$w week"))['now'] === 'apéro avec les collègues' ? 1 : 0;
+    }
+    $check(count($seen) === 3 && $apero > 5 && $apero < 35, 'planning : choix variés d’une semaine à l’autre, « parfois » environ 30 %');
+    $ctx = planning_context([['kind' => 'planning', 'body' => $plan], ['kind' => 'system', 'body' => 'x']], 7, $at('2026-11-17 19:30'));
+    $check(str_contains($ctx, 'En ce moment : yoga avec Inès.') && str_contains($ctx, 'Ensuite, vers 21h : temps libre.')
+        && planning_context([['kind' => 'system', 'body' => $plan]], 7) === '',
+        'planning : seuls le moment présent et le suivant partent dans le contexte, et seulement pour un prompt « planning »');
+    $built = chat_build_messages($persona, [['kind' => 'planning', 'body' => 'Tous les jours : peinture à l’atelier']], $conv, $hist, 'Salut');
+    $lastMsg = (string) end($built['messages'])['content'];
+    $check(str_contains($lastMsg, 'En ce moment : peinture à l’atelier.') && !str_contains((string) $built['messages'][0]['content'], 'peinture'),
+        'planning : l’activité du moment est dans le bloc <contexte> du dernier message, pas dans le prompt système');
+
     echo PHP_EOL . '— thèmes' . PHP_EOL;
     $ui = ui_style();
     $check($ui['accent'] === 'violet' && $ui['mode'] === 'dark', 'par défaut : Violet + Sombre (rendu historique)');

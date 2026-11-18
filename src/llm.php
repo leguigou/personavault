@@ -540,12 +540,17 @@ function llm_prompt_criteria(string $kind): array
         'goal'     => [t('labels.ai_crit.goal'), 'objectif clair du prompt'],
         'context'  => [t('labels.ai_crit.context'), 'contexte et informations utiles du persona'],
         'precision'=> [t('labels.ai_crit.precision'), 'précision et absence d’ambiguïté'],
+        'week'     => [t('labels.ai_crit.week'), 'chaque jour de la semaine couvert, du réveil au coucher, nuit comprise'],
+        'variety'  => [t('labels.ai_crit.variety'), 'des choix (« / ») et des activités occasionnelles (« parfois », %) pour que les semaines ne se ressemblent pas'],
+        'coherence'=> [t('labels.ai_crit.coherence'), 'cohérent avec la fiche : métier, horaires, loisirs, entourage, ville'],
+        'format'   => [t('labels.ai_crit.format'), 'une activité par ligne « quand : quoi », jours et heures lisibles par l’application'],
     ];
     $keys = [
         'image'    => ['face', 'hair', 'body', 'outfit', 'pose', 'scene', 'light', 'camera', 'style'],
         'video'    => ['face', 'hair', 'outfit', 'pose', 'scene', 'light', 'camera', 'motion', 'style'],
         'negative' => ['defects', 'quality', 'offstyle'],
         'system'   => ['identity', 'looks', 'persona', 'voice', 'relation', 'rules', 'examples'],
+        'planning' => ['week', 'variety', 'coherence', 'format'],
         'other'    => ['goal', 'context', 'precision'],
     ][$kind] ?? ['goal', 'context', 'precision'];
     return array_intersect_key($c, array_flip($keys));
@@ -607,7 +612,7 @@ function llm_visual_prompt(array $persona, array $prompts, string $kind, string 
         throw new RuntimeException(t('error.llm.no_key'));
     }
 
-    $kinds = ['image', 'negative', 'video', 'system', 'other'];
+    $kinds = ['image', 'negative', 'video', 'system', 'planning', 'other'];
     if (!in_array($kind, $kinds, true)) {
         $kind = 'image';
     }
@@ -633,6 +638,7 @@ function llm_visual_prompt(array $persona, array $prompts, string $kind, string 
         'negative' => "un prompt négatif (ce que le générateur d'images doit éviter) adapté à ce persona et à son style",
         'video'    => "un prompt de génération vidéo (plan, mouvement de caméra, action, ambiance) qui fasse apparaître CETTE personne de façon reconnaissable",
         'system'   => "un prompt système pour un agent conversationnel qui incarne ce persona (identité, apparence, voix, ton, limites)",
+        'planning' => "l'emploi du temps de la semaine de ce persona (travail, loisirs, proches, sommeil), lu par une application",
         'other'    => "un prompt utile pour ce persona",
     ][$kind];
 
@@ -669,6 +675,9 @@ Langue :
 
 {$rules}
 TXT;
+    if ($kind === 'planning') {
+        $system .= "\n\n" . llm_planning_format();
+    }
 
     $facts = [
         'nom'         => (string) $persona['name'],
@@ -824,3 +833,28 @@ TXT;
 
     return $base + ['body' => $out];
 }
+
+/**
+ * Format d'un planning (src/planning.php), donné à l'IA qui le rédige : c'est l'application
+ * qui le lit, ligne par ligne.
+ */
+function llm_planning_format(): string
+{
+    return <<<TXT
+FORMAT OBLIGATOIRE DU PLANNING (lu par une application, pas par un humain) :
+- Une activité par ligne, sous la forme « quand : quoi ». Pas de titre, pas de puces, pas de markdown, pas de ligne vide inutile.
+- « quand » : des jours (Lun, Mar, Mer, Jeu, Ven, Sam, Dim, Lun–Ven, Week-end, Tous les jours) puis une plage horaire (9h–18h, 19h30–21h) ou un moment (matin, midi, après-midi, soir, nuit). Rien d'autre dans « quand ».
+- « quoi » : l'activité, courte et concrète, avec un lieu ou une personne de son entourage si c'est utile (« yoga avec Inès »).
+- Pour varier : plusieurs choix séparés par « / », avec un pourcentage facultatif (« sport 50% / shopping 30% / ciné 20% »).
+- Activité occasionnelle : « parfois », « souvent », « rarement » ou un pourcentage au début du « quoi » (« Ven soir : parfois apéro avec les collègues »).
+- Couvre toute la semaine : travail ou études, trajets, repas importants, loisirs, proches, soirées, week-end, et le sommeil (« Tous les jours 0h–7h : dort », adapté à ses habitudes).
+- Reste cohérent avec la fiche (métier, horaires, ville, loisirs, entourage). Varie surtout les soirées et le week-end.
+Exemple :
+Lun–Ven 9h–18h : travail à la galerie
+Mar 19h–21h : yoga avec Inès
+Sam matin : marché avec sa sœur Léa / footing au bord de mer / grasse matinée
+Ven soir : parfois apéro avec les collègues
+Tous les jours 0h–7h : dort
+TXT;
+}
+
