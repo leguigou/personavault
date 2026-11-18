@@ -56,6 +56,18 @@
                         </div>
                     </div>
                 </a>
+                <!-- nouvelle conversation avec ce persona, sans passer par la dernière -->
+                <form method="post" action="/chat/<?= (int) $latest['id'] ?>/new" class="contact-new" data-new-chat
+                      data-title="<?= e(t('chat.head.new')) ?>" data-help="<?= e(t('chat.new.help')) ?>"
+                      data-fresh="<?= e(t('chat.new.fresh')) ?>" data-continue="<?= e(t('chat.new.continue')) ?>">
+                    <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+                    <input type="hidden" name="mode" value="fresh">
+                    <button type="submit" class="contact-new-btn" aria-haspopup="dialog"
+                            title="<?= e(t('chat.list.new_with', ['name' => $latest['persona_name']])) ?>"
+                            aria-label="<?= e(t('chat.list.new_with', ['name' => $latest['persona_name']])) ?>">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-6l-4 3v-3H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 8.5v5M9.5 11h5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+                    </button>
+                </form>
                 <details class="contact-history">
                     <summary><?= e(t('chat.list.thread_count', count($contact['threads']))) ?></summary>
                     <div class="conv-list contact-threads">

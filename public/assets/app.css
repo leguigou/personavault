@@ -3983,6 +3983,16 @@ html[data-avatars="0"] .msg-versions { margin-left: 0; }
     background: var(--card, rgba(var(--ink), .028));
 }
 .contact-item.is-unread { border-color: rgba(var(--acc), .35); }
+/* bouton « nouvelle conversation », à droite de la ligne « ▶ n discussions » */
+.contact-item { position: relative; }
+.contact-new { position: absolute; right: 10px; bottom: 4px; margin: 0; }
+.contact-new-btn {
+    display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid rgba(var(--acc), .35); background: rgba(var(--acc), .12); color: rgb(var(--acc)); cursor: pointer;
+}
+.contact-new-btn:is(:hover, :focus-visible) { background: rgba(var(--acc), .22); }
+.contact-new-btn svg { width: 20px; height: 20px; }
+.contact-history summary { padding-right: 56px; }
 .contact-open { border: 0; background: transparent; }
 .contact-open .conv-avatar { border-radius: 50%; }
 .contact-open .conv-line strong { font-size: 15px; font-weight: 700; }
