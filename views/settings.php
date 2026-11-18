@@ -402,23 +402,6 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
                     </div>
                     <p class="hint"><?= e(t('settings.followup.cron_test')) ?> <code>php bin/followup.php --dry</code></p>
                 </details>
-
-        <details class="settings-card settings-fold" id="feelings">
-            <summary>
-                <span class="fold-text">
-                    <span class="fold-title"><?= e(t('settings.feel.title')) ?></span>
-                    <span class="fold-sum"><?= e(t('settings.feel.sum', ['age' => feel_min_age()])) ?></span>
-                </span>
-            </summary>
-            <div class="fold-body">
-                <p class="hint"><?= e(t('settings.feel.hint')) ?></p>
-                <label class="field">
-                    <span><?= e(t('settings.feel.min_age')) ?></span>
-                    <input class="input" type="number" inputmode="numeric" name="romance_min_age" min="18" max="25" step="1" value="<?= feel_min_age() ?>">
-                    <small><?= e(t('settings.feel.min_age_help')) ?></small>
-                </label>
-            </div>
-        </details>
             </div>
 
             <label class="check">

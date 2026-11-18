@@ -13,12 +13,15 @@ declare(strict_types=1);
  * concret. Changements d'humeur et réglages sont notés dans le fil (messages « notice »).
  *
  * Seule limite : un persona dont l'attribut « Âge » de la fiche déclare un nombre inférieur
- * à l'âge minimum réglé (feel_min_age : 18 par défaut, de 18 à 25) n'a pas de sentiment amoureux envers l'utilisateur (barre « amour » désactivée,
+ * à FEEL_MIN_AGE n'a pas de sentiment amoureux envers l'utilisateur (barre « amour » désactivée,
  * rien de romantique dans le contexte). Aucune autre source n'est lue : ni l'accroche, ni la
  * description, ni les autres attributs.
  */
 
 const FEEL_EVERY = 4;
+
+/** Âge minimum pour les sentiments amoureux envers l'utilisateur (attribut « Âge » de la fiche). */
+const FEEL_MIN_AGE = 18;
 
 /**
  * Âge déclaré dans la fiche, lu UNIQUEMENT dans l'attribut « Âge ».
@@ -41,20 +44,11 @@ function feel_persona_age(array $persona): ?int
     return null;
 }
 
-/**
- * Âge minimum pour les sentiments amoureux envers l'utilisateur : Réglages › Humeur et
- * ressentis (romance_min_age). 18 par défaut, réglable de 18 à 25 (jamais moins de 18).
- */
-function feel_min_age(): int
-{
-    return max(18, min(25, (int) setting('romance_min_age', '18')));
-}
-
 /** La fiche déclare-t-elle explicitement, dans son attribut « Âge », moins que l'âge minimum ? */
 function feel_persona_minor(array $persona): bool
 {
     $age = feel_persona_age($persona);
-    return $age !== null && $age < feel_min_age();
+    return $age !== null && $age < FEEL_MIN_AGE;
 }
 
 /** Ligne brute (avec valeurs par défaut). */

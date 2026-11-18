@@ -9,9 +9,4 @@ return [
     'feel.notice.mood' => '{name} est maintenant {mood}',
     'logs.purpose.feelings' => 'Humeur et ressentis',
     'js.feel.saved' => 'Réglage enregistré : le persona en tiendra compte dès sa prochaine réponse',
-    'settings.feel.title' => 'Humeur et ressentis',
-    'settings.feel.sum' => 'Sentiments amoureux à partir de {age} ans',
-    'settings.feel.hint' => 'Humeur et ressentis des personas dans vos conversations (panneau « Contexte et mémoire »).',
-    'settings.feel.min_age' => 'Âge minimum pour les sentiments amoureux',
-    'settings.feel.min_age_help' => 'De 18 à 25 ans. Ne s’applique qu’aux fiches dont l’attribut « Âge » indique un nombre inférieur ; sans âge chiffré, aucune limite.',
 ];

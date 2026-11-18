@@ -383,7 +383,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 </div>
             <?php endforeach; ?>
             <p class="duo-feel-reason" data-feel-reason></p>
-            <p class="hint"><?= e($feelRomance ? t('feel.help') : t('feel.help_minor', ['age' => feel_min_age()])) ?></p>
+            <p class="hint"><?= e($feelRomance ? t('feel.help') : t('feel.help_minor', ['age' => FEEL_MIN_AGE])) ?></p>
         </section>
 
         <!-- modèle de CETTE conversation (pour tester), sans toucher au persona -->
