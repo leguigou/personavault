@@ -397,7 +397,8 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
             $unchanged = $row && $row['content'] === $source['content'] && $row['version_id'] === $source['version_id'];
         }
         if (!$unchanged) {
-            return ['ok' => true, 'added' => [], 'updated' => 0, 'removed' => 0];
+            // la conversation a bougé pendant l'appel : l'analyse sera refaite à la prochaine réponse
+            return ['ok' => true, 'added' => [], 'updated' => 0, 'removed' => 0, 'stale' => true];
         }
         $result = facts_save_extraction($cid, $personaId, $json, $sources, $known);
         $pdo->prepare('UPDATE conversations SET facts_cursor = ? WHERE id = ?')
@@ -516,3 +517,78 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
 
     return ['ok' => true, 'added' => $added, 'updated' => $updated, 'removed' => $removed];
 }
+
+/**
+ * Analyse des messages pas encore lus par la mémoire (route /chat/{id}/remember).
+ * Laisse une trace dans la conversation (rôle « memory », jamais renvoyé au modèle) : ce qui
+ * a été retenu, ou, si l'utilisateur l'avait explicitement demandé, pourquoi rien ne l'a été.
+ */
+function facts_remember(int $cid, array $conv, array $persona, bool $force = false): array
+{
+    $pid = (int) $persona['id'];
+    $cursor = (int) ($conv['facts_cursor'] ?? 0);
+    $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND id > ?
+                             AND role IN ('user', 'assistant') ORDER BY id ASC");
+    $st->execute([$cid, $cursor]);
+    $recent = $st->fetchAll();
+
+    // demande explicite : « souviens-toi », « promets-moi », « remember that »… (voir facts_explicit_request),
+    // dans n'importe quel message pas encore analysé : si l'analyse a sauté (connexion coupée), la demande
+    // n'est pas perdue quand l'utilisateur a écrit autre chose entre-temps
+    $explicit = false;
+    foreach ($recent as $m) {
+        if ((string) $m['role'] === 'user' && facts_explicit_request((string) $m['content'])) {
+            $explicit = true;
+            break;
+        }
+    }
+
+    $trace = static function (string $label) use ($cid): array {
+        db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "memory", ?)')->execute([$cid, $label]);
+        return ['id' => (int) db()->lastInsertId(), 'role' => 'memory', 'content' => $label];
+    };
+    $failed = static fn (string $reason): array => $trace(t('labels.chat.memory_failed', ['reason' => $reason]));
+    // demande explicite impossible : on le dit une seule fois, puis la demande est considérée comme lue
+    $refuse = static function (string $why) use ($explicit, $recent, $cid, $pid, $failed): array {
+        $out = ['ok' => true, 'added' => [], 'skipped' => $why, 'memories' => chat_persona_memories($pid)];
+        if ($explicit) {
+            $out['memory_msg'] = $failed($why);
+            db()->prepare('UPDATE conversations SET facts_cursor = ? WHERE id = ?')->execute([(int) end($recent)['id'], $cid]);
+        }
+        return $out;
+    };
+
+    if ((int) $conv['facts_enabled'] !== 1 || (int) $conv['memory_enabled'] !== 1) {
+        return $refuse(t('labels.facts_skip.disabled_here'));
+    }
+    // fréquence choisie dans les réglages (chaque échange, tous les N messages, sur demande…)
+    $why = facts_should_run(count($recent), $explicit, $force);
+    if ($why !== '') {
+        return $refuse($why);
+    }
+
+    try {
+        // jusqu'à 30 messages : en mode « tous les N », rien n'est sauté
+        $res = facts_extract($cid, $pid, array_slice($recent, -30), $cursor, $explicit);
+    } catch (Throwable $e) {
+        if ($explicit) {
+            $failed(t('labels.facts_fail.error', ['error' => mb_substr(public_error($e), 0, 160)]));
+        }
+        throw $e;
+    }
+    $res['memories'] = chat_persona_memories($pid);
+
+    $added = array_values(array_filter(array_map('strval', $res['added'] ?? [])));
+    if ($added) {
+        $label = implode(' · ', array_map(static fn (string $s): string => mb_substr($s, 0, 90), array_slice($added, 0, 2)));
+        $res['memory_msg'] = $trace(t('labels.chat.memory_updated', ['facts' => $label])
+            . (count($added) > 2 ? ' (+' . (count($added) - 2) . ')' : ''));
+    } elseif ($explicit && empty($res['stale']) && (int) ($res['updated'] ?? 0) === 0) {
+        // demande explicite sans résultat : on le dit plutôt que de rester muet
+        $res['memory_msg'] = $failed(empty($res['ok'])
+            ? t('labels.facts_fail.error', ['error' => mb_substr((string) ($res['error'] ?? ''), 0, 160)])
+            : t('labels.facts_fail.nothing'));
+    }
+    return $res;
+}
+

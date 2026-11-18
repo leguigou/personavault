@@ -53,62 +53,8 @@ if ($action === 'remember' && $method === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     session_write_close(); // route longue / AJAX : ne bloque pas les autres requêtes
-    if ((int) $conv['facts_enabled'] !== 1 || (int) $conv['memory_enabled'] !== 1) {
-        echo json_encode([
-            'ok'       => true,
-            'added'    => [],
-            'skipped'  => t('labels.facts_skip.disabled_here'),
-            'memories' => chat_persona_memories((int) $persona['id']),
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
-    $cursor = (int) ($conv['facts_cursor'] ?? 0);
-    $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND id > ?
-                             AND role IN ('user', 'assistant') ORDER BY id ASC");
-    $st->execute([$cid, $cursor]);
-    $recent = $st->fetchAll();
-
-    // demande explicite : « souviens-toi », « promets-moi », « remember that »… (voir facts_explicit_request),
-    // dans n'importe quel message pas encore analysé : si l'analyse a sauté (connexion coupée), la demande
-    // n'est pas perdue quand l'utilisateur a écrit autre chose entre-temps
-    $explicit = false;
-    foreach ($recent as $m) {
-        if ((string) $m['role'] === 'user' && facts_explicit_request((string) $m['content'])) {
-            $explicit = true;
-            break;
-        }
-    }
-
-    // fréquence choisie dans les réglages (chaque échange, tous les N messages, sur demande…)
-    $why = facts_should_run(count($recent), $explicit, !empty($_POST['force']));
-    if ($why !== '') {
-        echo json_encode(['ok' => true, 'added' => [], 'skipped' => $why, 'memories' => chat_persona_memories((int) $persona['id'])], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
     try {
-        // jusqu'à 30 messages : en mode « tous les N », rien n'est sauté
-        $slice = array_slice($recent, -30);
-        $res   = facts_extract($cid, (int) $persona['id'], $slice, $cursor, $explicit);
-        $res['memories'] = chat_persona_memories((int) $persona['id']);
-
-        // trace visible dans la conversation : la mémoire a bien été mise à jour.
-        // Enregistrée en base (rôle « memory ») dans la langue de l'interface : ce rôle n'est
-        // jamais renvoyé au modèle (seuls « user » et « assistant » le sont).
-        $added = array_values(array_filter(array_map('strval', $res['added'] ?? [])));
-        if ($added) {
-            $label = implode(' · ', array_map(
-                static fn (string $s): string => mb_substr($s, 0, 90),
-                array_slice($added, 0, 2)
-            ));
-            $label = t('labels.chat.memory_updated', ['facts' => $label]) . (count($added) > 2 ? ' (+' . (count($added) - 2) . ')' : '');
-            $ins   = db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "memory", ?)');
-            $ins->execute([$cid, $label]);
-            $res['memory_msg'] = ['id' => (int) db()->lastInsertId(), 'role' => 'memory', 'content' => $label];
-        }
-
-        echo json_encode($res, JSON_UNESCAPED_UNICODE);
+        echo json_encode(facts_remember($cid, $conv, $persona, !empty($_POST['force'])), JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => public_error($e)], JSON_UNESCAPED_UNICODE);
