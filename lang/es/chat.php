@@ -194,4 +194,8 @@ return [
     'chat.directive.placeholder' => 'Ej. Estamos de vacaciones en Lisboa y ella me enseña la ciudad.',
     'chat.directive.help'        => 'Se añade a la instrucción del personaje, solo en esta conversación.',
     'chat.directive.save'        => 'Guardar la instrucción',
+    'chat.toggles.web' => 'Buscar información (internet, Wikipedia, tiempo)',
+    'chat.toggles.web_global_off' => 'Ninguna fuente de búsqueda está activa en los Ajustes: este interruptor no tiene efecto por ahora.',
+    'chat.toggles.web_settings' => 'Configurar las fuentes',
+    'chat.toggles.web_persona_off' => 'La búsqueda está desactivada en la ficha de este persona.',
 ];

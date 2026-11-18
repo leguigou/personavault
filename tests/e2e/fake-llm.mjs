@@ -182,8 +182,15 @@ http.createServer(async (req, res) => {
         if (system.startsWith('Décide si le dernier message appelle une recherche')) {
             const { recent, message } = JSON.parse(last);
             const hasCity = recent.some(([role, content]) => role === 'user' && content.includes('à Toulon'));
-            text = JSON.stringify({ query: message === 'Italien et pizza' && hasCity ? 'restaurants italiens pizzas Toulon'
-                : message === 'Vérifie les horaires à Toulon' ? 'horaires Toulon' : '' });
+            // recherche d'informations : la source n'est proposée que si elle est listée dans la consigne
+            const planned = {
+                'Il fait quel temps à Toulon demain ?': { source: 'meteo', query: 'météo Toulon', lieu: 'Toulon' },
+                'Trouve-moi une boulangerie ouverte à Toulon': { source: 'web', query: 'boulangerie ouverte Toulon' },
+                'Qui était Sherlock Holmes ?': { source: 'wikipedia', query: 'Sherlock Holmes' },
+            }[message];
+            text = JSON.stringify(planned && system.includes('« ' + planned.source + ' »') ? planned
+                : { query: message === 'Italien et pizza' && hasCity ? 'restaurants italiens pizzas Toulon'
+                    : message === 'Vérifie les horaires à Toulon' ? 'horaires Toulon' : '' });
         } else if (system.startsWith('Choisis un média KLIPY facultatif')) {
             const format = system.match(/Formats autorisés : (gif|sticker|clip)/)?.[1];
             text = last.includes('Je fête cette réussite') ? format + ':celebrate' : 'none';
@@ -282,6 +289,34 @@ http.createServer(async (req, res) => {
         }
         return res.end(JSON.stringify({ query: { pages: [{ title: q.get('titles'), fullurl: 'https://fr.wikipedia.org/wiki/' + String(q.get('titles')).replace(/ /g, '_'),
             extract: 'Sherlock Holmes est un détective de fiction créé par Arthur Conan Doyle. '.repeat(8) }] } }));
+    }
+    // faux SearXNG (format JSON exigé, comme une instance où il n'est pas activé renvoie 403)
+    if (req.url.startsWith('/searxng/search?')) {
+        const q = new URL(req.url, 'http://x').searchParams;
+        if (q.get('format') !== 'json') {
+            res.statusCode = 403;
+            return res.end();
+        }
+        const results = q.get('q') === 'boulangerie ouverte Toulon'
+            ? [{ title: 'Boulangerie du port', content: 'Ouverte tous les jours de 6 h à 20 h, quai Cronstadt.', url: 'https://example.com/boulangerie-toulon' }]
+            : q.get('q') === 'Tour Eiffel Paris' ? [{ title: 'Tour Eiffel', content: 'Site officiel.', url: 'https://example.com/tour-eiffel' }] : [];
+        return res.end(JSON.stringify({ query: q.get('q'), results }));
+    }
+    if (req.url.startsWith('/searxng-nojson/search?')) {
+        res.statusCode = 403;
+        return res.end();
+    }
+    // fausse météo (Open-Meteo : géocodage puis prévisions)
+    if (req.url.startsWith('/meteo/geo?')) {
+        const q = new URL(req.url, 'http://x').searchParams;
+        return res.end(JSON.stringify(q.get('name') === 'Toulon'
+            ? { results: [{ name: 'Toulon', country: 'France', latitude: 43.12, longitude: 5.93 }] } : {}));
+    }
+    if (req.url.startsWith('/meteo/forecast?')) {
+        return res.end(JSON.stringify({
+            current: { temperature_2m: 14.2, weather_code: 1, wind_speed_10m: 12 },
+            daily: { weather_code: [1, 61, 3], temperature_2m_max: [16, 15, 17], temperature_2m_min: [9, 10, 11], precipitation_probability_max: [10, 80, 20] },
+        }));
     }
     res.statusCode = 404;
     res.end('{}');

@@ -208,4 +208,6 @@ return [
     'assist.entry_text' => 'Describe una idea o un personaje existente, rellena la ficha',
     'assist.complete_title' => 'El asistente detecta lo que falta, hace preguntas y completa la ficha sin sobrescribir nada.',
     'assist.preview_title' => 'Vista previa de la ficha',
+    'form.web_search' => 'Puede buscar información (internet, Wikipedia, tiempo)',
+    'form.web_search_help' => 'Según las fuentes activas en los Ajustes. Desactívalo para un persona que no deba salir de su ficción.',
 ];

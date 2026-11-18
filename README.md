@@ -31,6 +31,11 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Souvenirs persistants par personnage (recherche FTS5), partagés entre toutes ses discussions,
   avec une trace visible « mémoire mise à jour » sous l'échange. Fréquence, moment et modèle
   d'extraction réglables.
+- Recherche d'informations : quand ta question appelle une information réelle, le persona va la
+  chercher avant de répondre, sur internet (SearXNG, Brave ou LM Studio), Wikipédia ou la météo
+  (Open-Meteo). SearXNG, Wikipédia et Open-Meteo ne demandent aucune clé. Une **ligne bleue avec un globe** montre la
+  source et la requête. Activable dans les réglages, sur chaque persona et dans chaque discussion
+  (voir [Recherche d'informations](#recherche-dinformations-sans-clé--searxng-wikipédia-météo)).
 - Relance spontanée : le personnage peut écrire de lui-même après plusieurs heures de silence
   (nécessite une tâche planifiée, voir plus bas).
 - **Votre relation**, accessible depuis la fiche du persona : accords, tutoiement ou vouvoiement,
@@ -54,7 +59,8 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
 - Titres de discussion générés automatiquement.
 - Export d'une conversation (réglages de la discussion › Exporter) : texte brut, Markdown
   ou page imprimable (`/chat/{id}/print`) à « Enregistrer en PDF » depuis le navigateur.
-- Réglages par personnage : modèle, température, longueur, fenêtre de contexte, consigne.
+- Réglages par personnage : modèle, température, longueur, fenêtre de contexte, consigne,
+  recherche d'informations autorisée ou non.
 
 ### Sauvegarde
 - Export ZIP : un dossier par personnage (`persona.json`, `prompts.json`, photos).
@@ -225,6 +231,56 @@ dans `config.local.php` ou `BRAVE_SEARCH_API_KEY` dans l’environnement du serv
 utilise l’outil LM Studio en priorité si configuré. Le modèle formule la requête à partir des derniers
 échanges, puis transmet cette requête au moteur choisi. Le persona répond dans le même tour avec les
 liens des résultats disponibles. [Documentation LM Studio](https://lmstudio.ai/docs/developer/core/mcp).
+
+### Recherche d'informations sans clé : SearXNG, Wikipédia, météo
+
+**Réglages → Recherche d'informations** : un interrupteur général et trois sources, toutes sans
+compte ni clé. Avant chaque réponse, le modèle décide si le message appelle une recherche et choisit
+la source :
+
+| Source | Pour quoi | Service |
+|---|---|---|
+| Internet | actualité, adresses, horaires, prix | ton instance [SearXNG](https://docs.searxng.org/) (sinon Brave ou LM Studio, ci-dessus) |
+| Wikipédia | culture générale stable | API MediaWiki publique (`assist_lookup_url`) |
+| Météo | temps actuel et des 2 jours suivants d'une ville | [Open-Meteo](https://open-meteo.com/) (gratuit pour un usage non commercial) |
+
+Chaque persona (fiche → « Peut chercher des informations ») et chaque discussion (panneau de la
+discussion) a aussi son interrupteur. Quand le persona cherche, une **ligne bleue avec un globe**
+s'affiche juste avant sa réponse : source et requête. Elle n'est jamais renvoyée au modèle et
+disparaît avec l'échange si tu le supprimes ou le régénères. La requête ne contient que le sujet :
+ni ton prénom ni le reste de la conversation.
+
+**Installer SearXNG avec Docker**, sur le même serveur que PersonaVault :
+
+```bash
+mkdir -p /srv/searxng
+docker run -d --name searxng --restart unless-stopped \
+  -p 127.0.0.1:8888:8080 -v /srv/searxng:/etc/searxng searxng/searxng
+```
+
+Au premier démarrage, SearXNG crée `/srv/searxng/settings.yml`. Le format JSON y est désactivé
+par défaut : remplace le fichier par ceci, puis `docker restart searxng`.
+
+```yaml
+use_default_settings: true
+server:
+  secret_key: "colle-ici-le-resultat-de-openssl-rand-hex-32"
+  limiter: false        # usage privé, derrière 127.0.0.1
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json
+```
+
+Dans PersonaVault, indique `http://127.0.0.1:8888` puis **Tester SearXNG**. Une erreur 403 veut
+dire que `json` manque dans `formats`. Le port reste sur `127.0.0.1` : n'expose pas SearXNG sur
+internet sans protection. Les moteurs que SearXNG interroge peuvent te limiter temporairement si tu
+fais beaucoup de recherches. Vérifie ces réglages dans la
+[documentation SearXNG](https://docs.searxng.org/admin/settings/index.html), ils peuvent évoluer.
+
+Adresses des services météo modifiables dans `config.local.php` (`web_weather_geo_url`,
+`web_weather_url`).
 
 ### Mémoire et contexte
 
@@ -405,6 +461,18 @@ return [
 
 La clé API du fournisseur distant est stockée en base, dans la table `settings`.
 
+Recherche d'informations : l'adresse SearXNG et les cases Wikipédia / météo se règlent dans
+l'interface (table `settings` : `web_enabled`, `web_searxng_url`, `web_wikipedia`, `web_weather`).
+Dans `config.local.php`, seulement si besoin :
+
+```php
+    'chat_web_search_key'   => '...',                     // Brave Search, si pas de SearXNG
+    'chat_web_lmstudio_mcp' => ['id' => 'mcp/…', 'tool' => '…'], // outil de recherche LM Studio
+    'assist_lookup_url'     => 'https://{lang}.wikipedia.org/w/api.php', // '' coupe Wikipédia
+    'web_weather_geo_url'   => 'https://geocoding-api.open-meteo.com/v1/search',
+    'web_weather_url'       => 'https://api.open-meteo.com/v1/forecast',
+```
+
 ---
 
 ## Données
@@ -414,7 +482,7 @@ La clé API du fournisseur distant est stockée en base, dans la table `settings
 | `personas` | nom, accroche, description, portrait, tags, attributs, favori, archivé |
 | `photos` | galerie par personnage (`storage/uploads/<base>.webp` + `.thumb.webp`) |
 | `prompts` | titre, type, contenu |
-| `conversations` / `messages` | discussions, bulles, images envoyées |
+| `conversations` / `messages` | discussions, bulles, images envoyées ; lignes d'information (`memory`, `notice`, `web` pour une recherche), jamais renvoyées au modèle |
 | `user_memories` | souvenirs persistants (+ index FTS5) |
 | `login_attempts` | échecs de connexion récents (limitation) |
 
@@ -443,6 +511,7 @@ personavault/
 │   ├── i18n.php            # traductions : t(), langue, pluriels
 │   ├── llm.php             # client OpenAI-compatible (streaming inclus)
 │   ├── chat.php            # moteur de discussion, mémoire, bulles
+│   ├── chat_web.php        # recherche d'informations : SearXNG, Brave, LM Studio, Wikipédia, météo
 │   ├── facts.php           # souvenirs + recherche FTS5
 │   ├── prompts.php         # prompts internes éditables
 │   ├── backup.php          # export / import ZIP
@@ -507,6 +576,8 @@ bash tests/e2e/run.sh       # l'app réelle : toutes les routes, avec un faux mo
 (`tests/e2e/seed.php`) et un faux modèle déterministe (`tests/e2e/fake-llm.mjs`) : la vraie base
 n'est jamais touchée. Il vérifie les statuts de ~60 requêtes (`tests/e2e/expected.txt`), quelques
 contenus clés (recherche, compression, souvenirs, flux de réponse) et l'absence d'avertissement PHP.
+Le faux serveur simule aussi Brave, SearXNG, Wikipédia et Open-Meteo : aucun appel réseau réel
+pendant les tests.
 
 Avant / après un refactoring, pour vérifier que **rien** ne change (contenus compris) :
 

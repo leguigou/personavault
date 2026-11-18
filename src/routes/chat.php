@@ -26,11 +26,11 @@ if ($path === '/chat' && $method === 'GET') {
     $contactView = setting('ui_chat_list', 'threads') === 'contacts';
     $convStmt = db()->query(
         'SELECT c.*, p.name AS persona_name, p.avatar AS persona_avatar, p.slug AS persona_slug,
-                (SELECT content FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory") ORDER BY m.id DESC LIMIT 1) AS last_msg,
-                (SELECT role FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory") ORDER BY m.id DESC LIMIT 1) AS last_role,
-                (SELECT image FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory") ORDER BY m.id DESC LIMIT 1) AS last_image,
-                (SELECT created_at FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory") ORDER BY m.id DESC LIMIT 1) AS last_at,
-                (SELECT COUNT(*) FROM messages m2 WHERE m2.conversation_id = c.id AND m2.role NOT IN ("notice", "memory")) AS n
+                (SELECT content FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory", "web") ORDER BY m.id DESC LIMIT 1) AS last_msg,
+                (SELECT role FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory", "web") ORDER BY m.id DESC LIMIT 1) AS last_role,
+                (SELECT image FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory", "web") ORDER BY m.id DESC LIMIT 1) AS last_image,
+                (SELECT created_at FROM messages m WHERE m.conversation_id = c.id AND m.role NOT IN ("notice", "memory", "web") ORDER BY m.id DESC LIMIT 1) AS last_at,
+                (SELECT COUNT(*) FROM messages m2 WHERE m2.conversation_id = c.id AND m2.role NOT IN ("notice", "memory", "web")) AS n
          FROM conversations c JOIN personas p ON p.id = c.persona_id
          ORDER BY ' . ($contactView ? 'COALESCE(last_at, c.created_at)' : 'c.pinned DESC, COALESCE(last_at, c.updated_at)') . ' DESC, c.id DESC'
     );

@@ -39,6 +39,9 @@ $config = [
     // Seuls le nom du personnage et son œuvre sont envoyés. '' pour désactiver la recherche
     // (le modèle s'appuie alors sur ses seules connaissances).
     'assist_lookup_url' => 'https://{lang}.wikipedia.org/w/api.php',
+    // météo (recherche d'informations, Réglages) : Open-Meteo, gratuit et sans clé pour un usage non commercial
+    'web_weather_geo_url' => 'https://geocoding-api.open-meteo.com/v1/search',
+    'web_weather_url'     => 'https://api.open-meteo.com/v1/forecast',
 
     // Valeurs par défaut du LLM (surchargées par les réglages enregistrés)
     'llm' => [

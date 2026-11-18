@@ -195,4 +195,8 @@ return [
     'chat.directive.placeholder' => 'Ex. Nous sommes en vacances à Lisbonne, elle me fait visiter la ville.',
     'chat.directive.help'        => 'S’ajoute à la consigne du personnage, uniquement dans cette conversation.',
     'chat.directive.save'        => 'Enregistrer la consigne',
+    'chat.toggles.web' => 'Chercher des informations (internet, Wikipédia, météo)',
+    'chat.toggles.web_global_off' => 'Aucune source de recherche n\'est active dans les Réglages : cet interrupteur n\'a pas d\'effet pour l\'instant.',
+    'chat.toggles.web_settings' => 'Régler les sources',
+    'chat.toggles.web_persona_off' => 'La recherche est désactivée sur la fiche de ce persona.',
 ];

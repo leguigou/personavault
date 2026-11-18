@@ -153,6 +153,15 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
                     <?php endforeach; ?>
                 </div>
 
+                <div class="field">
+                    <input type="hidden" name="web_search_present" value="1">
+                    <label class="check">
+                        <input type="checkbox" name="web_search" value="1" <?= (int) ($persona['web_search'] ?? 1) === 1 ? 'checked' : '' ?>>
+                        <span><?= e(t('form.web_search')) ?></span>
+                    </label>
+                    <small><?= e(t('form.web_search_help')) ?></small>
+                </div>
+
                 <div class="row2">
                     <label class="field">
                         <span><?= e(t('form.temperature')) ?></span>

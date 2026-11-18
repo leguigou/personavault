@@ -194,4 +194,8 @@ return [
     'chat.directive.placeholder' => 'E.g. We’re on holiday in Lisbon and she’s showing me around.',
     'chat.directive.help'        => 'Added to the character’s instruction, only in this conversation.',
     'chat.directive.save'        => 'Save the instruction',
+    'chat.toggles.web' => 'Look up information (web, Wikipedia, weather)',
+    'chat.toggles.web_global_off' => 'No lookup source is active in Settings: this switch has no effect for now.',
+    'chat.toggles.web_settings' => 'Set up sources',
+    'chat.toggles.web_persona_off' => 'Lookup is turned off in this persona\'s sheet.',
 ];

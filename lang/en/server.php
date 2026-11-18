@@ -304,4 +304,9 @@ return [
     'assist.canon.memory' => 'No page found online: profile filled from what the AI knows about {name}. Please review it.',
     'assist.meta.source' => 'Original character',
     'assist.meta.source_url' => 'Reference',
+    'labels.chat.web_line' => '{source} search: “{query}”',
+    'labels.chat.web_line_empty' => '{source} search: “{query}” — no results',
+    'labels.chat.web_source.web' => 'web',
+    'labels.chat.web_source.wikipedia' => 'Wikipedia',
+    'labels.chat.web_source.meteo' => 'weather',
 ];

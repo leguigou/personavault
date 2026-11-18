@@ -75,11 +75,13 @@ if ($action === 'pin' && $method === 'POST') {
 if ($action === 'toggles' && $method === 'POST') {
     csrf_check();
     // sans toucher à updated_at : changer un réglage ne remonte pas la conversation dans la liste
-    db()->prepare('UPDATE conversations SET memory_enabled = ?, auto_followup = ?, pinned = ? WHERE id = ?')
+    db()->prepare('UPDATE conversations SET memory_enabled = ?, auto_followup = ?, pinned = ?, web_search = ? WHERE id = ?')
         ->execute([
             !empty($_POST['memory_enabled']) ? 1 : 0,
             !empty($_POST['auto_followup']) ? 1 : 0,
             !empty($_POST['pinned']) ? 1 : 0,
+            // interrupteur absent du formulaire (ancienne page) : on garde la valeur
+            isset($_POST['web_search_present']) ? (!empty($_POST['web_search']) ? 1 : 0) : (int) ($conv['web_search'] ?? 1),
             $cid,
         ]);
     if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
