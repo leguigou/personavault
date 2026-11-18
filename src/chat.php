@@ -990,7 +990,7 @@ function lms_touch_activity(): void
 /**
  * Déchargement après inactivité (Réglages › Chat) : si LM Studio n'a pas servi depuis
  * lms_idle_unload_minutes (0 = jamais), tous les modèles sont déchargés. Appelé par la tâche
- * planifiée (bin/followup.php), donc vérifié toutes les 30 min environ.
+ * planifiée (bin/followup.php), donc vérifié toutes les 5 min environ.
  * @return array<int,string> instances déchargées
  */
 function lms_idle_unload_check(): array

@@ -282,12 +282,14 @@ function followup_no_repeat(int $cid): string
 }
 
 /*
- * Petite attention : quelques minutes après une réponse du persona (3 à 7 min, au hasard),
- * il arrive qu'il renvoie de lui-même un petit mot, comme une pensée après coup.
- * Probabilité réglable (Réglages › Chat › Messages spontanés, chat_attention_chance en %).
- * Lancée en arrière-plan (bin/attention.php) : il faut que le serveur puisse lancer des
- * processus. Annulée si l'utilisateur a écrit entre-temps.
+ * Petite attention : quelques minutes après une réponse du persona, il arrive qu'il renvoie
+ * de lui-même un petit mot, comme une pensée après coup. Probabilité réglable (Réglages ›
+ * Chat › Messages spontanés, chat_attention_chance en %). Le tirage a lieu après la réponse ;
+ * la tâche planifiée (bin/followup.php, toutes les 5 min) envoie le mot une fois l'heure
+ * prévue passée, soit 3 à 8 min après la réponse. Annulée si l'utilisateur a écrit entre-temps.
  */
+
+const ATTENTION_DELAY = 180; // secondes minimum entre la réponse et la petite attention
 
 /** Consigne du type « attention ». */
 function attention_pick(): array
@@ -301,25 +303,45 @@ function attention_pick(): array
     ];
 }
 
-/**
- * Après une réponse du persona : tire au sort une petite attention et la programme.
- * config('attention_background') à false (banc de tests) : rien n'est lancé.
- */
+/** Après une réponse du persona : tire au sort une petite attention et la programme. */
 function attention_maybe(int $cid): bool
 {
     $chance = max(0, min(100, (int) setting('chat_attention_chance', '20')));
-    if ($chance === 0 || setting('chat_followup_enabled', '1') !== '1' || random_int(1, 100) > $chance
-        || !config('attention_background', true)) {
+    if ($chance === 0 || setting('chat_followup_enabled', '1') !== '1' || random_int(1, 100) > $chance) {
         return false;
     }
-    $stmt = db()->prepare('SELECT auto_followup FROM conversations WHERE id = ?');
-    $stmt->execute([$cid]);
-    if ((int) $stmt->fetchColumn() !== 1) {
-        return false;
-    }
-    return pv_spawn_script('bin/attention.php', $cid);
+    $stmt = db()->prepare("UPDATE conversations SET attention_due = datetime('now', ?), attention_msg = ?
+                           WHERE id = ? AND auto_followup = 1");
+    $stmt->execute(['+' . ATTENTION_DELAY . ' seconds', attention_last_id($cid), $cid]);
+    return $stmt->rowCount() > 0;
 }
 
+/**
+ * Petites attentions arrivées à échéance (appelé par la tâche planifiée). Chacune n'est
+ * tentée qu'une fois : sans les conditions réunies, elle est abandonnée.
+ * @return array<int,string> résultat par conversation (voir attention_run)
+ */
+function attention_due_run(bool $dry = false): array
+{
+    $rows = db()->query("SELECT id, attention_msg FROM conversations
+                         WHERE attention_due <> '' AND attention_due <= datetime('now') ORDER BY attention_due")->fetchAll();
+    $out = [];
+    foreach ($rows as $row) {
+        $cid = (int) $row['id'];
+        if ($dry) {
+            $out[$cid] = 'due';
+            continue;
+        }
+        // on réserve d'abord : deux passages simultanés n'envoient qu'un mot
+        $stmt = db()->prepare("UPDATE conversations SET attention_due = '' WHERE id = ? AND attention_due <> ''");
+        $stmt->execute([$cid]);
+        if ($stmt->rowCount() === 0) {
+            continue;
+        }
+        $out[$cid] = attention_run($cid, (int) $row['attention_msg']);
+    }
+    return $out;
+}
 /**
  * Envoie la petite attention si la conversation n'a pas bougé depuis $lastId (le dernier
  * message au moment du tirage) : ce doit toujours être la réponse du persona, pas un message

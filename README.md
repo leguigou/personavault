@@ -367,10 +367,10 @@ php bin/duo-test.php camille-lefebvre hugo-bernard --sujet="Partir vivre à la c
 ### Relances spontanées (tâche planifiée)
 
 Les messages spontanés sont envoyés par un script à lancer régulièrement, par exemple toutes les
-30 minutes :
+5 minutes (elle envoie aussi les petites attentions, quelques minutes après une réponse) :
 
 ```cron
-*/30 * * * * cd /chemin/vers/personavault && php bin/followup.php >> storage/followup.log 2>&1
+*/5 * * * * cd /chemin/vers/personavault && php bin/followup.php >> storage/followup.log 2>&1
 ```
 
 `php bin/followup.php --dry` montre ce qui serait envoyé sans rien enregistrer.

@@ -44,8 +44,6 @@ return [
     'chat_web_lmstudio_mcp' => getenv('PV_E2E_LMS_MCP') ? ['id' => 'mcp/test-search', 'tool' => 'web_search'] : [],
     // humeur et ressentis : pas d'analyse en arrière-plan pendant le parcours (tests/e2e/feelings.php l'appelle directement)
     'feelings_background' => false,
-    // petite attention : pas de processus en attente (tests/e2e/followup.php appelle bin/attention.php)
-    'attention_background' => false,
 ];
 PHP
 mkdir -p "$WORK/storage/uploads"

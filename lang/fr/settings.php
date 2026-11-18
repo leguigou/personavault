@@ -134,7 +134,7 @@ return [
     'settings.followup.cron_res_llm_down' => 'LM Studio injoignable',
     'settings.followup.cron_res_sent' => ['one' => '{n} relance envoyée', 'other' => '{n} relances envoyées'],
     'settings.followup.cron_how' => 'Installer la tâche planifiée',
-    'settings.followup.cron_help' => 'Sur le serveur, ouvre la crontab (commande crontab -e) et ajoute cette ligne : elle vérifie toutes les 30 min s\'il faut relancer une conversation, même quand l\'application est fermée.',
+    'settings.followup.cron_help' => 'Sur le serveur, ouvre la crontab (commande crontab -e) et ajoute cette ligne : elle vérifie toutes les 5 min s\'il faut relancer une conversation, même quand l\'application est fermée.',
     'settings.followup.cron_copy' => 'Copier',
     'settings.followup.cron_test' => 'Pour vérifier sans rien envoyer :',
     'settings.followup.enable'  => 'Autoriser les relances spontanées',
@@ -283,7 +283,7 @@ return [
     'settings.info.followup_html'     => '<p>Après un long silence, le persona peut t’écrire de lui-même, uniquement dans la plage horaire
             choisie et au plus une fois par période de silence.</p>
             <p>Ces relances sont déclenchées par une tâche planifiée sur le serveur, par exemple toutes les
-            30 minutes : <code>php bin/followup.php</code> (cron). Sans elle, rien ne part.</p>',
+            5 minutes : <code>php bin/followup.php</code> (cron). Sans elle, rien ne part.</p>',
     'settings.info.facts_label'       => 'souvenirs durables',
     'settings.info.facts_html'        => '<p>Après certains échanges, l’app demande à un modèle ce qui mérite d’être retenu sur toi
             (prénom, goûts, projets…). Ces souvenirs sont partagés entre toutes les conversations d’un persona
@@ -336,12 +336,12 @@ return [
     'settings.followup.streak'      => 'Relances d’affilée sans réponse',
     'settings.followup.streak_help' => 'Au-delà, le persona attend que tu lui répondes avant de t’écrire à nouveau.',
     'settings.followup.attention' => 'Petite attention après une réponse (%)',
-    'settings.followup.attention_help' => 'Chance qu’il/elle t’envoie un petit mot de lui-même 3 à 7 min après avoir répondu, si tu n’as pas réécrit. 0 = jamais. Le serveur doit pouvoir lancer des tâches en arrière-plan.',
+    'settings.followup.attention_help' => 'Chance qu’il/elle t’envoie un petit mot de lui-même environ 5 min après avoir répondu (entre 3 et 8), si tu n’as pas réécrit. 0 = jamais. Envoyé par la tâche planifiée.',
     'settings.single_model.label' => 'Un seul modèle à la fois dans LM Studio',
     'settings.single_model.hint' => 'À chaque changement de modèle (autre conversation, autre persona, modèle de test), les autres modèles sont déchargés avant de charger le nouveau : la mémoire ne sature pas. Désactivez-le seulement si votre machine peut garder plusieurs modèles chargés.',
     'settings.idle_unload.label' => 'Libérer la mémoire de LM Studio après une inactivité de',
     'settings.idle_unload.never' => 'Illimité',
-    'settings.idle_unload.hint' => 'Sans réponse ni chargement de modèle pendant cette durée, tous les modèles sont déchargés de LM Studio. Tout à gauche : jamais. Vérifié à chaque passage de la tâche planifiée (environ toutes les 30 min) ; les relances automatiques ne comptent pas comme activité.',
+    'settings.idle_unload.hint' => 'Sans réponse ni chargement de modèle pendant cette durée, tous les modèles sont déchargés de LM Studio. Tout à gauche : jamais. Vérifié à chaque passage de la tâche planifiée (environ toutes les 5 min) ; les relances automatiques ne comptent pas comme activité.',
     'logs.title' => 'Journal des échanges',
     'logs.eyebrow' => 'Diagnostic',
     'logs.intro' => 'Les 20 derniers échanges avec les modèles, du plus récent au plus ancien : ce qui est envoyé (↑) et ce qui revient (↓). Les clés d’API n’y figurent jamais ; les photos sont remplacées par leur taille.',

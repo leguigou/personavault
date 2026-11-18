@@ -138,22 +138,39 @@ if (array_intersect_key($seen, array_flip(['anecdote', 'proposition', 'decouvert
 }
 echo "OK : réveils variés (nouvelles de l’utilisateur, types qui tournent, dernier sujet seulement pour un rebond).\n";
 
-// Petite attention quelques minutes après une réponse du persona : envoyée seulement si la
-// réponse est toujours le dernier message, sans repousser la relance habituelle.
-set_setting('chat_attention_delay', '0');
-$pdo->prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', 'Bonne soirée !')")->execute([$cid]);
-$pdo->prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'assistant', 'Merci, à toi aussi !')")->execute([$cid]);
+// Petite attention quelques minutes après une réponse du persona : programmée après la réponse,
+// envoyée par la tâche planifiée une fois l'heure passée, sans repousser la relance habituelle ;
+// annulée si l'utilisateur a écrit entre-temps.
+set_setting('chat_attention_chance', '100');
+$say = $pdo->prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)");
+$say->execute([$cid, 'user', 'Bonne soirée !']);
+$say->execute([$cid, 'assistant', 'Merci, à toi aussi !']);
 $before = (string) $pdo->query("SELECT last_followup_at FROM conversations WHERE id = $cid")->fetchColumn();
-$attention = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($appDir . '/bin/attention.php') . ' ' . $cid;
-$first = trim((string) shell_exec($attention));
-$second = trim((string) shell_exec($attention)); // le dernier message est maintenant spontané
+$runOutput = static function () use ($command): string {
+    return (string) shell_exec($command . ' 2>&1');
+};
+$due = static fn (): string => (string) $pdo->query("SELECT attention_due FROM conversations WHERE id = $cid")->fetchColumn();
+$early = attention_maybe($cid) ? $runOutput() : 'non programmée';
+$pdo->exec("UPDATE conversations SET attention_due = datetime('now', '-1 minute') WHERE id = $cid");
+$sentOut = $runOutput();
+$againOut = $runOutput();
 $requests = $followupRequests();
 $system = json_decode(end($requests) ?: '[]', true, 512, JSON_THROW_ON_ERROR)[0]['content'] ?? '';
 $last = $pdo->query("SELECT role, spontaneous FROM messages WHERE conversation_id = $cid ORDER BY id DESC LIMIT 1")->fetch();
 $after = (string) $pdo->query("SELECT last_followup_at FROM conversations WHERE id = $cid")->fetchColumn();
-if ($first !== 'sent' || $second !== 'moved' || count($requests) !== 5 || !str_contains($system, 'petite attention')
-    || $last['role'] !== 'assistant' || (int) $last['spontaneous'] !== 1 || $after !== $before) {
-    throw new RuntimeException("Petite attention : $first / $second / " . count($requests));
+if (str_contains($early, 'petite attention') || !str_contains($sentOut, 'petite attention — sent') || str_contains($againOut, 'petite attention')
+    || count($requests) !== 5 || !str_contains($system, 'petite attention') || $last['role'] !== 'assistant'
+    || (int) $last['spontaneous'] !== 1 || $after !== $before || $due() !== '') {
+    throw new RuntimeException("Petite attention : $early / $sentOut / $againOut / " . count($requests));
 }
-set_setting('chat_attention_delay', '');
-echo "OK : petite attention après une réponse, une seule fois, sans repousser la relance habituelle.\n";
+$say->execute([$cid, 'user', 'Encore un mot']);
+$say->execute([$cid, 'assistant', 'Je t’écoute.']);
+attention_maybe($cid);
+$say->execute([$cid, 'user', 'En fait, rien.']);
+$pdo->exec("UPDATE conversations SET attention_due = datetime('now', '-1 minute') WHERE id = $cid");
+$movedOut = $runOutput();
+if (!str_contains($movedOut, 'petite attention — moved') || count($followupRequests()) !== 5) {
+    throw new RuntimeException('Petite attention à annuler si l’utilisateur a écrit : ' . $movedOut);
+}
+set_setting('chat_attention_chance', '20');
+echo "OK : petite attention envoyée par la tâche planifiée après une réponse, une seule fois, annulée si l’utilisateur a écrit.\n";

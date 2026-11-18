@@ -131,7 +131,7 @@ return [
     'settings.followup.cron_res_llm_down' => 'LM Studio unreachable',
     'settings.followup.cron_res_sent' => ['one' => '{n} follow-up sent', 'other' => '{n} follow-ups sent'],
     'settings.followup.cron_how' => 'Install the scheduled task',
-    'settings.followup.cron_help' => 'On the server, open the crontab (crontab -e) and add this line: every 30 minutes it checks whether a conversation needs a follow-up, even when the app is closed.',
+    'settings.followup.cron_help' => 'On the server, open the crontab (crontab -e) and add this line: every 5 minutes it checks whether a conversation needs a follow-up, even when the app is closed.',
     'settings.followup.cron_copy' => 'Copy',
     'settings.followup.cron_test' => 'To check without sending anything:',
     'settings.followup.enable'  => 'Allow spontaneous follow-ups',
@@ -280,7 +280,7 @@ return [
     'settings.info.followup_html'     => '<p>After a long silence, the persona can write to you on its own, only within the chosen
             time window and at most once per period of silence.</p>
             <p>These follow-ups are triggered by a scheduled task on the server, for example every
-            30 minutes: <code>php bin/followup.php</code> (cron). Without it, nothing is sent.</p>',
+            5 minutes: <code>php bin/followup.php</code> (cron). Without it, nothing is sent.</p>',
     'settings.info.facts_label'       => 'lasting memories',
     'settings.info.facts_html'        => '<p>After some exchanges, the app asks a model what is worth remembering about you
             (first name, tastes, plans…). These memories are shared across all of a persona’s conversations
@@ -333,12 +333,12 @@ return [
     'settings.followup.streak'      => 'Follow-ups in a row without a reply',
     'settings.followup.streak_help' => 'Beyond this, the persona waits for your reply before writing again.',
     'settings.followup.attention' => 'Little attention after a reply (%)',
-    'settings.followup.attention_help' => 'Chance that the persona sends you a short note on their own 3 to 7 min after replying, if you haven\'t written again. 0 = never. The server must be able to run background tasks.',
+    'settings.followup.attention_help' => 'Chance that the persona sends you a short note on their own about 5 min after replying (3 to 8), if you haven\'t written again. 0 = never. Sent by the scheduled task.',
     'settings.single_model.label' => 'Only one model at a time in LM Studio',
     'settings.single_model.hint' => 'Whenever the model changes (another conversation, another persona, a test model), the other models are unloaded before loading the new one, so memory does not fill up. Turn it off only if your machine can keep several models loaded.',
     'settings.idle_unload.label' => 'Free LM Studio memory after being idle for',
     'settings.idle_unload.never' => 'Unlimited',
-    'settings.idle_unload.hint' => 'With no reply or model load during this time, all models are unloaded from LM Studio. Far left: never. Checked on each run of the scheduled task (about every 30 min); automatic follow-ups do not count as activity.',
+    'settings.idle_unload.hint' => 'With no reply or model load during this time, all models are unloaded from LM Studio. Far left: never. Checked on each run of the scheduled task (about every 5 min); automatic follow-ups do not count as activity.',
     'logs.title' => 'Exchange log',
     'logs.eyebrow' => 'Diagnostics',
     'logs.intro' => 'The last 20 exchanges with the models, newest first: what is sent (↑) and what comes back (↓). API keys are never included; photos are replaced by their size.',
