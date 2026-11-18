@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 21);
+define('PV_SCHEMA_VERSION', 22);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -269,6 +269,11 @@ function migrate(PDO $pdo): void
         if ($version < 21) {
             // types des derniers messages spontanés de la conversation (src/followup.php)
             add_column_if_missing($pdo, 'conversations', 'followup_kinds', "TEXT NOT NULL DEFAULT ''");
+        }
+        if ($version < 22) {
+            // petite attention programmée : heure prévue et réponse du persona qui l'a déclenchée (src/followup.php)
+            add_column_if_missing($pdo, 'conversations', 'attention_due', "TEXT NOT NULL DEFAULT ''");
+            add_column_if_missing($pdo, 'conversations', 'attention_msg', 'INTEGER NOT NULL DEFAULT 0');
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);

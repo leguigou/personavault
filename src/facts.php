@@ -45,12 +45,16 @@ function facts_explicit_request(string $message): bool
 {
     return (bool) preg_match(
         // français
-        "/(souviens[- ]?toi|rappelle[- ]?toi|retiens|m[ée]morise|note (bien )?que|n['’]oublie pas|garde en m[ée]moire"
+        "/(souviens[- ]?(toi|t['’]en)|rappelle[- ]?(toi|t['’]en)|retiens|m[ée]morise|note (bien )?que|n['’]oublie (pas|jamais)|garde ([çc]a |le |cela )?en (m[ée]moire|t[êe]te)"
+        . "|\\b(pourras|devras|dois|vas|faut) (te |t['’]en )souvenir\\b|\\btu (te |t['’]en )souviendras\\b"
+        . "|\\bque tu (te |t['’]en )souviennes\\b|\\bpromets?[- ]moi\\b|\\btu me (le )?promets\\b|\\bje te (le )?promets\\b"
         // anglais (« do you remember… » est une question, pas une demande)
         . "|(?<!do you )\\bremember (that|this|me)\\b|\\bkeep (it )?in mind\\b|\\bdon['’]?t forget\\b|\\bdo not forget\\b"
+        . "|\\bpromise me\\b|\\bi promise( you)?\\b|\\byou(['’]ll| will) remember\\b"
         . "|\\bnever forget\\b|\\bmake a note\\b|\\btake note\\b|\\bnote that\\b|\\bmemori[sz]e\\b|\\bwrite (it|this) down\\b"
         // espagnol
         . "|\\brecuerda (que|esto|esta|este)\\b|\\bacu[ée]rdate\\b|\\bno (te )?olvides\\b|\\bapunta (que|esto)\\b"
+        . "|\\bpr[oó]meteme\\b|\\bme lo prometes\\b|\\bte (lo )?prometo\\b|\\bte acordar[aá]s\\b"
         . "|\\banota (que|esto)\\b|\\bten en cuenta\\b|\\bmemoriza\\b|\\bguarda en (la |tu )?memoria\\b|\\btoma nota\\b)/iu",
         $message
     );
@@ -330,7 +334,8 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
     if ($explicit) {
         $system .= " L'UTILISATEUR DEMANDE EXPLICITEMENT DE MÉMORISER quelque chose (souviens-toi, retiens, "
             . "note…) : tu DOIS enregistrer ce fait, même s'il ne parle pas de lui, même s'il paraît anodin. "
-            . "Formule-le tel qu'il devra être rappelé plus tard.";
+            . "Formule-le tel qu'il devra être rappelé plus tard. S'il s'agit d'une promesse que le persona a faite, "
+            . "enregistre-la dans story (voir ci-dessous).";
     }
     $system .= "\nEn plus de memories et forget, ajoute le tableau story à l'objet JSON. "
         . "Dans story uniquement, mémorise les événements concrets de la vie du persona, ses projets en cours et les moments partagés "
@@ -339,7 +344,11 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
         . "Écris à la troisième personne et distingue un projet d'un fait accompli. Ne transforme pas ces éléments en faits sur l'utilisateur. "
         . 'Chaque entrée de story a la forme {"source":2,"category":"fait|projet|decision","content":"phrase courte","replaces":null}. '
         . "source désigne le numéro du message du persona qui établit le souvenir. replaces désigne l'identifiant d'un souvenir story "
-        . "du même persona que la nouvelle information actualise. Omet les faits que tu as déjà sous une autre forme.";
+        . "du même persona que la nouvelle information actualise. Omet les faits que tu as déjà sous une autre forme. "
+        . "Garde AUSSI dans story les promesses et engagements que le persona prend envers l'utilisateur (« promis », "
+        . "« je te promets », « je ne te mentirai jamais »…), y compris quand l'utilisateur les lui a demandés : category "
+        . "\"decision\", par exemple « Le persona a promis à l'utilisateur de toujours lui dire la vérité » (avec son prénom "
+        . "à la place de « Le persona »). Les promesses de l'utilisateur au persona vont dans memories (category \"decision\").";
 
     $user = "Mémoires existantes :\n" . ($knownLines !== '' ? $knownLines : '(aucune)')
         . "\nDernier message de l'utilisateur (le plus important) :\n" . ($lastUser !== '' ? $lastUser : '(aucun)')

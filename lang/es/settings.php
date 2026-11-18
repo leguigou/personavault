@@ -132,7 +132,7 @@ return [
     'settings.followup.cron_res_llm_down' => 'LM Studio inaccesible',
     'settings.followup.cron_res_sent' => ['one' => '{n} mensaje enviado', 'other' => '{n} mensajes enviados'],
     'settings.followup.cron_how' => 'Instalar la tarea programada',
-    'settings.followup.cron_help' => 'En el servidor, abre la crontab (crontab -e) y añade esta línea: cada 30 minutos comprueba si hay que escribir en una conversación, incluso con la aplicación cerrada.',
+    'settings.followup.cron_help' => 'En el servidor, abre la crontab (crontab -e) y añade esta línea: cada 5 minutos comprueba si hay que escribir en una conversación, incluso con la aplicación cerrada.',
     'settings.followup.cron_copy' => 'Copiar',
     'settings.followup.cron_test' => 'Para comprobar sin enviar nada:',
     'settings.followup.enable'  => 'Permitir mensajes espontáneos',
@@ -281,7 +281,7 @@ return [
     'settings.info.followup_html'     => '<p>Tras un largo silencio, la persona puede escribirte por iniciativa propia, solo dentro de la franja
             horaria elegida y como mucho una vez por periodo de silencio.</p>
             <p>Estos mensajes los lanza una tarea programada en el servidor, por ejemplo cada
-            30 minutos: <code>php bin/followup.php</code> (cron). Sin ella, no se envía nada.</p>',
+            5 minutos: <code>php bin/followup.php</code> (cron). Sin ella, no se envía nada.</p>',
     'settings.info.facts_label'       => 'recuerdos duraderos',
     'settings.info.facts_html'        => '<p>Tras algunos intercambios, la app pregunta a un modelo qué merece la pena recordar sobre ti
             (nombre, gustos, proyectos…). Estos recuerdos se comparten entre todas las conversaciones de una persona
@@ -334,12 +334,12 @@ return [
     'settings.followup.streak'      => 'Mensajes seguidos sin respuesta',
     'settings.followup.streak_help' => 'Después, la persona espera tu respuesta antes de volver a escribirte.',
     'settings.followup.attention' => 'Pequeño detalle tras una respuesta (%)',
-    'settings.followup.attention_help' => 'Probabilidad de que la persona te mande un mensajito por su cuenta de 3 a 7 min después de responder, si no has vuelto a escribir. 0 = nunca. El servidor debe poder lanzar tareas en segundo plano.',
+    'settings.followup.attention_help' => 'Probabilidad de que la persona te mande un mensajito por su cuenta unos 5 min después de responder (entre 3 y 8), si no has vuelto a escribir. 0 = nunca. Lo envía la tarea programada.',
     'settings.single_model.label' => 'Un solo modelo a la vez en LM Studio',
     'settings.single_model.hint' => 'Con cada cambio de modelo (otra conversación, otro persona, un modelo de prueba), los demás modelos se descargan antes de cargar el nuevo: la memoria no se satura. Desactívelo solo si su equipo puede mantener varios modelos cargados.',
     'settings.idle_unload.label' => 'Liberar la memoria de LM Studio tras una inactividad de',
     'settings.idle_unload.never' => 'Ilimitado',
-    'settings.idle_unload.hint' => 'Sin respuestas ni cargas de modelo durante este tiempo, todos los modelos se descargan de LM Studio. Todo a la izquierda: nunca. Se comprueba en cada ejecución de la tarea programada (unos 30 min); los mensajes automáticos no cuentan como actividad.',
+    'settings.idle_unload.hint' => 'Sin respuestas ni cargas de modelo durante este tiempo, todos los modelos se descargan de LM Studio. Todo a la izquierda: nunca. Se comprueba en cada ejecución de la tarea programada (unos 5 min); los mensajes automáticos no cuentan como actividad.',
     'logs.title' => 'Registro de intercambios',
     'logs.eyebrow' => 'Diagnóstico',
     'logs.intro' => 'Los 20 últimos intercambios con los modelos, del más reciente al más antiguo: lo que se envía (↑) y lo que vuelve (↓). Las claves de API nunca aparecen; las fotos se sustituyen por su tamaño.',

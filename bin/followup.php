@@ -6,7 +6,8 @@
  *   --dry     affiche ce qui serait envoyé, sans rien enregistrer
  *   --verbose détaille les conversations examinées
  *
- * À lancer par cron (toutes les 30 min). Ne fait rien si LM Studio est éteint,
+ * À lancer par cron (toutes les 5 min). Envoie aussi les petites attentions programmées
+ * après une réponse (src/followup.php). Ne fait rien si LM Studio est éteint,
  * si l'heure est hors plage, ou si la conversation a déjà été relancée récemment.
  */
 require __DIR__ . '/../src/bootstrap.php';
@@ -59,6 +60,15 @@ try {
     $revived && $say(plural($revived, 'discussion entre personas relancée', 'discussions entre personas relancées'));
 } catch (Throwable $e) {
     $say('relance des discussions entre personas impossible : ' . $e->getMessage());
+}
+
+// petites attentions programmées après une réponse (elles vérifient elles-mêmes plage horaire et réglages)
+try {
+    foreach (attention_due_run($dry) as $aCid => $aResult) {
+        $say("#{$aCid} : petite attention — {$aResult}");
+    }
+} catch (Throwable $e) {
+    $say('petites attentions impossibles : ' . $e->getMessage());
 }
 
 if (setting('chat_followup_enabled', '1') !== '1') {

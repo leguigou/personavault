@@ -372,7 +372,7 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
             $fuRes    = json_decode(setting('followup_last_result', ''), true) ?: [];
             $fuAge    = $fuLast !== '' ? time() - (int) strtotime($fuLast . ' UTC') : null;
             $fuStale  = $fuAge !== null && $fuAge > 2 * 3600;
-            $fuLine   = '*/30 * * * * cd ' . PV_ROOT . ' && php bin/followup.php >> storage/followup.log 2>&1';
+            $fuLine   = '*/5 * * * * cd ' . PV_ROOT . ' && php bin/followup.php >> storage/followup.log 2>&1';
             $fuReason = match ((string) ($fuRes['reason'] ?? '')) {
                 'disabled'  => t('settings.followup.cron_res_disabled'),
                 'off_hours' => t('settings.followup.cron_res_off_hours'),
