@@ -56,6 +56,7 @@
                         </div>
                     </div>
                 </a>
+                <div class="contact-foot">
                 <!-- nouvelle conversation avec ce persona, sans passer par la dernière -->
                 <form method="post" action="/chat/<?= (int) $latest['id'] ?>/new" class="contact-new" data-new-chat
                       data-title="<?= e(t('chat.head.new')) ?>" data-help="<?= e(t('chat.new.help')) ?>"
@@ -76,6 +77,7 @@
                         <?php endforeach; ?>
                     </div>
                 </details>
+                </div>
             </article>
         <?php endforeach; ?>
     </div>
