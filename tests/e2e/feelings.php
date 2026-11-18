@@ -45,3 +45,13 @@ if (!feel_persona_minor($minor) || feel_persona_minor($persona) || feel_get($cid
     throw new RuntimeException('Une fiche de moins de 18 ans ne doit pas recevoir de sentiment amoureux.');
 }
 echo "OK : humeur et ressentis par conversation (analyse, réglage, contexte, garde-fou d’âge).\n";
+
+// Âge minimum (FEEL_MIN_AGE) ; seul l'attribut « Âge » compte, jamais l'accroche.
+$withAge = static fn (string $age): array => ['meta' => json_encode([['k' => 'Âge', 'v' => $age]]), 'tagline' => 'Barman, 3 ans d’expérience'];
+$noAge = ['meta' => '[]', 'tagline' => 'Barman, 3 ans d’expérience'];
+$checks = [feel_persona_minor($withAge((string) (FEEL_MIN_AGE - 1) . ' ans')), !feel_persona_minor($withAge((string) FEEL_MIN_AGE)),
+    !feel_persona_minor($noAge), !feel_persona_minor($withAge('la quarantaine'))];
+if (in_array(false, $checks, true)) {
+    throw new RuntimeException('Âge minimum : seul l’attribut « Âge » chiffré compte : ' . json_encode($checks));
+}
+echo "OK : âge minimum lu seulement dans l’attribut « Âge » chiffré.\n";
