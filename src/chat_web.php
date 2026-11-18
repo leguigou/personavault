@@ -122,7 +122,9 @@ function chat_web_plan(array $history, string $text, array $cfg, callable $ping,
                 ['personnage' => $character, 'recent' => $recent, 'message' => mb_substr($text, 0, 900)],
                 JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
             )],
-        ], $cfg, ['json' => true, 'temperature' => 0.0, 'max_tokens' => 160, 'timeout' => 20, 'on_tick' => $ping]);
+        ], $cfg, ['json' => true, 'temperature' => 0.0, 'max_tokens' => 160, 'timeout' => 20, 'on_tick' => $ping,
+            // un modèle « thinking » (Gemma 4, Qwen3) sans ceci renvoie un contenu vide
+            'reasoning_effort' => setting('chat_reasoning_effort', 'none')]);
         $data = llm_json($result['content']);
     } catch (RuntimeException $e) {
         return $none;
