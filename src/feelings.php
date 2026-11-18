@@ -119,6 +119,27 @@ function feel_reason_manual(string $reason): bool
     return $reason === t('duo.adjust.reason');
 }
 
+/**
+ * Humeur proposée par l'analyse, freinée comme les jauges : une humeur ne change pas d'un bloc.
+ * - humeur opposée (négative ↔ positive) alors que l'actuelle est forte : elle retombe de 20 points (duo_mood_inertia) ;
+ * - humeur forte (≥ 50) qui redeviendrait neutre d'un coup : elle retombe de 20 points ;
+ * - sinon l'intensité bouge de 20 points au plus par analyse (85 → 65 au minimum, pas 85 → 30).
+ * Depuis le neutre, l'humeur peut monter directement : un échange peut suffire à agacer ou réjouir.
+ * @return array{0:string, 1:string, 2:int} [émotion, mot, intensité]
+ */
+function feel_mood_step(array $before, string $emotion, string $word, int $intensity): array
+{
+    [$emotion, $word, $level] = duo_mood_inertia($before, $emotion, $word, $intensity);
+    $from = (int) $before['intensity'];
+    if ($before['emotion'] === 'neutre' || $from <= 0) {
+        return [$emotion, $word, max(0, min(100, $level))];
+    }
+    if ($from >= 50 && duo_emotion_key($emotion) === 'neutre') {
+        return [$before['emotion'], $before['mood'], $from - 20];
+    }
+    return [$emotion, $word, max(0, min(100, $from + 20, max($from - 20, $level)))];
+}
+
 /** Note dans le fil (message « notice », hors historique envoyé au modèle). */
 function feel_notice(int $cid, string $text): void
 {
@@ -292,7 +313,7 @@ function feel_analyze(int $cid): bool
         $emotion = strtolower(trim((string) ($data['emotion'] ?? '')));
         $word = mb_strtolower(trim((string) ($data['mot'] ?? '')));
         if (isset(duo_emotions()[$emotion]) || $word !== '') {
-            [$emotion, $word, $level] = duo_mood_inertia(
+            [$emotion, $word, $level] = feel_mood_step(
                 ['emotion' => $f['emotion'], 'mood' => $f['mood'], 'intensity' => $f['intensity']],
                 $emotion !== '' ? $emotion : 'neutre', $word, (int) ($data['intensite'] ?? 50)
             );
