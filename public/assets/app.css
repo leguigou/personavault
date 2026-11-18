@@ -3374,10 +3374,12 @@ html[data-avatars="0"] .msg-bot > .bubbles { max-width: 100%; }
 .hours-range { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
 .hours-range .input { width: 72px; text-align: center; padding-left: 8px; padding-right: 8px; }
 
-/* Dans les réglages, les actions restent visibles même avant la première modification. */
+/* Réglages : « Enregistrer » n'apparaît qu'après une modification (barre fixe en bas) ;
+   les autres actions de la barre (« Tester la connexion ») restent visibles, à leur place. */
 .dirty-note { display: none; margin-right: auto; align-self: center; font-size: 12.5px; color: var(--warn-t, #fcd34d); }
 form.is-dirty .dirty-note { display: inline; }
-.settings-page .save-bar,
+.settings-page form[data-dirty-guard]:not(.is-dirty) .save-bar [type="submit"] { display: none; }
+.settings-page form[data-dirty-guard]:not(.is-dirty) .save-bar:not(:has(button:not([type="submit"]))) { display: none; }
 form.is-dirty .save-bar {
     position: sticky;
     bottom: 12px;
@@ -3546,7 +3548,6 @@ html[data-tabbar="classic"] { --tabbar-space: calc(66px + var(--safe-b)); }
 
 .toast { bottom: calc(var(--tabbar-space) + 18px); }
 @media (max-width: 899px) {
-    .settings-page .save-bar,
     form.is-dirty .save-bar { bottom: calc(var(--tabbar-space) + 10px); }
     /* réserve sous le contenu pour la barre du bas — pas dans une conversation, qui n'en a pas */
     .page:not(.page-chat) { padding-bottom: calc(var(--tabbar-space) + 40px); }

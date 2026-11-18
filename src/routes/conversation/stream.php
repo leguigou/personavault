@@ -445,6 +445,8 @@ if ($action === 'stream' && $method === 'POST') {
         $out['feelings_pending'] = true;
         $out['feelings_drive'] = !feel_spawn($cid);
     }
+    // petite attention quelques minutes plus tard, de temps en temps (src/followup.php)
+    attention_maybe($cid);
     $sse($out);
     if ($relationshipPending && function_exists('fastcgi_finish_request')) {
         fastcgi_finish_request();

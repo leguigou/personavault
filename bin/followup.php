@@ -89,15 +89,9 @@ if (!$st['reachable']) {
     exit(0);
 }
 
-// un seul modèle pour toutes les relances du passage, sans rien décharger ni charger :
-// celui déjà en mémoire dans LM Studio s'il y en a un (en cours d'utilisation), sinon le
-// modèle de base des Réglages. Le modèle propre au persona ou à la conversation est ignoré
-// ici : sinon chaque relance ferait décharger puis recharger des modèles.
-$fuCfg = chat_llm_config();
-if (!empty($st['loaded'])) {
-    $fuCfg['model'] = (string) ($st['loaded'][0]['key'] ?: $st['loaded'][0]['id']);
-}
-if ((string) $fuCfg['model'] === '') {
+// un seul modèle pour toutes les relances du passage (src/followup.php)
+$fuCfg = followup_model_config($st);
+if ($fuCfg === null) {
     $say('aucun modèle de discussion configuré — aucune relance envoyée');
     $beat('llm_down');
     exit(0);
@@ -150,126 +144,17 @@ foreach ($convs as $conv) {
         continue;
     }
 
-    $stmt = db()->prepare('SELECT * FROM prompts WHERE persona_id = ?');
-    $stmt->execute([(int) $persona['id']]);
-    $prompts = $stmt->fetchAll();
-
-    $conv    = chat_with_persona($conv, $persona);
-    $factsOn = (int) $conv['memory_enabled'] === 1 && (int) $conv['facts_enabled'] === 1;
-    $facts = $factsOn ? array_merge(
-        facts_relevant((int) $persona['id'], (string) $last['content']),
-        facts_relevant((int) $persona['id'], (string) $last['content'], 3, 'story')
-    ) : [];
-
-    $system = chat_system_prompt($persona, $prompts, $conv, $facts)
-        . "\n\n" . chat_time_context($conv, $history, true)
-        . "\n\n" . str_replace(
-            ['{persona}', '{gap}'],
-            [(string) $persona['name'], chat_gap_duration($gap)],
-            engine_prompt('followup')
-        )
-        . followup_no_repeat($cid);
-
-    $messages = [['role' => 'system', 'content' => $system]];
-    $lastUserMessage = '';
-    foreach ($history as $m) {
-        $content = trim((string) $m['content'] . ($m['image'] !== '' ? ' [photo jointe]' : ''));
-        $messages[] = ['role' => (string) $m['role'], 'content' => $content];
-        if ($m['role'] === 'user') {
-            $lastUserMessage = $content;
-        }
-    }
-    $messages[] = ['role' => 'user', 'content' => '[le téléphone vibre : écris ton message spontané maintenant]'];
-
-    try {
-        llm_log_context(['cid' => $cid]);
-        $res = llm_request($messages, $fuCfg, [
-            'purpose'          => 'followup',
-            'temperature'      => max(0.7, (float) ($conv['temperature'] ?? 0.85)),
-            'max_tokens'       => 140,
-            'timeout'          => 120,
-            'reasoning_effort' => setting('chat_reasoning_effort', 'none'),
-        ]);
-    } catch (Throwable $e) {
-        $say("#{$cid} : échec génération (" . $e->getMessage() . ')');
-        continue;
-    }
-
-    $text = trim((string) $res['content']);
-    if ($text === '') {
-        $say("#{$cid} : réponse vide");
-        continue;
-    }
-    if (mb_strlen($text) > 320) {
-        $text = mb_substr($text, 0, 320) . '…';
-    }
-
-    if ($dry) {
-        $say("#{$cid} ({$persona['name']}) APRÈS " . chat_gap_duration($gap) . ' : ' . $text);
+    $r = followup_send($conv, $persona, $history, $gap, $fuCfg, null, $dry);
+    if ($r['status'] === 'dry') {
+        $say("#{$cid} ({$persona['name']}) APRÈS " . chat_gap_duration($gap) . " [{$r['kind']}] : " . $r['text']);
         $sent++;
-        continue;
+    } elseif ($r['status'] === 'sent') {
+        $say("#{$cid} ({$persona['name']}) relance « {$r['kind']} » envoyée après " . chat_gap_duration($gap) . ' : ' . mb_substr($r['text'], 0, 90));
+        $sent++;
+    } elseif ($r['error'] !== '') {
+        $say("#{$cid} : " . $r['error']);
     }
-
-    $chatLock = chat_try_lock($cid);
-    if ($chatLock === false) {
-        continue;
-    }
-    try {
-        // Les échanges récents ou le réglage peuvent avoir changé pendant la génération.
-        $stmt = db()->prepare("SELECT klipy_formats FROM conversations WHERE id = ? AND auto_followup = 1
-                                AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'chat_followup_enabled' AND value <> '1')");
-        $stmt->execute([$cid]);
-        $formats = $stmt->fetchColumn();
-        if ($formats === false || fetch_messages($cid, CHAT_MIN_RECENT, 0, true) !== $history) {
-            continue;
-        }
-        $conv['klipy_formats'] = (int) $formats;
-        $klipyUrl = chat_spontaneous_klipy($cid, $persona, $conv, $lastUserMessage, $text, modelConfig: $fuCfg);
-        $pdo = db();
-        $pdo->beginTransaction();
-        $ins = $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, klipy_url, spontaneous) VALUES (?, "assistant", ?, ?, ?, 1)');
-        $ins->execute([$cid, $text, (string) ($res['model'] ?? ''), $klipyUrl]);
-        $pdo->prepare('UPDATE conversations SET last_followup_at = datetime("now"), unread = 1, updated_at = datetime("now") WHERE id = ?')
-            ->execute([$cid]);
-        $pdo->commit();
-    } catch (Throwable $e) {
-        if (db()->inTransaction()) {
-            db()->rollBack();
-        }
-        $say("#{$cid} : écriture impossible (" . $e->getMessage() . ')');
-        continue;
-    } finally {
-        fclose($chatLock);
-    }
-
-    $say("#{$cid} ({$persona['name']}) relance envoyée après " . chat_gap_duration($gap) . ' : ' . mb_substr($text, 0, 90));
-    $sent++;
 }
 
 $beat('done', $sent);
 $say(plural($sent, 'relance', 'relances') . ($dry ? ($sent >= 2 ? ' simulées' : ' simulée') : ($sent >= 2 ? ' envoyées' : ' envoyée')));
-
-/**
- * Rappel des dernières relances de la conversation, pour que la suivante ne les répète pas
- * ('' s'il n'y en a pas encore).
- */
-function followup_no_repeat(int $cid): string
-{
-    $stmt = db()->prepare("SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' AND spontaneous = 1
-                           ORDER BY id DESC LIMIT 3");
-    $stmt->execute([$cid]);
-    $previous = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $content) {
-        $content = trim(preg_replace('/\s+/u', ' ', (string) $content) ?? '');
-        if ($content !== '') {
-            $previous[] = '- « ' . mb_substr($content, 0, 200) . ' »';
-        }
-    }
-    if (!$previous) {
-        return '';
-    }
-    return "\n\nTes derniers messages spontanés dans cette conversation, du plus récent au plus ancien :\n"
-        . implode("\n", $previous)
-        . "\nN'en reprends ni le sujet ni les formulations. Parle d'autre chose, ou raconte une suite nouvelle "
-        . "de ce qui s'y passait.";
-}

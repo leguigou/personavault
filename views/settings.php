@@ -425,6 +425,11 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
                     <input class="input" type="number" inputmode="numeric" name="chat_followup_max_streak" min="1" max="5" step="1" value="<?= (int) setting('chat_followup_max_streak', '2') ?>">
                     <small><?= e(t('settings.followup.streak_help')) ?></small>
                 </label>
+                <label class="field">
+                    <span><?= e(t('settings.followup.attention')) ?></span>
+                    <input class="input" type="number" inputmode="numeric" name="chat_attention_chance" min="0" max="100" step="5" value="<?= (int) setting('chat_attention_chance', '20') ?>">
+                    <small><?= e(t('settings.followup.attention_help')) ?></small>
+                </label>
                 <div class="field">
                     <span><?= e(t('settings.followup.hours')) ?></span>
                     <div class="hours-range">
