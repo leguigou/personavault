@@ -1438,9 +1438,10 @@ function chat_gap_duration(int $seconds): string
 /**
  * Contexte temporel (date, heure, silence écoulé, dernier sujet après une longue pause).
  * $skipSpontaneous : le « dernier sujet » ignore les messages spontanés du persona (relances),
- * pour qu'une relance ne reprenne pas la précédente.
+ * pour qu'une relance ne reprenne pas la précédente. $withTopic à false : pas de « dernier sujet »
+ * (message spontané d'un autre type qu'un rebond, src/followup.php).
  */
-function chat_time_context(array $conv, array $history, bool $skipSpontaneous = false): string
+function chat_time_context(array $conv, array $history, bool $skipSpontaneous = false, bool $withTopic = true): string
 {
     $now    = chat_now();
     $jours  = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -1467,7 +1468,7 @@ function chat_time_context(array $conv, array $history, bool $skipSpontaneous = 
     }
 
     // reprise après une vraie pause : on rappelle le dernier sujet, sans le réciter
-    if ($gap >= 6 * 3600) {
+    if ($withTopic && $gap >= 6 * 3600) {
         $topicSource = $last;
         if ($skipSpontaneous) {
             $topicSource = null;

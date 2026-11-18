@@ -27,6 +27,7 @@ set_setting('chat_followup_from', '0');
 set_setting('chat_followup_to', '24');
 set_setting('chat_followup_idle_hours', '6');
 set_setting('chat_followup_min_gap_hours', '12');
+set_setting('chat_followup_force_kind', 'rebond'); // vérifications du « dernier sujet » ci-dessous
 set_setting('klipy_api_key', 'test-gif-key');
 $pdo->prepare('UPDATE conversations SET klipy_formats = ? WHERE id = ?')->execute([KLIPY_FORMATS['gif'], $cid]);
 
@@ -112,3 +113,27 @@ if (count($followupRequests()) !== 3 || $spontaneous() !== 3) {
     throw new RuntimeException('Une réponse de l’utilisateur doit permettre de nouvelles relances.');
 }
 echo "OK : une réponse de l’utilisateur relance le compte.\n";
+
+// Type de message imposé : « prendre des nouvelles » à partir d'un souvenir sur l'utilisateur,
+// sans rappel du dernier sujet ; le type est retenu pour ne pas revenir aux réveils suivants.
+set_setting('chat_followup_force_kind', 'nouvelles');
+$age();
+$run();
+$requests = $followupRequests();
+$system = json_decode(end($requests) ?: '[]', true, 512, JSON_THROW_ON_ERROR)[0]['content'] ?? '';
+$kinds = (string) $pdo->query("SELECT followup_kinds FROM conversations WHERE id = $cid")->fetchColumn();
+if (count($requests) !== 4 || !str_contains($system, 'prends de ses nouvelles') || !preg_match('/t\'a confié \(.+\) : « .+ »/u', $system)
+    || str_contains($system, 'Dernier sujet') || !str_ends_with($kinds, 'nouvelles')) {
+    throw new RuntimeException('Un réveil « nouvelles » doit partir d’un souvenir sur l’utilisateur, sans le dernier sujet : ' . $kinds);
+}
+set_setting('chat_followup_force_kind', '');
+$conv = chat_conv_effective($cid);
+$conv['followup_kinds'] = 'anecdote,proposition,decouverte';
+$seen = [];
+for ($i = 0; $i < 40; $i++) {
+    $seen[followup_pick($conv, (int) $conv['persona_id'])['kind']] = true;
+}
+if (array_intersect_key($seen, array_flip(['anecdote', 'proposition', 'decouverte'])) || count($seen) < 2) {
+    throw new RuntimeException('Les types des 3 derniers réveils ne doivent pas revenir : ' . implode(',', array_keys($seen)));
+}
+echo "OK : réveils variés (nouvelles de l’utilisateur, types qui tournent, dernier sujet seulement pour un rebond).\n";

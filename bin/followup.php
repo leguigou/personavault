@@ -155,19 +155,28 @@ foreach ($convs as $conv) {
     $prompts = $stmt->fetchAll();
 
     $conv    = chat_with_persona($conv, $persona);
+    // genre de message imposé (nouvelles, anecdote, souvenir, proposition…), différent des
+    // derniers réveils : sans lui, le modèle prolonge le dernier sujet (src/followup.php)
+    $pick = followup_pick($conv, (int) $persona['id']);
+    $verbose && $say("#{$cid} : type de message « {$pick['kind']} »");
     $factsOn = (int) $conv['memory_enabled'] === 1 && (int) $conv['facts_enabled'] === 1;
+    // souvenirs liés au dernier message seulement pour un rebond ; sinon les plus récents
+    $factsQuery = $pick['topic'] ? (string) $last['content'] : '';
     $facts = $factsOn ? array_merge(
-        facts_relevant((int) $persona['id'], (string) $last['content']),
-        facts_relevant((int) $persona['id'], (string) $last['content'], 3, 'story')
+        facts_relevant((int) $persona['id'], $factsQuery),
+        facts_relevant((int) $persona['id'], $factsQuery, 3, 'story')
     ) : [];
+    $feelings = feel_context($cid, $persona);
 
     $system = chat_system_prompt($persona, $prompts, $conv, $facts)
-        . "\n\n" . chat_time_context($conv, $history, true)
+        . "\n\n" . chat_time_context($conv, $history, true, $pick['topic'])
+        . ($feelings !== '' ? "\n\n" . $feelings : '')
         . "\n\n" . str_replace(
             ['{persona}', '{gap}'],
             [(string) $persona['name'], chat_gap_duration($gap)],
             engine_prompt('followup')
         )
+        . "\n\n" . $pick['text']
         . followup_no_repeat($cid);
 
     $messages = [['role' => 'system', 'content' => $system]];
@@ -205,7 +214,7 @@ foreach ($convs as $conv) {
     }
 
     if ($dry) {
-        $say("#{$cid} ({$persona['name']}) APRÈS " . chat_gap_duration($gap) . ' : ' . $text);
+        $say("#{$cid} ({$persona['name']}) APRÈS " . chat_gap_duration($gap) . " [{$pick['kind']}] : " . $text);
         $sent++;
         continue;
     }
@@ -231,6 +240,7 @@ foreach ($convs as $conv) {
         $ins->execute([$cid, $text, (string) ($res['model'] ?? ''), $klipyUrl]);
         $pdo->prepare('UPDATE conversations SET last_followup_at = datetime("now"), unread = 1, updated_at = datetime("now") WHERE id = ?')
             ->execute([$cid]);
+        followup_remember($cid, (string) ($conv['followup_kinds'] ?? ''), $pick['kind']);
         $pdo->commit();
     } catch (Throwable $e) {
         if (db()->inTransaction()) {
