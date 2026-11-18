@@ -12,26 +12,40 @@ declare(strict_types=1);
  * Ils sont transmis dans le bloc <contexte> du dernier message, avec un comportement
  * concret. Changements d'humeur et réglages sont notés dans le fil (messages « notice »).
  *
- * Seule limite : un persona dont la fiche indique un âge inférieur à 18 ans n'a pas de
- * sentiment amoureux envers l'utilisateur (barre « amour » désactivée, rien de romantique
- * dans le contexte).
+ * Seule limite : un persona dont l'attribut « Âge » de la fiche déclare un nombre inférieur
+ * à 18 ans n'a pas de sentiment amoureux envers l'utilisateur (barre « amour » désactivée,
+ * rien de romantique dans le contexte). Aucune autre source n'est lue : ni l'accroche, ni la
+ * description, ni les autres attributs.
  */
 
 const FEEL_EVERY = 4;
 
-/** La fiche indique-t-elle explicitement un âge inférieur à 18 ans ? */
-function feel_persona_minor(array $persona): bool
+/**
+ * Âge déclaré dans la fiche, lu UNIQUEMENT dans l'attribut « Âge ».
+ * Aucune autre source n'est consultée : l'accroche, la description et les autres attributs
+ * ne sont jamais interprétés, donc une durée (« depuis 3 ans ») ne peut pas être prise pour
+ * un âge et une fiche ne peut pas être verrouillée par erreur.
+ */
+function feel_persona_age(array $persona): ?int
 {
     foreach (json_list($persona['meta'] ?? '[]') as $row) {
-        if (is_array($row) && preg_match('/^\s*[âa]ge\s*$/iu', (string) ($row['k'] ?? ''))
-            && preg_match('/\d+/', (string) ($row['v'] ?? ''), $m)) {
-            return (int) $m[0] < 18;
+        if (!is_array($row) || !preg_match('/^\s*[âa]ges?\s*$/iu', (string) ($row['k'] ?? ''))) {
+            continue;
         }
+        // « 21 », « 21 ans », « ~24 », « 18-20 » : le premier nombre de la valeur.
+        if (preg_match('/[~≈]?\s*(\d{1,3})/u', (string) ($row['v'] ?? ''), $m)) {
+            return (int) $m[1];
+        }
+        return null; // valeur non chiffrée (« la quarantaine ») : aucune restriction
     }
-    if (preg_match('/\b(\d{1,2})\s*ans\b/iu', (string) ($persona['tagline'] ?? ''), $m)) {
-        return (int) $m[1] < 18;
-    }
-    return false;
+    return null;
+}
+
+/** La fiche déclare-t-elle explicitement, dans son attribut « Âge », moins de 18 ans ? */
+function feel_persona_minor(array $persona): bool
+{
+    $age = feel_persona_age($persona);
+    return $age !== null && $age < 18;
 }
 
 /** Ligne brute (avec valeurs par défaut). */
