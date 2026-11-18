@@ -145,6 +145,86 @@ function facts_norm(string $s): string
 }
 
 /**
+ * Mots porteurs de sens d'un souvenir, pour repérer deux formulations du même fait.
+ * Les négations et les nombres sont gardés à part : « aime le jazz » ≠ « n'aime pas le jazz », « 30 ans » ≠ « 31 ans ».
+ * @param string[] $ignore mots à ignorer en plus (prénom du persona…)
+ * @return array{words:array<string,true>, neg:array<string,true>, num:array<string,true>}
+ */
+function facts_signature(string $s, array $ignore = []): array
+{
+    static $stop = ['les', 'des', 'une', 'est', 'que', 'qui', 'dans', 'avec', 'pour', 'sur', 'par', 'son', 'ses',
+        'aux', 'elle', 'lui', 'leur', 'cette', 'tout', 'très', 'tres', 'être', 'etre', 'avoir', 'été', 'ete', 'aussi',
+        'utilisateur', 'utilisatrice', 'personnage', 'persona', 'user', 'character', 'the', 'and', 'with', 'for', 'has',
+        'was', 'his', 'her', 'their', 'that', 'usuario', 'usuaria', 'personaje', 'los', 'las', 'con', 'por', 'del'];
+    static $negations = ['pas', 'plus', 'jamais', 'aucun', 'aucune', 'rien', 'personne', 'not', 'never', 'nunca', 'nada', 'ningún', 'ninguna'];
+
+    $out = ['words' => [], 'neg' => [], 'num' => []];
+    foreach (explode(' ', facts_norm($s)) as $w) {
+        if ($w === '') {
+            continue;
+        }
+        if (preg_match('/\p{N}/u', $w)) {
+            $out['num'][$w] = true;
+        } elseif (in_array($w, $negations, true) || $w === 'no' || $w === 'ne' || $w === 'n') {
+            $out['neg'][$w === 'n' ? 'ne' : $w] = true;
+        } elseif (mb_strlen($w) >= 3 && !in_array($w, $stop, true) && !in_array($w, $ignore, true)) {
+            $out['words'][$w] = true;
+        }
+    }
+    return $out;
+}
+
+/**
+ * Deux souvenirs disent-ils la même chose ? Vrai quand presque tous les mots du plus court
+ * se retrouvent dans l'autre (« Guillaume vit à Toulon » / « L'utilisateur s'appelle Guillaume et vit à Toulon »).
+ */
+function facts_similar(array $a, array $b): bool
+{
+    // une négation d'un côté seulement : faits opposés, pas un doublon
+    if ((bool) $a['neg'] !== (bool) $b['neg']) {
+        return false;
+    }
+    if ($a['num'] || $b['num']) {
+        $na = array_keys($a['num']);
+        $nb = array_keys($b['num']);
+        sort($na);
+        sort($nb);
+        if ($na !== $nb) {
+            return false;
+        }
+    }
+    $min = min(count($a['words']), count($b['words']));
+    if ($min < 2) {
+        // un seul mot utile (« Eva est célibataire ») : doublon seulement si c'est exactement le même
+        return $min === 1 && count($a['words']) === count($b['words']) && !array_diff_key($a['words'], $b['words']);
+    }
+    return count(array_intersect_key($a['words'], $b['words'])) / $min >= 0.8;
+}
+
+/** Mots du nom du persona, ignorés dans la comparaison (« Eva a promis… » = « Le personnage a promis… »). */
+function facts_persona_words(int $personaId): array
+{
+    $st = db()->prepare('SELECT name FROM personas WHERE id = ?');
+    $st->execute([$personaId]);
+    return array_values(array_filter(explode(' ', facts_norm((string) $st->fetchColumn()))));
+}
+
+/**
+ * Souvenir déjà présent sous une autre forme ?
+ * @param array<int, array{sig:array, len:int}> $pool souvenirs existants du même sujet, par id
+ * @return array{0:int, 1:bool} [id du souvenir proche ou 0, la nouvelle formulation est-elle plus complète]
+ */
+function facts_find_similar(array $pool, array $sig): array
+{
+    foreach ($pool as $id => $entry) {
+        if (facts_similar($entry['sig'], $sig)) {
+            return [(int) $id, count($sig['words']) > $entry['len']];
+        }
+    }
+    return [0, false];
+}
+
+/**
  * Souvenirs pertinents pour un message (FTS5), sinon les plus récents.
  * @return array<int, array>
  */
@@ -255,11 +335,12 @@ function facts_context(array $rows): string
  */
 function facts_settings(): array
 {
-    $freq = setting('facts_frequency', 'each');
+    // par défaut tous les 6 messages : un passage sur 3 échanges trie mieux qu'un passage par réponse
+    $freq = setting('facts_frequency', 'every');
     $timing = setting('facts_timing', 'now');
     $model = setting('facts_model', 'chat');
     return [
-        'frequency' => in_array($freq, ['each', 'every', 'explicit', 'off'], true) ? $freq : 'each',
+        'frequency' => in_array($freq, ['each', 'every', 'explicit', 'off'], true) ? $freq : 'every',
         'every'     => max(2, min(30, (int) setting('facts_every', '6'))),
         'timing'    => in_array($timing, ['now', 'idle'], true) ? $timing : 'now',
         'idle'      => max(10, min(600, (int) setting('facts_idle_seconds', '45'))),
@@ -338,19 +419,28 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
             . "enregistre-la dans story (voir ci-dessous).";
     }
     $system .= "\nEn plus de memories et forget, ajoute le tableau story à l'objet JSON. "
-        . "Dans story uniquement, mémorise les événements concrets de la vie du persona, ses projets en cours et les moments partagés "
-        . "qui comptent pour la suite. Garde seulement ce qui a été clairement raconté par le persona ou confirmé par lui "
-        . "dans un message numéroté de l'échange. Ignore les salutations, les scènes hypothétiques, les plaisanteries et les simples suggestions. "
+        . "Dans story uniquement, garde ce qui définit durablement le persona et votre histoire commune, et qui servira "
+        . "encore dans une autre conversation : son passé et ses relations (ex, famille, célibat…), ce qu'il dit chercher, "
+        . "aimer ou refuser, les moments marquants partagés avec l'utilisateur, ses promesses, et les événements futurs "
+        . "précis (voyage, tournage, rendez-vous…). Pour un événement futur, écris une date absolue calculée à partir de "
+        . "la date du jour (« fin novembre 2026 », jamais « fin du mois », « demain » ou « ce week-end »). "
+        . "INTERDIT dans story : l'activité du moment ou de la journée (travailler, être au bureau, gérer ses réseaux, "
+        . "monter des vidéos, être fatigué… l'emploi du temps s'en charge déjà), les traits évidents d'après son métier "
+        . "ou sa fiche, les salutations, les scènes hypothétiques, les plaisanteries, les simples suggestions, "
+        . "et tout ce qui figure déjà dans les mémoires existantes, même formulé autrement. "
+        . "Garde seulement ce qui a été clairement raconté ou confirmé par le persona dans un message numéroté. "
         . "Écris à la troisième personne et distingue un projet d'un fait accompli. Ne transforme pas ces éléments en faits sur l'utilisateur. "
+        . "Au plus 2 entrées story par analyse, souvent aucune. "
         . 'Chaque entrée de story a la forme {"source":2,"category":"fait|projet|decision","content":"phrase courte","replaces":null}. '
         . "source désigne le numéro du message du persona qui établit le souvenir. replaces désigne l'identifiant d'un souvenir story "
-        . "du même persona que la nouvelle information actualise. Omet les faits que tu as déjà sous une autre forme. "
+        . "du même persona que la nouvelle information actualise ou précise. "
         . "Garde AUSSI dans story les promesses et engagements que le persona prend envers l'utilisateur (« promis », "
         . "« je te promets », « je ne te mentirai jamais »…), y compris quand l'utilisateur les lui a demandés : category "
         . "\"decision\", par exemple « Le persona a promis à l'utilisateur de toujours lui dire la vérité » (avec son prénom "
         . "à la place de « Le persona »). Les promesses de l'utilisateur au persona vont dans memories (category \"decision\").";
 
-    $user = "Mémoires existantes :\n" . ($knownLines !== '' ? $knownLines : '(aucune)')
+    $user = 'Date du jour : ' . chat_now()->format('Y-m-d') . "\n"
+        . "Mémoires existantes :\n" . ($knownLines !== '' ? $knownLines : '(aucune)')
         . "\nDernier message de l'utilisateur (le plus important) :\n" . ($lastUser !== '' ? $lastUser : '(aucun)')
         . "\nÉchange récent :\n" . $transcript;
 
@@ -431,18 +521,27 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
             $knownIds[$id] = true;
         }
     }
+    // repérage des doublons reformulés : le prénom du persona ne compte pas dans la comparaison
+    $ignore = facts_persona_words($personaId);
+    $userPool = [];
+    $storyPool = [];
     foreach ($current as $k) {
         $norm = facts_norm((string) $k['content']);
+        $sig = facts_signature((string) $k['content'], $ignore);
         if ($k['subject'] === 'story') {
-            $storySeen[$norm] = (int) $k['id'];
+            if ((int) $k['persona_id'] === $personaId) {
+                $storySeen[$norm] = (int) $k['id'];
+                $storyPool[(int) $k['id']] = ['sig' => $sig, 'len' => count($sig['words'])];
+            }
         } else {
             $seen[$norm] = (int) $k['id'];
+            $userPool[(int) $k['id']] = ['sig' => $sig, 'len' => count($sig['words'])];
         }
     }
 
     $items = $json['memories'] ?? [];
     if (is_array($items)) {
-        foreach (array_slice($items, 0, 8) as $it) {
+        foreach (array_slice($items, 0, 5) as $it) {
             if (!is_array($it)) {
                 continue;
             }
@@ -450,22 +549,41 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
             if (mb_strlen($content) < 6) {
                 continue;
             }
+            // un fait sur l'utilisateur vient de SES messages : ce que le persona dit de lui ne compte pas
+            $sourceNo = filter_var($it['source'] ?? null, FILTER_VALIDATE_INT);
+            if ($sourceNo && ($sources[$sourceNo - 1]['role'] ?? '') === 'assistant') {
+                continue;
+            }
             $norm = facts_norm($content);
+            $sig  = facts_signature($content, $ignore);
             $cat  = (string) ($it['category'] ?? 'fait');
             $conf = (string) ($it['confidence'] ?? 'confirme');
 
             $replaces = is_scalar($it['replaces'] ?? null) ? (int) $it['replaces'] : 0;
             if ($replaces > 0 && isset($knownIds[$replaces])) {
                 facts_update($replaces, $content, $cat, $conf);
+                $userPool[$replaces] = ['sig' => $sig, 'len' => count($sig['words'])];
                 $updated++;
                 continue;
             }
             if (isset($seen[$norm])) {
                 continue; // déjà connu
             }
+            [$near, $richer] = facts_find_similar($userPool, $sig);
+            if ($near > 0) {
+                // déjà connu sous une autre forme : on garde la formulation la plus complète
+                if ($richer && isset($knownIds[$near])) {
+                    facts_update($near, $content, $cat, $conf);
+                    $userPool[$near] = ['sig' => $sig, 'len' => count($sig['words'])];
+                    $seen[$norm] = $near;
+                    $updated++;
+                }
+                continue;
+            }
             $id = facts_add($personaId, $content, $cat, $conf, $cid);
             if ($id > 0) {
                 $seen[$norm] = $id;
+                $userPool[$id] = ['sig' => $sig, 'len' => count($sig['words'])];
                 $added[] = $content;
             }
         }
@@ -484,7 +602,7 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
     }
 
     $story = $json['story'] ?? [];
-    foreach (is_array($story) ? array_slice($story, 0, 5) : [] as $item) {
+    foreach (is_array($story) ? array_slice($story, 0, 2) : [] as $item) {
         if (!is_array($item)) {
             continue;
         }
@@ -498,10 +616,19 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
         if (isset($storySeen[$norm])) {
             continue;
         }
+        $sig = facts_signature($content, $ignore);
         $category = is_string($item['category'] ?? null) ? $item['category'] : 'fait';
         $replace = filter_var($item['replaces'] ?? null, FILTER_VALIDATE_INT);
         $sourceId = (int) $source['id'];
+        if (!($replace && isset($storyIds[$replace]))) {
+            [$near, $richer] = facts_find_similar($storyPool, $sig);
+            if ($near > 0 && !($richer && isset($storyIds[$near]))) {
+                continue; // déjà dans l'histoire du persona, sous une autre forme
+            }
+            $replace = $near ?: $replace;
+        }
         if ($replace && isset($storyIds[$replace])) {
+            $storyPool[$replace] = ['sig' => $sig, 'len' => count($sig['words'])];
             facts_update($replace, $content, $category, 'confirme');
             db()->prepare('UPDATE user_memories SET source_conversation_id = ?, source_message_id = ? WHERE id = ?')
                 ->execute([$cid, $sourceId, $replace]);
@@ -512,6 +639,7 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
         }
         $id = facts_add($personaId, $content, $category, 'confirme', $cid, $sourceId);
         $storySeen[$norm] = $id;
+        $storyPool[$id] = ['sig' => $sig, 'len' => count($sig['words'])];
         $added[] = $content;
     }
 

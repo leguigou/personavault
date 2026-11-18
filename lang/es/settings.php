@@ -153,7 +153,7 @@ return [
     'settings.facts.frequency'  => 'Frecuencia',
     'settings.facts.frequency_aria' => 'Frecuencia de la extracción',
     'settings.facts.freq_each'  => 'Después de cada intercambio',
-    'settings.facts.freq_every' => 'Cada N mensajes',
+    'settings.facts.freq_every' => 'Cada N mensajes (recomendado)',
     'settings.facts.freq_explicit' => 'Solo cuando lo pidas («recuerda que…»)',
     'settings.facts.freq_off'   => 'Nunca',
     'settings.facts.every'      => 'Número de mensajes nuevos',
@@ -291,7 +291,8 @@ return [
     'settings.info.facts_frequency_label' => 'frecuencia',
     'settings.info.facts_frequency_html'  => '<p><strong>Después de cada intercambio</strong>: lo más reactivo, pero una llamada al modelo en cada respuesta.</p>
             <p><strong>Cada N mensajes</strong>: agrupa varios intercambios en una sola llamada. No se pierde nada:
-            se analizan todos los mensajes desde la última extracción.</p>
+            se analizan todos los mensajes desde la última extracción. Recomendado: con varios intercambios a la vista,
+            el modelo distingue mejor lo que importa de los detalles del momento.</p>
             <p><strong>Solo cuando lo pidas</strong>: únicamente cuando escribes «recuerda que…», «acuérdate de…».</p>
             <p><strong>Nunca</strong>: ningún recuerdo automático nuevo (los existentes se siguen usando).</p>',
     'settings.info.facts_timing_label' => 'momento de la extracción',
