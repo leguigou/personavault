@@ -140,6 +140,33 @@ function feel_mood_step(array $before, string $emotion, string $word, int $inten
     return [$emotion, $word, max(0, min(100, $from + 20, max($from - 20, $level)))];
 }
 
+/**
+ * Échanges donnés à l'analyse de l'humeur. Les répliques du persona sont écrites SOUS la consigne
+ * d'humeur : ce sont des conséquences, pas des causes. Les donner comme preuves entretenait la boucle
+ * (persona réglé en colère → répond sèchement → l'analyse y voit de la colère → la colère monte, même
+ * quand l'utilisateur s'excuse). Elles restent comme contexte court, pour comprendre à quoi répond
+ * l'utilisateur (« oui », « haha t'es nulle »…) ; seuls les messages de l'utilisateur sont à juger.
+ * @return string '' s'il n'y a aucun message de l'utilisateur
+ */
+function feel_analysis_lines(array $history, string $name): string
+{
+    $lines = [];
+    $hasUser = false;
+    foreach ($history as $m) {
+        $text = trim(preg_replace('/\s+/u', ' ', (string) $m['content']) ?? '');
+        if ($text === '') {
+            continue;
+        }
+        if ($m['role'] === 'user') {
+            $hasUser = true;
+            $lines[] = 'Utilisateur : ' . mb_substr($text, 0, 400);
+        } elseif ($m['role'] === 'assistant') {
+            $lines[] = "(contexte) {$name} venait de dire : « " . (mb_strlen($text) > 150 ? mb_substr($text, 0, 150) . '…' : $text) . ' »';
+        }
+    }
+    return $hasUser ? implode("\n", $lines) : '';
+}
+
 /** Note dans le fil (message « notice », hors historique envoyé au modèle). */
 function feel_notice(int $cid, string $text): void
 {
@@ -265,15 +292,22 @@ function feel_analyze(int $cid): bool
         $before = feel_row($cid);
         $f = feel_get($cid, $persona);
         $name = (string) $persona['name'];
-        $lines = [];
-        foreach ($history as $m) {
-            $lines[] = ($m['role'] === 'user' ? 'Utilisateur' : $name) . ' : ' . mb_substr(trim((string) $m['content']), 0, 400);
+        $lines = feel_analysis_lines($history, $name);
+        if ($lines === '') {
+            // rien de l'utilisateur à juger (messages spontanés du persona seulement)
+            feel_save($cid, ['analyzed_id' => $lastId]);
+            return false;
         }
         $system = "Tu observes une conversation entre {$name} (un personnage) et l'utilisateur, comme dans un jeu de simulation "
             . "de vie, et tu mets à jour l'humeur de {$name} et ce que {$name} ressent pour l'utilisateur. "
-            . "Les variations sont petites (entre -10 et 10, 0 si rien ne change) et s'appuient sur ce qui vient d'être dit : "
+            . "Les lignes « (contexte) » sont les répliques de {$name} : elles reflètent l'humeur qu'on lui a déjà donnée, "
+            . "ce ne sont PAS des preuves de son humeur. Ne t'en sers que pour comprendre à quoi l'utilisateur répond. "
+            . "Juge uniquement comment {$name} réagirait aux messages de l'utilisateur : une excuse ou un geste attentionné "
+            . "apaise, une moquerie ou un reproche blesse. Si l'utilisateur ne fait rien de marquant, les variations valent 0. "
+            . "Les variations sont petites (entre -10 et 10, 0 si rien ne change) : "
             . "un compliment, de la drague bien reçue, une blague font monter l'amitié ou l'amour ; une moquerie, un reproche, "
-            . "une drague mal venue font monter la colère ou baisser l'amour. « emotion » est l'humeur dominante de {$name} : "
+            . "une drague mal venue font monter la colère ou baisser l'amour. « raison » dit ce que l'utilisateur a dit ou fait "
+            . "qui explique le changement. « emotion » est l'humeur dominante de {$name} : "
             . "écris uniquement l'une de ces clés : " . implode(', ', array_map(static fn (string $k, array $e): string => $k === $e['word'] ? $k : "{$k} ({$e['word']})",
                 array_keys(duo_emotions()), duo_emotions())) . ". « mot » la précise en un adjectif accordé au personnage. "
             . ($f['romance'] ? '' : "{$name} est mineur : « amour » vaut toujours 0. ")
@@ -282,7 +316,7 @@ function feel_analyze(int $cid): bool
             . '"amitie":0,"amour":0,"colere":0,"raison":"phrase courte"}';
         $user = "Humeur actuelle de {$name} : {$f['emotion']}" . ($f['mood'] !== '' ? " ({$f['mood']})" : '') . " {$f['intensity']}/100"
             . "\nCe que {$name} ressent pour l'utilisateur : amitié {$f['friendship']}, amour {$f['love']}, colère {$f['anger']}"
-            . "\n\nDerniers échanges :\n" . implode("\n", $lines);
+            . "\n\nDerniers échanges :\n" . $lines;
         try {
             llm_log_context(['purpose' => 'feelings', 'cid' => $cid]);
             $res = llm_request([['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]], chat_llm_config_for($conv), [
