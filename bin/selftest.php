@@ -553,11 +553,14 @@ try {
         'rappel : pas de faux positif sur une phrase ordinaire (3 langues)');
     $check($all('facts_explicit_request', ['Retiens que je suis végétarien', 'Souviens-toi que mon chat s’appelle Tom', 'N’oublie pas mon anniversaire']),
         'demande de mémorisation : français');
+    $check($all('facts_explicit_request', ['Tu me promets que tu seras toujours vraie avec moi', 'Tu pourras t\'en souvenir aussi',
+        'Promets-moi de ne jamais mentir', 'Je veux que tu t’en souviennes', 'Garde ça en tête', 'Tu te souviendras de mon prénom ?']),
+        'demande de mémorisation : promesses et « tu pourras t’en souvenir »');
     $check($all('facts_explicit_request', ['Remember that I’m allergic to nuts', 'Please keep in mind that I work nights', "Don't forget my birthday is in May"]),
         'demande de mémorisation : anglais');
     $check($all('facts_explicit_request', ['Recuerda que soy vegetariano', 'No olvides que trabajo de noche', 'Apunta que mi gato se llama Tom']),
         'demande de mémorisation : espagnol');
-    $check($none('facts_explicit_request', ['Tu te souviens de ce jour ?', 'Do you remember that day?', '¿Recuerdas aquel día?', 'J’aime le jazz', 'I like jazz', 'Me gusta el jazz']),
+    $check($none('facts_explicit_request', ['Tu te souviens de ce jour ?', 'Je me souviens de ce concert', 'Do you remember that day?', '¿Recuerdas aquel día?', 'J’aime le jazz', 'I like jazz', 'Me gusta el jazz']),
         'demande de mémorisation : une question « tu te souviens ? » n’en est pas une (3 langues)');
 
     // mots vides : une phrase faite uniquement d'indices de rappel ne cherche rien

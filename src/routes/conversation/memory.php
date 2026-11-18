@@ -69,15 +69,16 @@ if ($action === 'remember' && $method === 'POST') {
     $st->execute([$cid, $cursor]);
     $recent = $st->fetchAll();
 
-    // demande explicite : « souviens-toi », « remember that », « recuerda que »… (voir facts_explicit_request)
-    $lastUser = '';
-    foreach (array_reverse($recent) as $m) {
-        if ((string) $m['role'] === 'user') {
-            $lastUser = (string) $m['content'];
+    // demande explicite : « souviens-toi », « promets-moi », « remember that »… (voir facts_explicit_request),
+    // dans n'importe quel message pas encore analysé : si l'analyse a sauté (connexion coupée), la demande
+    // n'est pas perdue quand l'utilisateur a écrit autre chose entre-temps
+    $explicit = false;
+    foreach ($recent as $m) {
+        if ((string) $m['role'] === 'user' && facts_explicit_request((string) $m['content'])) {
+            $explicit = true;
             break;
         }
     }
-    $explicit = facts_explicit_request($lastUser);
 
     // fréquence choisie dans les réglages (chaque échange, tous les N messages, sur demande…)
     $why = facts_should_run(count($recent), $explicit, !empty($_POST['force']));
