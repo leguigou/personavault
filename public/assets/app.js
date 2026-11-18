@@ -1632,6 +1632,13 @@
                         : [f === "explicit" ? tr("settings.sum_facts_explicit")
                             : f === "every" ? tr("settings.sum_facts_every", { n: val("facts_every")?.value || "6" })
                             : tr("settings.sum_facts_each"), ...t, m].join(" · ");
+                } else if (el.dataset.foldSum === "web") {
+                    // sources actives de la recherche d'informations
+                    const on = (name) => val(name)?.checked;
+                    const list = [(val("web_searxng_url")?.value || "").trim() ? "SearXNG" : "",
+                        on("web_wikipedia") ? tr("settings.sum_web_wikipedia") : "", on("web_weather") ? tr("settings.sum_web_weather") : ""].filter(Boolean);
+                    el.textContent = !on("web_enabled") ? tr("settings.sum_web_off")
+                        : list.length ? list.join(" · ") : tr("settings.sum_web_none");
                 } else if (el.dataset.foldSum === "titles") {
                     const t = val("chat_title_model")?.value || "remote";
                     el.textContent = t === "off" ? tr("settings.sum_titles_off")
@@ -2993,6 +3000,15 @@
                 line.querySelector("span").textContent = m.content;
                 return line;
             }
+            if (m.role === "web") {
+                // le persona est allé chercher une information : source et recherche
+                const line = document.createElement("div");
+                line.className = "msg-web";
+                if (m.id) line.dataset.msgId = m.id;
+                line.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18M12 3c2.6 2.5 3.9 5.5 3.9 9s-1.3 6.5-3.9 9c-2.6-2.5-3.9-5.5-3.9-9S9.4 5.5 12 3Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span></span>';
+                line.querySelector("span").textContent = m.content;
+                return line;
+            }
             if (m.role === "notice") {
                 const n = document.createElement("div");
                 n.className = "msg-notice";
@@ -3438,7 +3454,7 @@
                 }
                 const prevH = scroll.scrollHeight;
                 const prevTop = scroll.scrollTop;
-                const first = scroll.querySelector(".msg, .msg-notice, .msg-memory");
+                const first = scroll.querySelector(".msg, .msg-notice, .msg-memory, .msg-web");
                 const frag = document.createDocumentFragment();
                 d.messages.forEach((m) => frag.appendChild(renderMsg(m)));
                 scroll.insertBefore(frag, first || null);
@@ -5183,6 +5199,7 @@
             let splitTimer = null;
             let userId = 0;
             let afterId = 0;
+            let webLine = null;
             // rythme d'écriture : mesuré sur la première bulle (mots par seconde), puis appliqué
             // aux bulles suivantes, qui s'écrivent mot à mot au lieu d'apparaître d'un bloc
             let firstDeltaAt = 0;
@@ -5459,7 +5476,19 @@
                             } else if (evt.phase === "memory") {
                                 if (!live) loadingLabel(tr("chat.memory_phase"));
                             } else if (evt.phase === "web_search") {
-                                if (!live) loadingLabel(tr("chat.web_search_phase"));
+                                if (!live) loadingLabel(evt.source === "meteo" ? tr("chat.web_search_phase_meteo")
+                                    : evt.source === "wikipedia" ? tr("chat.web_search_phase_wikipedia") : tr("chat.web_search_phase"));
+                            } else if (evt.web) {
+                                // ligne bleue « recherche » juste au-dessus de la réponse qui arrive ;
+                                // en régénération, elle remplace celle de l'ancienne réponse
+                                scroll.querySelectorAll(".msg-web[data-msg-id]").forEach((n) => {
+                                    if (userId && Number(n.dataset.msgId) > userId) n.remove();
+                                });
+                                webLine = renderMsg(evt.web);
+                                const typingEl = document.getElementById("chat-typing");
+                                if (typingEl) typingEl.before(webLine);
+                                else scroll.appendChild(webLine);
+                                scrollBottom(false);
                             } else if (evt.start) {
                                 userId = Number(evt.user?.id || evt.user_id || 0);
                                 afterId = Number(evt.after_id || userId);
@@ -5470,6 +5499,10 @@
                                 }
                             } else if (evt.done) {
                                 finalReply = evt.reply || null;
+                                // régénération sans nouvelle recherche : l'ancienne ligne n'est plus valable
+                                scroll.querySelectorAll(".msg-web[data-msg-id]").forEach((n) => {
+                                    if (userId && Number(n.dataset.msgId) > userId && n !== webLine) n.remove();
+                                });
                                 finishReason = evt.finish_reason || "";
                                 if (evt.relationship_pending) scheduleRelationship(300000);
                                 if (evt.feelings_pending) window.dispatchEvent(new CustomEvent("pv:feelings-pending", { detail: { drive: !!evt.feelings_drive } }));
@@ -5491,6 +5524,7 @@
                     if (failed) {
                         clearLive();
                         if (!keptUser) restoreDraft();
+                        if (!streamed) webLine?.remove();
                         if (keptUser && userId) {
                             const recovered = await recoverReply();
                             if (recovered) {

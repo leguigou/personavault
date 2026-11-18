@@ -330,6 +330,10 @@ if ($action === 'msg-delete' && $method === 'POST') {
         $stmt->execute([$cid, $mid]);
         if (($next = $stmt->fetch()) && $next['role'] === 'assistant') {
             $ids[] = (int) $next['id'];
+            // ligne « recherche » entre la question et la réponse
+            $web = db()->prepare("SELECT id FROM messages WHERE conversation_id = ? AND role = 'web' AND id > ? AND id < ?");
+            $web->execute([$cid, $mid, (int) $next['id']]);
+            array_push($ids, ...array_map('intval', $web->fetchAll(PDO::FETCH_COLUMN)));
         }
     }
 

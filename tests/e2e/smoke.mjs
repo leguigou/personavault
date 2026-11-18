@@ -731,6 +731,67 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
             'le chat local utilise le MCP LM Studio en priorité et conserve les liens réellement retournés');
     }
 }
+// --- recherche d'informations : SearXNG, Wikipédia, météo, ligne bleue, interrupteurs
+{
+    const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });
+    const chatSettings = { chat_provider: 'lmstudio', chat_base_url: `http://127.0.0.1:${llmPort}/v1`, chat_model: 'fake-model',
+        chat_memory_threshold: '600', chat_memory_target: '300', chat_split_words: '50', chat_split_max_bubbles: '1',
+        facts_frequency: 'each', chat_title_model: 'chat', chat_user_profile_enabled: '1', chat_user_profile: 'Je préfère les voyages en train.' };
+    const searxng = `http://127.0.0.1:${llmPort}/searxng`;
+    const webSettings = (extra) => submit('/settings/chat', { ...chatSettings, web_settings_present: '1', web_enabled: '1',
+        web_searxng_url: searxng, web_wikipedia: '1', web_weather: '1', ...extra });
+    const test = async (fields) => (await submit('/settings/searxng/test', fields)).json();
+    expect((await test({ web_searxng_url: searxng })).ok, 'SearXNG : le test réussit avec l’adresse saisie');
+    expect(/json/i.test((await test({ web_searxng_url: `http://127.0.0.1:${llmPort}/searxng-nojson` })).error || ''),
+        'SearXNG : un format JSON non autorisé est expliqué');
+    await webSettings({});
+    const settingsPage = await (await http('/settings')).text();
+    expect(settingsPage.includes(`value="${searxng}"`) && /name="web_weather"[^>]*\bchecked/.test(settingsPage),
+        'les réglages de la recherche sont enregistrés');
+
+    const path = (await submit('/chat/1/new', {})).headers.get('location');
+    const turn = async (message) => (await (await submit(path + '/stream', { message })).text())
+        .split('\n').filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6)));
+    const lineOf = (events) => events.find((event) => event.web)?.web;
+
+    const meteo = await turn('Il fait quel temps à Toulon demain ?');
+    const meteoLine = lineOf(meteo);
+    const logs = await (await http('/settings/logs')).text();
+    expect(meteo.some((event) => event.phase === 'web_search' && event.source === 'meteo')
+        && meteoLine?.role === 'web' && meteoLine.content.includes('météo') && meteoLine.content.includes('Toulon')
+        && meteo.findIndex((event) => event.web) < meteo.findIndex((event) => event.delta)
+        && logs.includes('Météo à Toulon (France)') && logs.includes('Demain : pluie, 10 à 15 °C, pluie 80 %'),
+        'météo : ligne de recherche avant la réponse, prévisions transmises au persona');
+
+    const bakery = await turn('Trouve-moi une boulangerie ouverte à Toulon');
+    expect(lineOf(bakery)?.content.includes('boulangerie ouverte Toulon')
+        && (bakery.find((event) => event.done)?.reply?.content ?? '').includes('https://example.com/boulangerie-toulon'),
+        'SearXNG : la recherche internet passe par SearXNG et garde le lien');
+
+    const wiki = await turn('Qui était Sherlock Holmes ?');
+    expect(lineOf(wiki)?.content.includes('Wikipédia')
+        && (wiki.find((event) => event.done)?.reply?.content ?? '').includes('https://fr.wikipedia.org/wiki/'),
+        'Wikipédia : la culture générale passe par Wikipédia');
+
+    const page = await (await http(path)).text();
+    expect((page.match(/class="msg-web"/g) || []).length === 3 && page.includes('boulangerie ouverte Toulon'),
+        'les lignes de recherche restent affichées dans la discussion');
+
+    await submit(path + '/toggles', { web_search_present: '1' });
+    expect(!(await turn('Il fait quel temps à Toulon demain ?')).some((event) => event.phase === 'web_search' || event.web),
+        'discussion : la recherche se coupe avec son interrupteur');
+    await submit(path + '/toggles', { web_search_present: '1', web_search: '1' });
+
+    await webSettings({ web_weather: '' });
+    const noWeather = await turn('Il fait quel temps à Toulon demain ?');
+    expect(!noWeather.some((event) => event.source === 'meteo'), 'réglages : une source décochée n’est plus proposée au modèle');
+
+    await webSettings({ web_enabled: '' });
+    expect(!(await turn('Trouve-moi une boulangerie ouverte à Toulon')).some((event) => event.web),
+        'réglages : l’interrupteur général coupe toute recherche');
+    // retour à l'état d'origine pour la suite du parcours
+    await webSettings({ web_searxng_url: '', web_wikipedia: '', web_weather: '' });
+}
 {
     const modelControl = `http://127.0.0.1:${llmPort}/test/model-state`;
     const load = async (state) => {

@@ -94,7 +94,7 @@ function export_chunks(iterable $rows, array $meta, string $format): Generator
         $role    = (string) $row['role'];
         $content = trim(str_replace("\r\n", "\n", (string) $row['content']));
 
-        if ($role === 'memory' || $role === 'notice') {
+        if ($role === 'memory' || $role === 'notice' || $role === 'web') {
             if ($content === '') {
                 continue;
             }

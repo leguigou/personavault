@@ -226,6 +226,56 @@ utilise l’outil LM Studio en priorité si configuré. Le modèle formule la re
 échanges, puis transmet cette requête au moteur choisi. Le persona répond dans le même tour avec les
 liens des résultats disponibles. [Documentation LM Studio](https://lmstudio.ai/docs/developer/core/mcp).
 
+### Recherche d'informations sans clé : SearXNG, Wikipédia, météo
+
+**Réglages → Recherche d'informations** : un interrupteur général et trois sources, toutes sans
+compte ni clé. Avant chaque réponse, le modèle décide si le message appelle une recherche et choisit
+la source :
+
+| Source | Pour quoi | Service |
+|---|---|---|
+| Internet | actualité, adresses, horaires, prix | ton instance [SearXNG](https://docs.searxng.org/) (sinon Brave ou LM Studio, ci-dessus) |
+| Wikipédia | culture générale stable | API MediaWiki publique (`assist_lookup_url`) |
+| Météo | temps actuel et des 2 jours suivants d'une ville | [Open-Meteo](https://open-meteo.com/) (gratuit pour un usage non commercial) |
+
+Chaque persona (fiche → « Peut chercher des informations ») et chaque discussion (panneau de la
+discussion) a aussi son interrupteur. Quand le persona cherche, une **ligne bleue avec un globe**
+s'affiche juste avant sa réponse : source et requête. Elle n'est jamais renvoyée au modèle et
+disparaît avec l'échange si tu le supprimes ou le régénères. La requête ne contient que le sujet :
+ni ton prénom ni le reste de la conversation.
+
+**Installer SearXNG avec Docker**, sur le même serveur que PersonaVault :
+
+```bash
+mkdir -p /srv/searxng
+docker run -d --name searxng --restart unless-stopped \
+  -p 127.0.0.1:8888:8080 -v /srv/searxng:/etc/searxng searxng/searxng
+```
+
+Au premier démarrage, SearXNG crée `/srv/searxng/settings.yml`. Le format JSON y est désactivé
+par défaut : remplace le fichier par ceci, puis `docker restart searxng`.
+
+```yaml
+use_default_settings: true
+server:
+  secret_key: "colle-ici-le-resultat-de-openssl-rand-hex-32"
+  limiter: false        # usage privé, derrière 127.0.0.1
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json
+```
+
+Dans PersonaVault, indique `http://127.0.0.1:8888` puis **Tester SearXNG**. Une erreur 403 veut
+dire que `json` manque dans `formats`. Le port reste sur `127.0.0.1` : n'expose pas SearXNG sur
+internet sans protection. Les moteurs que SearXNG interroge peuvent te limiter temporairement si tu
+fais beaucoup de recherches. Vérifie ces réglages dans la
+[documentation SearXNG](https://docs.searxng.org/admin/settings/index.html), ils peuvent évoluer.
+
+Adresses des services météo modifiables dans `config.local.php` (`web_weather_geo_url`,
+`web_weather_url`).
+
 ### Mémoire et contexte
 
 Ce que reçoit le modèle à chaque message, dans cet ordre :

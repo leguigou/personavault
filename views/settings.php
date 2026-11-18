@@ -301,6 +301,41 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
             </section>
         <?php endif; ?>
 
+        <details class="settings-card settings-fold" id="web">
+            <summary>
+                <span class="fold-text">
+                    <span class="fold-title"><?= e(t('settings.web.title')) ?> <?= $info('web', t('settings.info.web_label')) ?></span>
+                    <span class="fold-sum" data-fold-sum="web"></span>
+                </span>
+            </summary>
+            <div class="fold-body">
+                <p class="hint"><?= e(t('settings.web.hint')) ?></p>
+                <input type="hidden" name="web_settings_present" value="1">
+                <label class="check">
+                    <input type="checkbox" name="web_enabled" value="1" <?= setting('web_enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <span><?= e(t('settings.web.enabled')) ?></span>
+                </label>
+                <label class="field" data-show-if="web_enabled=1">
+                    <span><?= e(t('settings.web.searxng')) ?></span>
+                    <input class="input" type="url" name="web_searxng_url" value="<?= e(setting('web_searxng_url', '')) ?>"
+                           placeholder="http://127.0.0.1:8888" spellcheck="false" autocomplete="off">
+                    <small><?= e(t('settings.web.searxng_help')) ?></small>
+                </label>
+                <button type="button" class="btn btn-ghost btn-sm" data-connection-test="/settings/searxng/test" data-test-fields="web_searxng_url"
+                        aria-controls="test-searxng-status" data-show-if="web_enabled=1"><?= e(t('settings.web.searxng_test')) ?></button>
+                <p class="llm-status" id="test-searxng-status" role="status" hidden></p>
+                <label class="check" data-show-if="web_enabled=1">
+                    <input type="checkbox" name="web_wikipedia" value="1" <?= setting('web_wikipedia', '0') === '1' ? 'checked' : '' ?>>
+                    <span><?= e(t('settings.web.wikipedia')) ?></span>
+                </label>
+                <label class="check" data-show-if="web_enabled=1">
+                    <input type="checkbox" name="web_weather" value="1" <?= setting('web_weather', '0') === '1' ? 'checked' : '' ?>>
+                    <span><?= e(t('settings.web.weather')) ?></span>
+                </label>
+                <small class="hint" data-show-if="web_enabled=1"><?= e(t('settings.web.per_persona')) ?></small>
+            </div>
+        </details>
+
         <details class="settings-card settings-fold">
             <summary>
                 <span class="fold-text">
@@ -886,6 +921,7 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
         'split'           => [t('settings.split.title'), t('settings.info.split_html')],
         'followup'        => [t('settings.followup.title'), t('settings.info.followup_html')],
         'facts'           => [t('settings.facts.title'), t('settings.info.facts_html')],
+        'web' => [t('settings.web.title'), t('settings.info.web_html')],
         'facts-frequency' => [t('settings.facts.frequency_aria'), t('settings.info.facts_frequency_html')],
         'facts-timing'    => [t('settings.facts.timing_aria'), t('settings.info.facts_timing_html')],
         'facts-model'     => [t('settings.facts.model_aria'), t('settings.info.facts_model_html')],

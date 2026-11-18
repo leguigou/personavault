@@ -307,4 +307,9 @@ return [
     'assist.canon.memory' => 'Aucune page trouvée en ligne : fiche remplie d’après ce que l’IA sait de {name}. Relis-la.',
     'assist.meta.source' => 'Personnage d’origine',
     'assist.meta.source_url' => 'Référence',
+    'labels.chat.web_line' => 'Recherche {source} : « {query} »',
+    'labels.chat.web_line_empty' => 'Recherche {source} : « {query} » — aucun résultat',
+    'labels.chat.web_source.web' => 'internet',
+    'labels.chat.web_source.wikipedia' => 'Wikipédia',
+    'labels.chat.web_source.meteo' => 'météo',
 ];

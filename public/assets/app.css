@@ -1281,6 +1281,26 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
 }
 .msg-memory svg { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 1px; opacity: .8; }
 
+/* le persona est allé chercher une information (internet, Wikipédia, météo) */
+.msg-web {
+    align-self: flex-start;
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    max-width: 86%;
+    margin: 2px 0 2px 34px;
+    padding: 7px 11px;
+    border-radius: 11px;
+    background: rgba(96, 165, 250, .08);
+    border: 1px solid rgba(96, 165, 250, .4);
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: var(--info-t, #93c5fd);
+    animation: fade .2s both;
+    overflow-wrap: anywhere;
+}
+.msg-web svg { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 1px; }
+
 .msg-loading {
     align-self: center;
     margin: 2px 0 10px;
@@ -3295,7 +3315,7 @@ html[data-avatars="0"] .msg-bot > .bubbles { max-width: 100%; }
 /* lisibilité : textes courants à 11,5 px minimum sur téléphone
    (les pastilles en capitales et les initiales d'avatar gardent leur taille) */
 @media (max-width: 899px) {
-    .msg-memory, .lms-steps li, .chat-side-mono, .metas dt, .mini-link,
+    .msg-memory, .msg-web, .lms-steps li, .chat-side-mono, .metas dt, .mini-link,
     .msg-loading, .lms-timer, .badge { font-size: 11.5px; }
     .conv-meta, .chat-foot, .chat-id-text span, .mem-scope { font-size: 12px; }
 }

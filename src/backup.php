@@ -186,6 +186,7 @@ function backup_add_persona(ZipArchive $zip, string $root, array $p, array &$sta
         'directive'      => (string) $p['directive'],
         'reasoning_effort' => $p['reasoning_effort'],
         'klipy_formats' => (int) $p['klipy_formats'],
+        'web_search'     => (int) ($p['web_search'] ?? 1),
         'created_at'     => (string) $p['created_at'],
         'updated_at'     => (string) $p['updated_at'],
         'avatar'         => $avatarFile,
@@ -514,7 +515,8 @@ function backup_insert_persona(array $persona, array $prompts, string $avatar = 
             ]);
             $pid = (int) $pdo->lastInsertId();
             $formats = (int) ($persona['klipy_formats'] ?? (int) !empty($persona['spontaneous_gifs']));
-            $pdo->prepare('UPDATE personas SET klipy_formats = ? WHERE id = ?')->execute([max(0, min(7, $formats)), $pid]);
+            $pdo->prepare('UPDATE personas SET klipy_formats = ?, web_search = ? WHERE id = ?')
+                ->execute([max(0, min(7, $formats)), (int) ($persona['web_search'] ?? 1) === 0 ? 0 : 1, $pid]);
 
             $ph = $pdo->prepare('INSERT INTO photos (persona_id, file, caption, sort) VALUES (?,?,?,?)');
             foreach ($photos as $n => $base) {

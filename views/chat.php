@@ -225,6 +225,11 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a4 4 0 0 0-4 4 3 3 0 0 0 0 6 3.5 3.5 0 0 0 4 4V5Zm0 0a4 4 0 0 1 4 4 3 3 0 0 1 0 6 3.5 3.5 0 0 1-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
                         <span><?= e((string) $m['content']) ?></span>
                     </div>
+                <?php elseif ($role === 'web'): ?>
+                    <div class="msg-web" data-msg-id="<?= (int) $m['id'] ?>">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18M12 3c2.6 2.5 3.9 5.5 3.9 9s-1.3 6.5-3.9 9c-2.6-2.5-3.9-5.5-3.9-9S9.4 5.5 12 3Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                        <span><?= e((string) $m['content']) ?></span>
+                    </div>
                 <?php elseif ($role === 'notice'): ?>
                     <div class="msg-notice" data-msg-id="<?= (int) $m['id'] ?>"><?= e((string) $m['content']) ?></div>
                 <?php else: ?>
@@ -544,6 +549,20 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <input type="checkbox" name="auto_followup" value="1" <?= (int) ($conv['auto_followup'] ?? 1) === 1 ? 'checked' : '' ?>>
                 <span><?= e(t('chat.toggles.followup')) ?></span>
             </label>
+
+            <input type="hidden" name="web_search_present" value="1">
+            <label class="check">
+                <input type="checkbox" name="web_search" value="1" <?= (int) ($conv['web_search'] ?? 1) === 1 ? 'checked' : '' ?>>
+                <span><?= e(t('chat.toggles.web')) ?></span>
+            </label>
+            <?php if (!chat_web_any(chat_web_sources())): ?>
+                <p class="inline-warn" role="note">
+                    <?= e(t('chat.toggles.web_global_off')) ?>
+                    <a href="/settings#web"><?= e(t('chat.toggles.web_settings')) ?></a>
+                </p>
+            <?php elseif ((int) ($persona['web_search'] ?? 1) !== 1): ?>
+                <p class="inline-warn" role="note"><?= e(t('chat.toggles.web_persona_off')) ?></p>
+            <?php endif; ?>
             <?php
             // l'interrupteur ne sert à rien si les relances sont coupées partout,
             // ou si le planificateur (bin/followup.php) n'a jamais tourné

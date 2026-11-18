@@ -49,7 +49,7 @@ $portrait = static function () use ($avatar, $name): string {
         $role = (string) $m['role'];
         $any  = true;
         ?>
-        <?php if ($role === 'memory' || $role === 'notice'): ?>
+        <?php if ($role === 'memory' || $role === 'notice' || $role === 'web'): ?>
             <?php if (trim((string) $m['content']) !== ''): ?>
                 <p class="pr-note"><?= e(trim((string) $m['content'])) ?></p>
             <?php endif; ?>

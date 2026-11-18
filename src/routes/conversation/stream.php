@@ -207,24 +207,32 @@ if ($action === 'stream' && $method === 'POST') {
 
     $mode    = ((string) ($_POST['fallback'] ?? '')) === '1' ? 'fallback' : 'auto';
     $webResults = null;
-    $searchKey = chat_web_search_key();
-    $searchMcp = $mode === 'auto' ? chat_web_mcp_config() : null;
-    $useMcp = $searchMcp !== null;
-    if (($useMcp || $searchKey !== '') && $mediaRequest === null && $text !== '') {
+    $webLineId = 0;
+    // recherche d'informations : réglages globaux (sources), puis persona et discussion
+    $webSources = chat_web_allowed($persona, $conv) ? chat_web_sources($mode) : ['web' => '', 'wikipedia' => false, 'meteo' => false];
+    if (chat_web_any($webSources) && $mediaRequest === null && $text !== '') {
         $searchModel = $mode === 'fallback' ? llm_config() : chat_llm_config_for($conv);
         if ($mode !== 'fallback' || $searchModel['key'] !== '') {
-            $query = chat_web_query($history, $quote === null ? $text : $text . "\nEn réponse à : " . mb_substr($quote['text'], 0, 420), $searchModel, $ping);
+            $plan = chat_web_plan($history, $quote === null ? $text : $text . "\nEn réponse à : " . mb_substr($quote['text'], 0, 420),
+                $searchModel, $ping, $webSources, $persona);
             if ($ping()) {
                 exit;
             }
-            if ($query !== '') {
-                $sse(['phase' => 'web_search']);
-                $webResults = $useMcp
-                    ? chat_web_lmstudio_results($query, $searchModel, $searchMcp['id'], $searchMcp['tool'], $ping)
-                    : chat_web_results($query, $searchKey, $ping);
+            if ($plan['source'] !== '') {
+                $sse(['phase' => 'web_search', 'source' => $plan['source']]);
+                $webResults = chat_web_run($plan, $webSources, $searchModel, $ping);
                 if ($ping()) {
                     exit;
                 }
+                // ligne d'information dans la discussion (rôle « web », jamais renvoyée au modèle)
+                $webParams = [
+                    'source' => chat_web_source_label($plan['source']),
+                    'query'  => $plan['source'] === 'meteo' ? $plan['place'] : $plan['query'],
+                ];
+                $webLabel = $webResults ? t('labels.chat.web_line', $webParams) : t('labels.chat.web_line_empty', $webParams);
+                db()->prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'web', ?)")->execute([$cid, mb_substr($webLabel, 0, 400)]);
+                $webLineId = (int) db()->lastInsertId();
+                $sse(['web' => ['id' => $webLineId, 'role' => 'web', 'content' => $webLabel, 'source' => $plan['source']]]);
             }
         }
     }
@@ -303,6 +311,10 @@ if ($action === 'stream' && $method === 'POST') {
             // rien n'a été produit : on retire le message pour permettre un nouvel essai propre
             db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$userMsgId]);
         }
+        if (!$sentAny && $webLineId > 0) {
+            // aucune réponse : la ligne « recherche » de ce tour n'a plus de sens
+            db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$webLineId]);
+        }
         $sse([
             'error' => public_error($e),
             'kind' => $kind,
@@ -345,12 +357,15 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     try {
-        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv, $trackRelationship, $address, $relationshipRevision): array {
+        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv, $trackRelationship, $address, $relationshipRevision, $webLineId): array {
             if ($regen) {
                 // L'ancienne réponse reste visible jusqu'à la validation de la transaction.
                 reply_version_archive($cid, $userMsgId);
                 $pdo->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?")
                     ->execute([$cid, $userMsgId]);
+                // une seule ligne « recherche » par réponse : celle de la nouvelle version
+                $pdo->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'web' AND id > ? AND id <> ?")
+                    ->execute([$cid, $userMsgId, $webLineId]);
             }
 
             $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points, klipy_url)

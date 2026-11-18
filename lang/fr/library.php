@@ -209,4 +209,6 @@ return [
     'assist.entry_text' => 'Décris une idée ou un personnage existant, elle remplit la fiche',
     'assist.complete_title' => 'L’assistant repère ce qui manque, pose les questions et complète la fiche sans rien écraser.',
     'assist.preview_title' => 'Aperçu de la fiche',
+    'form.web_search' => 'Peut chercher des informations (internet, Wikipédia, météo)',
+    'form.web_search_help' => 'Selon les sources actives dans les Réglages. À désactiver pour un persona qui ne doit pas sortir de sa fiction.',
 ];

@@ -304,4 +304,9 @@ return [
     'assist.canon.memory' => 'No se encontró ninguna página en línea: ficha rellenada con lo que la IA sabe de {name}. Revísala.',
     'assist.meta.source' => 'Personaje original',
     'assist.meta.source_url' => 'Referencia',
+    'labels.chat.web_line' => 'Búsqueda {source}: «{query}»',
+    'labels.chat.web_line_empty' => 'Búsqueda {source}: «{query}» — sin resultados',
+    'labels.chat.web_source.web' => 'en internet',
+    'labels.chat.web_source.wikipedia' => 'en Wikipedia',
+    'labels.chat.web_source.meteo' => 'del tiempo',
 ];

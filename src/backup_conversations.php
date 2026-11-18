@@ -333,6 +333,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 'persona_id' => $personaId,
                 'reasoning_effort' => chat_reasoning_effort($conversation['reasoning_effort'] ?? ''),
                 'klipy_formats' => max(-1, min(7, (int) ($conversation['klipy_formats'] ?? -1))),
+                'web_search' => (int) ($conversation['web_search'] ?? 1) === 0 ? 0 : 1,
             ]);
             $messageIds = [];
             $assistantIds = [];
@@ -340,7 +341,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
             $selections = [];
             foreach ($conversation['messages'] as $message) {
                 $sourceId = backup_id($message['id'] ?? null);
-                if (!is_array($message) || !in_array($message['role'] ?? null, ['user', 'assistant', 'memory', 'notice'], true)
+                if (!is_array($message) || !in_array($message['role'] ?? null, ['user', 'assistant', 'memory', 'notice', 'web'], true)
                     || !is_string($message['content'] ?? null) || (!$legacy && !$sourceId) || isset($messageIds[$sourceId])) {
                     throw new RuntimeException(t('error.backup.invalid_chat_data'));
                 }

@@ -334,6 +334,19 @@ if ($path === '/settings/chat' && $method === 'POST') {
     set_setting('chat_followup_from', (string) max(0, min(23, (int) ($_POST['chat_followup_from'] ?? 8))));
     set_setting('chat_followup_to', (string) max(1, min(24, (int) ($_POST['chat_followup_to'] ?? 23))));
 
+    // recherche d'informations (internet via SearXNG, Wikipédia, météo) : seulement si le bloc était dans le formulaire
+    if (!empty($_POST['web_settings_present'])) {
+        set_setting('web_enabled', !empty($_POST['web_enabled']) ? '1' : '0');
+        $searx = rtrim(trim((string) ($_POST['web_searxng_url'] ?? '')), '/');
+        if ($searx !== '' && (!preg_match('~\Ahttps?://~i', $searx) || !filter_var($searx, FILTER_VALIDATE_URL))) {
+            flash('error', t('error.settings.url_scheme'));
+            $searx = setting('web_searxng_url', '');
+        }
+        set_setting('web_searxng_url', mb_substr($searx, 0, 300));
+        set_setting('web_wikipedia', !empty($_POST['web_wikipedia']) ? '1' : '0');
+        set_setting('web_weather', !empty($_POST['web_weather']) ? '1' : '0');
+    }
+
     // souvenirs durables : quand et avec quel modèle les extraire
     $ff = (string) ($_POST['facts_frequency'] ?? 'every');
     set_setting('facts_frequency', in_array($ff, ['each', 'every', 'explicit', 'off'], true) ? $ff : 'every');
@@ -413,13 +426,34 @@ if ($path === '/settings/klipy/test' && $method === 'POST') {
     exit;
 }
 
-if ($method === 'POST' && in_array($path, ['/settings/test', '/settings/chat/test', '/settings/brave/test', '/settings/mcp/test'], true)) {
+if ($method === 'POST' && in_array($path, ['/settings/test', '/settings/chat/test', '/settings/brave/test', '/settings/mcp/test', '/settings/searxng/test'], true)) {
     csrf_check_json();
     session_write_close();
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     $field = static fn (string $name): string => is_string($_POST[$name] ?? null) ? trim($_POST[$name]) : '';
     try {
+        if ($path === '/settings/searxng/test') {
+            // adresse saisie (pas encore enregistrée), sinon celle des réglages
+            $base = rtrim($field('web_searxng_url'), '/') ?: chat_web_searxng_url();
+            if ($base === '') {
+                throw new RuntimeException(t('settings.web.searxng_missing'));
+            }
+            if (!preg_match('~\Ahttps?://~i', $base) || !filter_var($base, FILTER_VALIDATE_URL)) {
+                throw new RuntimeException(t('error.settings.url_scheme'));
+            }
+            try {
+                $found = chat_web_searxng_results('Tour Eiffel Paris', $base, null, true);
+            } catch (RuntimeException $e) {
+                // 403 : SearXNG répond, mais le format JSON n'est pas autorisé dans son settings.yml
+                throw $e->getCode() === 403 ? new RuntimeException(t('settings.web.searxng_json')) : $e;
+            }
+            if (!$found) {
+                throw new RuntimeException(t('settings.connection.search_empty'));
+            }
+            echo json_encode(['ok' => true, 'message' => t('settings.connection.search_ok')], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         if ($path === '/settings/brave/test' || $path === '/settings/mcp/test') {
             $query = 'Tour Eiffel Paris site officiel';
             if ($path === '/settings/brave/test') {

@@ -607,6 +607,31 @@ try {
     $check(feel_mood_step(['emotion' => 'neutre', 'mood' => '', 'intensity' => 0], 'colere', 'vexée', 70) === ['colere', 'vexée', 70],
         'humeur : depuis le neutre, un échange peut suffire à fâcher');
 
+    echo PHP_EOL . '— recherche d’informations : sources et interrupteurs' . PHP_EOL;
+    $check(chat_web_sources() === ['web' => '', 'wikipedia' => false, 'meteo' => false] && !chat_web_any(chat_web_sources()),
+        'par défaut : aucune source sans clé ni réglage (pas d’appel en plus au modèle)');
+    set_setting('web_searxng_url', 'http://127.0.0.1:8888/');
+    set_setting('web_wikipedia', '1');
+    set_setting('web_weather', '1');
+    $check(chat_web_sources() === ['web' => 'searxng', 'wikipedia' => true, 'meteo' => true] && chat_web_searxng_url() === 'http://127.0.0.1:8888',
+        'SearXNG, Wikipédia et météo activés dans les réglages');
+    set_setting('web_searxng_url', 'javascript:alert(1)');
+    $check(chat_web_sources()['web'] === '', 'adresse SearXNG invalide : ignorée');
+    set_setting('web_enabled', '0');
+    $check(!chat_web_any(chat_web_sources()), 'interrupteur général coupé : aucune source');
+    foreach (['web_enabled', 'web_searxng_url', 'web_wikipedia', 'web_weather'] as $k) {
+        db()->prepare('DELETE FROM settings WHERE key = ?')->execute([$k]);
+    }
+    unset($GLOBALS['pv_settings_cache']);
+    $check(chat_web_allowed(['web_search' => 1], ['web_search' => 1]) && !chat_web_allowed(['web_search' => 0], ['web_search' => 1])
+        && !chat_web_allowed(['web_search' => 1], ['web_search' => 0]) && chat_web_allowed([], []),
+        'persona et discussion : chacun peut couper la recherche (actif par défaut)');
+    $check(chat_web_weather_word(0) === 'ciel dégagé' && chat_web_weather_word(61) === 'pluie' && chat_web_weather_word(95) === 'orages',
+        'météo : codes WMO traduits en mots');
+    $pidW = (int) db()->query("SELECT id FROM personas LIMIT 1")->fetchColumn();
+    $check((int) db()->query("SELECT web_search FROM personas WHERE id = $pidW")->fetchColumn() === 1
+        && (int) db()->query('SELECT web_search FROM conversations LIMIT 1')->fetchColumn() === 1, 'migration : interrupteurs actifs par défaut');
+
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
     set_setting('chat_title_model', 'off');

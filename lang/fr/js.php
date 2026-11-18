@@ -306,4 +306,10 @@ return [
     'js.assist.f.system_prompt' => 'Prompt système',
     'js.assist.f.image_prompt' => 'Prompt image',
     'js.assist.meta_example' => 'Un attribut par ligne, au format « Âge : 32 »',
+    'js.chat.web_search_phase_meteo' => 'Recherche météo en cours…',
+    'js.chat.web_search_phase_wikipedia' => 'Recherche sur Wikipédia…',
+    'js.settings.sum_web_off' => 'Désactivée',
+    'js.settings.sum_web_none' => 'Aucune source',
+    'js.settings.sum_web_wikipedia' => 'Wikipédia',
+    'js.settings.sum_web_weather' => 'Météo',
 ];

@@ -208,4 +208,6 @@ return [
     'assist.entry_text' => 'Describe an idea or an existing character, it fills the profile',
     'assist.complete_title' => 'The assistant spots what’s missing, asks questions and completes the profile without overwriting anything.',
     'assist.preview_title' => 'Profile preview',
+    'form.web_search' => 'Can look up information (web, Wikipedia, weather)',
+    'form.web_search_help' => 'Depending on the sources enabled in Settings. Turn off for a persona that must stay inside its fiction.',
 ];
