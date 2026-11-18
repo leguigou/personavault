@@ -298,7 +298,8 @@
     })();
     window.pvModal = pvModal;
 
-    document.querySelector("[data-new-chat]")?.addEventListener("submit", async (e) => {
+    // nouvelle conversation (menu de la conversation, cartes du carnet de contacts) : fil vierge ou avec souvenirs
+    document.querySelectorAll("[data-new-chat]").forEach((newChat) => newChat.addEventListener("submit", async (e) => {
         const form = e.currentTarget;
         e.preventDefault();
         const mode = await pvModal.open({
@@ -312,7 +313,7 @@
         if (!mode) return;
         form.elements.mode.value = mode;
         form.submit();
-    });
+    }));
 
     /* interrupteurs de la conversation : enregistrés dès qu'ils changent */
     document.querySelectorAll(".sheet-form").forEach((form) => {
