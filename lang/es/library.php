@@ -4,6 +4,33 @@
  * Referencia: lang/fr/library.php (mismas claves, mismos {parámetros}). Tuteo, como en francés.
  */
 return [
+    // --- audit du prompt (views/persona_prompt_audit.php)
+    'persona.audit.title' => 'Auditar el prompt',
+    'persona.audit.conversation' => 'Conversación que se simulará',
+    'persona.audit.new' => 'Nueva conversación',
+    'persona.audit.message' => 'Mensaje de prueba',
+    'persona.audit.run' => 'Recalcular',
+    'persona.audit.example' => 'Hola, ¿cómo estás?',
+    'persona.audit.budget' => 'Presupuesto del bloque de sistema',
+    'persona.audit.budget_help' => 'Estimaciones en tokens. El límite reserva espacio para la respuesta, el historial, la memoria, el mensaje y las instrucciones web. Los tokens necesarios corresponden al bloque de sistema antes del recorte.',
+    'persona.audit.limit' => 'Límite',
+    'persona.audit.need' => 'Necesarios',
+    'persona.audit.margin' => 'Margen',
+    'persona.audit.window' => 'Ventana configurada de {configured} tokens. Ventana utilizada en el cálculo de {effective} tokens.',
+    'persona.audit.loaded' => 'LM Studio indica una ventana cargada de {n} tokens.',
+    'persona.audit.unverified' => 'Cálculo basado en la configuración. Se desconoce la ventana cargada.',
+    'persona.audit.scope' => 'Simula un mensaje de texto con la memoria actual, sin búsqueda web ni una nueva compresión. El proveedor puede contar los tokens de otra forma.',
+    'persona.audit.paragraphs' => 'Párrafos de los prompts de sistema',
+    'persona.audit.no_system' => 'Este personaje usa las instrucciones predeterminadas. No hay texto guardado en un prompt de sistema.',
+    'persona.audit.kept' => '{kept} / {total} incluidos completos',
+    'persona.audit.partial' => 'Párrafo {n} recortado en parte',
+    'persona.audit.omitted' => 'Párrafo {n} omitido por completo',
+    'persona.audit.other' => 'Otros prompts de la ficha',
+    'persona.audit.planning' => '— El horario se interpreta para indicar la actividad actual y la siguiente.',
+    'persona.audit.not_chat' => '— Este tipo de prompt está reservado para otros usos de la ficha.',
+    'persona.audit.preview' => 'Ver el bloque de sistema preparado',
+    'persona.prompt_token_count' => ['one' => '{n} token estimado', 'other' => '{n} tokens estimados'],
+
     // --- biblioteca (views/library.php)
     'library.title'               => 'Mi biblioteca de personas',
     'library.title_favorites'     => 'Mis favoritos',

@@ -5,6 +5,33 @@
  * Paramètres entre accolades : {name}. Pluriels : ['one' => …, 'other' => …] avec {n}.
  */
 return [
+    // --- audit du prompt (views/persona_prompt_audit.php)
+    'persona.audit.title' => 'Auditer le prompt',
+    'persona.audit.conversation' => 'Discussion à simuler',
+    'persona.audit.new' => 'Nouvelle discussion',
+    'persona.audit.message' => 'Message de test',
+    'persona.audit.run' => 'Recalculer',
+    'persona.audit.example' => 'Salut, comment vas-tu ?',
+    'persona.audit.budget' => 'Budget du bloc système',
+    'persona.audit.budget_help' => 'Estimations en tokens. La limite est calculée après réservation de la place pour la réponse, l’historique, la mémoire, le message et les consignes web. Le besoin correspond au bloc système avant coupe.',
+    'persona.audit.limit' => 'Limite',
+    'persona.audit.need' => 'Besoin',
+    'persona.audit.margin' => 'Marge',
+    'persona.audit.window' => 'Fenêtre configurée de {configured} tokens. Fenêtre utilisée pour le calcul de {effective} tokens.',
+    'persona.audit.loaded' => 'LM Studio signale une fenêtre chargée de {n} tokens.',
+    'persona.audit.unverified' => 'Calcul à partir de la configuration. La fenêtre chargée est inconnue.',
+    'persona.audit.scope' => 'Simulation d’un message texte avec la mémoire actuelle, sans recherche web ni nouvelle compression. Le fournisseur peut compter les tokens différemment.',
+    'persona.audit.paragraphs' => 'Paragraphes des prompts système',
+    'persona.audit.no_system' => 'Cette fiche utilise les consignes par défaut. Elle ne contient aucun prompt système renseigné.',
+    'persona.audit.kept' => '{kept} / {total} transmis en entier',
+    'persona.audit.partial' => 'Paragraphe {n} partiellement coupé',
+    'persona.audit.omitted' => 'Paragraphe {n} entièrement écarté',
+    'persona.audit.other' => 'Autres prompts de la fiche',
+    'persona.audit.planning' => '— Le planning est interprété pour transmettre l’activité en cours et la suivante.',
+    'persona.audit.not_chat' => '— Ce type de prompt est réservé aux autres usages de la fiche.',
+    'persona.audit.preview' => 'Voir le bloc système préparé',
+    'persona.prompt_token_count' => ['one' => '{n} token estimé', 'other' => '{n} tokens estimés'],
+
     // --- bibliothèque (views/library.php)
     'library.title'               => 'Ma bibliothèque de personas',
     'library.title_favorites'     => 'Mes favoris',

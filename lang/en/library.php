@@ -4,6 +4,33 @@
  * Reference: lang/fr/library.php (same keys, same {parameters}).
  */
 return [
+    // --- audit du prompt (views/persona_prompt_audit.php)
+    'persona.audit.title' => 'Audit prompt',
+    'persona.audit.conversation' => 'Conversation to simulate',
+    'persona.audit.new' => 'New conversation',
+    'persona.audit.message' => 'Test message',
+    'persona.audit.run' => 'Recalculate',
+    'persona.audit.example' => 'Hi, how are you?',
+    'persona.audit.budget' => 'System block budget',
+    'persona.audit.budget_help' => 'Estimated tokens. The limit leaves room for the reply, history, memory, message and web instructions. Required tokens measure the system block before trimming.',
+    'persona.audit.limit' => 'Limit',
+    'persona.audit.need' => 'Required',
+    'persona.audit.margin' => 'Headroom',
+    'persona.audit.window' => 'Configured window of {configured} tokens. Window used for the calculation of {effective} tokens.',
+    'persona.audit.loaded' => 'LM Studio reports a loaded window of {n} tokens.',
+    'persona.audit.unverified' => 'Calculated from settings. The loaded window is unknown.',
+    'persona.audit.scope' => 'Simulates a text message with the current memory, without web search or a new compression pass. The provider may count tokens differently.',
+    'persona.audit.paragraphs' => 'System prompt paragraphs',
+    'persona.audit.no_system' => 'This persona uses the default instructions. No system prompt text is saved.',
+    'persona.audit.kept' => '{kept} / {total} included in full',
+    'persona.audit.partial' => 'Paragraph {n} partially cut',
+    'persona.audit.omitted' => 'Paragraph {n} omitted in full',
+    'persona.audit.other' => 'Other prompts on this profile',
+    'persona.audit.planning' => '— The schedule is interpreted to provide the current and next activities.',
+    'persona.audit.not_chat' => '— This prompt type is reserved for other uses on the profile.',
+    'persona.audit.preview' => 'View the prepared system block',
+    'persona.prompt_token_count' => ['one' => '{n} estimated token', 'other' => '{n} estimated tokens'],
+
     // --- library (views/library.php)
     'library.title'               => 'My persona library',
     'library.title_favorites'     => 'My favorites',
