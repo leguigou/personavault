@@ -4292,7 +4292,7 @@ html[data-mode="light"] .icon-tool.is-danger { color: #dc2626; }
     margin: 0;
     overflow: hidden;
 }
-.pe-head { display: flex; align-items: center; gap: 8px; }
+.pe-head { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .pe-hbtn {
     flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
     display: grid; place-items: center; background: rgba(var(--ink), .07); color: var(--text);
@@ -4317,12 +4317,23 @@ html[data-mode="light"] .icon-tool.is-danger { color: #dc2626; }
 .pe-kindsel option { color: initial; background: initial; }
 
 /* le texte, en grand */
+.pe-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+.pe-content > :not(.pe-body) { flex-shrink: 0; }
 .pe-body, .pe-diffview {
     flex: 1; min-height: 120px; padding: 10px 6px; border: 0; border-radius: 0;
     background: transparent; color: var(--text); resize: none; overflow: auto;
     font: 15px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     white-space: pre-wrap; word-break: break-word;
 }
+.pe-diffview { flex-basis: auto; overflow: visible; }
 .pe-body:focus { outline: none; }
 .pe-body::placeholder { color: var(--muted-2); }
 .pe-body[hidden], .pe-diffview[hidden] { display: none; }
@@ -4349,7 +4360,7 @@ html[data-mode="light"] .pe-diffview .is-del { color: #991b1b; }
 html[data-mode="light"] .pe-banner small.is-safe { color: #047857; }
 
 /* l'IA, toujours en bas */
-.pe-ai { display: flex; flex-direction: column; gap: 8px; }
+.pe-ai { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
 .prompt-editor.is-proposing .pe-ai { display: none; }
 .pe-chips {
     display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px;
@@ -4394,7 +4405,7 @@ html[data-mode="light"] .pe-chip.is-undo { color: #a21caf; }
 .pe-send svg, .pe-stop svg { width: 18px; height: 18px; }
 
 /* boutons du bas */
-.pe-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pe-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; flex-shrink: 0; }
 .pe-actions[hidden] { display: none; }
 .pe-actions.pe-decide { grid-template-columns: 1fr 1fr 1.3fr; }
 .pe-actions .btn { height: 52px; justify-content: center; font-size: 15px; border-radius: 16px; }
@@ -4498,6 +4509,7 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
     .prompt-editor .pe-card {
         width: 100%;
         height: calc(100dvh - 24px);
+        max-height: calc(100dvh - 24px);
         border-radius: 24px 24px 0 0;
         padding-bottom: calc(14px + env(safe-area-inset-bottom));
         animation: sheet-up .22s ease-out both;

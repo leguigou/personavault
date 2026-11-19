@@ -552,6 +552,7 @@
         const kindSel = form.querySelector("[data-pe-kind]");
         const heading = pe.querySelector("[data-pe-heading]");
         const banner = pe.querySelector("[data-pe-banner]");
+        const content = pe.querySelector("[data-pe-content]");
         const diffview = pe.querySelector("[data-pe-diffview]");
         const actions = pe.querySelector("[data-pe-actions]");
         const decide = pe.querySelector("[data-pe-decide]");
@@ -684,14 +685,15 @@
             planSig = "";
         };
         const planRefresh = async () => {
-            const sig = [body.value, planDay.value, planTime.value].join("\u0001");
+            const text = pending?.text ?? body.value;
+            const sig = [text, planDay.value, planTime.value].join("\u0001");
             if (sig === planSig) return;
             planSig = sig;
             planCtrl?.abort();
             planCtrl = new AbortController();
             const fd = new FormData();
             fd.append("_token", form.querySelector("[name=_token]").value);
-            fd.append("body", body.value);
+            fd.append("body", text);
             fd.append("day", planDay.value);
             fd.append("time", planTime.value);
             try {
@@ -897,7 +899,8 @@
             body.hidden = true;
             actions.hidden = true;
             decide.hidden = false;
-            diffview.scrollTop = 0;
+            content.scrollTop = 0;
+            paintPlan();
             decide.querySelector("[data-pe-apply]").focus({ preventScroll: true });
         }
         const endProposal = () => {
@@ -908,6 +911,7 @@
             body.hidden = false;
             actions.hidden = false;
             decide.hidden = true;
+            content.scrollTop = 0;
             paint();
         };
         decide.querySelector("[data-pe-refuse]").addEventListener("click", endProposal);
@@ -1137,8 +1141,9 @@
             paint();
         });
         kindSel.addEventListener("change", paint);
-        // fermer pendant une proposition : on la referme d'abord
-        form.addEventListener("submit", () => pending && endProposal(), true);
+        form.addEventListener("submit", (e) => {
+            if (pending) e.preventDefault();
+        });
     }
 
     /* ------------------------------------- assistant de création de persona
