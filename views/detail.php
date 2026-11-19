@@ -345,32 +345,34 @@ $token    = csrf_token();
                 <button type="button" class="pe-hbtn" data-pe-more aria-label="<?= e(t('persona.prompt_more')) ?>" title="<?= e(t('persona.prompt_more')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="18" cy="12" r="1.7" fill="currentColor"/></svg></button>
             </div>
 
-            <!-- proposition de l'IA en cours de revue -->
-            <div class="pe-banner" data-pe-banner hidden aria-live="polite"></div>
+            <div class="pe-content" data-pe-content>
+                <!-- proposition de l'IA en cours de revue -->
+                <div class="pe-banner" data-pe-banner hidden aria-live="polite"></div>
 
-            <label class="sr-only" for="pe-body"><?= e(t('persona.prompt_body')) ?></label>
-            <textarea id="pe-body" class="pe-body" name="body" required placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>"></textarea>
-            <div class="pe-diffview" data-pe-diffview hidden></div>
+                <label class="sr-only" for="pe-body"><?= e(t('persona.prompt_body')) ?></label>
+                <textarea id="pe-body" class="pe-body" name="body" required placeholder="<?= e(t('persona.prompt_body_placeholder')) ?>"></textarea>
+                <div class="pe-diffview" data-pe-diffview hidden></div>
 
-            <!-- planning : aperçu de ce que le persona fait à un jour et une heure (src/planning.php) -->
-            <div class="pe-plan" data-pe-plan="/p/<?= e($persona['slug']) ?>/planning-preview" hidden>
-                <div class="pe-plan-row">
-                    <span class="pe-plan-label"><?= e(t('persona.planning.preview')) ?></span>
-                    <label class="sr-only" for="pe-plan-day"><?= e(t('persona.planning.day')) ?></label>
-                    <select id="pe-plan-day" class="input pe-plan-day" data-pe-plan-day form="pe-noform">
-                        <?php foreach ([1 => t('persona.planning.day_1'), 2 => t('persona.planning.day_2'), 3 => t('persona.planning.day_3'),
-                                        4 => t('persona.planning.day_4'), 5 => t('persona.planning.day_5'), 6 => t('persona.planning.day_6'),
-                                        7 => t('persona.planning.day_7')] as $d => $dayLabel): ?>
-                            <option value="<?= $d ?>"><?= e($dayLabel) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <label class="sr-only" for="pe-plan-time"><?= e(t('persona.planning.time')) ?></label>
-                    <input id="pe-plan-time" class="input pe-plan-time" type="time" step="900" data-pe-plan-time form="pe-noform">
-                    <button type="button" class="mini" data-pe-plan-now><?= e(t('persona.planning.now')) ?></button>
+                <!-- planning : aperçu de ce que le persona fait à un jour et une heure (src/planning.php) -->
+                <div class="pe-plan" data-pe-plan="/p/<?= e($persona['slug']) ?>/planning-preview" hidden>
+                    <div class="pe-plan-row">
+                        <span class="pe-plan-label"><?= e(t('persona.planning.preview')) ?></span>
+                        <label class="sr-only" for="pe-plan-day"><?= e(t('persona.planning.day')) ?></label>
+                        <select id="pe-plan-day" class="input pe-plan-day" data-pe-plan-day form="pe-noform">
+                            <?php foreach ([1 => t('persona.planning.day_1'), 2 => t('persona.planning.day_2'), 3 => t('persona.planning.day_3'),
+                                            4 => t('persona.planning.day_4'), 5 => t('persona.planning.day_5'), 6 => t('persona.planning.day_6'),
+                                            7 => t('persona.planning.day_7')] as $d => $dayLabel): ?>
+                                <option value="<?= $d ?>"><?= e($dayLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <label class="sr-only" for="pe-plan-time"><?= e(t('persona.planning.time')) ?></label>
+                        <input id="pe-plan-time" class="input pe-plan-time" type="time" step="900" data-pe-plan-time form="pe-noform">
+                        <button type="button" class="mini" data-pe-plan-now><?= e(t('persona.planning.now')) ?></button>
+                    </div>
+                    <p class="pe-plan-out" data-pe-plan-out aria-live="polite"></p>
+                    <ul class="pe-plan-errors" data-pe-plan-errors></ul>
+                    <p class="hint pe-plan-help"><?= e(t('persona.planning.help')) ?></p>
                 </div>
-                <p class="pe-plan-out" data-pe-plan-out aria-live="polite"></p>
-                <ul class="pe-plan-errors" data-pe-plan-errors></ul>
-                <p class="hint pe-plan-help"><?= e(t('persona.planning.help')) ?></p>
             </div>
 
             <?php if ($aiOn): ?>
