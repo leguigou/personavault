@@ -216,16 +216,16 @@ await post('/settings/prompts', { prompt_memory: '', prompt_facts: '', prompt_fo
     }
     const preview = JSON.parse(await post('/assist/preview', { draft: JSON.stringify(version.draft) }));
     expect(preview.ok && preview.progress.percent === 100 && preview.fields.system_prompt.includes('Sherlock Holmes') && preview.fields.image_prompt.includes('Sherlock Holmes')
-        && preview.fields.family.includes('Mycroft') && preview.fields.friends.includes('Watson') && preview.fields.history && preview.fields.goals
-        && !Object.hasOwn(preview.fields, 'looks')
+        && !['history', 'family', 'friends', 'goals', 'personality', 'looks'].some((key) => Object.hasOwn(preview.fields, key))
+        && preview.fields.meta.includes('Âge: 35')
         && (await http('/p/sherlock-holmes')).status === 404, 'assistant : la relecture contient les deux prompts et ne crée pas la fiche');
-    const fields = { ...preview.fields, tagline: 'Détective relu', friends: 'Watson relit ses notes.',
-        system_prompt: 'Tu es Sherlock Holmes. Tu parles avec précision.', image_prompt: '' };
+    const fields = { ...preview.fields, tagline: 'Détective relu',
+        system_prompt: 'Tu es Sherlock Holmes. Watson relit tes notes. Tu parles avec précision.', image_prompt: '' };
     const c = JSON.parse(await post('/assist/create', { fields: JSON.stringify(fields) }));
     expect(c.ok && c.redirect === '/p/sherlock-holmes', 'assistant : fiche créée');
     const page = await record('GET /p/sherlock-holmes', await http('/p/sherlock-holmes'));
     expect(page.includes(fields.system_prompt) && page.includes(fields.tagline) && page.includes('Personnage d’origine')
-        && page.includes(fields.friends) && page.includes(fields.family) && page.includes(fields.goals)
+        && !page.includes('Mycroft, son frère.') && !page.includes('Résoudre les affaires')
         && !page.includes(version.draft.looks)
         && !page.includes(preview.fields.image_prompt), 'assistant : les corrections de relecture et le retrait du prompt image sont enregistrés');
     const additions = JSON.parse(await post('/assist/preview', { slug: 'sherlock-holmes' }, '/assist/preview (compléter)'));

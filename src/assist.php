@@ -32,6 +32,12 @@ const ASSIST_TEXT_FIELDS = [
 
 const ASSIST_BACKGROUND_FIELDS = ['history', 'family', 'friends', 'work', 'goals', 'personality'];
 
+/**
+ * Histoire, entourage, envies et personnalité : rédigés DANS le prompt système, jamais enregistrés
+ * comme attributs. Les attributs ne gardent que le résumé en faits courts (âge, ville, métier, style…).
+ */
+const ASSIST_STORY_FIELDS = ['history', 'family', 'friends', 'goals', 'personality'];
+
 const ASSIST_REQUIRED_FIELDS = ['name', 'work', 'history', 'family', 'friends',
     'goals', 'personality', 'voice', 'looks', 'relation', 'rules'];
 const ASSIST_MAX_STALLED_TURNS = 3;
@@ -160,8 +166,9 @@ function assist_progress(array $d, array $prompts = [], string $conflict = ''): 
     $items = [];
     $missing = [];
     foreach (ASSIST_REQUIRED_FIELDS as $key) {
+        // un prompt système existant porte déjà la voix, la relation, les limites, l'histoire et l'entourage
         $covered = $d[$key] !== '' || ($key === 'looks' && isset($kinds['image']))
-            || (in_array($key, ['voice', 'relation', 'rules'], true) && isset($kinds['system']));
+            || (in_array($key, ['voice', 'relation', 'rules', 'work', ...ASSIST_STORY_FIELDS], true) && isset($kinds['system']));
         $done = $covered && $key !== $conflict;
         $labelKey = 'js.assist.f.' . $key;
         $items[] = ['key' => $key, 'label' => t($labelKey), 'done' => $done];
@@ -172,6 +179,8 @@ function assist_progress(array $d, array $prompts = [], string $conflict = ''): 
     $percent = (int) round(count(array_filter($items, static fn (array $item): bool => $item['done'])) / count($items) * 100);
     $items[] = ['key' => 'system', 'label' => t('assist.item.system'), 'done' => isset($kinds['system']), 'auto' => !isset($kinds['system'])];
     $items[] = ['key' => 'image', 'label' => t('assist.item.image'), 'done' => isset($kinds['image']), 'auto' => !isset($kinds['image'])];
+    // attributs vides : déduits à la rédaction (âge, ville, métier…), sans question en plus
+    $items[] = ['key' => 'meta', 'label' => t('js.assist.f.meta'), 'done' => $d['meta'] !== [], 'auto' => $d['meta'] === []];
     return ['items' => $items, 'percent' => $percent, 'missing' => $missing];
 }
 
@@ -601,8 +610,8 @@ function assist_finalize(array $draft, ?array $persona = null, array $prompts = 
     $draft = $persona ? assist_merge(assist_from_persona($persona), $draft) : assist_clean($draft);
     $system = <<<TXT
 Tu finalises la fiche d'un PERSONA à partir de la FICHE EN COURS et des choix de l'utilisateur dans la CONVERSATION.
-1. Relis la conversation et la fiche avant de rédiger. Complète les champs vides de façon cohérente, en utilisant les faits déjà donnés avant d'en proposer de nouveaux. Si un fait du brouillon contredit une correction explicite de l'utilisateur, applique la correction la plus récente. La description situe le personnage en 2 ou 3 phrases. Le portrait détaillé va dans looks pour préparer l'image. Réserve meta aux faits courts comme l'âge ou la ville. Dans history, family, friends, work, goals et personality, donne des éléments précis qui peuvent se manifester en conversation, en 200 caractères maximum par champ. Préserve les choix explicites, y compris l'absence de proches ou de travail. Complète aussi name, tagline, tags, style, voice, relation et rules.
-2. Écris "system_prompt" en français, à la 2e personne (« Tu es … »). La description et les attributs sont déjà transmis au modèle de discussion. Concentre le prompt sur ce qui guide le jeu : comment le personnage parle, se comporte avec l'interlocuteur et réagit à un imprévu, une contradiction ou un sujet qui le touche. Fais sentir ses motivations et ses relations quand elles deviennent pertinentes. Donne 2 ou 3 courtes répliques illustrant des réactions différentes. Garde les limites utiles, sans répéter le portrait ni réciter la biographie.
+1. Relis la conversation et la fiche avant de rédiger. Complète les champs vides de façon cohérente, en utilisant les faits déjà donnés avant d'en proposer de nouveaux. Si un fait du brouillon contredit une correction explicite de l'utilisateur, applique la correction la plus récente. La description situe le personnage en 2 ou 3 phrases. Le portrait détaillé va dans looks pour préparer l'image. meta est le RÉSUMÉ de la fiche : 3 à 8 attributs aux valeurs courtes (40 caractères au plus), faits durs seulement : Âge, Ville, Métier, Situation, Origine, Entourage (prénoms et liens en quelques mots)… Jamais d'histoire, de traits de caractère ni de phrase dans meta. Si la fiche existante n'a aucun attribut, déduis-les de sa description et de ses prompts, sans rien inventer qui les contredise. Dans history, family, friends, work, goals et personality, donne des éléments précis qui peuvent se manifester en conversation, en 200 caractères maximum par champ. Préserve les choix explicites, y compris l'absence de proches ou de travail. Complète aussi name, tagline, tags, style, voice, relation et rules.
+2. Écris "system_prompt" en français, à la 2e personne (« Tu es … »). C'est la SEULE source de la psychologie, de l'histoire et de la voix : l'accroche et la description ne sont pas transmises au modèle de discussion, seuls les attributs courts le sont. Intègre-y, en paragraphes vivants et pas en liste : son histoire et ce qu'elle a laissé (history), sa famille et son entourage avec la nature des liens (family, friends), son quotidien (work), ce qu'il désire et ce qui l'en empêche (goals), sa personnalité et sa tension intérieure (personality). Puis ce qui guide le jeu : comment il parle (voice), se comporte avec l'interlocuteur (relation) et réagit à un imprévu, une contradiction ou un sujet qui le touche. Donne 2 ou 3 courtes répliques illustrant des réactions différentes. Termine par ses limites (rules). Ne recopie pas les attributs mot pour mot et ne décris pas le physique.
 3. Écris "image_prompt" en anglais, à partir de looks et style. Décris le sujet, les traits distinctifs, la tenue, l'expression et les éléments de cadrage, de lumière ou de décor utiles à l'image. Utilise des détails visibles plutôt que de raconter l'histoire ou de lister des traits de caractère abstraits.
 Réponds UNIQUEMENT avec un objet JSON :
 {"draft": {la fiche complète}, "corrected": ["clés des champs corrigés sur demande explicite de l'utilisateur, ou tableau vide"], "system_prompt": "…", "image_prompt": "…"}
@@ -637,7 +646,7 @@ TXT;
 function assist_review_fields(array $final, ?array $persona, array $prompts): array
 {
     $d = $final['draft'];
-    $attributeLabels = assist_profile_labels();
+    $attributeLabels = assist_attribute_labels();
     $fields = array_intersect_key($d, array_flip(['name', 'tagline', 'description']) + $attributeLabels);
     $fields['tags'] = implode(', ', $d['tags']);
     $dedicated = [];
@@ -646,7 +655,8 @@ function assist_review_fields(array $final, ?array $persona, array $prompts): ar
             $dedicated[] = mb_strtolower($label);
         }
     }
-    $reviewMeta = array_filter($d['meta'], static fn (array $row): bool => !in_array(mb_strtolower($row['k']), $dedicated, true));
+    $reviewMeta = array_filter($d['meta'], static fn (array $row): bool => !in_array(mb_strtolower($row['k']), $dedicated, true)
+        && !assist_is_story_label($row['k']));
     if ($d['work'] !== '') {
         foreach ($reviewMeta as &$row) {
             if (assist_is_work_label($row['k'])) {
@@ -708,7 +718,10 @@ function assist_review_final(array $fields, ?array $persona): array
     ];
 }
 
-/** Champs dédiés qui sont enregistrés comme attributs et lus dans le chat. */
+/**
+ * Libellés des champs de la fiche en cours, y compris ceux des anciennes fiches où l'histoire
+ * et l'entourage étaient des attributs (lus pour reprendre une fiche, plus jamais écrits).
+ */
 function assist_profile_labels(): array
 {
     return [
@@ -719,12 +732,25 @@ function assist_profile_labels(): array
     ];
 }
 
-/** Attributs factuels et champs dédiés du persona. */
+/** Champs dédiés enregistrés comme attributs : faits courts seulement (le reste est dans le prompt système). */
+function assist_attribute_labels(): array
+{
+    return array_diff_key(assist_profile_labels(), array_flip(ASSIST_STORY_FIELDS));
+}
+
+/** Un attribut qui porte de l'histoire ou de la psychologie (« Histoire », « Personnalité »…) : pas un résumé. */
+function assist_is_story_label(string $label): bool
+{
+    $story = array_map('mb_strtolower', array_intersect_key(assist_profile_labels(), array_flip(ASSIST_STORY_FIELDS)));
+    return in_array(mb_strtolower(trim($label)), $story, true);
+}
+
+/** Attributs du persona : le résumé en faits courts, plus métier, style et personnage d'origine. */
 function assist_meta_rows(array $d): array
 {
-    $rows = $d['meta'];
+    $rows = array_values(array_filter($d['meta'], static fn (array $r): bool => !assist_is_story_label((string) $r['k'])));
     $known = array_map(static fn ($r) => mb_strtolower($r['k']), $rows);
-    foreach (assist_profile_labels() as $key => $k) {
+    foreach (assist_attribute_labels() as $key => $k) {
         $v = $d[$key];
         if ($v !== '' && !in_array(mb_strtolower($k), $known, true) && count($rows) < 20
             && ($key !== 'work' || !array_filter($known, 'assist_is_work_label'))) {

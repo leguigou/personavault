@@ -71,6 +71,7 @@ return [
     'persona.remove_delete_hint' => 'Ficha, fotos, prompts y conversaciones se borran. No se puede deshacer.',
     'persona.add'                 => 'Añadir',
     'persona.meta_empty'          => 'Añade atributos (edad, estilo, modelo, seed, LoRA…) con «Editar».',
+    'persona.meta_empty_ai'       => 'O deja que la IA los deduzca de la ficha: «Completar».',
     'persona.directive_title'     => 'Consigna de rol',
     'persona.directive_hint'      => 'Se añade al prompt de sistema de todas sus conversaciones.',
     'persona.prompts_title'       => 'Prompts',

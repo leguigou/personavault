@@ -330,17 +330,20 @@ Sur la page de création, **Créer avec l'IA** (`/p/assist`) ouvre un assistant 
   un toucher ouvre l'**aperçu** de tout ce qui est déjà rédigé ;
 - **Relire la fiche** : l'IA complète ce qui manque et prépare le **prompt système** et le **prompt
   image**. Tu peux modifier la fiche et les prompts avant de cliquer sur **Créer** ou revenir à la discussion.
-  L'histoire, les proches, les envies et la personnalité sont des attributs lus en discussion. Le prompt
-  système guide les réactions du persona et le prompt image décrit son apparence.
+  L'histoire, les proches, les envies et la personnalité sont rédigées **dans le prompt système**,
+  avec la voix, la relation et les limites. Les **attributs** ne sont que le résumé en faits courts
+  (âge, ville, métier, entourage en quelques mots, style…). Le prompt image décrit l'apparence.
 
 La conversation est gardée dans l'onglet du navigateur : un rechargement ne la perd pas. Sur mobile,
 l'assistant est en plein écran (ni en-tête ni barre du bas) : la saisie reste toujours visible.
 
 Sur une fiche existante, le bouton **Compléter** ouvre le même assistant (`/p/{slug}/assist`) : il
 repère ce qui manque (par exemple l'absence de prompt système) et pose les questions
-correspondantes. À l'application, **rien n'est écrasé** : seuls les champs vides sont remplis, les
-attributs et tags manquants ajoutés, et le prompt système ou image créé seulement s'il n'en existe
-pas (`src/assist.php`).
+correspondantes. Un prompt système existant compte comme histoire, entourage et voix : l'assistant ne
+redemande pas ce qu'il contient. Si la fiche n'a **aucun attribut**, ils sont déduits de la
+description et des prompts à la rédaction (étape « Attributs » ✦), sans question en plus.
+À l'application, **rien n'est écrasé** : seuls les champs vides sont remplis, les attributs et tags
+manquants ajoutés, et le prompt système ou image créé seulement s'il n'en existe pas (`src/assist.php`).
 
 ### Prompts : l'IA dans l'éditeur, et l'historique
 

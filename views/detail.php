@@ -259,6 +259,9 @@ $token    = csrf_token();
             </dl>
         <?php else: ?>
             <p class="hint"><?= e(t('persona.meta_empty')) ?></p>
+            <?php if (llm_ready()): ?>
+                <p class="hint"><a href="/p/<?= e($persona['slug']) ?>/assist"><?= e(t('persona.meta_empty_ai')) ?></a></p>
+            <?php endif; ?>
         <?php endif; ?>
     </aside>
 </div>
