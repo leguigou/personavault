@@ -72,6 +72,7 @@ return [
     'persona.remove_delete_hint' => 'Fiche, photos, prompts et discussions sont effacés. Impossible de revenir en arrière.',
     'persona.add'                 => 'Ajouter',
     'persona.meta_empty'          => 'Ajoute des attributs (âge, style, modèle, seed, LoRA…) via « Modifier ».',
+    'persona.meta_empty_ai'       => 'Ou laisse l’IA les déduire de la fiche : « Compléter ».',
     'persona.directive_title'     => 'Consigne de jeu',
     'persona.directive_hint'      => 'Injectée dans le prompt système de toutes ses conversations.',
     'persona.prompts_title'       => 'Prompts',

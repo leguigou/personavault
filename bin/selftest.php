@@ -620,6 +620,18 @@ try {
     $check(feel_mood_step(['emotion' => 'neutre', 'mood' => '', 'intensity' => 0], 'colere', 'vexée', 70) === ['colere', 'vexée', 70],
         'humeur : depuis le neutre, un échange peut suffire à fâcher');
 
+    echo PHP_EOL . '— fiche envoyée au modèle : une seule source par information' . PHP_EOL;
+    $card = ['name' => 'Lena', 'tagline' => 'Ta loueuse de bateaux préférée', 'description' => 'Lena loue des bateaux au port.',
+        'meta' => json_encode([['k' => 'Ville', 'v' => 'Toulon'], ['k' => 'Âge', 'v' => '23']])];
+    $withSystem = implode("\n\n", chat_persona_identity($card, [['kind' => 'system', 'body' => 'Tu es Lena, drôle et pudique.']], 'Messages courts.'));
+    $withoutSystem = implode("\n\n", chat_persona_identity($card, []));
+    $check(str_contains($withSystem, 'Tu es Lena, drôle et pudique.') && str_contains($withSystem, 'Ville : Toulon')
+        && str_contains($withSystem, 'Consigne de jeu : Messages courts.')
+        && !str_contains($withSystem, 'loueuse de bateaux préférée') && !str_contains($withSystem, 'loue des bateaux au port'),
+        'avec prompt système : ni accroche ni description, les attributs et la consigne restent');
+    $check(str_contains($withoutSystem, 'Description : Lena loue des bateaux au port.') && !str_contains($withoutSystem, 'préférée'),
+        'sans prompt système : la description sert de repli, jamais l’accroche');
+
     echo PHP_EOL . '— recherche d’informations : sources et interrupteurs' . PHP_EOL;
     $check(chat_web_sources() === ['web' => '', 'wikipedia' => false, 'meteo' => false] && !chat_web_any(chat_web_sources()),
         'par défaut : aucune source sans clé ni réglage (pas d’appel en plus au modèle)');
@@ -802,8 +814,9 @@ try {
         'assistant : un attribut trop long est raccourci à la fin d’un mot');
     $__pg = assist_progress(['name' => 'A', 'tagline' => 'B', 'description' => str_repeat('x', 50)], [['kind' => 'system']]);
     $__sys = array_values(array_filter($__pg['items'], static fn ($i) => $i['key'] === 'system'))[0];
-    $check($__pg['percent'] === 36 && $__sys['done'] === true && !in_array('voice', $__pg['missing'], true),
-        'assistant : avancement et prompt système existant reconnus');
+    $__metaItem = array_values(array_filter($__pg['items'], static fn ($i) => $i['key'] === 'meta'))[0];
+    $check($__pg['percent'] === 91 && $__sys['done'] === true && $__pg['missing'] === ['looks'] && $__metaItem['auto'] === true,
+        'assistant : un prompt système existant couvre voix, histoire et entourage ; attributs vides déduits à la rédaction');
     $__complete = array_fill_keys(ASSIST_REQUIRED_FIELDS, 'Choix renseigné');
     $__complete['family'] = 'Elle n’a pas de famille proche.';
     $__complete['friends'] = 'Elle n’a pas d’amis pour le moment.';
@@ -836,17 +849,30 @@ try {
     db()->prepare('INSERT INTO prompts (persona_id, title, kind, body) VALUES (?,?,?,?)')->execute([$__zid, 'Mon système', 'system', 'Texte à moi']);
     $__z  = db()->query('SELECT * FROM personas WHERE id = ' . $__zid)->fetch();
     $__ch = assist_apply($__z, fetch_prompts($__zid), ['draft' => assist_clean(['tagline' => 'Autre accroche', 'description' => 'Une description',
-        'looks' => 'Cheveux noirs', 'family' => 'Son frère Jules', 'meta' => [['k' => 'Âge', 'v' => '22'], ['k' => 'Ville', 'v' => 'Lyon']]]),
+        'looks' => 'Cheveux noirs', 'family' => 'Son frère Jules', 'work' => 'Fleuriste',
+        'meta' => [['k' => 'Âge', 'v' => '22'], ['k' => 'Ville', 'v' => 'Lyon'], ['k' => 'Histoire', 'v' => 'A grandi au bord de la mer.']]]),
         'system_prompt' => 'Nouveau système', 'image_prompt' => 'portrait']);
     $__z  = db()->query('SELECT * FROM personas WHERE id = ' . $__zid)->fetch();
     $__pk = array_map(static fn ($p) => $p['kind'] . ':' . $p['body'], fetch_prompts($__zid));
     $check($__z['tagline'] === 'Ma propre accroche' && $__z['description'] === 'Une description'
-        && json_list($__z['meta'])[0]['v'] === '40' && count(json_list($__z['meta'])) === 3
+        && json_list($__z['meta'])[0]['v'] === '40'
+        && array_column(json_list($__z['meta']), 'k') === ['Âge', 'Ville', t('js.assist.f.work')]
         && $__pk === ['system:Texte à moi', 'image:portrait'] && $__ch !== [],
         'assistant : fiche existante complétée sans rien écraser (accroche, âge et prompt système gardés)');
     $__context = chat_system_prompt($__z, fetch_prompts($__zid), []);
-    $check(assist_from_persona($__z)['family'] === 'Son frère Jules' && str_contains($__context, 'Son frère Jules')
-        && !str_contains($__context, 'Cheveux noirs'), 'assistant : l’entourage rejoint le contexte de discussion et le portrait reste visuel');
+    $check(!str_contains(json_encode(json_list($__z['meta']), JSON_UNESCAPED_UNICODE), 'Jules') && !str_contains($__context, 'grandi au bord')
+        && !str_contains($__context, 'Cheveux noirs'), 'assistant : histoire et entourage ne deviennent jamais des attributs (ils vont dans le prompt système)');
+    $__rv = assist_review_fields(['draft' => assist_clean(['name' => 'Léa', 'history' => 'Un souvenir', 'family' => 'Sa sœur', 'work' => 'Libraire',
+        'meta' => [['k' => 'Âge', 'v' => '30'], ['k' => 'Personnalité', 'v' => 'Rieuse']]]), 'system_prompt' => 'Tu es Léa.', 'image_prompt' => ''], null, []);
+    $check(!array_intersect(array_keys($__rv), ASSIST_STORY_FIELDS) && $__rv['work'] === 'Libraire' && $__rv['meta'] === 'Âge: 30',
+        'assistant : la relecture ne propose plus l’histoire en attributs, seulement le résumé et le prompt système');
+    // fiche existante sans attributs : « Compléter » les ajoute
+    db()->prepare('UPDATE personas SET meta = ? WHERE id = ?')->execute(['[]', $__zid]);
+    $__z = db()->query('SELECT * FROM personas WHERE id = ' . $__zid)->fetch();
+    assist_apply($__z, fetch_prompts($__zid), ['draft' => assist_clean(['meta' => [['k' => 'Âge', 'v' => '41'], ['k' => 'Ville', 'v' => 'Nantes']]]),
+        'system_prompt' => '', 'image_prompt' => '']);
+    $check(array_column(json_list(db()->query('SELECT meta FROM personas WHERE id = ' . $__zid)->fetchColumn()), 'v') === ['41', 'Nantes'],
+        'assistant : attributs vides complétés par « Compléter »');
     db()->prepare('DELETE FROM personas WHERE id = ?')->execute([$__zid]);
 
     // historique des prompts : lignes + / −, 10 dernières modifications seulement

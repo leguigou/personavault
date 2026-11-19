@@ -1106,11 +1106,11 @@ function chat_persona_identity(array $persona, array $personaPrompts, string $di
         $parts[] = 'Tu incarnes ' . $persona['name'] . ". Reste dans le personnage et réponds de façon naturelle.";
     }
 
+    // une seule source par information : le prompt système porte la psychologie et la voix, les attributs
+    // les faits durs, la consigne la forme. L'accroche est un champ de carte (jamais envoyée) ; la
+    // description ne sert que de repli quand il n'y a pas de prompt système.
     $fiche = ['Nom' => $persona['name']];
-    if (trim((string) $persona['tagline']) !== '') {
-        $fiche['Accroche'] = $persona['tagline'];
-    }
-    if (trim((string) $persona['description']) !== '') {
+    if ($system === '' && trim((string) $persona['description']) !== '') {
         $fiche['Description'] = $persona['description'];
     }
     foreach (json_list($persona['meta'] ?? '[]') as $row) {

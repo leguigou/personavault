@@ -71,6 +71,7 @@ return [
     'persona.remove_delete_hint' => 'Card, photos, prompts and chats are erased. This cannot be undone.',
     'persona.add'                 => 'Add',
     'persona.meta_empty'          => 'Add attributes (age, style, model, seed, LoRA…) via “Edit”.',
+    'persona.meta_empty_ai'       => 'Or let the AI infer them from the profile: “Complete”.',
     'persona.directive_title'     => 'Role-play instruction',
     'persona.directive_hint'      => 'Added to the system prompt of all their conversations.',
     'persona.prompts_title'       => 'Prompts',
