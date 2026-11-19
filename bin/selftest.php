@@ -620,6 +620,18 @@ try {
     $check(feel_mood_step(['emotion' => 'neutre', 'mood' => '', 'intensity' => 0], 'colere', 'vexée', 70) === ['colere', 'vexée', 70],
         'humeur : depuis le neutre, un échange peut suffire à fâcher');
 
+    echo PHP_EOL . '— fiche envoyée au modèle : une seule source par information' . PHP_EOL;
+    $card = ['name' => 'Lena', 'tagline' => 'Ta loueuse de bateaux préférée', 'description' => 'Lena loue des bateaux au port.',
+        'meta' => json_encode([['k' => 'Ville', 'v' => 'Toulon'], ['k' => 'Âge', 'v' => '23']])];
+    $withSystem = implode("\n\n", chat_persona_identity($card, [['kind' => 'system', 'body' => 'Tu es Lena, drôle et pudique.']], 'Messages courts.'));
+    $withoutSystem = implode("\n\n", chat_persona_identity($card, []));
+    $check(str_contains($withSystem, 'Tu es Lena, drôle et pudique.') && str_contains($withSystem, 'Ville : Toulon')
+        && str_contains($withSystem, 'Consigne de jeu : Messages courts.')
+        && !str_contains($withSystem, 'loueuse de bateaux préférée') && !str_contains($withSystem, 'loue des bateaux au port'),
+        'avec prompt système : ni accroche ni description, les attributs et la consigne restent');
+    $check(str_contains($withoutSystem, 'Description : Lena loue des bateaux au port.') && !str_contains($withoutSystem, 'préférée'),
+        'sans prompt système : la description sert de repli, jamais l’accroche');
+
     echo PHP_EOL . '— recherche d’informations : sources et interrupteurs' . PHP_EOL;
     $check(chat_web_sources() === ['web' => '', 'wikipedia' => false, 'meteo' => false] && !chat_web_any(chat_web_sources()),
         'par défaut : aucune source sans clé ni réglage (pas d’appel en plus au modèle)');

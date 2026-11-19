@@ -289,6 +289,12 @@ Ce que reçoit le modèle à chaque message, dans cet ordre :
 1. **Partie fixe** (message système) : prompts « système » du persona, fiche, consigne de jeu,
    résumé de la conversation, règles. Elle ne change qu'à la compression : LM Studio / llama.cpp
    réutilisent leur cache et ne retraitent que la fin.
+
+   **Une seule source par information**, pour éviter que le modèle lise trois fois la même chose :
+   le **prompt système** porte la psychologie et la voix ; les **attributs** ne portent que les faits
+   durs (âge, ville, métier, entourage) ; la **consigne de jeu** ne porte que la forme (registre,
+   longueur, tics, emojis). L'**accroche** et la **description** sont des champs de carte : l'accroche
+   n'est jamais envoyée au modèle, la description seulement quand le persona n'a pas de prompt système.
 2. **Historique** : uniquement les messages **pas encore résumés**, plus les 2 derniers messages
    résumés pour la continuité. Sans mémoire, tout l'historique dans la limite de la fenêtre.
 3. **Dernier message**, précédé d'un bloc `<contexte>` variable : date et heure, silence écoulé,
