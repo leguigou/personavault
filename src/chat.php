@@ -293,10 +293,12 @@ function chat_token_budget(array $conv): array
     ];
 }
 
-/** Variante stricte pour les blocs qui doivent rester dans le budget estimé. */
-function chat_fit_text(string $text, int $tokens): string
+/** Variante stricte. L'audit peut récupérer l'intervalle d'octets retiré, hors marqueur […]. */
+function chat_fit_text(string $text, int $tokens, ?array &$omitted = null): string
 {
+    $omitted = null;
     if ($tokens <= 1) {
+        $omitted = [0, strlen($text)];
         return '';
     }
     if (chat_estimate_tokens($text) <= $tokens) {
@@ -304,10 +306,15 @@ function chat_fit_text(string $text, int $tokens): string
     }
     $chars = (int) floor(($tokens - 1) * 3.6);
     if ($chars < 12) {
-        return mb_substr($text, 0, $chars);
+        $head = mb_substr($text, 0, $chars);
+        $omitted = [strlen($head), strlen($text)];
+        return $head;
     }
     $half = intdiv($chars - 5, 2);
-    return rtrim(mb_substr($text, 0, $half)) . ' […] ' . ltrim(mb_substr($text, -$half));
+    $head = rtrim(mb_substr($text, 0, $half));
+    $tail = ltrim(mb_substr($text, -$half));
+    $omitted = [strlen($head), strlen($text) - strlen($tail)];
+    return $head . ' […] ' . $tail;
 }
 
 /** Le résumé de la conversation remplace-t-il les anciens messages ? */
@@ -958,15 +965,11 @@ function chat_fit_context(array $conv, ?callable $onLoading = null, ?callable $o
     }
     $model  = (string) $cfg['model'];
     $window = max(2048, (int) ($conv['context_window'] ?? 8192));
-    foreach ($st['loaded'] as $l) {
-        if ($l['key'] === $model || $l['id'] === $model) {
-            $ctx = (int) $l['ctx'];
-            if ($ctx > 0 && $ctx < $window) {
-                $out['conv']['context_window'] = max(1024, $ctx);
-            }
-            $out['ctx'] = $ctx;
-            return $out;
-        }
+    $ctx = chat_loaded_model_context($model, $st['loaded']);
+    if ($ctx !== null) {
+        $out['conv'] = chat_apply_loaded_context($conv, $ctx);
+        $out['ctx'] = $ctx;
+        return $out;
     }
     // pas chargé : n'en garder qu'un en mémoire (réglage), puis charger avec la bonne fenêtre
     if (setting('lms_single_model', '1') === '1' && $st['loaded']) {
@@ -979,6 +982,25 @@ function chat_fit_context(array $conv, ?callable $onLoading = null, ?callable $o
     $out['loaded'] = lms_load_sync($model, $window, $onTick);
     $out['ctx']    = $out['loaded'] ? $window : 0;
     return $out;
+}
+
+/** null si le modèle n'est pas chargé, 0 si sa fenêtre est inconnue. */
+function chat_loaded_model_context(string $model, array $loaded): ?int
+{
+    foreach ($loaded as $instance) {
+        if ($instance['key'] === $model || $instance['id'] === $model) {
+            return (int) $instance['ctx'];
+        }
+    }
+    return null;
+}
+
+function chat_apply_loaded_context(array $conv, int $ctx): array
+{
+    if ($ctx > 0 && $ctx < max(2048, (int) ($conv['context_window'] ?? 8192))) {
+        $conv['context_window'] = max(1024, $ctx);
+    }
+    return $conv;
 }
 
 /** Note l'heure d'utilisation de LM Studio (réponse, chargement…) : base du déchargement après inactivité. */
@@ -1819,7 +1841,7 @@ function chat_auto_title(int $cid, bool $rewrite = false): ?string
  *                            lui est renvoyée (sinon « décris-la » dans le message suivant ne
  *                            pouvait rien donner : seul le texte des anciens messages partait)
  */
-function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, string $addressOverride = '', ?array $webResults = null, ?array $quote = null, array $quoteHistory = []): array
+function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, string $addressOverride = '', ?array $webResults = null, ?array $quote = null, array $quoteHistory = [], ?array &$systemAudit = null): array
 {
     $limits = chat_token_budget($conv);
     $budget = $limits['input'] - 8; // enveloppes des messages système et utilisateur
@@ -1846,7 +1868,17 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $webRule .= " Sans résultats web fournis, ne prétends pas avoir consulté le Web. Si une vérification est nécessaire, dis que tu ne peux pas la faire ici.";
     }
     $systemRoom = $budget - $historyReserve - $limits['memory'] - chat_estimate_tokens($text) - 256;
-    $system = chat_fit_text($system, max(intdiv($budget, 6), $systemRoom) - chat_estimate_tokens($webRule)) . $webRule;
+    $systemLimit = max(intdiv($budget, 6), $systemRoom) - chat_estimate_tokens($webRule);
+    $fittedSystem = chat_fit_text($system, $systemLimit, $omitted);
+    if ($systemAudit !== null) {
+        $systemAudit = [
+            'original' => $system,
+            'limit' => max(0, $systemLimit),
+            'need' => chat_estimate_tokens($system),
+            'omitted' => $omitted,
+        ];
+    }
+    $system = $fittedSystem . $webRule;
 
     // 2) Partie VARIABLE (heure, souvenirs, rappels) : jointe au DERNIER message,
     //    pour ne pas invalider le cache de tout ce qui précède.

@@ -280,10 +280,13 @@ $token    = csrf_token();
 <section class="panel panel-wide">
     <header class="panel-head">
         <h2><?= e(t('persona.prompts_title')) ?> <span class="count"><?= count($prompts) ?></span></h2>
-        <button class="btn btn-ghost btn-sm" type="button" data-prompt-new>
-            <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-            <?= e(t('persona.add')), "\n" ?>
-        </button>
+        <div class="prompt-tools">
+            <a class="btn btn-ghost btn-sm" href="/p/<?= e(rawurlencode($persona['slug'])) ?>/prompt-audit"><?= e(t('persona.audit.title')) ?></a>
+            <button class="btn btn-ghost btn-sm" type="button" data-prompt-new>
+                <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                <?= e(t('persona.add')), "\n" ?>
+            </button>
+        </div>
     </header>
 
     <?php if (!$prompts): ?>
@@ -308,6 +311,8 @@ $token    = csrf_token();
                     </div>
                 </header>
                 <pre class="prompt-body" id="body-<?= (int) $pr['id'] ?>" data-prompt-edit><?= e($pr['body']) ?></pre>
+                <?php $promptText = trim((string) $pr['body']); ?>
+                <small class="prompt-token-count"><?= e(t('persona.prompt_token_count', $promptText === '' ? 0 : chat_estimate_tokens($promptText))) ?></small>
             </article>
         <?php endforeach; ?>
     </div>

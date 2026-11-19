@@ -486,6 +486,34 @@ try {
         && str_ends_with((string) end($smallPrompt['messages'])['content'], 'fin de ma demande'),
         'contexte : une petite fenêtre garde la fin du message et respecte le budget');
 
+    require_once __DIR__ . '/../src/persona_prompt_audit.php';
+    $repeated = str_repeat('é', 500);
+    $auditPrompts = [
+        ['kind' => 'system', 'title' => 'Voix', 'body' => $repeated . "\r\n \r\n" . $repeated],
+        ['kind' => 'system', 'title' => 'Histoire', 'body' => 'Un souvenir propre au personnage.'],
+        ['kind' => 'planning', 'title' => 'Agenda', 'body' => 'Tous les jours : peinture à l’atelier'],
+    ];
+    $auditPersona = ['model' => 'modele-audit', 'context_window' => 32768, 'max_tokens' => 400] + $persona;
+    $auditConv = ['id' => 0, 'memory_enabled' => 0];
+    $offlineAudit = persona_prompt_audit($auditPersona, $auditPrompts, $auditConv, 'Salut', []);
+    $check($offlineAudit['margin'] > 0 && $offlineAudit['rows'][0]['count'] === 2
+        && $offlineAudit['rows'][0]['omissions'] === [] && count($offlineAudit['otherPrompts']) === 1,
+        'audit : fenêtre configurée, paragraphes CRLF intacts et planning classé à part');
+    $tightAudit = persona_prompt_audit($auditPersona, $auditPrompts, $auditConv, 'Salut', [
+        'loaded' => [['id' => 'instance-audit', 'key' => 'modele-audit', 'ctx' => 2048]],
+    ]);
+    $tightOmissions = $tightAudit['rows'][0]['omissions'];
+    $expectedSystem = chat_build_messages($auditPersona, $auditPrompts,
+        chat_with_persona($auditConv, ['context_window' => 2048] + $auditPersona), [], 'Salut', canReact: true);
+    $check($tightAudit['effectiveWindow'] === 2048 && $tightAudit['margin'] < 0
+        && $tightAudit['margin'] === $tightAudit['limit'] - $tightAudit['need']
+        && $tightAudit['system'] === $expectedSystem['messages'][0]['content']
+        && array_column($tightOmissions, 'number') === [1, 2]
+        && array_column($tightOmissions, 'partial') === [true, false]
+        && $tightOmissions[1]['text'] === $repeated
+        && str_starts_with($tightAudit['system'], substr($repeated, 0, strlen($repeated) - strlen($tightOmissions[0]['text'])) . ' […] '),
+        'audit : modèle chargé, aperçu identique à la discussion et coupe partielle ou complète de paragraphes identiques');
+
     echo PHP_EOL . '— index plein texte des messages' . PHP_EOL;
     db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$pid, 'ailleurs']);
     $cid2 = (int) db()->lastInsertId();
