@@ -3302,7 +3302,6 @@ html.kb-open .chat-room .chat-composer { padding-bottom: 10px; }
 .msg-bot > .bubble,
 .msg-bot > .bubbles { max-width: calc(100% - 34px); }
 html[data-avatars="0"] .msg-bot > .bubbles { max-width: 100%; }
-.msg-bot.typing > .bubble { max-width: none; }
 
 /* icônes de la barre du haut : taille fixe (sinon le SVG remplit le bouton) */
 .icon-btn > .ico, .icon-btn > svg:not([width]) { width: 20px; height: 20px; }
