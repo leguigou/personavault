@@ -112,10 +112,12 @@ if (!is_cli() && !defined('PV_NO_SESSION') && session_status() !== PHP_SESSION_A
 
 /* ------------------------------------------------------------------- base */
 
-function db(): PDO
+require_once __DIR__ . '/database.php';
+
+function db(): PersonaVaultDatabase
 {
     static $pdo = null;
-    if ($pdo instanceof PDO) {
+    if ($pdo instanceof PersonaVaultDatabase) {
         return $pdo;
     }
 
@@ -124,24 +126,10 @@ function db(): PDO
     if (!is_dir($dir)) {
         mkdir($dir, 0700, true);
     }
-    $isNew = !is_file($path);
+    $connection = new PersonaVaultDatabase($path);
+    migrate($connection);
 
-    $pdo = new PDO('sqlite:' . $path, null, null, [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ]);
-    if ($isNew) {
-        @chmod($path, 0600);
-    }
-    // explicite (PDO met 60 s par défaut) : plusieurs workers écrivent en parallèle
-    $pdo->exec('PRAGMA busy_timeout = 15000');
-    $pdo->exec('PRAGMA journal_mode = WAL');
-    $pdo->exec('PRAGMA foreign_keys = ON');
-
-    migrate($pdo);
-
-    return $pdo;
+    return $pdo = $connection;
 }
 
 /**

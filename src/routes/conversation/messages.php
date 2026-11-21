@@ -50,7 +50,7 @@ if ($action === 'find-messages' && $method === 'GET') {
         $params[] = gmdate('Y-m-d H:i:s', $day->getTimestamp());
         $params[] = gmdate('Y-m-d H:i:s', $day->modify('+1 day')->getTimestamp());
     }
-    $pdo = db();
+    $pdo = db()->readConnection();
     if ($query !== '') {
         $pdo->sqliteCreateFunction('pv_message_matches', static fn (string $content): int => (int) (mb_stripos($content, $query) !== false), 1);
         $sql .= ' AND pv_message_matches(content) = 1';
