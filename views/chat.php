@@ -110,6 +110,13 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                         <svg viewBox="0 0 24 24" class="ico"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.7-1.2-1.8-3.1-2 .8a7.6 7.6 0 0 0-2.6-1.5L14.4 3h-3.6l-.3 2.5a7.6 7.6 0 0 0-2.6 1.5l-2-.8L4 9.3l1.7 1.2a7.6 7.6 0 0 0 0 3L4 14.7l1.8 3.1 2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.5h3.6l.3-2.5a7.6 7.6 0 0 0 2.6-1.5l2 .8 1.8-3.1-1.6-1.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
                         <?= e(t('chat.head.settings')) ?>
                     </button>
+                    <button type="button" class="chat-menu-action" data-open-godmode aria-haspopup="dialog"
+                            data-godmode-label="<?= e(t('chat.godmode.prompt')) ?>"
+                            data-godmode-submit="<?= e(t('chat.godmode.send')) ?>"
+                            data-godmode-max="<?= CHAT_GODMODE_MAX ?>">
+                        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 10-12h-7l1-8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                        Godmode
+                    </button>
                     <?php if (!(int) $persona['archived']): ?>
                         <form method="post" action="/chat/<?= (int) $conv['id'] ?>/new" data-new-chat
                               data-title="<?= e(t('chat.head.new')) ?>" data-help="<?= e(t('chat.new.help')) ?>"
@@ -236,8 +243,9 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                     <?php
                     $bubbles = chat_message_bubbles($m);
                     $bubbleReactions = chat_bubble_reactions($m, $bubbles);
+                    $godmode = $role === 'user' && !empty($m['godmode']);
                     ?>
-                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-version-id="<?= (int) $m['version_id'] ?>"<?php if ($m['reaction_reply']): ?> data-reaction-reply="1"<?php endif; ?> data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>"<?php if (($replyVersions['mid'] ?? 0) === (int) $m['id']): ?> data-ver="<?= (int) $replyVersions['index'] ?>" data-vers="<?= (int) $replyVersions['total'] ?>"<?php endif; ?>>
+                    <div class="msg msg-<?= $role === 'user' ? 'user' : 'bot' ?><?= $godmode ? ' msg-godmode' : '' ?>" data-msg-id="<?= (int) $m['id'] ?>" data-version-id="<?= (int) $m['version_id'] ?>"<?php if ($m['reaction_reply']): ?> data-reaction-reply="1"<?php endif; ?> data-at="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime((string) $m['created_at'] . ' UTC'))) ?>"<?php if (($replyVersions['mid'] ?? 0) === (int) $m['id']): ?> data-ver="<?= (int) $replyVersions['index'] ?>" data-vers="<?= (int) $replyVersions['total'] ?>"<?php endif; ?>>
                         <?php if ($role !== 'user'): ?>
                             <span class="msg-avatar">
                                 <?php if ($persona['avatar']): ?>
@@ -254,6 +262,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                         if (!$photoOnly) echo $photo;
                         ?>
                         <div class="bubbles">
+                            <?php if ($godmode): ?><span class="godmode-tag">Godmode</span><?php endif; ?>
                             <?php if ($quote = chat_reply_quote($m)): ?>
                                 <?php $tag = $quote['id'] > 0 ? 'button' : 'div'; ?>
                                 <<?= $tag ?> class="chat-quote"<?php if ($quote['id'] > 0): ?> type="button" data-quote-id="<?= $quote['id'] ?>" data-quote-bubble="<?= $quote['bubble'] ?>"<?php endif; ?>>
@@ -265,7 +274,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                                 <?php if ($role === 'assistant' && $part === '') continue; ?>
                                 <div class="msg-bubble" data-bubble-index="<?= $index ?>" data-reaction="<?= e($bubbleReactions[$index] ?? '') ?>">
                                     <?php if ($photoOnly) echo $photo; ?>
-                                    <div class="bubble"<?= $photoOnly ? ' hidden' : '' ?>><?= nl2br(e($part)) ?></div>
+                                    <div class="bubble"<?= $photoOnly ? ' hidden' : '' ?>><?= $godmode ? e($part) : nl2br(e($part)) ?></div>
                                 </div>
                             <?php endforeach; ?>
                             <?php if ($mediaUrl = klipy_media_url($m['klipy_url'])): ?>

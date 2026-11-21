@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 25);
+define('PV_SCHEMA_VERSION', 26);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -285,6 +285,9 @@ function migrate(PDO $pdo): void
             )");
             $pdo->exec('CREATE INDEX IF NOT EXISTS idx_conv_topics_due ON conversation_topics(conversation_id, closed, due_on, id)');
             $pdo->exec('CREATE INDEX IF NOT EXISTS idx_conv_topics_source ON conversation_topics(source_message_id)');
+        }
+        if ($version < 26) {
+            add_column_if_missing($pdo, 'messages', 'godmode', 'INTEGER NOT NULL DEFAULT 0');
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);

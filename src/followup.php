@@ -171,7 +171,7 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
     $out = ['status' => 'error', 'kind' => $pick['kind'], 'text' => '', 'error' => ''];
     $factsOn = (int) $conv['memory_enabled'] === 1 && (int) $conv['facts_enabled'] === 1;
     // souvenirs liés au dernier message seulement pour un rebond ; sinon les plus récents
-    $factsQuery = $pick['topic'] ? (string) $last['content'] : '';
+    $factsQuery = $pick['topic'] && $last ? chat_history_text($last) : '';
     $facts = $factsOn ? array_merge(
         facts_relevant((int) $persona['id'], $factsQuery),
         facts_relevant((int) $persona['id'], $factsQuery, 3, 'story')
@@ -193,7 +193,7 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
     $messages = [['role' => 'system', 'content' => $system]];
     $lastUserMessage = '';
     foreach ($history as $m) {
-        $content = trim((string) $m['content'] . ($m['image'] !== '' ? ' [photo jointe]' : ''));
+        $content = trim(chat_history_text($m) . ($m['image'] !== '' ? ' [photo jointe]' : ''));
         $messages[] = ['role' => (string) $m['role'], 'content' => $content];
         if ($m['role'] === 'user') {
             $lastUserMessage = $content;

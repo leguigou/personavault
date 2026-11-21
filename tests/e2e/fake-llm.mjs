@@ -212,6 +212,12 @@ http.createServer(async (req, res) => {
             text = last.includes('pastéis au bord du Tage') && last.includes('Camille prépare une exposition à Lyon')
                 ? JSON.stringify({ message: 'Ça m’a fait repenser à ton voyage à Lisbonne. Tu y retournerais ?', questions: ['Et ton exposition à Lyon, elle avance ?'] })
                 : JSON.stringify({ message: 'Tu as déjà développé une pellicule argentique ?', questions: ['Tu photographies quoi en ce moment ?'] });
+        } else if (j.stream && system.startsWith('Consigne Godmode de l’utilisateur')) {
+            text = system.includes('MARQUEUR-GODMODE') && !system.includes('REGLE-PERSONA-TEST')
+                && !system.includes('Privilégie une réponse concise') ? 'Consigne prioritaire reçue.' : 'Consigne prioritaire incorrecte.';
+        } else if (j.stream && last.endsWith('Retour au persona.')) {
+            text = system.includes('REGLE-PERSONA-TEST') && !JSON.stringify(j.messages).includes('MARQUEUR-GODMODE')
+                ? 'Réglages du persona rétablis.' : 'Consigne précédente encore active.';
         } else if (system.includes('open_topics et closed_topics') && last.includes('On reparlera du concours de cerfs-volants.')) {
             const source = Number(last.match(/\[(\d+)\] \((\d{4}-\d{2}-\d{2})\) Utilisateur : On reparlera du concours de cerfs-volants\./)?.[1]);
             const day = last.match(/^Date du jour : (\d{4}-\d{2}-\d{2})/)?.[1];

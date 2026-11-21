@@ -1004,6 +1004,34 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
             'modifier un ancien message de la branche préserve le fil d’origine');
     }
 }
+{
+    const fresh = await http('/chat/2/new', { method: 'POST', form: { _token: csrf } });
+    const path = fresh.headers.get('location');
+    const submit = (action, fields) => http(path + '/' + action, { method: 'POST', form: { _token: csrf, ...fields } });
+    await submit('directive', { directive: 'REGLE-PERSONA-TEST' });
+    const page = await (await http(path)).text();
+    expect(page.indexOf('data-open-settings="conversation"') < page.indexOf('data-open-godmode')
+        && page.includes('Envoyer en Godmode'), 'Godmode est proposé sous les réglages');
+    const events = async (fields) => (await (await submit('stream', fields)).text()).split('\n')
+        .filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6)));
+    const instruction = 'MARQUEUR-GODMODE\nRéponds autrement.';
+    expect((await submit('stream', { message: 'a'.repeat(6001), godmode: '1' })).status === 422,
+        'une consigne Godmode trop longue est refusée avant enregistrement');
+    const first = await events({ message: instruction, godmode: '1' });
+    const saved = first.find((event) => event.start)?.user;
+    expect(saved?.godmode && saved.content === instruction
+        && first.find((event) => event.done)?.reply.content === 'Consigne prioritaire reçue.', 'le modèle reçoit la consigne sans les directives habituelles');
+    const history = await (await http(path + '/messages')).json();
+    expect(history.messages.some((m) => m.id === saved?.id && m.role === 'user' && m.godmode)
+        && (await (await http(path)).text()).includes('msg-user msg-godmode'), 'le message Godmode reste identifié après rechargement');
+    const regenerated = await events({ regen: '1' });
+    expect(regenerated.find((event) => event.done)?.reply.content === 'Consigne prioritaire reçue.', 'régénérer réapplique le mode du message d’origine');
+    const normal = await events({ message: 'Retour au persona.' });
+    expect(normal.find((event) => event.done)?.reply.content === 'Réglages du persona rétablis.', 'la consigne Godmode ne devient pas permanente');
+    const fork = await submit('fork', {});
+    const copied = await (await http(fork.headers.get('location') + '/messages')).json();
+    expect(copied.messages.some((m) => m.godmode && m.content === instruction), 'une autre suite conserve le type de message Godmode');
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

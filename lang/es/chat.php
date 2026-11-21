@@ -81,6 +81,9 @@ return [
     'chat.head.model_default'       => 'modelo predeterminado',
     'chat.head.context_memory'      => 'Contexto y memoria',
     'chat.head.settings'            => 'Ajustes de la conversación',
+    'chat.godmode.prompt'           => 'Instrucción prioritaria para esta respuesta',
+    'chat.godmode.send'             => 'Enviar en Godmode',
+    'chat.godmode.too_long'         => 'La instrucción de Godmode es demasiado larga para la ventana de contexto del modelo.',
 
     // --- conversación: mensajes y redacción
     'chat.intro.first_message'      => 'Puedes escribir un mensaje.',

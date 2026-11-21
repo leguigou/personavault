@@ -1871,6 +1871,22 @@ button.chat-quote:hover { border-inline-start-color: rgb(var(--acc)); }
     text-shadow: 0 1px 1px rgba(0, 0, 0, .18);
 }
 
+.msg-godmode .godmode-tag {
+    color: var(--warn-t, #fcd34d);
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+.msg-user.msg-godmode .bubble {
+    background: var(--panel-2);
+    border: 1px solid var(--border-soft);
+    border-inline-end: 3px solid var(--warn-t, #fcd34d);
+    color: var(--text);
+    text-shadow: none;
+    white-space: pre-wrap;
+}
+
 .msg-notice {
     align-self: center;
     max-width: 92%;

@@ -153,6 +153,9 @@ function feel_analysis_lines(array $history, string $name): string
     $lines = [];
     $hasUser = false;
     foreach ($history as $m) {
+        if (!empty($m['godmode'])) {
+            continue;
+        }
         $text = trim(preg_replace('/\s+/u', ' ', (string) $m['content']) ?? '');
         if ($text === '') {
             continue;

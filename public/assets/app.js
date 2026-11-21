@@ -3079,6 +3079,8 @@
             }
             const wrap = document.createElement("div");
             wrap.className = "msg msg-" + (m.role === "user" ? "user" : "bot");
+            const godmode = m.role === "user" && m.godmode;
+            if (godmode) wrap.classList.add("msg-godmode");
             if (m.id) wrap.dataset.msgId = m.id;
             wrap.dataset.versionId = m.version_id || "0";
             if (m.reaction_reply) wrap.dataset.reactionReply = "1";
@@ -3114,6 +3116,12 @@
             }
             const holder = document.createElement("div");
             holder.className = "bubbles";
+            if (godmode) {
+                const tag = document.createElement("span");
+                tag.className = "godmode-tag";
+                tag.textContent = "Godmode";
+                holder.appendChild(tag);
+            }
             if (m.reply_to) {
                 const linked = interactive && m.reply_to.id;
                 const quote = document.createElement(linked ? "button" : "div");
@@ -4276,10 +4284,13 @@
         /* --- bascule manuelle vers DeepSeek --- */
         const fbModal = document.getElementById("fb-modal");
         let lastText = "";
+        let lastGodmode = false;
+        let godmodeDraft = "";
         let retryFallback = null;
 
-        const askFallback = (text, msg, kind, retry) => {
+        const askFallback = (text, msg, kind, retry, godmode) => {
             lastText = text;
+            lastGodmode = godmode;
             retryFallback = retry;
             if (!fbModal) {
                 notice(tr("common.error", { message: msg }));
@@ -4300,7 +4311,7 @@
         fbModal?.querySelectorAll("[data-fb-wait]").forEach((b) =>
             b.addEventListener("click", () => {
                 fbModal.hidden = true;
-                if (lastText) {
+                if (lastText && !lastGodmode) {
                     input.value = lastText;
                     grow();
                     syncSend();
@@ -5138,7 +5149,7 @@
                 } else if (chatQueue.length) {
                     const next = chatQueue.shift();
                     paintQueueStatus();
-                    await send(next.text, "auto", true, false, null, null, next.attachment, next.quote);
+                    await send(next.text, "auto", true, false, null, null, next.attachment, next.quote, next.godmode);
                 } else {
                     maintenancePending = false;
                     const data = await compressMemory();
@@ -5167,19 +5178,20 @@
             processChatQueue();
         };
 
-        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, attachment = null, quote = null) => {
+        const send = async (overrideText = null, mode = "auto", echo = true, regen = false, regenMid = null, regenReply = null, attachment = null, quote = null, godmode = false) => {
             const text = regen ? "" : (overrideText ?? input.value.trim());
             if (!regen && text === "" && !attachment) return;
             if (busy || opening) return;
 
             const tryFallback = () => {
                 if (busy) return;
-                if (!regen && input.value.trim() === text) {
+                if (godmode && godmodeDraft === text) godmodeDraft = "";
+                if (!godmode && !regen && input.value.trim() === text) {
                     input.value = "";
                     if (pendingQuote === quote) setQuoteDraft(null);
                     grow();
                 }
-                const retry = send(text, "fallback", echo, regen, regenMid, regenReply, attachment, quote);
+                const retry = send(text, "fallback", echo, regen, regenMid, regenReply, attachment, quote, godmode);
                 if (attachment && pendingFile === attachment.file) clearAttach();
                 retry.finally(processChatQueue);
             };
@@ -5189,7 +5201,8 @@
             let userEl = null;
             const restoreDraft = () => {
                 userEl?.remove();
-                if (!regen && !input.value) {
+                if (godmode && !godmodeDraft) godmodeDraft = text;
+                if (!godmode && !regen && !input.value) {
                     input.value = text;
                     if (quote && !pendingQuote) setQuoteDraft(quote);
                     grow();
@@ -5205,7 +5218,7 @@
             if (!regen) {
                 clearIntro();
                 if (echo) {
-                    userEl = renderMsg({ role: "user", content: text, reply_to: quote, at: new Date().toISOString() });
+                    userEl = renderMsg({ role: "user", content: text, reply_to: quote, godmode, at: new Date().toISOString() });
                     scroll.appendChild(userEl);
                 }
                 scrollBottom(true, true);
@@ -5236,7 +5249,7 @@
                 liveMsg.remove();
                 setStreaming(false);
                 restoreDraft();
-                askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down", tryFallback);
+                askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down", tryFallback, godmode);
                 busy = false;
                 processChatQueue();
                 syncSend();
@@ -5445,6 +5458,7 @@
                 const fd = new FormData();
                 fd.append("_token", token);
                 fd.append("message", text);
+                if (godmode) fd.append("godmode", "1");
                 if (quote) {
                     fd.append("reply_to", String(quote.id));
                     fd.append("reply_bubble", String(quote.bubble));
@@ -5541,6 +5555,7 @@
                                 liveMsg.before(webLine);
                                 scrollBottom(false);
                             } else if (evt.start) {
+                                if (evt.godmode === true) godmode = true;
                                 userId = Number(evt.user?.id || evt.user_id || 0);
                                 afterId = Number(evt.after_id || userId);
                                 if (evt.user && userEl) {
@@ -5580,13 +5595,13 @@
                             const recovered = await recoverReply();
                             if (recovered) {
                                 settleLive(recovered);
-                                maintenancePending = true;
+                                if (!godmode) maintenancePending = true;
                                 scrollBottom();
                                 return;
                             }
                         }
                         if (mode === "auto" && !streamed && !keptUser && ["down", "not_loaded", "no_model", "error"].includes(failedKind)) {
-                            askFallback(text, failed, failedKind, tryFallback);
+                            askFallback(text, failed, failedKind, tryFallback, godmode);
                         } else {
                             notice(tr("chat.interrupted", { message: failed }));
                         }
@@ -5616,7 +5631,7 @@
                 }
 
                 scrollBottom();
-                maintenancePending = true;
+                if (!godmode) maintenancePending = true;
             } catch (err) {
                 liveMsg.remove();
                 clearInterval(probe);
@@ -5641,6 +5656,39 @@
                 processChatQueue();
             }
         };
+
+        chat.querySelector("[data-open-godmode]")?.addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            moreMenu.open = false;
+            moreMenu.querySelector("summary")?.focus({ preventScroll: true });
+            const textarea = document.createElement("textarea");
+            textarea.className = "input";
+            textarea.rows = 6;
+            textarea.maxLength = Number(button.dataset.godmodeMax);
+            textarea.value = godmodeDraft;
+            textarea.setAttribute("aria-label", button.dataset.godmodeLabel);
+            textarea.placeholder = button.dataset.godmodeLabel;
+            const result = pvModal.open({
+                title: "Godmode",
+                node: textarea,
+                actions: [
+                    { label: tr("modal.cancel"), value: false },
+                    { label: button.dataset.godmodeSubmit, value: true, kind: "primary" },
+                ],
+            });
+            const submit = textarea.closest(".pv-dialog").querySelector(".pv-dialog-actions .btn-primary");
+            const syncSubmit = () => { submit.disabled = !textarea.value.trim(); };
+            textarea.addEventListener("input", syncSubmit);
+            syncSubmit();
+            textarea.focus({ preventScroll: true });
+            const accepted = await result;
+            const text = textarea.value.trim();
+            godmodeDraft = accepted ? "" : text;
+            if (accepted && text) {
+                chatQueue.push({ text, godmode: true });
+                processChatQueue();
+            }
+        });
 
         form.addEventListener("submit", (e) => {
             e.preventDefault();

@@ -12,6 +12,7 @@ function chat_message_json(array $message): array
     return [
         'id' => (int) $message['id'],
         'role' => (string) $message['role'],
+        'godmode' => !empty($message['godmode']),
         'content' => $message['role'] === 'memory' ? chat_memory_display_text($content) : $content,
         'reply_to' => chat_reply_quote($message),
         'image' => (string) $message['image'],
