@@ -1883,6 +1883,8 @@ button.chat-quote:hover { border-inline-start-color: rgb(var(--acc)); }
     border: 1px solid var(--border-soft);
     border-inline-end: 3px solid var(--warn-t, #fcd34d);
     color: var(--text);
+    font-style: italic;
+    font-weight: 400;
     text-shadow: none;
     white-space: pre-wrap;
 }
