@@ -119,6 +119,7 @@ return [
     'js.chat.version_error' => 'No se pudo cambiar de versión.',
     'js.chat.edit'                => 'Editar este mensaje',
     'js.chat.message_actions'     => 'Acciones del mensaje',
+    'js.chat.fork_message'        => 'Explorar otra continuación',
     'js.chat.copy_message'        => 'Copiar',
     'js.chat.select_text'         => 'Seleccionar el texto',
     'js.chat.message_copied'      => 'Mensaje copiado',

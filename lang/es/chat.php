@@ -30,7 +30,6 @@ return [
     'chat.reasoning_inherit' => 'Usar el ajuste del personaje',
     'chat.reasoning_global' => 'Usar el ajuste global',
     'chat.list.retitle' => 'Reescribir el título',
-    'chat.list.fork' => 'Explorar otra continuación',
     'chat.list.fork_title' => 'Otra continuación — {title}',
     'chat.emoji.like' => 'De acuerdo',
     'chat.emoji.heart' => 'Afecto',

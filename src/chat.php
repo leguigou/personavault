@@ -52,26 +52,27 @@ function chat_create_conversation(array $persona, bool $resume = false, bool $sh
     });
 }
 
-/** Copie le fil visible et ses réglages dans une discussion indépendante. */
-function chat_fork_conversation(int $cid): int
+/** Copie une discussion jusqu'au message de l'utilisateur qui ouvre la bifurcation. */
+function chat_fork_conversation(int $cid, int $mid): int
 {
-    return db_tx(static function (PDO $pdo) use ($cid): int {
-        $stmt = $pdo->prepare('SELECT * FROM conversations WHERE id = ?');
-        $stmt->execute([$cid]);
-        $source = $stmt->fetch();
+    return db_tx(static function (PDO $pdo) use ($cid, $mid): int {
+        $stmt = $pdo->prepare("SELECT c.title FROM conversations c JOIN messages m ON m.conversation_id = c.id
+            WHERE c.id = ? AND m.id = ? AND m.role = 'user'");
+        $stmt->execute([$cid, $mid]);
+        $sourceTitle = $stmt->fetchColumn();
         $stmt->closeCursor();
-        if (!$source) {
+        if ($sourceTitle === false) {
             return 0;
         }
-        $title = mb_substr(t('chat.list.fork_title', ['title' => $source['title']]), 0, 120);
+        $title = mb_substr(t('chat.list.fork_title', ['title' => $sourceTitle]), 0, 120);
         $pdo->prepare('INSERT INTO conversations (
                 title, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
-                memory_enabled, directive, summary, compressions, title_auto, facts_enabled, auto_followup,
-                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, opening_questions
+                memory_enabled, directive, title_auto, facts_enabled, auto_followup,
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time
             )
             SELECT ?, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
-                memory_enabled, directive, summary, compressions, 0, 0, 0,
-                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, opening_questions
+                memory_enabled, directive, 0, 0, 0,
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time
             FROM conversations WHERE id = ?')->execute([$title, $cid]);
         $newId = (int) $pdo->lastInsertId();
         $copy = $pdo->prepare('INSERT INTO messages (
@@ -84,23 +85,14 @@ function chat_fork_conversation(int $cid): int
                 reaction_reply, spontaneous, ?, reply_to_bubble, reply_quote, godmode
             FROM messages WHERE id = ?');
         $ids = [];
-        $lastDialogue = 0;
-        foreach (fetch_messages($cid) as $message) {
+        $history = $pdo->prepare('SELECT id, reply_to_id FROM messages WHERE conversation_id = ? AND id <= ? ORDER BY id');
+        $history->execute([$cid, $mid]);
+        foreach ($history->fetchAll() as $message) {
             $copy->execute([$newId, $ids[(int) $message['reply_to_id']] ?? 0, $message['id']]);
-            $copiedId = (int) $pdo->lastInsertId();
-            $ids[(int) $message['id']] = $copiedId;
-            if (in_array($message['role'], ['user', 'assistant'], true)) {
-                $lastDialogue = $copiedId;
-            }
+            $ids[(int) $message['id']] = (int) $pdo->lastInsertId();
         }
-        $pdo->prepare('UPDATE conversations SET last_compressed_id = ?, facts_cursor = ? WHERE id = ?')
-            ->execute([$ids[(int) $source['last_compressed_id']] ?? 0, $lastDialogue, $newId]);
-        $pdo->prepare('INSERT INTO conversation_feelings (
-                conversation_id, emotion, mood, intensity, mood_at, friendship, love, anger, reason, bond_at, analyzed_id
-            )
-            SELECT ?, emotion, mood, intensity, mood_at, friendship, love, anger, reason, bond_at, ?
-            FROM conversation_feelings WHERE conversation_id = ?')
-            ->execute([$newId, $lastDialogue, $cid]);
+        // Le résumé et les ressentis actuels ont pu intégrer la suite du fil d'origine.
+        $pdo->prepare('UPDATE conversations SET facts_cursor = ? WHERE id = ?')->execute([$ids[$mid], $newId]);
         return $newId;
     });
 }

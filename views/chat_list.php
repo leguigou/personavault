@@ -121,10 +121,6 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9L12 3Zm6.5 12v5M16 17.5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span><?= e(t('chat.list.retitle')) ?></span>
                 </button>
-                <button type="button" class="action-row" data-act="fork">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V4m0 12c0-5 3-8 8-8h5m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span><?= e(t('chat.list.fork')) ?></span>
-                </button>
                 <button type="button" class="action-row is-danger" data-act="delete"
                         data-confirm="<?= e(t('chat.list.delete_confirm')) ?>">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 11v6m4-6v6M8 7l1-3h6l1 3m-9 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>

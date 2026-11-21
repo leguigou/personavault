@@ -17,7 +17,11 @@ if ($action === 'new' && $method === 'POST') {
 
 if ($action === 'fork' && $method === 'POST') {
     csrf_check();
-    $newId = chat_fork_conversation($cid);
+    $mid = filter_var($_POST['mid'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    $newId = $mid === false ? 0 : chat_fork_conversation($cid, $mid);
+    if (!$newId) {
+        flash('error', t('error.message.not_found'));
+    }
     redirect('/chat/' . ($newId ?: $cid));
 }
 

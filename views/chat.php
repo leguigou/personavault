@@ -316,6 +316,10 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
         </div>
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/fork" data-chat-fork hidden>
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <input type="hidden" name="mid" value="">
+        </form>
         <form class="chat-composer" data-chat-form>
             <div class="chat-field">
                 <button class="chat-attach" type="button" data-attach hidden aria-label="<?= e(t('chat.composer.attach')) ?>" title="<?= e(t('chat.composer.attach')) ?>">
