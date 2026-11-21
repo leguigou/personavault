@@ -14,6 +14,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+(?:\.(?:txt|md))?))?$#', $path, $m)) {
     $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
     $stmt->execute([$cid]);
     $conv = $stmt->fetch();
+    $stmt->closeCursor();
     if (!$conv) {
         http_response_code(404);
         render('notfound', ['title' => t('notfound.title')]);
@@ -23,6 +24,7 @@ if (preg_match('#^/chat/(\d+)(?:/([\w-]+(?:\.(?:txt|md))?))?$#', $path, $m)) {
     $stmt = db()->prepare('SELECT * FROM personas WHERE id = ?');
     $stmt->execute([(int) $conv['persona_id']]);
     $persona = $stmt->fetch();
+    $stmt->closeCursor();
     if (!$persona) {
         http_response_code(404);
         render('notfound', ['title' => t('notfound.title')]);

@@ -32,6 +32,7 @@ if ($action === 'stream' && $method === 'POST') {
     $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
     $stmt->execute([$cid]);
     $current = $stmt->fetch();
+    $stmt->closeCursor();
     if (!$current) {
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(404);
@@ -65,6 +66,7 @@ if ($action === 'stream' && $method === 'POST') {
         $ust = db()->prepare("SELECT id, content, image, reply_to_id, reply_to_bubble, reply_quote FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
         $ust->execute([$cid]);
         $lastUser = $ust->fetch();
+        $ust->closeCursor();
         if (!$lastUser) {
             $sse(['error' => t('error.message.nothing_to_regen'), 'kind' => 'regen']);
             exit;
@@ -76,6 +78,7 @@ if ($action === 'stream' && $method === 'POST') {
         $stmt = db()->prepare("SELECT MAX(id) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?");
         $stmt->execute([$cid, $userMsgId]);
         $previousReplyId = (int) $stmt->fetchColumn();
+        $stmt->closeCursor();
         $regenMid = (int) ($_POST['regen_mid'] ?? 0);
         $regenReply = (int) ($_POST['regen_reply'] ?? 0);
         if (($regenMid > 0 && $regenMid !== $userMsgId) || ($regenReply > 0 && $regenReply !== $previousReplyId)) {
@@ -92,6 +95,7 @@ if ($action === 'stream' && $method === 'POST') {
         $stmt = db()->prepare("SELECT * FROM messages WHERE id = ? AND conversation_id = ? AND role = 'assistant'");
         $stmt->execute([$replyId, $cid]);
         $source = $stmt->fetch();
+        $stmt->closeCursor();
         $bubbles = $source ? chat_message_bubbles($source) : [];
         if ($replyId === false || $replyBubble === false || $replyVersion === false || !$source
             || (int) $source['version_id'] !== $replyVersion || trim($bubbles[$replyBubble] ?? '') === '') {
@@ -137,7 +141,9 @@ if ($action === 'stream' && $method === 'POST') {
                     $stmt->execute([$cid]);
                     // réappliquer les réglages du persona (modèle, fenêtre, consigne…)
                     $effectiveWindow = $conv['context_window'];
-                    $conv = chat_with_persona($stmt->fetch(), $persona);
+                    $current = $stmt->fetch();
+                    $stmt->closeCursor();
+                    $conv = chat_with_persona($current, $persona);
                     $conv['context_window'] = $effectiveWindow;
                 }
             }
