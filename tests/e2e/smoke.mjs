@@ -164,8 +164,12 @@ await post('/chat/1/facts-toggle', { enabled: '0' });
 await post('/chat/1/facts-toggle', { enabled: '1' }, '/chat/1/facts-toggle (2)');
 const comp = await post('/chat/1/compress', { force: '1' });
 expect(JSON.parse(comp).compressed > 0, 'la compression résume des messages');
-const rem = await post('/chat/1/remember', { force: '1' });
-expect((JSON.parse(rem).added || []).length > 0, 'l’extraction ajoute un souvenir');
+const rem = JSON.parse(await post('/chat/1/remember', { force: '1' }));
+expect(rem.added.some((fact) => fact.length > 90) && rem.memory_msg?.content === rem.added.join(' · '),
+    'la bulle mémoire contient les souvenirs en entier');
+const savedMemory = (await (await http('/chat/1/messages')).json()).messages.find((m) => m.id === rem.memory_msg?.id);
+expect(savedMemory?.role === 'memory' && savedMemory.content === rem.memory_msg.content,
+    'le texte entier de la bulle mémoire reste visible après rechargement');
 await post('/chat/1/autotitle');
 {
     const chatAction = async (cid, action, form = {}) => http(`/chat/${cid}/${action}`, {

@@ -205,7 +205,6 @@ return [
 
     // --- chat: texts stored in the database (default title, notices)
     'labels.chat.default_title'   => 'Chat with {name}',
-    'labels.chat.memory_updated'  => 'Memory updated: {facts}',
     'labels.chat.memory_failed'   => 'I couldn’t remember it: {reason}. Try again, or add it to the persona’s memories yourself.',
     'labels.facts_fail.nothing'   => 'the model found nothing to keep',
     'labels.facts_fail.error'     => 'the model did not answer ({error})',
