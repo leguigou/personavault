@@ -3,7 +3,9 @@
 return [
     'feel.title' => 'Humor y sentimientos',
     'feel.towards_you' => 'Lo que {name} siente por ti',
-    'feel.help' => 'Propios de esta conversación. Se actualizan cada 4 respuestas aproximadamente; desliza los puntos o toca un color para intervenir: la persona lo tendrá en cuenta desde su próxima respuesta.',
+    'feel.confirm' => 'Confirmar cambios',
+    'feel.unsaved' => 'Cambios sin confirmar',
+    'feel.help' => 'El humor y los sentimientos se actualizan cada 4 respuestas aproximadamente.',
     'feel.help_minor' => 'Propios de esta conversación, se actualizan cada 4 respuestas aproximadamente. El atributo «Edad» de la ficha indica menos de {age} años: sin sentimientos amorosos hacia ti.',
     'feel.notice.adjust' => 'Tu ajuste para {name}: {text}',
     'feel.notice.mood' => '{name} ahora está {mood}',

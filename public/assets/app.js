@@ -6104,7 +6104,14 @@
         const colors = JSON.parse(feel.dataset.gaugeColors || "{}");
         const scroll = document.querySelector("[data-scroll]");
         const head = document.querySelector(".chat-head");
+        const moods = new Map([...feel.querySelectorAll("[data-feel-emotion]")].map((b) => [b.dataset.feelEmotion, b]));
+        const sliders = [...feel.querySelectorAll("[data-feel-slider]")];
+        const confirm = feel.querySelector("[data-feel-confirm]");
+        const draftStatus = feel.querySelector("[data-feel-draft]");
+        const draft = {};
         let fstate = null;
+        let saving = false;
+        let savedVersion = 0;
         let lastNotice = Math.max(0, ...[...document.querySelectorAll(".msg-notice[data-msg-id]")].map((n) => Number(n.dataset.msgId) || 0));
         let followUntil = 0;
         let timer = 0;
@@ -6128,9 +6135,42 @@
             g.querySelector(".duo-gauge-value").textContent = (v > 0 ? "+" : "") + v;
         };
 
-        const paint = (st) => {
-            fstate = st;
-            const f = st.feelings;
+        const paintPanel = () => {
+            const hasChanges = Object.keys(draft).length > 0;
+            confirm.disabled = !hasChanges || saving;
+            draftStatus.hidden = !hasChanges;
+            if (!fstate) return;
+
+            const f = { ...fstate.feelings, ...draft };
+            const mood = moods.get(f.emotion);
+            const color = mood?.style.getPropertyValue("--mood").trim() || f.color;
+            feel.querySelector("[data-feel-mood-label]").textContent = mood?.getAttribute("aria-label") || f.label;
+            moods.forEach((button, key) => {
+                button.disabled = saving;
+                button.setAttribute("aria-checked", String(key === f.emotion));
+            });
+            sliders.forEach((slider) => {
+                const k = slider.dataset.feelSlider;
+                const g = slider.closest("[data-feel-gauge]");
+                slider.disabled = saving || g.classList.contains("is-off");
+                if (slider.value !== String(f[k])) slider.value = String(f[k]);
+                paintGauge(g, k, f[k], color);
+            });
+            feel.querySelector("[data-feel-reason]").textContent = f.reason || "";
+        };
+
+        const stage = (key, value) => {
+            if (value === fstate.feelings[key]) delete draft[key];
+            else draft[key] = value;
+        };
+
+        const paint = (st, version) => {
+            // Les lectures lancées avant une confirmation peuvent encore apporter des notes.
+            if (version === savedVersion) {
+                fstate = st;
+                paintPanel();
+            }
+            const f = fstate.feelings;
             // en-tête : pastille et anneau de l'humeur
             const pill = head?.querySelector("[data-chat-mood]");
             if (pill) {
@@ -6144,19 +6184,6 @@
                 avatar.style.setProperty("--mood", f.color);
                 avatar.classList.toggle("has-mood", f.intensity > 0 && f.emotion !== "neutre");
             }
-            // panneau : humeur, intensité, ressentis envers l'utilisateur
-            feel.querySelector("[data-feel-mood-label]").textContent = f.label;
-            feel.querySelectorAll("[data-feel-emotion]").forEach((b) => {
-                b.setAttribute("aria-checked", b.dataset.feelEmotion === f.emotion && f.intensity > 0 ? "true" : "false");
-            });
-            ["intensity", "friendship", "love", "anger"].forEach((k) => {
-                const g = feel.querySelector(`[data-feel-gauge="${k}"]`);
-                const slider = g?.querySelector(".duo-slider");
-                if (!g || (slider && (slider.dataset.dragging || document.activeElement === slider))) return;
-                slider.value = String(f[k]);
-                paintGauge(g, k, f[k], f.color);
-            });
-            feel.querySelector("[data-feel-reason]").textContent = f.reason || "";
             // notes du fil : changements d'humeur, réglages
             (st.notices || []).forEach((n) => {
                 if (n.id <= lastNotice || !scroll) return;
@@ -6170,10 +6197,11 @@
         };
 
         const load = async () => {
+            const version = savedVersion;
             try {
                 const res = await fetch(`${url}?after=${lastNotice}`, { cache: "no-store", headers: { "X-Requested-With": "XMLHttpRequest" } });
                 const data = await res.json();
-                if (data.ok) paint(data);
+                if (data.ok) paint(data, version);
             } catch (e) {
                 // réseau coupé : on réessaiera
             }
@@ -6187,7 +6215,6 @@
             const res = await fetch(path, { method: "POST", body: fd, headers: { "X-Requested-With": "XMLHttpRequest" } });
             const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
             if (!res.ok || !data.ok) throw new Error(data.error || tr("duo.failed"));
-            paint(data);
             return data;
         };
 
@@ -6202,36 +6229,45 @@
         };
         window.addEventListener("pv:feelings-pending", async (e) => {
             if (e.detail?.drive) {
-                try { await post(url + "-analyze", {}); } catch (err) { /* sans effet : nouvel essai à la prochaine réponse */ }
+                const version = savedVersion;
+                try {
+                    paint(await post(url + "-analyze", {}), version);
+                } catch (err) { /* sans effet : nouvel essai à la prochaine réponse */ }
                 return;
             }
             followUntil = Date.now() + 120000;
             follow();
         });
 
-        const save = async (values) => {
+        confirm.addEventListener("click", async () => {
+            saving = true;
+            paintPanel();
             try {
-                await post(url, values);
+                const data = await post(url, draft);
+                Object.keys(draft).forEach((key) => { delete draft[key]; });
+                paint(data, ++savedVersion);
                 toast(tr("feel.saved"));
             } catch (err) {
                 toast(tr("common.error", { message: err.message }), true);
+            } finally {
+                saving = false;
+                paintPanel();
             }
-        };
-        feel.querySelectorAll("[data-feel-slider]").forEach((slider) => {
-            const g = slider.closest("[data-feel-gauge]");
-            slider.addEventListener("pointerdown", () => { slider.dataset.dragging = "1"; });
-            slider.addEventListener("input", () => paintGauge(g, slider.dataset.feelSlider, Number(slider.value), fstate?.feelings?.color));
-            slider.addEventListener("change", async () => {
-                delete slider.dataset.dragging;
-                await save({ [slider.dataset.feelSlider]: slider.value });
-                slider.blur();
-            });
         });
-        feel.querySelectorAll("[data-feel-emotion]").forEach((b) => b.addEventListener("click", () => {
-            const current = fstate?.feelings?.intensity || 0;
-            save({ emotion: b.dataset.feelEmotion, intensity: current > 0 ? current : 60 });
+        sliders.forEach((slider) => slider.addEventListener("input", () => {
+            stage(slider.dataset.feelSlider, Number(slider.value));
+            paintPanel();
+        }));
+        moods.forEach((button, emotion) => button.addEventListener("click", () => {
+            const intensity = draft.intensity ?? fstate.feelings.intensity;
+            stage("emotion", emotion);
+            if (emotion !== "neutre" && intensity === 0) stage("intensity", 60);
+            paintPanel();
         }));
 
+        document.querySelector('[data-open-settings="memory"]')?.addEventListener("click", () => {
+            if (!fstate) load();
+        });
         load();
     }
 

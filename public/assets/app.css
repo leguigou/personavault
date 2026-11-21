@@ -4896,6 +4896,8 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
 .chat-mood .duo-dot { width: 7px; height: 7px; }
 .chat-avatar.has-mood { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--mood); transition: box-shadow .3s; }
 .feel-box { display: grid; gap: 10px; }
+.feel-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.feel-actions .hint { font-size: 12px; }
 .duo-gauge.is-off { opacity: .45; }
 .duo-gauge.is-off .duo-slider { cursor: not-allowed; }
 html[data-mode="light"] .duo-badge.is-running { color: #065f46; }
