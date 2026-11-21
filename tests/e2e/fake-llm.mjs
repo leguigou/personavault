@@ -213,8 +213,12 @@ http.createServer(async (req, res) => {
                 ? JSON.stringify({ message: 'Ça m’a fait repenser à ton voyage à Lisbonne. Tu y retournerais ?', questions: ['Et ton exposition à Lyon, elle avance ?'] })
                 : JSON.stringify({ message: 'Tu as déjà développé une pellicule argentique ?', questions: ['Tu photographies quoi en ce moment ?'] });
         } else if (j.stream && system.startsWith('Consigne Godmode de l’utilisateur')) {
-            text = system.includes('MARQUEUR-GODMODE') && !system.includes('REGLE-PERSONA-TEST')
+            text = j.messages.length === 2 && j.messages.at(-1).role === 'user'
+                && last.endsWith('Demande Godmode de ce tour :\nMARQUEUR-GODMODE\nRéponds autrement.')
+                && last.includes('Persona : "ANCIEN-REFUS-TEST"') && !system.includes('REGLE-PERSONA-TEST')
                 && !system.includes('Privilégie une réponse concise') ? 'Consigne prioritaire reçue.' : 'Consigne prioritaire incorrecte.';
+        } else if (j.stream && last.endsWith('Historique de test Godmode.')) {
+            text = 'ANCIEN-REFUS-TEST';
         } else if (j.stream && last.endsWith('Retour au persona.')) {
             text = system.includes('REGLE-PERSONA-TEST') && !JSON.stringify(j.messages).includes('MARQUEUR-GODMODE')
                 ? 'Réglages du persona rétablis.' : 'Consigne précédente encore active.';
