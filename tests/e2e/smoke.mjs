@@ -989,14 +989,21 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect((await send(topicPath, 'Autre chose maintenant.'))?.content === 'Parlons de la suite.', 'le sujet repris ne revient pas au tour suivant');
 
     const listing = await (await http('/chat')).text();
-    expect(listing.includes('data-act="fork"') && listing.includes('Explorer une autre suite'), 'le menu des conversations propose une autre suite');
+    expect(!listing.includes('data-act="fork"'), 'la bifurcation se choisit depuis un message du fil');
+    expect((await (await http(topicPath)).text()).includes('data-chat-fork'), 'le fil propose une autre suite depuis un message');
     const original = await messages(topicPath);
-    const fork = await http(topicPath + '/fork', { method: 'POST', form: { _token: csrf } });
+    const branchAt = original.find((message) => message.role === 'user' && message.content === 'Me revoilà.');
+    const invalid = await http(topicPath + '/fork', { method: 'POST', form: { _token: csrf, mid: original.find((message) => message.role === 'assistant').id } });
+    expect(invalid.headers.get('location') === topicPath, 'un message du persona ne peut pas servir de point de départ');
+    await http(topicPath + '/memory', { method: 'POST', form: { _token: csrf, op: 'save', summary: 'Résumé de la suite originale à exclure.' } });
+    const fork = await http(topicPath + '/fork', { method: 'POST', form: { _token: csrf, mid: branchAt.id } });
     const forkPath = fork.headers.get('location');
     const duplicate = await messages(forkPath);
     const signature = (rows) => rows.map(({ role, content }) => [role, content]);
-    expect(fork.status === 303 && forkPath !== topicPath && JSON.stringify(signature(duplicate)) === JSON.stringify(signature(original))
-        && duplicate.every((message, i) => message.id !== original[i].id), 'la branche ouvre un fil distinct avec le même historique visible');
+    const prefix = original.filter((message) => message.id <= branchAt.id);
+    expect(fork.status === 303 && forkPath !== topicPath && JSON.stringify(signature(duplicate)) === JSON.stringify(signature(prefix))
+        && duplicate.every((message, i) => message.id !== prefix[i].id), 'la branche s’arrête exactement au message choisi');
+    expect(!(await (await http(forkPath)).text()).includes('Résumé de la suite originale à exclure.'), 'le résumé de la suite ne passe pas dans la branche');
     const firstMessage = duplicate.find((message) => message.role === 'user');
     if (firstMessage) {
         const edit = await http(forkPath + '/msg-edit', { method: 'POST', form: { _token: csrf, mid: firstMessage.id, content: 'Une autre suite.' } });
@@ -1028,7 +1035,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(regenerated.find((event) => event.done)?.reply.content === 'Consigne prioritaire reçue.', 'régénérer réapplique le mode du message d’origine');
     const normal = await events({ message: 'Retour au persona.' });
     expect(normal.find((event) => event.done)?.reply.content === 'Réglages du persona rétablis.', 'la consigne Godmode ne devient pas permanente');
-    const fork = await submit('fork', {});
+    const fork = await submit('fork', { mid: saved.id });
     const copied = await (await http(fork.headers.get('location') + '/messages')).json();
     expect(copied.messages.some((m) => m.godmode && m.content === instruction), 'une autre suite conserve le type de message Godmode');
 }

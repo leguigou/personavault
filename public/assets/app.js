@@ -2699,9 +2699,6 @@
                 post("/chat/" + id + "/pin", { pinned: current.dataset.pinned === "1" ? "0" : "1" });
             } else if (btn.dataset.act === "retitle") {
                 await retitle(current);
-            } else if (btn.dataset.act === "fork") {
-                closeMenu();
-                post("/chat/" + id + "/fork", {});
             } else if (btn.dataset.act === "delete") {
                 closeMenu();
                 const ok = await pvModal.confirm(
@@ -2889,6 +2886,7 @@
     const chat = document.getElementById("chat");
     if (chat) {
         const form = chat.querySelector("[data-chat-form]");
+        const forkForm = chat.querySelector("[data-chat-fork]");
         const input = chat.querySelector("[data-chat-input]");
         const scroll = chat.querySelector("[data-scroll]");
         const sendBtn = form.querySelector(".chat-send");
@@ -4342,6 +4340,7 @@
         const editUrl   = endpoint.replace(/\/send$/, "/msg-edit");
 
         const ICONS = {
+            fork: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V4m0 12c0-5 3-8 8-8h5m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
             reply: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 7-5 5 5 5m-5-5h9a5 5 0 0 1 5 5v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
             copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
             select: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6m-6 4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
@@ -4942,6 +4941,12 @@
                 });
             }
             addAction("edit", tr("chat.edit"), () => startEdit(msg));
+            if (forkForm) {
+                addAction("fork", tr("chat.fork_message"), () => {
+                    forkForm.elements.mid.value = msg.dataset.msgId;
+                    forkForm.requestSubmit();
+                });
+            }
             if (msg === lastUserMessage()) {
                 addAction("regen", tr("chat.retry_last_message"), () => retryLastMessage(msg), busy || opening || processingQueue);
             }

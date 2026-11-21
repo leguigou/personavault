@@ -51,7 +51,7 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
   modification et exports gardent les astérisques).
 - Sur téléphone, la zone de saisie ne reprend pas le focus après une réponse (le clavier ne s'ouvre pas tout seul).
 - Édition : modifier son message efface la suite et rejoue la réponse depuis ce point.
-- Explorer une autre suite : un appui long sur une discussion permet de copier le fil visible dans une nouvelle discussion. Les souvenirs partagés et les relances y sont désactivés au départ.
+- Explorer une autre suite : un appui long sur l’un de tes messages ouvre une nouvelle discussion qui s’arrête à ce message. Les souvenirs partagés et les relances y sont désactivés au départ.
 - Régénérer garde les réponses précédentes : flèches ‹ 2 / 3 › sous la dernière réponse pour
   passer de l'une à l'autre (la version affichée est celle que le modèle voit ensuite).
 - Liste des discussions façon messagerie : heure relative, « Vous : » devant son dernier message,
