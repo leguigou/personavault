@@ -972,6 +972,38 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const forged = await http('/chat/1/feelings', { method: 'POST', form: { _token: 'mauvais', emotion: 'joie' } });
     expect(forged.status === 419, 'un jeton valide est exigé pour régler les ressentis');
 }
+{
+    const send = async (path, message) => (await (await http(path + '/stream', {
+        method: 'POST', form: { _token: csrf, message },
+    })).text()).split('\n').filter((line) => line.startsWith('data: '))
+        .map((line) => JSON.parse(line.slice(6))).find((event) => event.done)?.reply;
+    const messages = async (path) => (await (await http(path + '/messages?limit=100')).json()).messages;
+    const fresh = await http('/chat/2/new', { method: 'POST', form: { _token: csrf, mode: 'with-memory' } });
+    const topicPath = fresh.headers.get('location');
+    await send(topicPath, 'On reparlera du concours de cerfs-volants.');
+    const analysis = await http(topicPath + '/remember', { method: 'POST', form: { _token: csrf, force: '1' } });
+    expect((await analysis.json()).ok, 'l’analyse enregistre le sujet laissé en suspens');
+    expect((await send(topicPath, 'Me revoilà.'))?.content.includes('passé au concours'), 'le persona reprend un sujet arrivé à échéance');
+    const resumed = await http(topicPath + '/remember', { method: 'POST', form: { _token: csrf, force: '1' } });
+    expect((await resumed.json()).ok, 'l’analyse traite la reprise du sujet');
+    expect((await send(topicPath, 'Autre chose maintenant.'))?.content === 'Parlons de la suite.', 'le sujet repris ne revient pas au tour suivant');
+
+    const listing = await (await http('/chat')).text();
+    expect(listing.includes('data-act="fork"') && listing.includes('Explorer une autre suite'), 'le menu des conversations propose une autre suite');
+    const original = await messages(topicPath);
+    const fork = await http(topicPath + '/fork', { method: 'POST', form: { _token: csrf } });
+    const forkPath = fork.headers.get('location');
+    const duplicate = await messages(forkPath);
+    const signature = (rows) => rows.map(({ role, content }) => [role, content]);
+    expect(fork.status === 303 && forkPath !== topicPath && JSON.stringify(signature(duplicate)) === JSON.stringify(signature(original))
+        && duplicate.every((message, i) => message.id !== original[i].id), 'la branche ouvre un fil distinct avec le même historique visible');
+    const firstMessage = duplicate.find((message) => message.role === 'user');
+    if (firstMessage) {
+        const edit = await http(forkPath + '/msg-edit', { method: 'POST', form: { _token: csrf, mid: firstMessage.id, content: 'Une autre suite.' } });
+        expect((await edit.json()).ok && JSON.stringify(await messages(topicPath)) === JSON.stringify(original),
+            'modifier un ancien message de la branche préserve le fil d’origine');
+    }
+}
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));
 

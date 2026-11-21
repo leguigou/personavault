@@ -30,6 +30,8 @@ return [
     'chat.reasoning_inherit' => 'Suivre le réglage du persona',
     'chat.reasoning_global' => 'Suivre le réglage global',
     'chat.list.retitle' => 'Réécrire le titre',
+    'chat.list.fork' => 'Explorer une autre suite',
+    'chat.list.fork_title' => 'Autre suite — {title}',
     'chat.emoji.like' => 'D’accord',
     'chat.emoji.heart' => 'Affection',
     'chat.emoji.laugh' => 'Ça me fait rire',

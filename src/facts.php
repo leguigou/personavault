@@ -385,13 +385,16 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
 {
     $transcript = '';
     $sources = [];
+    $now = chat_now();
     foreach ($messages as $m) {
         if (!in_array((string) $m['role'], ['user', 'assistant'], true)) {
             continue;
         }
         $who = $m['role'] === 'user' ? 'Utilisateur' : 'Personnage';
         $sources[] = $m;
-        $transcript .= '[' . count($sources) . '] ' . $who . ' : ' . mb_substr(trim((string) $m['content']), 0, 1200) . "\n\n";
+        $day = (new DateTimeImmutable((string) $m['created_at'], new DateTimeZone('UTC')))->setTimezone($now->getTimezone());
+        $transcript .= '[' . count($sources) . '] (' . $day->format('Y-m-d') . ') '
+            . $who . ' : ' . mb_substr(trim((string) $m['content']), 0, 1200) . "\n\n";
     }
     if (trim($transcript) === '') {
         return ['ok' => true, 'added' => [], 'updated' => 0, 'removed' => 0];
@@ -439,8 +442,19 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
         . "\"decision\", par exemple « Le persona a promis à l'utilisateur de toujours lui dire la vérité » (avec son prénom "
         . "à la place de « Le persona »). Les promesses de l'utilisateur au persona vont dans memories (category \"decision\").";
 
-    $user = 'Date du jour : ' . chat_now()->format('Y-m-d') . "\n"
+    $topics = chat_topics_for_analysis($cid);
+    $system .= "\nAjoute open_topics et closed_topics au même objet JSON, avec des tableaux vides par défaut. "
+        . 'open_topics contient au plus trois sujets de CETTE discussion à reprendre plus tard, sous la forme '
+        . '{"source":2,"content":"demander comment s’est passé le rendez-vous","due_on":"2026-11-23"}. '
+        . "Garde seulement un engagement de revenir sur un sujet, un résultat attendu ou une question reportée "
+        . "explicitement, avec un message source numéroté. Ignore les salutations, projets vagues et questions courantes. "
+        . "Si le sujet est déjà suivi, repris, annulé ou réglé dans l'échange, ne l'ajoute pas. "
+        . "Calcule la date à partir du jour indiqué sur le message source (par exemple « demain »), ou utilise null si aucune date n'a été donnée. "
+        . "Dans closed_topics, renvoie les identifiants des sujets encore ouverts qui ont déjà été repris ou annulés dans les messages numérotés.";
+
+    $user = 'Date du jour : ' . $now->format('Y-m-d') . "\n"
         . "Mémoires existantes :\n" . ($knownLines !== '' ? $knownLines : '(aucune)')
+        . "\nSujets déjà suivis (closed=1 signifie clos) :\n" . json_encode($topics, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)
         . "\nDernier message de l'utilisateur (le plus important) :\n" . ($lastUser !== '' ? $lastUser : '(aucun)')
         . "\nÉchange récent :\n" . $transcript;
 
@@ -451,7 +465,7 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
     $opts = [
         'purpose'          => 'facts',
         'temperature'      => 0.2,
-        'max_tokens'       => 900,
+        'max_tokens'       => 1200,
         'timeout'          => 120,
         // le réglage « réflexion » concerne le modèle local de discussion
         'reasoning_effort' => $remote ? '' : setting('chat_reasoning_effort', 'none'),
@@ -472,7 +486,7 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
         return ['ok' => false, 'added' => [], 'updated' => 0, 'removed' => 0, 'error' => $e->getMessage()];
     }
 
-    return db_tx(static function (PDO $pdo) use ($cid, $personaId, $json, $sources, $known, $cursor): array {
+    return db_tx(static function (PDO $pdo) use ($cid, $personaId, $json, $sources, $known, $topics, $cursor): array {
         $check = $pdo->prepare('SELECT 1 FROM conversations WHERE id = ? AND facts_cursor = ? AND memory_enabled = 1 AND facts_enabled = 1');
         $check->execute([$cid, $cursor]);
         $unchanged = (bool) $check->fetchColumn();
@@ -491,6 +505,7 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
             return ['ok' => true, 'added' => [], 'updated' => 0, 'removed' => 0, 'stale' => true];
         }
         $result = facts_save_extraction($cid, $personaId, $json, $sources, $known);
+        chat_topics_save_analysis($pdo, $cid, $json, $sources, $topics);
         $pdo->prepare('UPDATE conversations SET facts_cursor = ? WHERE id = ?')
             ->execute([(int) end($sources)['id'], $cid]);
         return $result;

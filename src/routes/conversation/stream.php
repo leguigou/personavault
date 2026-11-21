@@ -242,7 +242,9 @@ if ($action === 'stream' && $method === 'POST') {
             }
         }
     }
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $address, $webResults, $quote, $quoteHistory);
+    $dueTopic = $regen || $mediaRequest !== null ? null : chat_topic_due($conv);
+    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $address, $webResults, $quote, $quoteHistory, dueTopic: $dueTopic);
+    $topicId = $built['topic_used'] ? (int) $dueTopic['id'] : 0;
     $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
     $built['messages'][0]['content'] .= ' Privilégie une réponse concise et termine ta dernière phrase dans le budget de sortie.';
     $sentAny = false;
@@ -363,7 +365,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     try {
-        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv, $trackRelationship, $address, $relationshipRevision, $webLineId): array {
+        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv, $trackRelationship, $address, $relationshipRevision, $webLineId, $topicId): array {
             if ($regen) {
                 // L'ancienne réponse reste visible jusqu'à la validation de la transaction.
                 reply_version_archive($cid, $userMsgId);
@@ -398,6 +400,9 @@ if ($action === 'stream' && $method === 'POST') {
             if ($aborted) {
                 $pdo->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
             } else {
+                if ($topicId && $res['finish_reason'] !== 'length') {
+                    chat_topic_mark_offered($pdo, $cid, $topicId);
+                }
                 if ($res['reaction'] !== '') {
                     $pdo->prepare("UPDATE messages SET reaction = ? WHERE id = ? AND role = 'user'")
                         ->execute([$res['reaction'], $userMsgId]);

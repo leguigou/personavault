@@ -51,6 +51,59 @@ function chat_create_conversation(array $persona, bool $resume = false, bool $sh
     });
 }
 
+/** Copie le fil visible et ses réglages dans une discussion indépendante. */
+function chat_fork_conversation(int $cid): int
+{
+    return db_tx(static function (PDO $pdo) use ($cid): int {
+        $stmt = $pdo->prepare('SELECT * FROM conversations WHERE id = ?');
+        $stmt->execute([$cid]);
+        $source = $stmt->fetch();
+        $stmt->closeCursor();
+        if (!$source) {
+            return 0;
+        }
+        $title = mb_substr(t('chat.list.fork_title', ['title' => $source['title']]), 0, 120);
+        $pdo->prepare('INSERT INTO conversations (
+                title, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
+                memory_enabled, directive, summary, compressions, title_auto, facts_enabled, auto_followup,
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, opening_questions
+            )
+            SELECT ?, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
+                memory_enabled, directive, summary, compressions, 0, 0, 0,
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, opening_questions
+            FROM conversations WHERE id = ?')->execute([$title, $cid]);
+        $newId = (int) $pdo->lastInsertId();
+        $copy = $pdo->prepare('INSERT INTO messages (
+                conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms,
+                created_at, image, split_at, split_points, reaction, bubble_reactions, klipy_url,
+                reaction_reply, spontaneous, reply_to_id, reply_to_bubble, reply_quote
+            )
+            SELECT ?, role, content, model, prompt_tokens, completion_tokens, latency_ms,
+                created_at, image, split_at, split_points, reaction, bubble_reactions, klipy_url,
+                reaction_reply, spontaneous, ?, reply_to_bubble, reply_quote
+            FROM messages WHERE id = ?');
+        $ids = [];
+        $lastDialogue = 0;
+        foreach (fetch_messages($cid) as $message) {
+            $copy->execute([$newId, $ids[(int) $message['reply_to_id']] ?? 0, $message['id']]);
+            $copiedId = (int) $pdo->lastInsertId();
+            $ids[(int) $message['id']] = $copiedId;
+            if (in_array($message['role'], ['user', 'assistant'], true)) {
+                $lastDialogue = $copiedId;
+            }
+        }
+        $pdo->prepare('UPDATE conversations SET last_compressed_id = ?, facts_cursor = ? WHERE id = ?')
+            ->execute([$ids[(int) $source['last_compressed_id']] ?? 0, $lastDialogue, $newId]);
+        $pdo->prepare('INSERT INTO conversation_feelings (
+                conversation_id, emotion, mood, intensity, mood_at, friendship, love, anger, reason, bond_at, analyzed_id
+            )
+            SELECT ?, emotion, mood, intensity, mood_at, friendship, love, anger, reason, bond_at, ?
+            FROM conversation_feelings WHERE conversation_id = ?')
+            ->execute([$newId, $lastDialogue, $cid]);
+        return $newId;
+    });
+}
+
 function chat_opening_questions(array $conv, array $messages, int $total): array
 {
     return $total <= 1 && ($messages[0]['role'] ?? '') !== 'user' ? json_list($conv['opening_questions']) : [];
@@ -1876,7 +1929,7 @@ function chat_auto_title(int $cid, bool $rewrite = false): ?string
  *                            lui est renvoyée (sinon « décris-la » dans le message suivant ne
  *                            pouvait rien donner : seul le texte des anciens messages partait)
  */
-function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, string $addressOverride = '', ?array $webResults = null, ?array $quote = null, array $quoteHistory = [], ?array &$systemAudit = null): array
+function chat_build_messages(array $persona, array $personaPrompts, array $conv, array $history, string $userMessage, ?string $imageDataUrl = null, bool $historyVision = false, bool $canReact = false, string $addressOverride = '', ?array $webResults = null, ?array $quote = null, array $quoteHistory = [], ?array &$systemAudit = null, ?array $dueTopic = null): array
 {
     $limits = chat_token_budget($conv);
     $budget = $limits['input'] - 8; // enveloppes des messages système et utilisateur
@@ -1920,6 +1973,13 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $factsOn = (int) ($conv['memory_enabled'] ?? 1) === 1 && (int) ($conv['facts_enabled'] ?? 1) === 1;
     $context = [];
     $contextRoom = max(0, $budget - chat_estimate_tokens($system) - chat_estimate_tokens($text) - 12);
+    $topicText = $dueTopic === null ? '' : chat_topic_context($dueTopic);
+    $topicCost = $topicText === '' ? 0 : chat_estimate_tokens($topicText);
+    if ($topicCost > min(180, intdiv($contextRoom, 3))) {
+        $topicText = '';
+    } else {
+        $contextRoom -= $topicCost;
+    }
     $replyContext = '';
     if ($quote !== null) {
         $replyContext = chat_reply_context($quote, $quoteHistory, min(540, intdiv($contextRoom * 2, 3)));
@@ -1976,7 +2036,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $memory = chat_fit_text(implode("\n\n", $context), $memoryRoom);
     // humeur et ressentis du persona dans cette conversation (src/feelings.php)
     $feelings = (int) ($conv['id'] ?? 0) > 0 ? feel_context((int) $conv['id'], $persona) : '';
-    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $planning, $feelings, $replyContext, $memory, $web]))) . "\n</contexte>";
+    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $planning, $feelings, $replyContext, $memory, $web, $topicText]))) . "\n</contexte>";
 
     $text = $contextBlock . "\n\n" . $text;
     $used = chat_estimate_tokens($system) + chat_estimate_tokens($text);
@@ -2048,6 +2108,7 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         'kept'     => count($kept),
         'dropped'  => $dropped,
         'tokens'   => $used + 8,
+        'topic_used' => $topicText !== '',
     ];
 }
 

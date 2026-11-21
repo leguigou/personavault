@@ -15,6 +15,12 @@ if ($action === 'new' && $method === 'POST') {
     redirect('/chat/' . ($newId ?: $cid));
 }
 
+if ($action === 'fork' && $method === 'POST') {
+    csrf_check();
+    $newId = chat_fork_conversation($cid);
+    redirect('/chat/' . ($newId ?: $cid));
+}
+
 if ($action === 'scene-time' && $method === 'POST') {
     $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
     $ajax ? csrf_check_json() : csrf_check();

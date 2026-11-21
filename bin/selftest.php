@@ -153,6 +153,16 @@ try {
 
     echo "Sauvegarde\n";
     $sourceMid = (int) db()->query('SELECT id FROM messages WHERE conversation_id = ' . $cid)->fetchColumn();
+    $pdo->prepare('INSERT INTO conversation_topics (conversation_id, source_message_id, content, due_on) VALUES (?, ?, ?, ?)')
+        ->execute([$cid, $sourceMid, 'Reparler du voyage', '2099-05-06']);
+    $topicConv = ['id' => $cid, 'memory_enabled' => 1, 'facts_enabled' => 1];
+    $dueDay = new DateTimeImmutable('2099-05-06');
+    $topic = chat_topic_due($topicConv, $dueDay);
+    $check(chat_topic_due($topicConv, $dueDay->modify('-1 day')) === null && $topic['content'] === 'Reparler du voyage',
+        'un sujet daté attend son échéance');
+    db_tx(static fn (PDO $db): bool => chat_topic_mark_offered($db, $cid, (int) $topic['id'], $dueDay));
+    $check(chat_topic_due($topicConv, $dueDay) === null && chat_topic_due($topicConv, $dueDay->modify('+1 day')) === $topic,
+        'un sujet proposé attend le lendemain avant de revenir');
     $pdo->prepare("UPDATE messages SET reaction = 'hug' WHERE id = ?")->execute([$sourceMid]);
     $pdo->prepare("INSERT INTO messages (conversation_id, role, content, split_points, reaction, bubble_reactions)
                    VALUES (?, 'assistant', 'Premier essai.', '[8]', 'heart', ?)")->execute([$cid, '{"1":"laugh"}']);
@@ -217,6 +227,16 @@ try {
         $copy = $pdo->query('SELECT * FROM conversations WHERE persona_id = ' . $nid)->fetch();
         $copyMessages = fetch_messages((int) $copy['id']);
         [$copiedUser, $copiedReply] = $copyMessages;
+        $copiedTopic = $pdo->query('SELECT * FROM conversation_topics WHERE conversation_id = ' . (int) $copy['id'])->fetch();
+        $check($copiedTopic && $copiedTopic['source_message_id'] === $copiedUser['id']
+            && $copiedTopic['due_on'] === '2099-05-06' && $copiedTopic['last_offered_on'] === '2099-05-06',
+            'sujet et échéance restaurés avec leur message source');
+        $copiedTopicConv = ['id' => (int) $copy['id']] + $topicConv;
+        $knownTopics = chat_topics_for_analysis((int) $copy['id']);
+        db_tx(static fn (PDO $db) => chat_topics_save_analysis($db, (int) $copy['id'],
+            ['closed_topics' => [$copiedTopic['id']]], [], $knownTopics));
+        $check(chat_topic_due($copiedTopicConv, $dueDay->modify('+1 day')) === null
+            && chat_topic_due($topicConv, $dueDay->modify('+1 day')) === $topic, 'un sujet traité ne revient plus et le fil source reste indépendant');
         $reaction = $pdo->prepare('SELECT reaction, bubble_reactions FROM reply_versions WHERE id = ?');
         $reaction->execute([$copiedReply['version_id']]);
         $versionReaction = $reaction->fetch();

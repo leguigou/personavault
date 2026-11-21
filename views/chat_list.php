@@ -37,7 +37,9 @@
             $when = $latest['last_at'] ?? $latest['created_at'];
             ?>
             <article class="contact-item<?= $contact['unread'] ? ' is-unread' : '' ?>" data-contact="<?= $pid ?>">
-                <a class="conv-card contact-open" href="/chat/<?= (int) $latest['id'] ?>" style="--hue: <?= hue_for($latest['persona_name']) ?>">
+                <a class="conv-card contact-open" href="/chat/<?= (int) $latest['id'] ?>" style="--hue: <?= hue_for($latest['persona_name']) ?>"
+                   data-conv-id="<?= (int) $latest['id'] ?>" data-conv-title="<?= e((string) $latest['title']) ?>"
+                   data-pinned="<?= (int) $latest['pinned'] === 1 ? '1' : '0' ?>">
                     <div class="conv-avatar">
                         <?php if ($latest['persona_avatar']): ?>
                             <img src="<?= e(media_url($latest['persona_avatar'])) ?>" alt="" loading="lazy">
@@ -51,7 +53,7 @@
                             <time datetime="<?= e(gmdate('Y-m-d\TH:i:s\Z', (int) strtotime($when . ' UTC'))) ?>"><?= e(rel_time($when)) ?></time>
                         </div>
                         <div class="conv-line">
-                            <span class="conv-preview" data-contact-title="<?= (int) $latest['id'] ?>"><?= e($latest['title']) ?></span>
+                            <span class="conv-preview" data-conv-title-text data-contact-title="<?= (int) $latest['id'] ?>"><?= e($latest['title']) ?></span>
                             <?php if ($contact['unread']): ?><span class="conv-badge"><?= e(t('chat.list.new_badge')) ?></span><?php endif; ?>
                         </div>
                     </div>
@@ -118,6 +120,10 @@
                 <button type="button" class="action-row" data-act="retitle">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9L12 3Zm6.5 12v5M16 17.5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span><?= e(t('chat.list.retitle')) ?></span>
+                </button>
+                <button type="button" class="action-row" data-act="fork">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V4m0 12c0-5 3-8 8-8h5m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span><?= e(t('chat.list.fork')) ?></span>
                 </button>
                 <button type="button" class="action-row is-danger" data-act="delete"
                         data-confirm="<?= e(t('chat.list.delete_confirm')) ?>">

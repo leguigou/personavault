@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 24);
+define('PV_SCHEMA_VERSION', 25);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -271,6 +271,20 @@ function migrate(PDO $pdo): void
         if ($version < 24) {
             add_column_if_missing($pdo, 'conversations', 'scene_day', 'INTEGER NOT NULL DEFAULT 0');
             add_column_if_missing($pdo, 'conversations', 'scene_time', "TEXT NOT NULL DEFAULT ''");
+        }
+        if ($version < 25) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS conversation_topics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                source_message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                content TEXT NOT NULL,
+                due_on TEXT NOT NULL,
+                closed INTEGER NOT NULL DEFAULT 0,
+                last_offered_on TEXT NOT NULL DEFAULT '',
+                UNIQUE (conversation_id, source_message_id, content)
+            )");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_conv_topics_due ON conversation_topics(conversation_id, closed, due_on, id)');
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_conv_topics_source ON conversation_topics(source_message_id)');
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -1472,6 +1486,7 @@ require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/chat_web.php';
 require_once __DIR__ . '/chat_opening.php';
 require_once __DIR__ . '/facts.php';
+require_once __DIR__ . '/conversation_topics.php';
 require_once __DIR__ . '/relationships.php';
 require_once __DIR__ . '/backup.php';
 require_once __DIR__ . '/cards.php';
