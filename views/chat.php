@@ -344,19 +344,49 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
     </header>
 
     <div class="sheet-body">
-        <!-- contexte -->
-        <section data-sheet-group="memory" class="sheet-ctx">
-            <span data-ctx-ring-big><?= chat_ring($memory, 62) ?></span>
-            <div class="sheet-ctx-text">
-                <strong><?= e(t('chat.sheet.ctx_percent', ['percent' => (int) $memory['percent']])) ?></strong>
-                <span><?= e(t('chat.sheet.ctx_tokens', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?></span>
-                <span data-threshold="<?= e($fmt((float) chat_memory_threshold())) ?>"><?= e(t('js.chat.ctx_auto_summary', ['n' => (int) $memory['compressions'], 'threshold' => $fmt((float) chat_memory_threshold())])) ?></span>
+        <?php
+        $sceneOverride = chat_scene_override($conv['scene_day'] ?? 0, $conv['scene_time'] ?? '');
+        $realNow = chat_now();
+        $sceneNow = chat_scene_now($conv, $realNow);
+        $sceneForced = $sceneNow !== $realNow;
+        $sceneDays = [1 => t('persona.planning.day_1'), t('persona.planning.day_2'), t('persona.planning.day_3'),
+            t('persona.planning.day_4'), t('persona.planning.day_5'), t('persona.planning.day_6'), t('persona.planning.day_7')];
+        ?>
+        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/scene-time" class="sheet-card scene-time"
+              data-sheet-group="memory" data-scene-time data-timezone="<?= e($realNow->getTimezone()->getName()) ?>"
+              data-mode-current="<?= e(t('chat.scene.current')) ?>" data-mode-forced="<?= e(t('chat.scene.forced')) ?>"
+              aria-labelledby="scene-title" aria-describedby="scene-help">
+            <input type="hidden" name="_token" value="<?= e($token) ?>">
+            <div class="mem-head">
+                <h3 id="scene-title"><?= e(t('chat.scene.title')) ?></h3>
+                <span class="scene-mode" data-scene-mode data-forced="<?= $sceneForced ? '1' : '0' ?>"><?= e(t($sceneForced ? 'chat.scene.forced' : 'chat.scene.current')) ?></span>
             </div>
-        </section>
+            <p class="scene-moment" data-scene-moment><?= e($sceneDays[(int) $sceneNow->format('N')] . ' · ' . $sceneNow->format('H:i')) ?></p>
+            <div class="scene-fields">
+                <label class="field">
+                    <span><?= e(t('chat.scene.day')) ?></span>
+                    <select class="input" name="scene_day">
+                        <option value="0"><?= e(t('chat.scene.current_day')) ?></option>
+                        <?php foreach ($sceneDays as $day => $label): ?>
+                            <option value="<?= $day ?>"<?= $sceneOverride['scene_day'] === $day ? ' selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="field">
+                    <span><?= e(t('chat.scene.time')) ?></span>
+                    <input class="input" type="time" name="scene_time" value="<?= e($sceneOverride['scene_time']) ?>">
+                </label>
+            </div>
+            <p class="hint" id="scene-help"><?= e(t('chat.scene.help')) ?></p>
+            <div class="form-actions">
+                <button class="btn btn-primary btn-sm" type="submit" name="op" value="save"><?= e(t('chat.scene.apply')) ?></button>
+                <button class="btn btn-ghost btn-sm" type="submit" name="op" value="reset" formnovalidate><?= e(t('chat.scene.reset')) ?></button>
+            </div>
+        </form>
 
         <!-- humeur et ressentis du persona dans cette conversation (src/feelings.php) -->
         <?php $feelRomance = !feel_persona_minor($persona); ?>
-        <section data-sheet-group="memory" class="feel-box" data-feel data-url="/chat/<?= (int) $conv['id'] ?>/feelings"
+        <section data-sheet-group="memory" class="sheet-card feel-box" data-feel data-url="/chat/<?= (int) $conv['id'] ?>/feelings"
                  data-token="<?= e($token) ?>" data-gauge-colors="<?= e(json_encode(duo_gauge_colors())) ?>">
             <div class="mem-head"><h3><?= e(t('feel.title')) ?></h3></div>
             <p class="duo-feel-title"><?= e(t('duo.feelings.mood_of', ['name' => (string) $persona['name']])) ?> :
@@ -391,202 +421,14 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
             <p class="hint"><?= e($feelRomance ? t('feel.help') : t('feel.help_minor', ['age' => FEEL_MIN_AGE])) ?></p>
         </section>
 
-        <!-- modèle de CETTE conversation (pour tester), sans toucher au persona -->
-        <?php
-        $overrideModel = trim((string) ($conv['model_override'] ?? ''));
-        $personaModel  = (string) (($persona['model'] ?? '') !== '' ? $persona['model'] : $chatModel);
-        $modelIds      = array_column($models ?? [], 'id');
-        ?>
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/model-override" class="conv-model" data-sheet-group="conversation" data-model-override>
-            <input type="hidden" name="_token" value="<?= e($token) ?>">
-            <label class="conv-model-label" for="conv-model"><?= e(t('chat.model.label')) ?></label>
-            <div class="conv-model-row">
-                <select id="conv-model" name="model" class="input conv-model-select">
-                    <option value=""><?= e(t('chat.model.persona_default', ['model' => $personaModel !== '' ? $personaModel : t('chat.persona.model_global')])) ?></option>
-                    <?php foreach ($models ?? [] as $mo): ?>
-                        <option value="<?= e((string) $mo['id']) ?>" <?= $overrideModel === (string) $mo['id'] ? 'selected' : '' ?>><?= e(($mo['fav'] ? '★ ' : '') . $mo['id']) ?></option>
-                    <?php endforeach; ?>
-                    <?php if ($overrideModel !== '' && !in_array($overrideModel, $modelIds, true)): ?>
-                        <option value="<?= e($overrideModel) ?>" selected><?= e($overrideModel) ?></option>
-                    <?php endif; ?>
-                </select>
-                <button type="button" class="btn btn-ghost btn-sm conv-model-reset" data-model-reset <?= $overrideModel === '' ? 'hidden' : '' ?>><?= e(t('chat.model.reset')) ?></button>
+        <section data-sheet-group="memory" class="sheet-ctx">
+            <span data-ctx-ring-big><?= chat_ring($memory, 62) ?></span>
+            <div class="sheet-ctx-text">
+                <strong><?= e(t('chat.sheet.ctx_percent', ['percent' => (int) $memory['percent']])) ?></strong>
+                <span><?= e(t('chat.sheet.ctx_tokens', ['used' => $fmt((float) $memory['context_tokens']), 'window' => $fmt((float) $memory['window'])])) ?></span>
+                <span data-threshold="<?= e($fmt((float) chat_memory_threshold())) ?>"><?= e(t('js.chat.ctx_auto_summary', ['n' => (int) $memory['compressions'], 'threshold' => $fmt((float) chat_memory_threshold())])) ?></span>
             </div>
-            <p class="hint conv-model-legend" data-model-vision-hint hidden><?= e(t('chat.model.vision_legend')) ?></p>
-            <p class="hint" data-model-hint><?= e($overrideModel !== '' ? t('chat.model.hint_on') : t('chat.model.hint_off')) ?></p>
-            <noscript><button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button></noscript>
-        </form>
-
-        <section data-sheet-group="conversation" class="lms-status" data-lms-status data-state="loading">
-            <span class="lms-dot"></span>
-            <span class="lms-text"><?= e(t('chat.lms.checking')) ?></span>
-            <button type="button" class="lms-refresh" data-lms-refresh aria-label="<?= e(t('chat.lms.refresh')) ?>">&#8635;</button>
         </section>
-
-        <div data-sheet-group="conversation"><!-- chargement du modèle : bouton et progression (masquée par le JS) -->
-        <div class="lms-actions">
-            <button type="button" class="btn btn-ghost btn-sm" data-load-model>
-                <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span data-load-label><?= e(t('js.lms.load_now')) ?></span>
-            </button>
-        </div>
-
-        <div class="lms-progress" data-lms-progress hidden>
-            <ol class="lms-steps" data-lms-steps>
-                <li data-step="server"><span class="n">1</span><span><?= e(t('chat.lms.step_server')) ?></span></li>
-                <li data-step="purge"><span class="n">2</span><span><?= e(t('chat.lms.step_purge')) ?></span></li>
-                <li data-step="request"><span class="n">3</span><span><?= e(t('chat.lms.step_request')) ?></span></li>
-                <li data-step="loading"><span class="n">4</span><span><?= e(t('chat.lms.step_loading')) ?></span></li>
-                <li data-step="ready"><span class="n">5</span><span><?= e(t('chat.lms.step_ready')) ?></span></li>
-            </ol>
-            <p class="lms-timer" data-lms-timer><?= e(t('chat.lms.timer_zero')) ?></p>
-            <p class="hint lms-purged" data-lms-purged hidden></p>
-        </div>
-        <!-- échec du chargement : explication claire + message brut de LM Studio -->
-        <div class="lms-error" data-lms-error role="alert" hidden>
-            <p class="lms-error-hint" data-lms-error-hint></p>
-            <details class="lms-error-more">
-                <summary><?= e(t('chat.lms.error_detail')) ?></summary>
-                <p data-lms-error-detail></p>
-            </details>
-            <button type="button" class="btn btn-ghost btn-sm" data-lms-error-reset hidden><?= e(t('chat.lms.error_reset')) ?></button>
-        </div>
-        </div>
-
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/reasoning" class="sheet-settings-form" data-sheet-group="conversation">
-            <input type="hidden" name="_token" value="<?= e($token) ?>">
-            <label class="field">
-                <span><?= e(t('settings.chat.reasoning')) ?></span>
-                <select class="input" name="reasoning_effort">
-                    <?php
-                    $reasoningLabels = chat_reasoning_labels();
-                    $inheritedEffort = chat_reasoning_effort($persona['reasoning_effort']) ?: setting('chat_reasoning_effort', 'none');
-                    ?>
-                    <option value=""><?= e(t('chat.reasoning_inherit')) ?></option>
-                    <?php foreach ($reasoningLabels as $effort => $label): ?>
-                        <option value="<?= $effort ?>" <?= $conv['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e($label) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <?php if ($conv['reasoning_effort'] === ''): ?>
-                    <small><?= e(t('chat.reasoning_inherited_level', ['level' => $reasoningLabels[$inheritedEffort] ?? $reasoningLabels['none']])) ?></small>
-                <?php endif; ?>
-            </label>
-            <div class="form-actions">
-                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('form.save')) ?></button>
-            </div>
-        </form>
-
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/klipy" class="sheet-settings-form" data-sheet-group="conversation" data-klipy-settings>
-            <input type="hidden" name="_token" value="<?= e($token) ?>">
-            <?php
-            $inheritsKlipy = (int) $conv['klipy_formats'] === -1;
-            $klipyMask = (int) ($inheritsKlipy ? $persona['klipy_formats'] : $conv['klipy_formats']);
-            ?>
-            <strong><?= e(t('chat.klipy_formats')) ?></strong>
-            <label class="check">
-                <input type="checkbox" name="inherit" value="1" <?= $inheritsKlipy ? 'checked' : '' ?>>
-                <span><?= e(t('chat.klipy_inherit')) ?></span>
-            </label>
-            <div class="klipy-options" role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
-                <?php foreach (klipy_format_labels() as $format => $label): ?>
-                    <label class="check">
-                        <input type="checkbox" name="klipy_formats[]" value="<?= $format ?>" <?= ($klipyMask & KLIPY_FORMATS[$format]) ? 'checked' : '' ?>>
-                        <span><?= e($label) ?></span>
-                    </label>
-                <?php endforeach; ?>
-            </div>
-            <div class="form-actions">
-                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('form.save')) ?></button>
-            </div>
-        </form>
-
-        <!-- réglages du personnage : communs à toutes ses conversations -->
-        <section data-sheet-group="conversation" class="persona-summary">
-            <div class="mem-head">
-                <h3><?= e(t('chat.persona.title')) ?></h3>
-                <a class="mini" href="/p/<?= e((string) $persona['slug']) ?>/edit#ia"><?= e(t('chat.persona.edit')) ?></a>
-            </div>
-            <p class="perso-line">
-                <b><?= e($model !== '' ? $model : t('chat.persona.model_global')) ?></b>
-                <span><?= e(t('chat.persona.temperature', ['value' => fmt_number((float) $conv['temperature'], 2, false)])) ?></span>
-                <span><?= e(t('chat.persona.max_tokens', ['count' => (int) $conv['max_tokens']])) ?></span>
-                <span><?= e(t('chat.persona.window', ['size' => fmt_number((int) $conv['context_window'])])) ?></span>
-            </p>
-            <?php $personaDirective = trim((string) ($persona['directive'] ?? '')); ?>
-            <?php if ($personaDirective !== ''): ?>
-                <p class="hint perso-directive"><?= e(t('chat.persona.directive', ['text' => mb_substr($personaDirective, 0, 160)])) ?></p>
-            <?php endif; ?>
-        </section>
-
-        <!-- consigne propre à cette conversation (s'ajoute à celle du personnage) -->
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/directive" class="sheet-directive" data-sheet-group="conversation" data-directive-form>
-            <input type="hidden" name="_token" value="<?= e($token) ?>">
-            <label class="field">
-                <span><?= e(t('chat.directive.label')) ?></span>
-                <textarea class="input" name="directive" rows="3" maxlength="2000" placeholder="<?= e(t('chat.directive.placeholder')) ?>"><?= e($convDirective ?? '') ?></textarea>
-                <small><?= e(t('chat.directive.help')) ?></small>
-            </label>
-            <div class="form-actions">
-                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
-            </div>
-        </form>
-
-        <!-- options propres à cette conversation -->
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/toggles" class="sheet-form" data-sheet-group="conversation">
-            <input type="hidden" name="_token" value="<?= e($token) ?>">
-
-            <label class="check">
-                <input type="checkbox" name="pinned" value="1" <?= (int) ($conv['pinned'] ?? 0) === 1 ? 'checked' : '' ?>>
-                <span><?= e(t('chat.toggles.pinned')) ?></span>
-            </label>
-
-            <label class="check">
-                <input type="checkbox" name="memory_enabled" value="1" <?= (int) $conv['memory_enabled'] ? 'checked' : '' ?>>
-                <span><?= e(t('chat.toggles.memory')) ?></span>
-            </label>
-
-            <label class="check">
-                <input type="checkbox" name="auto_followup" value="1" <?= (int) ($conv['auto_followup'] ?? 1) === 1 ? 'checked' : '' ?>>
-                <span><?= e(t('chat.toggles.followup')) ?></span>
-            </label>
-
-            <input type="hidden" name="web_search_present" value="1">
-            <label class="check">
-                <input type="checkbox" name="web_search" value="1" <?= (int) ($conv['web_search'] ?? 1) === 1 ? 'checked' : '' ?>>
-                <span><?= e(t('chat.toggles.web')) ?></span>
-            </label>
-            <?php if (!chat_web_any(chat_web_sources())): ?>
-                <p class="inline-warn" role="note">
-                    <?= e(t('chat.toggles.web_global_off')) ?>
-                    <a href="/settings#web"><?= e(t('chat.toggles.web_settings')) ?></a>
-                </p>
-            <?php elseif ((int) ($persona['web_search'] ?? 1) !== 1): ?>
-                <p class="inline-warn" role="note"><?= e(t('chat.toggles.web_persona_off')) ?></p>
-            <?php endif; ?>
-            <?php
-            // l'interrupteur ne sert à rien si les relances sont coupées partout,
-            // ou si le planificateur (bin/followup.php) n'a jamais tourné
-            $fuGlobalOff = setting('chat_followup_enabled', '1') !== '1';
-            $fuNeverRan  = !$fuGlobalOff && setting('followup_last_run', '') === '';
-            ?>
-            <?php if ($fuGlobalOff): ?>
-                <p class="inline-warn" role="note">
-                    <?= e(t('chat.toggles.followup_global_off')) ?>
-                    <a href="/settings#followup"><?= e(t('chat.toggles.followup_enable')) ?></a>
-                </p>
-            <?php elseif ($fuNeverRan): ?>
-                <p class="inline-warn" role="note">
-                    <?= e(t('chat.toggles.followup_no_cron')) ?>
-                    <a href="/settings#followup"><?= e(t('chat.toggles.followup_how')) ?></a>
-                </p>
-            <?php else: ?>
-                <a class="mini-link" href="/settings#followup"><?= e(t('chat.toggles.followup_settings')) ?></a>
-            <?php endif; ?>
-
-            <div class="form-actions" data-autosave-fallback>
-                <button class="btn btn-primary btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
-            </div>
-        </form>
 
         <!-- mémoire -->
         <section data-sheet-group="memory" class="mem-box">
@@ -671,34 +513,240 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
             <ul class="fact-list recall-list" data-recall-list></ul>
         </section>
 
-        <!-- exporter toute la conversation (texte, Markdown, page imprimable → PDF) -->
-        <section data-sheet-group="conversation" class="recall-box export-box">
-            <div class="mem-head">
-                <h3><?= e(t('export.sheet.title')) ?></h3>
-            </div>
-            <p class="fact-hint"><?= e(t('export.sheet.hint')) ?></p>
-            <div class="form-actions">
-                <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/export.txt" download data-export="txt"><?= e(t('export.sheet.txt')) ?></a>
-                <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/export.md" download data-export="md"><?= e(t('export.sheet.md')) ?></a>
-                <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/print?auto=1" data-export="pdf"
-                   title="<?= e(t('export.sheet.pdf_title')) ?>"><?= e(t('export.sheet.pdf')) ?></a>
-            </div>
+        <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
+            <div class="mem-head"><h3><?= e(t('chat.sheet.behavior')) ?></h3></div>
+            <!-- options propres à cette conversation -->
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/toggles" class="sheet-form">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+
+                <label class="check">
+                    <input type="checkbox" name="pinned" value="1" <?= (int) ($conv['pinned'] ?? 0) === 1 ? 'checked' : '' ?>>
+                    <span><?= e(t('chat.toggles.pinned')) ?></span>
+                </label>
+
+                <label class="check">
+                    <input type="checkbox" name="memory_enabled" value="1" <?= (int) $conv['memory_enabled'] ? 'checked' : '' ?>>
+                    <span><?= e(t('chat.toggles.memory')) ?></span>
+                </label>
+
+                <label class="check">
+                    <input type="checkbox" name="auto_followup" value="1" <?= (int) ($conv['auto_followup'] ?? 1) === 1 ? 'checked' : '' ?>>
+                    <span><?= e(t('chat.toggles.followup')) ?></span>
+                </label>
+
+                <input type="hidden" name="web_search_present" value="1">
+                <label class="check">
+                    <input type="checkbox" name="web_search" value="1" <?= (int) ($conv['web_search'] ?? 1) === 1 ? 'checked' : '' ?>>
+                    <span><?= e(t('chat.toggles.web')) ?></span>
+                </label>
+                <?php if (!chat_web_any(chat_web_sources())): ?>
+                    <p class="inline-warn" role="note">
+                        <?= e(t('chat.toggles.web_global_off')) ?>
+                        <a href="/settings#web"><?= e(t('chat.toggles.web_settings')) ?></a>
+                    </p>
+                <?php elseif ((int) ($persona['web_search'] ?? 1) !== 1): ?>
+                    <p class="inline-warn" role="note"><?= e(t('chat.toggles.web_persona_off')) ?></p>
+                <?php endif; ?>
+                <?php
+                // l'interrupteur ne sert à rien si les relances sont coupées partout,
+                // ou si le planificateur (bin/followup.php) n'a jamais tourné
+                $fuGlobalOff = setting('chat_followup_enabled', '1') !== '1';
+                $fuNeverRan  = !$fuGlobalOff && setting('followup_last_run', '') === '';
+                ?>
+                <?php if ($fuGlobalOff): ?>
+                    <p class="inline-warn" role="note">
+                        <?= e(t('chat.toggles.followup_global_off')) ?>
+                        <a href="/settings#followup"><?= e(t('chat.toggles.followup_enable')) ?></a>
+                    </p>
+                <?php elseif ($fuNeverRan): ?>
+                    <p class="inline-warn" role="note">
+                        <?= e(t('chat.toggles.followup_no_cron')) ?>
+                        <a href="/settings#followup"><?= e(t('chat.toggles.followup_how')) ?></a>
+                    </p>
+                <?php else: ?>
+                    <a class="mini-link" href="/settings#followup"><?= e(t('chat.toggles.followup_settings')) ?></a>
+                <?php endif; ?>
+
+                <div class="form-actions" data-autosave-fallback>
+                    <button class="btn btn-primary btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
+                </div>
+            </form>
+
+            <!-- consigne propre à cette conversation (s'ajoute à celle du personnage) -->
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/directive" class="sheet-directive" data-directive-form>
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <label class="field">
+                    <span><?= e(t('chat.directive.label')) ?></span>
+                    <textarea class="input" name="directive" rows="3" maxlength="2000" placeholder="<?= e(t('chat.directive.placeholder')) ?>"><?= e($convDirective ?? '') ?></textarea>
+                    <small><?= e(t('chat.directive.help')) ?></small>
+                </label>
+                <div class="form-actions">
+                    <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.directive.save')) ?></button>
+                </div>
+            </form>
+
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/klipy" class="sheet-settings-form" data-klipy-settings>
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <?php
+                $inheritsKlipy = (int) $conv['klipy_formats'] === -1;
+                $klipyMask = (int) ($inheritsKlipy ? $persona['klipy_formats'] : $conv['klipy_formats']);
+                ?>
+                <strong><?= e(t('chat.klipy_formats')) ?></strong>
+                <label class="check">
+                    <input type="checkbox" name="inherit" value="1" <?= $inheritsKlipy ? 'checked' : '' ?>>
+                    <span><?= e(t('chat.klipy_inherit')) ?></span>
+                </label>
+                <div class="klipy-options" role="group" aria-label="<?= e(t('chat.klipy_formats')) ?>">
+                    <?php foreach (klipy_format_labels() as $format => $label): ?>
+                        <label class="check">
+                            <input type="checkbox" name="klipy_formats[]" value="<?= $format ?>" <?= ($klipyMask & KLIPY_FORMATS[$format]) ? 'checked' : '' ?>>
+                            <span><?= e($label) ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('form.save')) ?></button>
+                </div>
+            </form>
         </section>
 
-        <!-- renommer / supprimer -->
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/rename" class="rename-row" data-sheet-group="conversation">
-            <input type="hidden" name="_token" value="<?= e($token) ?>">
-            <input class="input" type="text" name="title" value="<?= e((string) $conv['title']) ?>" aria-label="<?= e(t('chat.rename.label')) ?>">
-            <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.rename.submit')) ?></button>
-        </form>
+        <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
+            <div class="mem-head"><h3><?= e(t('chat.sheet.generation')) ?></h3></div>
+            <!-- modèle de CETTE conversation (pour tester), sans toucher au persona -->
+            <?php
+            $overrideModel = trim((string) ($conv['model_override'] ?? ''));
+            $personaModel  = (string) (($persona['model'] ?? '') !== '' ? $persona['model'] : $chatModel);
+            $modelIds      = array_column($models ?? [], 'id');
+            ?>
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/model-override" class="conv-model" data-model-override>
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <label class="conv-model-label" for="conv-model"><?= e(t('chat.model.label')) ?></label>
+                <div class="conv-model-row">
+                    <select id="conv-model" name="model" class="input conv-model-select">
+                        <option value=""><?= e(t('chat.model.persona_default', ['model' => $personaModel !== '' ? $personaModel : t('chat.persona.model_global')])) ?></option>
+                        <?php foreach ($models ?? [] as $mo): ?>
+                            <option value="<?= e((string) $mo['id']) ?>" <?= $overrideModel === (string) $mo['id'] ? 'selected' : '' ?>><?= e(($mo['fav'] ? '★ ' : '') . $mo['id']) ?></option>
+                        <?php endforeach; ?>
+                        <?php if ($overrideModel !== '' && !in_array($overrideModel, $modelIds, true)): ?>
+                            <option value="<?= e($overrideModel) ?>" selected><?= e($overrideModel) ?></option>
+                        <?php endif; ?>
+                    </select>
+                    <button type="button" class="btn btn-ghost btn-sm conv-model-reset" data-model-reset <?= $overrideModel === '' ? 'hidden' : '' ?>><?= e(t('chat.model.reset')) ?></button>
+                </div>
+                <p class="hint conv-model-legend" data-model-vision-hint hidden><?= e(t('chat.model.vision_legend')) ?></p>
+                <p class="hint" data-model-hint><?= e($overrideModel !== '' ? t('chat.model.hint_on') : t('chat.model.hint_off')) ?></p>
+                <noscript><button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button></noscript>
+            </form>
 
-        <form method="post" action="/chat/<?= (int) $conv['id'] ?>/delete" data-confirm="<?= e(t('chat.delete.confirm')) ?>" class="chat-danger" data-sheet-group="conversation">
-            <input type="hidden" name="_token" value="<?= e($token) ?>">
-            <button class="btn btn-danger-ghost btn-block" type="submit">
-                <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-                <?= e(t('chat.delete.submit')) . "\n" ?>
-            </button>
-        </form>
+            <section class="lms-status" data-lms-status data-state="loading">
+                <span class="lms-dot"></span>
+                <span class="lms-text"><?= e(t('chat.lms.checking')) ?></span>
+                <button type="button" class="lms-refresh" data-lms-refresh aria-label="<?= e(t('chat.lms.refresh')) ?>">&#8635;</button>
+            </section>
+
+            <div><!-- chargement du modèle : bouton et progression (masquée par le JS) -->
+            <div class="lms-actions">
+                <button type="button" class="btn btn-ghost btn-sm" data-load-model>
+                    <svg viewBox="0 0 24 24" class="ico"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span data-load-label><?= e(t('js.lms.load_now')) ?></span>
+                </button>
+            </div>
+
+            <div class="lms-progress" data-lms-progress hidden>
+                <ol class="lms-steps" data-lms-steps>
+                    <li data-step="server"><span class="n">1</span><span><?= e(t('chat.lms.step_server')) ?></span></li>
+                    <li data-step="purge"><span class="n">2</span><span><?= e(t('chat.lms.step_purge')) ?></span></li>
+                    <li data-step="request"><span class="n">3</span><span><?= e(t('chat.lms.step_request')) ?></span></li>
+                    <li data-step="loading"><span class="n">4</span><span><?= e(t('chat.lms.step_loading')) ?></span></li>
+                    <li data-step="ready"><span class="n">5</span><span><?= e(t('chat.lms.step_ready')) ?></span></li>
+                </ol>
+                <p class="lms-timer" data-lms-timer><?= e(t('chat.lms.timer_zero')) ?></p>
+                <p class="hint lms-purged" data-lms-purged hidden></p>
+            </div>
+            <!-- échec du chargement : explication claire + message brut de LM Studio -->
+            <div class="lms-error" data-lms-error role="alert" hidden>
+                <p class="lms-error-hint" data-lms-error-hint></p>
+                <details class="lms-error-more">
+                    <summary><?= e(t('chat.lms.error_detail')) ?></summary>
+                    <p data-lms-error-detail></p>
+                </details>
+                <button type="button" class="btn btn-ghost btn-sm" data-lms-error-reset hidden><?= e(t('chat.lms.error_reset')) ?></button>
+            </div>
+            </div>
+
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/reasoning" class="sheet-settings-form">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <label class="field">
+                    <span><?= e(t('settings.chat.reasoning')) ?></span>
+                    <select class="input" name="reasoning_effort">
+                        <?php
+                        $reasoningLabels = chat_reasoning_labels();
+                        $inheritedEffort = chat_reasoning_effort($persona['reasoning_effort']) ?: setting('chat_reasoning_effort', 'none');
+                        ?>
+                        <option value=""><?= e(t('chat.reasoning_inherit')) ?></option>
+                        <?php foreach ($reasoningLabels as $effort => $label): ?>
+                            <option value="<?= $effort ?>" <?= $conv['reasoning_effort'] === $effort ? 'selected' : '' ?>><?= e($label) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if ($conv['reasoning_effort'] === ''): ?>
+                        <small><?= e(t('chat.reasoning_inherited_level', ['level' => $reasoningLabels[$inheritedEffort] ?? $reasoningLabels['none']])) ?></small>
+                    <?php endif; ?>
+                </label>
+                <div class="form-actions">
+                    <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('form.save')) ?></button>
+                </div>
+            </form>
+
+            <!-- réglages du personnage : communs à toutes ses conversations -->
+            <section class="persona-summary">
+                <div class="mem-head">
+                    <h3><?= e(t('chat.persona.title')) ?></h3>
+                    <a class="mini" href="/p/<?= e((string) $persona['slug']) ?>/edit#ia"><?= e(t('chat.persona.edit')) ?></a>
+                </div>
+                <p class="perso-line">
+                    <b><?= e($model !== '' ? $model : t('chat.persona.model_global')) ?></b>
+                    <span><?= e(t('chat.persona.temperature', ['value' => fmt_number((float) $conv['temperature'], 2, false)])) ?></span>
+                    <span><?= e(t('chat.persona.max_tokens', ['count' => (int) $conv['max_tokens']])) ?></span>
+                    <span><?= e(t('chat.persona.window', ['size' => fmt_number((int) $conv['context_window'])])) ?></span>
+                </p>
+                <?php $personaDirective = trim((string) ($persona['directive'] ?? '')); ?>
+                <?php if ($personaDirective !== ''): ?>
+                    <p class="hint perso-directive"><?= e(t('chat.persona.directive', ['text' => mb_substr($personaDirective, 0, 160)])) ?></p>
+                <?php endif; ?>
+            </section>
+        </section>
+
+        <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
+            <div class="mem-head"><h3><?= e(t('chat.sheet.manage')) ?></h3></div>
+            <!-- exporter toute la conversation (texte, Markdown, page imprimable → PDF) -->
+            <section class="recall-box export-box">
+                <div class="mem-head">
+                    <h3><?= e(t('export.sheet.title')) ?></h3>
+                </div>
+                <p class="fact-hint"><?= e(t('export.sheet.hint')) ?></p>
+                <div class="form-actions">
+                    <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/export.txt" download data-export="txt"><?= e(t('export.sheet.txt')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/export.md" download data-export="md"><?= e(t('export.sheet.md')) ?></a>
+                    <a class="btn btn-ghost btn-sm" href="/chat/<?= (int) $conv['id'] ?>/print?auto=1" data-export="pdf"
+                       title="<?= e(t('export.sheet.pdf_title')) ?>"><?= e(t('export.sheet.pdf')) ?></a>
+                </div>
+            </section>
+
+            <!-- renommer / supprimer -->
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/rename" class="rename-row">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <input class="input" type="text" name="title" value="<?= e((string) $conv['title']) ?>" aria-label="<?= e(t('chat.rename.label')) ?>">
+                <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.rename.submit')) ?></button>
+            </form>
+
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/delete" data-confirm="<?= e(t('chat.delete.confirm')) ?>" class="chat-danger">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <button class="btn btn-danger-ghost btn-block" type="submit">
+                    <svg viewBox="0 0 24 24" class="ico"><path d="M6 7h12M9 7V5h6v2m-8 0 1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                    <?= e(t('chat.delete.submit')) . "\n" ?>
+                </button>
+            </form>
+        </section>
     </div>
 </aside>
 

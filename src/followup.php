@@ -151,11 +151,13 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
     $prompts = $stmt->fetchAll();
 
     // emploi du temps (src/planning.php) : pas de message spontané pendant son sommeil
-    $planState = planning_now(planning_body($prompts), (int) $persona['id'], chat_now());
+    $now = chat_now();
+    $scene = chat_scene_now($conv, $now);
+    $planState = planning_now(planning_body($prompts), (int) $persona['id'], $scene);
     if ($planState !== null && $planState['sleeping']) {
         return ['status' => 'asleep', 'kind' => (string) ($pick['kind'] ?? ''), 'text' => '', 'error' => ''];
     }
-    $planning = planning_context($prompts, (int) $persona['id']);
+    $planning = planning_context($prompts, (int) $persona['id'], $scene);
 
     $conv = chat_with_persona($conv, $persona);
     // genre de message imposé (nouvelles, anecdote, souvenir, proposition…), différent des
@@ -172,7 +174,7 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
     $feelings = feel_context($cid, $persona);
 
     $system = chat_system_prompt($persona, $prompts, $conv, $facts)
-        . "\n\n" . chat_time_context($conv, $history, true, $pick['topic'])
+        . "\n\n" . chat_time_context($conv, $history, true, $pick['topic'], $now)
         . ($planning !== '' ? "\n\n" . $planning : '')
         . ($feelings !== '' ? "\n\n" . $feelings : '')
         . "\n\n" . str_replace(

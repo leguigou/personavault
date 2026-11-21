@@ -4,6 +4,20 @@
  * Same keys as lang/fr/chat.php (reference).
  */
 return [
+    'chat.scene.title' => 'Day and time',
+    'chat.scene.current' => 'Live',
+    'chat.scene.forced' => 'Forced',
+    'chat.scene.day' => 'Day of the week',
+    'chat.scene.current_day' => 'Current day',
+    'chat.scene.time' => 'Time',
+    'chat.scene.help' => 'Leave the time blank to follow the live clock.',
+    'chat.scene.apply' => 'Apply',
+    'chat.scene.reset' => 'Return to live time',
+    'chat.scene.saved' => 'Day and time updated.',
+    'chat.scene.invalid' => 'Choose a valid day and time.',
+    'chat.sheet.behavior' => 'Behavior',
+    'chat.sheet.generation' => 'Model and generation',
+    'chat.sheet.manage' => 'Manage conversation',
     'chat.klipy_format_disabled' => 'This KLIPY format is disabled in this conversation.',
     'chat.klipy_no_media' => 'KLIPY found no media for this request.',
     'chat.reasoning_inherited_level' => 'Inherited setting · {level}',

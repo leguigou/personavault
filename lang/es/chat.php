@@ -4,6 +4,20 @@
  * Mismas claves que lang/fr/chat.php (referencia). Se tutea al usuario, como en francés.
  */
 return [
+    'chat.scene.title' => 'Día y hora',
+    'chat.scene.current' => 'Actual',
+    'chat.scene.forced' => 'Forzado',
+    'chat.scene.day' => 'Día de la semana',
+    'chat.scene.current_day' => 'Día actual',
+    'chat.scene.time' => 'Hora',
+    'chat.scene.help' => 'Deja la hora en blanco para seguir el reloj real.',
+    'chat.scene.apply' => 'Aplicar',
+    'chat.scene.reset' => 'Volver al momento actual',
+    'chat.scene.saved' => 'Día y hora actualizados.',
+    'chat.scene.invalid' => 'Elige un día y una hora válidos.',
+    'chat.sheet.behavior' => 'Comportamiento',
+    'chat.sheet.generation' => 'Modelo y generación',
+    'chat.sheet.manage' => 'Gestionar conversación',
     'chat.klipy_format_disabled' => 'Este formato de KLIPY está desactivado en esta conversación.',
     'chat.klipy_no_media' => 'KLIPY no encontró contenido para esta solicitud.',
     'chat.reasoning_inherited_level' => 'Ajuste heredado · {level}',

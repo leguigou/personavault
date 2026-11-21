@@ -15,6 +15,33 @@ if ($action === 'new' && $method === 'POST') {
     redirect('/chat/' . ($newId ?: $cid));
 }
 
+if ($action === 'scene-time' && $method === 'POST') {
+    $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+    $ajax ? csrf_check_json() : csrf_check();
+
+    $reset = ($_POST['op'] ?? '') === 'reset';
+    $day = $reset ? '0' : ($_POST['scene_day'] ?? null);
+    $time = $reset ? '' : ($_POST['scene_time'] ?? null);
+    $scene = chat_scene_override($day, $time);
+    $valid = $day === (string) $scene['scene_day'] && $time === $scene['scene_time'];
+    if ($valid) {
+        db()->prepare('UPDATE conversations SET scene_day = ?, scene_time = ? WHERE id = ?')
+            ->execute([$scene['scene_day'], $scene['scene_time'], $cid]);
+    }
+    $message = $valid ? t('chat.scene.saved') : t('chat.scene.invalid');
+
+    if ($ajax) {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$valid) {
+            http_response_code(422);
+        }
+        echo json_encode($valid ? ['ok' => true, 'message' => $message] + $scene : ['ok' => false, 'error' => $message], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    flash($valid ? 'ok' : 'error', $message);
+    redirect('/chat/' . $cid);
+}
+
 /* --- modèle de cette conversation seulement (pour tester ; vide = celui du persona) --- */
 if ($action === 'model-override' && $method === 'POST') {
     $ajax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';

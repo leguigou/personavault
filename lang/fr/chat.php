@@ -4,6 +4,20 @@
  * Toute clé ajoutée ici doit exister dans lang/en/chat.php et lang/es/chat.php (vérifié par bin/i18n-check.php).
  */
 return [
+    'chat.scene.title' => 'Jour et heure',
+    'chat.scene.current' => 'Actuel',
+    'chat.scene.forced' => 'Forcé',
+    'chat.scene.day' => 'Jour de la semaine',
+    'chat.scene.current_day' => 'Jour actuel',
+    'chat.scene.time' => 'Heure',
+    'chat.scene.help' => 'Laissez l’heure vide pour suivre l’horloge réelle.',
+    'chat.scene.apply' => 'Appliquer',
+    'chat.scene.reset' => 'Revenir à l’actuel',
+    'chat.scene.saved' => 'Jour et heure mis à jour.',
+    'chat.scene.invalid' => 'Choisissez un jour et une heure valides.',
+    'chat.sheet.behavior' => 'Comportement',
+    'chat.sheet.generation' => 'Modèle et génération',
+    'chat.sheet.manage' => 'Gestion de la conversation',
     'chat.klipy_format_disabled' => 'Ce format KLIPY est désactivé dans cette discussion.',
     'chat.klipy_no_media' => 'KLIPY n’a trouvé aucun média pour cette demande.',
     'chat.reasoning_inherited_level' => 'Réglage hérité · {level}',

@@ -1420,6 +1420,36 @@ function chat_now(): DateTimeImmutable
     return new DateTimeImmutable('now', new DateTimeZone((string) config('timezone', 'Europe/Paris')));
 }
 
+/** Le jour ISO (0 = actuel) et l'heure locale facultative de la scène. */
+function chat_scene_override(mixed $day, mixed $time): array
+{
+    return [
+        'scene_day' => (is_int($day) || is_string($day)) && preg_match('/^[1-7]$/D', (string) $day) ? (int) $day : 0,
+        'scene_time' => is_string($time) && preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', $time) ? $time : '',
+    ];
+}
+
+function chat_scene_now(array $conv, DateTimeImmutable $now): DateTimeImmutable
+{
+    $override = chat_scene_override($conv['scene_day'] ?? 0, $conv['scene_time'] ?? '');
+    if (!$override['scene_day'] && $override['scene_time'] === '') {
+        return $now;
+    }
+
+    // Le planning lit l'heure murale. Un fuseau fixe évite de décaler une heure
+    // choisie si elle tombe dans le saut du passage à l'heure d'été.
+    $scene = new DateTimeImmutable($now->format('Y-m-d H:i:s P'));
+    if ($override['scene_day']) {
+        $offset = $override['scene_day'] - (int) $now->format('N');
+        $scene = $scene->modify(sprintf('%+d days', $offset));
+    }
+    if ($override['scene_time'] !== '') {
+        [$hour, $minute] = explode(':', $override['scene_time']);
+        $scene = $scene->setTime((int) $hour, (int) $minute);
+    }
+    return $scene;
+}
+
 /** « il y a 3 jours », « il y a 2 h », « à l'instant »… */
 function chat_gap_label(int $seconds): string
 {
@@ -1454,26 +1484,25 @@ function chat_gap_duration(int $seconds): string
 }
 
 /**
- * Bloc de contexte temporel injecté dans le prompt système :
- * date/heure réelle, silence écoulé, et rappel du dernier sujet si la pause est longue.
- */
-/**
  * Contexte temporel (date, heure, silence écoulé, dernier sujet après une longue pause).
  * $skipSpontaneous : le « dernier sujet » ignore les messages spontanés du persona (relances),
  * pour qu'une relance ne reprenne pas la précédente. $withTopic à false : pas de « dernier sujet »
  * (message spontané d'un autre type qu'un rebond, src/followup.php).
  */
-function chat_time_context(array $conv, array $history, bool $skipSpontaneous = false, bool $withTopic = true): string
+function chat_time_context(array $conv, array $history, bool $skipSpontaneous = false, bool $withTopic = true, ?DateTimeImmutable $now = null): string
 {
-    $now    = chat_now();
+    $now  ??= chat_now();
+    $scene  = chat_scene_now($conv, $now);
     $jours  = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
     $mois   = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
         'septembre', 'octobre', 'novembre', 'décembre'];
 
     $lines = [];
-    $lines[] = 'Contexte réel : nous sommes ' . $jours[(int) $now->format('w')] . ' '
-        . (int) $now->format('j') . ' ' . $mois[(int) $now->format('n') - 1] . ', '
-        . $now->format('H\hi') . '.';
+    $jour = $jours[(int) $scene->format('w')];
+    $lines[] = $scene === $now
+        ? 'Contexte réel : nous sommes ' . $jour . ' ' . (int) $now->format('j') . ' '
+            . $mois[(int) $now->format('n') - 1] . ', ' . $now->format('H\hi') . '.'
+        : 'Moment de la scène choisi pour cette conversation : ' . $jour . ', ' . $scene->format('H\hi') . '.';
 
     $last = null;
     for ($i = count($history) - 1; $i >= 0; $i--) {
@@ -1896,9 +1925,10 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $web = chat_fit_text("Extraits web :\n" . implode("\n", $snippets), min(420, intdiv($contextRoom * 2, 3)));
         $contextRoom -= chat_estimate_tokens($web);
     }
-    $time = chat_fit_text(chat_time_context($conv, $history), min(256, intdiv($contextRoom, 2)));
+    $now = chat_now();
+    $time = chat_fit_text(chat_time_context($conv, $history, now: $now), min(256, intdiv($contextRoom, 2)));
     // emploi du temps : seulement l'activité du moment et la suivante (src/planning.php)
-    $planning = chat_fit_text(planning_context($personaPrompts, (int) $persona['id']), 160);
+    $planning = chat_fit_text(planning_context($personaPrompts, (int) $persona['id'], chat_scene_now($conv, $now)), 160);
     $contextRoom -= chat_estimate_tokens($planning);
 
     $pid = (int) $persona['id'];
