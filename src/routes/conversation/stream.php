@@ -11,6 +11,7 @@ if ($action === 'stream' && $method === 'POST') {
     csrf_check_json();
     session_write_close(); // le flux peut durer plusieurs minutes : on libère la session
     $regen = ((string) ($_POST['regen'] ?? '')) === '1';
+    $godmode = !$regen && ($_POST['godmode'] ?? '') === '1';
     // Un onglet ouvert avant la mise à jour peut encore demander cette ancienne relance.
     if (!$regen && (int) ($_POST['reaction_mid'] ?? 0) > 0) {
         header('Content-Type: text/event-stream; charset=utf-8');
@@ -19,11 +20,17 @@ if ($action === 'stream' && $method === 'POST') {
         exit;
     }
     $text  = trim((string) ($_POST['message'] ?? ''));
-    $hasImage = !$regen && upload_present($_FILES['image'] ?? null);
+    $hasImage = !$regen && !$godmode && upload_present($_FILES['image'] ?? null);
     if (!$regen && $text === '' && !$hasImage) {
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => t('error.message.empty_send')]);
+        exit;
+    }
+    if ($godmode && mb_strlen($text) > CHAT_GODMODE_MAX) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => t('chat.godmode.too_long')], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -63,7 +70,7 @@ if ($action === 'stream' && $method === 'POST') {
     $quote = null;
     $userMsgId = 0;
     if ($regen) {
-        $ust = db()->prepare("SELECT id, content, image, reply_to_id, reply_to_bubble, reply_quote FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
+        $ust = db()->prepare("SELECT id, content, image, reply_to_id, reply_to_bubble, reply_quote, godmode FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
         $ust->execute([$cid]);
         $lastUser = $ust->fetch();
         $ust->closeCursor();
@@ -73,6 +80,7 @@ if ($action === 'stream' && $method === 'POST') {
         }
         $text      = (string) $lastUser['content'];
         $userMsgId = (int) $lastUser['id'];
+        $godmode = (bool) $lastUser['godmode'];
         $regenImage = (string) $lastUser['image'];
         $quote = chat_reply_quote($lastUser);
         $stmt = db()->prepare("SELECT MAX(id) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?");
@@ -85,10 +93,10 @@ if ($action === 'stream' && $method === 'POST') {
             $sse(['error' => t('error.chat.reply_changed'), 'kind' => 'regen']);
             exit;
         }
-        $sse(['start' => true, 'regen' => true, 'user_id' => $userMsgId, 'after_id' => max($userMsgId, $previousReplyId)]);
+        $sse(['start' => true, 'regen' => true, 'godmode' => $godmode, 'user_id' => $userMsgId, 'after_id' => max($userMsgId, $previousReplyId)]);
     }
 
-    if (!$regen && isset($_POST['reply_to'])) {
+    if (!$regen && !$godmode && isset($_POST['reply_to'])) {
         $replyId = filter_var($_POST['reply_to'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $replyBubble = filter_var($_POST['reply_bubble'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
         $replyVersion = filter_var($_POST['reply_version'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
@@ -127,7 +135,18 @@ if ($action === 'stream' && $method === 'POST') {
         exit;
     }
 
-    if (!$regen) {
+    if ($godmode) {
+        // Le modèle et sa fenêtre suivent le chargement normal. Les limites du persona ne s'appliquent pas.
+        $conv['temperature'] = 0.7;
+        $conv['max_tokens'] = min(4096, intdiv((int) $conv['context_window'], 3));
+        $conv['reasoning_override'] = '';
+        try {
+            chat_godmode_messages($conv, [], $text, null);
+        } catch (InvalidArgumentException $error) {
+            $sse(['error' => $error->getMessage(), 'kind' => 'godmode']);
+            exit;
+        }
+    } elseif (!$regen) {
         try {
             $mem = chat_memory_stats($cid, $conv);
             // même critère que chat_compress : les messages pas encore résumés
@@ -164,7 +183,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     // uniquement ce qui n'est pas déjà dans le résumé (+ léger recouvrement)
-    $history = fetch_context_messages($cid, $conv);
+    $history = $godmode ? fetch_messages($cid, CHAT_MIN_RECENT, 0, true) : fetch_context_messages($cid, $conv);
     if ($regen) {
         // régénérer (ou rejouer après modification) un message avec photo : on la renvoie
         if ($regenImage !== '') {
@@ -184,11 +203,11 @@ if ($action === 'stream' && $method === 'POST') {
             break;
         }
     }
-    $canReact = !$regen && chat_can_react($cid);
-    $trackRelationship = relationship_memory_on($conv);
+    $canReact = !$godmode && !$regen && chat_can_react($cid);
+    $trackRelationship = !$godmode && relationship_memory_on($conv);
     $address = $trackRelationship ? relationship_direct_address($text) : '';
     $relationshipRevision = $trackRelationship ? (int) relationship_state((int) $persona['id'])['revision'] : 0;
-    $mediaRequest = klipy_requested_media($text);
+    $mediaRequest = $godmode ? null : klipy_requested_media($text);
 
     if ($ping()) {
         if (!$regen && $imageBase !== '') {
@@ -198,13 +217,14 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     if (!$regen) {
-        $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image, reply_to_id, reply_to_bubble, reply_quote)
-            VALUES (?, "user", ?, ?, ?, ?, ?)');
-        $ins->execute([$cid, $text, $imageBase, $quote['id'] ?? 0, $quote['bubble'] ?? 0, $quote['text'] ?? '']);
+        $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image, reply_to_id, reply_to_bubble, reply_quote, godmode)
+            VALUES (?, "user", ?, ?, ?, ?, ?, ?)');
+        $ins->execute([$cid, $text, $imageBase, $quote['id'] ?? 0, $quote['bubble'] ?? 0, $quote['text'] ?? '', (int) $godmode]);
         $userMsgId = (int) db()->lastInsertId();
         $sse(['start' => true, 'user' => [
             'id'      => $userMsgId,
             'role'    => 'user',
+            'godmode' => $godmode,
             'content' => $text,
             'image'   => $imageBase,
             'reply_to' => $quote,
@@ -215,12 +235,12 @@ if ($action === 'stream' && $method === 'POST') {
     $webResults = null;
     $webLineId = 0;
     // recherche d'informations : réglages globaux (sources), puis persona et discussion
-    $webSources = chat_web_allowed($persona, $conv) ? chat_web_sources($mode) : ['web' => '', 'wikipedia' => false, 'meteo' => false];
+    $webSources = chat_web_allowed($godmode ? [] : $persona, $conv) ? chat_web_sources($mode) : ['web' => '', 'wikipedia' => false, 'meteo' => false];
     if (chat_web_any($webSources) && $mediaRequest === null && $text !== '') {
         $searchModel = $mode === 'fallback' ? llm_config() : chat_llm_config_for($conv);
         if ($mode !== 'fallback' || $searchModel['key'] !== '') {
             $plan = chat_web_plan($history, $quote === null ? $text : $text . "\nEn réponse à : " . mb_substr($quote['text'], 0, 420),
-                $searchModel, $ping, $webSources, $persona);
+                $searchModel, $ping, $webSources, $godmode ? [] : $persona);
             if ($ping()) {
                 exit;
             }
@@ -242,11 +262,15 @@ if ($action === 'stream' && $method === 'POST') {
             }
         }
     }
-    $dueTopic = $regen || $mediaRequest !== null ? null : chat_topic_due($conv);
-    $built = chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $address, $webResults, $quote, $quoteHistory, dueTopic: $dueTopic);
-    $topicId = $built['topic_used'] ? (int) $dueTopic['id'] : 0;
-    $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
-    $built['messages'][0]['content'] .= ' Privilégie une réponse concise et termine ta dernière phrase dans le budget de sortie.';
+    $dueTopic = $godmode || $regen || $mediaRequest !== null ? null : chat_topic_due($conv);
+    $built = $godmode
+        ? chat_godmode_messages($conv, $history, $text, $webResults)
+        : chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $address, $webResults, $quote, $quoteHistory, dueTopic: $dueTopic);
+    $topicId = !empty($built['topic_used']) ? (int) $dueTopic['id'] : 0;
+    if (!$godmode) {
+        $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
+        $built['messages'][0]['content'] .= ' Privilégie une réponse concise et termine ta dernière phrase dans le budget de sortie.';
+    }
     $sentAny = false;
     $requestedUrl = '';
     $mediaNotice = '';
@@ -273,13 +297,13 @@ if ($action === 'stream' && $method === 'POST') {
         return connection_aborted() !== 0;
     };
 
-    $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort, $canReact, $mediaRequest): array {
-        $filtered = new ChatReactionStream($canReact);
+    $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort, $canReact, $mediaRequest, $godmode): array {
+        $filtered = $godmode ? null : new ChatReactionStream($canReact);
         $res = chat_reply_stream(
             $built['messages'],
             $conv,
             static function (string $delta) use ($sse, &$sentAny, $filtered): void {
-                $delta = $filtered->push($delta);
+                $delta = $filtered?->push($delta) ?? $delta;
                 if ($delta === '') {
                     return;
                 }
@@ -289,13 +313,13 @@ if ($action === 'stream' && $method === 'POST') {
             $mode,
             $shouldAbort
         );
-        $tail = $filtered->finish();
+        $tail = $filtered?->finish() ?? '';
         if ($tail !== '') {
             $sentAny = true;
             $sse(['delta' => $tail]);
         }
-        $res['reaction'] = $filtered->reaction((string) $res['content']);
-        $res['content'] = trim($filtered->content);
+        $res['reaction'] = $filtered?->reaction((string) $res['content']) ?? '';
+        $res['content'] = trim($filtered?->content ?? (string) $res['content']);
         if ($res['content'] === '' && empty($res['aborted']) && $mediaRequest === null) {
             throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
         }
@@ -341,7 +365,7 @@ if ($action === 'stream' && $method === 'POST') {
     }
 
     $res['klipy_url'] = $aborted ? '' : $requestedUrl;
-    if (!$aborted && !$regen && $mediaRequest === null) {
+    if (!$godmode && !$aborted && !$regen && $mediaRequest === null) {
         $res['klipy_url'] = chat_spontaneous_klipy(
             $cid, $persona, $conv, $text, $res['content'],
             modelConfig: $res['provider'] === 'fallback' ? llm_config() : null
@@ -467,12 +491,14 @@ if ($action === 'stream' && $method === 'POST') {
     fclose($chatLock);
     // humeur et ressentis : analyse en arrière-plan toutes les FEEL_EVERY réponses (src/feelings.php) ;
     // si le serveur ne peut pas lancer de processus, la page la demande elle-même
-    if (feel_due($cid)) {
+    if (!$godmode && feel_due($cid)) {
         $out['feelings_pending'] = true;
         $out['feelings_drive'] = !feel_spawn($cid);
     }
     // petite attention quelques minutes plus tard, de temps en temps (src/followup.php, envoyée par la tâche planifiée)
-    attention_maybe($cid);
+    if (!$godmode) {
+        attention_maybe($cid);
+    }
     $sse($out);
     if ($relationshipPending && function_exists('fastcgi_finish_request')) {
         fastcgi_finish_request();

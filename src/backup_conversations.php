@@ -364,6 +364,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                     'reply_to_id' => $fields['role'] === 'user' ? ($assistantIds[backup_id($message['reply_to_id'] ?? null)] ?? 0) : 0,
                     'reply_to_bubble' => $fields['role'] === 'user' ? max(0, (int) ($message['reply_to_bubble'] ?? 0)) : 0,
                     'reply_quote' => $fields['role'] === 'user' ? mb_substr(backup_str($message['reply_quote'] ?? ''), 0, CHAT_REPLY_QUOTE_MAX) : '',
+                    'godmode' => $fields['role'] === 'user' && !empty($message['godmode']) ? 1 : 0,
                 ]);
                 if ($sourceId) {
                     $messageIds[$sourceId] = $mid;

@@ -14,7 +14,7 @@ function chat_opening_history(int $pid, int $cid): array
         $summary = chat_shorten_middle(trim((string) $thread['summary']), 100);
         $lines = $summary !== '' ? ['Résumé : ' . $summary] : [];
         foreach (fetch_messages((int) $thread['id'], 5, 0, true) as $m) {
-            $content = trim((string) $m['content']);
+            $content = trim(chat_history_text($m));
             if ($content !== '') {
                 $lines[] = '(' . chat_llm_date($m['created_at']) . ') '
                     . ($m['role'] === 'user' ? 'Utilisateur' : 'Persona') . ' : ' . chat_shorten_middle($content, 100);

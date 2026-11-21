@@ -671,7 +671,7 @@ function facts_remember(int $cid, array $conv, array $persona, bool $force = fal
     $pid = (int) $persona['id'];
     $cursor = (int) ($conv['facts_cursor'] ?? 0);
     $st = db()->prepare("SELECT * FROM messages WHERE conversation_id = ? AND id > ?
-                             AND role IN ('user', 'assistant') ORDER BY id ASC");
+                             AND godmode = 0 AND role IN ('user', 'assistant') ORDER BY id ASC");
     $st->execute([$cid, $cursor]);
     $recent = $st->fetchAll();
 

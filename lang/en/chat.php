@@ -81,6 +81,9 @@ return [
     'chat.head.model_default'       => 'default model',
     'chat.head.context_memory'      => 'Context and memory',
     'chat.head.settings'            => 'Conversation settings',
+    'chat.godmode.prompt'           => 'Priority instruction for this reply',
+    'chat.godmode.send'             => 'Send in Godmode',
+    'chat.godmode.too_long'         => 'The Godmode instruction is too long for this model’s context window.',
 
     // --- conversation: messages and composer
     'chat.intro.first_message'      => 'You can write a message.',

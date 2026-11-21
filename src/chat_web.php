@@ -83,7 +83,7 @@ function chat_web_plan(array $history, string $text, array $cfg, callable $ping,
     $recent = [];
     foreach (array_slice($history, -6) as $message) {
         if (in_array($message['role'], ['user', 'assistant'], true)) {
-            $recent[] = [$message['role'], mb_substr((string) $message['content'], 0, 360)];
+            $recent[] = [$message['role'], mb_substr(chat_history_text($message), 0, 360)];
         }
     }
     $choices = [];

@@ -81,6 +81,9 @@ return [
     'chat.head.model_default'       => 'modèle par défaut',
     'chat.head.context_memory'      => 'Contexte et mémoire',
     'chat.head.settings'            => 'Réglages de la conversation',
+    'chat.godmode.prompt'           => 'Consigne prioritaire pour cette réponse',
+    'chat.godmode.send'             => 'Envoyer en Godmode',
+    'chat.godmode.too_long'         => 'La consigne Godmode est trop longue pour la fenêtre de contexte de ce modèle.',
 
     // --- conversation : messages et composeur
     // {count} est remplacé par un <span> (le JavaScript met le nombre à jour) ; {n} choisit la forme
