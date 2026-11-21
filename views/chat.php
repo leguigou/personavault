@@ -393,7 +393,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <span class="duo-feel-mood" data-feel-mood-label></span></p>
             <div class="duo-emotions" role="radiogroup" aria-label="<?= e(t('duo.feelings.mood_of', ['name' => (string) $persona['name']])) ?>">
                 <?php foreach (duo_emotions() as $key => $emotion): ?>
-                    <button type="button" class="duo-emotion" role="radio" aria-checked="false" style="--mood: <?= e($emotion['color']) ?>"
+                    <button type="button" class="duo-emotion" role="radio" aria-checked="false" style="--mood: <?= e($emotion['color']) ?>" disabled
                             data-feel-emotion="<?= e($key) ?>" title="<?= e(duo_emotion_label($key)) ?>" aria-label="<?= e(duo_emotion_label($key)) ?>"></button>
                 <?php endforeach; ?>
             </div>
@@ -412,12 +412,16 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                     <span class="duo-gauge-track">
                         <span class="duo-gauge-fill"></span>
                         <input class="duo-slider" type="range" min="<?= $min ?>" max="100" step="1" value="0" data-feel-slider="<?= $k ?>"
-                               aria-label="<?= e($label) ?>"<?= $off ? ' disabled' : '' ?>>
+                               aria-label="<?= e($label) ?>" disabled>
                     </span>
                     <span class="duo-gauge-value">0</span>
                 </div>
             <?php endforeach; ?>
             <p class="duo-feel-reason" data-feel-reason></p>
+            <div class="feel-actions">
+                <button type="button" class="btn btn-primary btn-sm" data-feel-confirm disabled><?= e(t('feel.confirm')) ?></button>
+                <span class="hint" role="status" data-feel-draft hidden><?= e(t('feel.unsaved')) ?></span>
+            </div>
             <p class="hint"><?= e($feelRomance ? t('feel.help') : t('feel.help_minor', ['age' => FEEL_MIN_AGE])) ?></p>
         </section>
 
