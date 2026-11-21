@@ -16,11 +16,13 @@ const remember = (r) => {
         jar.set(kv.slice(0, i), kv.slice(i + 1));
     }
 };
-const http = async (path, { method = 'GET', form, anonymous = false, origin = base, signal } = {}) => {
+const http = async (path, { method = 'GET', form, anonymous = false, origin = base, signal, ajax = false } = {}) => {
+    const headers = anonymous ? {} : { cookie: cookieHeader() };
+    if (ajax) headers['X-Requested-With'] = 'XMLHttpRequest';
     const r = await fetch(origin + path, {
         method,
         redirect: 'manual',
-        headers: anonymous ? {} : { cookie: cookieHeader() },
+        headers,
         body: form ? new URLSearchParams(form) : undefined,
         signal,
     });
@@ -939,6 +941,14 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
 {
     const page = await (await http('/chat/1')).text();
     expect(page.includes('data-feel ') && page.includes('data-chat-mood'), 'la conversation affiche l’humeur et les ressentis');
+    expect(page.includes('data-scene-time ') && page.indexOf('data-scene-time ') < page.indexOf('data-feel '),
+        'le jour et l’heure se règlent juste avant les humeurs');
+    const setScene = (form) => http('/chat/1/scene-time', { method: 'POST', ajax: true, form: { _token: csrf, ...form } });
+    const scene = await (await setScene({ scene_day: '2', scene_time: '03:15' })).json();
+    expect(scene.ok && scene.scene_day === 2 && scene.scene_time === '03:15', 'le jour et l’heure choisis sont enregistrés');
+    expect((await setScene({ scene_day: '8', scene_time: '24:00' })).status === 422, 'un créneau invalide est refusé');
+    const reloaded = await (await http('/chat/1')).text();
+    expect(reloaded.includes('Mardi · 03:15'), 'le créneau forcé est conservé après rechargement');
     const set = await (await http('/chat/1/feelings', { method: 'POST', form: { _token: csrf, emotion: 'colere', intensity: '80', love: '40' } })).json();
     expect(set.ok && set.feelings.emotion === 'colere' && set.feelings.intensity === 80 && set.feelings.love === 40
         && set.notices.some((n) => n.text.includes('40')), 'humeur et ressentis se règlent à la main, avec une note dans le fil');
@@ -947,6 +957,10 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(sent.includes('"done"') && logs.includes('Ton humeur et tes sentiments dans cette conversation')
         && logs.includes('colère (forte)') && logs.includes('tu ressens une vraie attirance'),
         'l’humeur et les ressentis réglés arrivent dans le contexte de la réponse suivante');
+    expect(logs.includes('Moment de la scène choisi pour cette conversation : mardi, 03h15.'),
+        'le créneau forcé arrive dans le contexte de la réponse suivante');
+    const resetScene = await (await setScene({ op: 'reset' })).json();
+    expect(resetScene.ok && resetScene.scene_day === 0 && resetScene.scene_time === '', 'le bouton rétablit le jour et l’heure actuels');
     const forged = await http('/chat/1/feelings', { method: 'POST', form: { _token: 'mauvais', emotion: 'joie' } });
     expect(forged.status === 419, 'un jeton valide est exigé pour régler les ressentis');
 }

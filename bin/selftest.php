@@ -123,7 +123,8 @@ try {
     reply_version_register($cid, $sourceMid, $replyMid);
     $pdo->prepare("UPDATE messages SET content = 'Premier essai.', version_id = ?, reaction = 'heart' WHERE id = ?")->execute([$firstVersion, $replyMid]);
     $pdo->prepare("UPDATE conversations SET summary = 'Résumé', last_compressed_id = ?, facts_cursor = ?, pinned = 1,
-                   model_override = 'mon-modèle', title_auto = 0 WHERE id = ?")->execute([$sourceMid, $replyMid, $cid]);
+                   model_override = 'mon-modèle', title_auto = 0, scene_day = 2, scene_time = '03:15' WHERE id = ?")
+        ->execute([$sourceMid, $replyMid, $cid]);
     facts_add($pid, 'Souvenir de sauvegarde', 'preference', 'confirme', $cid);
     facts_add($pid, 'Lisa prépare une exposition', 'projet', 'confirme', $cid, $replyMid);
     $pdo->prepare("UPDATE conversations SET opening_questions = '[\"Ton exposition avance ?\"]' WHERE id = ?")->execute([$cid]);
@@ -187,6 +188,7 @@ try {
         $check($copy['last_compressed_id'] === $copiedUser['id'] && $copy['facts_cursor'] === $copiedReply['id']
             && chat_uses_summary($copy) && $copy['pinned'] === 1 && $copy['model_override'] === 'mon-modèle' && $copy['title_auto'] === 0,
             'curseurs mémoire remappés et réglages de la discussion restaurés');
+        $check($copy['scene_day'] === 2 && $copy['scene_time'] === '03:15', 'jour et heure forcés restaurés');
         $check($copiedReply['content'] === 'Premier essai.' && $copiedReply['split_points'] === '[8]'
             && reply_versions_info((int) $copy['id'], $copiedReply) === ['index' => 1, 'total' => 2],
             'versions, découpage et réponse sélectionnée restaurés');
@@ -972,6 +974,17 @@ try {
         'planning : une plage horaire passe avant « toute la journée » (dort, pas « famille »)');
     $check(planning_now($plan, 7, $at('2026-11-21 01:00'))['now'] === 'sortie',
         'planning : une soirée qui passe minuit continue le lendemain');
+    $realNow = $at('2026-11-21 19:30');
+    $forcedScene = ['scene_day' => 2, 'scene_time' => '19:30'];
+    $check(planning_now($plan, 7, chat_scene_now($forcedScene, $realNow))['now'] === 'yoga avec Inès'
+        && chat_scene_now(['scene_day' => 2], $realNow)->format('N H:i') === '2 19:30'
+        && chat_scene_now(['scene_time' => '03:15'], $realNow)->format('N H:i') === '6 03:15'
+        && chat_scene_now([], $realNow) === $realNow,
+        'moment forcé : le planning suit le jour et l’heure choisis, chacun pouvant rester actuel');
+    $twoHoursAgo = gmdate('Y-m-d H:i:s', $realNow->getTimestamp() - 7200);
+    $sceneContext = chat_time_context($forcedScene, [['role' => 'user', 'created_at' => $twoHoursAgo]], now: $realNow);
+    $check(str_contains($sceneContext, 'mardi, 19h30.') && str_contains($sceneContext, 'il y a 2 h'),
+        'moment forcé : le temps écoulé depuis le dernier message suit l’horloge réelle');
     $draw = planning_now($plan, 7, $at('2026-11-21 09:00'))['now'];
     $check($draw === planning_now($plan, 7, $at('2026-11-21 11:30'))['now'],
         'planning : le tirage du jour reste le même toute la matinée');

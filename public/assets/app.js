@@ -418,6 +418,56 @@
         });
     });
 
+    document.querySelectorAll("[data-scene-time]").forEach((form) => {
+        const day = form.elements.scene_day;
+        const time = form.elements.scene_time;
+        const mode = form.querySelector("[data-scene-mode]");
+        const moment = form.querySelector("[data-scene-moment]");
+        const buttons = form.querySelectorAll("button[type=submit]");
+        const timeZone = form.dataset.timezone;
+        const clock = new Intl.DateTimeFormat(LOCALE, {
+            timeZone, weekday: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+        });
+        let savedDay = day.value;
+        let savedTime = time.value;
+
+        const paintMoment = () => {
+            const parts = Object.fromEntries(clock.formatToParts().map(({ type, value }) => [type, value]));
+            const weekday = savedDay === "0" ? parts.weekday : day.options[Number(savedDay)].text;
+            const hour = savedTime || parts.hour + ":" + parts.minute;
+            const label = weekday.charAt(0).toLocaleUpperCase(LOCALE) + weekday.slice(1) + " · " + hour;
+            if (moment.textContent !== label) moment.textContent = label;
+        };
+        setInterval(() => {
+            if (!document.hidden && !form.hidden && form.closest(".chat-sheet.is-open")) paintMoment();
+        }, 5000);
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const body = new FormData(form);
+            body.set("op", event.submitter?.value || "save");
+            [day, time, ...buttons].forEach((control) => { control.disabled = true; });
+            try {
+                const res = await fetch(form.action, {
+                    method: "POST", body, headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                const data = await res.json().catch(() => ({ ok: false }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("common.send_failed"));
+                savedDay = day.value = String(data.scene_day);
+                savedTime = time.value = data.scene_time;
+                const forced = savedDay !== "0" || savedTime !== "";
+                mode.dataset.forced = forced ? "1" : "0";
+                mode.textContent = forced ? form.dataset.modeForced : form.dataset.modeCurrent;
+                paintMoment();
+                toast(data.message);
+            } catch (err) {
+                toast(tr("common.error", { message: err.message }), true);
+            } finally {
+                [day, time, ...buttons].forEach((control) => { control.disabled = false; });
+            }
+        });
+    });
+
     /* cases à cocher présentées en interrupteur : annoncées comme telles */
     document.querySelectorAll(".check input[type=checkbox]").forEach((c) => c.setAttribute("role", "switch"));
 
@@ -2692,6 +2742,7 @@
             });
             const eyebrow = chatSheet.querySelector("[data-sheet-eyebrow]");
             if (eyebrow) eyebrow.textContent = tr(group === "memory" ? "chat.sheet_memory" : "chat.sheet_conversation");
+            chatSheet.scrollTop = 0;
             chatSheet.querySelector(".sheet-body")?.scrollTo(0, 0);
         }
         chatSheet.classList.toggle("is-open", open);

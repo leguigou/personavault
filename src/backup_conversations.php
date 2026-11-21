@@ -334,7 +334,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 'reasoning_effort' => chat_reasoning_effort($conversation['reasoning_effort'] ?? ''),
                 'klipy_formats' => max(-1, min(7, (int) ($conversation['klipy_formats'] ?? -1))),
                 'web_search' => (int) ($conversation['web_search'] ?? 1) === 0 ? 0 : 1,
-            ]);
+            ] + chat_scene_override($conversation['scene_day'] ?? 0, $conversation['scene_time'] ?? ''));
             $messageIds = [];
             $assistantIds = [];
             $userIds = [];
