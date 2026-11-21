@@ -2550,6 +2550,7 @@
     // posées dans <main>, ces fenêtres passeraient sous la barre du bas : on les sort dans <body>
     [convSheet, ...document.querySelectorAll(".modal[data-modal]")].forEach((m) => m && document.body.appendChild(m));
     if (convSheet) {
+        const items = document.querySelectorAll(".conv-item, .contact-open[data-conv-id]");
         let current = null;
         // tant que le doigt reste posé après l'appui long, le navigateur poursuit son propre
         // geste (sélection de texte) : on l'interdit jusqu'à ce que le doigt se lève
@@ -2618,11 +2619,12 @@
                 });
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || !data.ok || !data.title) throw new Error(data.error || tr("chat.retitle_failed"));
-                item.dataset.convTitle = data.title;
-                item.querySelector("[data-conv-title-text]").textContent = data.title;
-                const contactTitle = item.closest("[data-contact]")?.querySelector('[data-contact-title="' + id + '"]');
-                if (contactTitle) contactTitle.textContent = data.title;
-                if (current === item) {
+                items.forEach((row) => {
+                    if (row.dataset.convId !== id) return;
+                    row.dataset.convTitle = data.title;
+                    row.querySelector("[data-conv-title-text]").textContent = data.title;
+                });
+                if (current?.dataset.convId === id) {
                     titleEl.textContent = data.title;
                     if (!convSheet.hidden) closeMenu();
                 }
@@ -2635,7 +2637,7 @@
             }
         };
 
-        document.querySelectorAll(".conv-item").forEach((item) => {
+        items.forEach((item) => {
             let timer = null;
             let fired = false;
             let x0 = 0;
@@ -2697,6 +2699,9 @@
                 post("/chat/" + id + "/pin", { pinned: current.dataset.pinned === "1" ? "0" : "1" });
             } else if (btn.dataset.act === "retitle") {
                 await retitle(current);
+            } else if (btn.dataset.act === "fork") {
+                closeMenu();
+                post("/chat/" + id + "/fork", {});
             } else if (btn.dataset.act === "delete") {
                 closeMenu();
                 const ok = await pvModal.confirm(

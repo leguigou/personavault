@@ -162,7 +162,12 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
     $conv = chat_with_persona($conv, $persona);
     // genre de message imposé (nouvelles, anecdote, souvenir, proposition…), différent des
     // derniers réveils : sans lui, le modèle prolonge le dernier sujet
-    $pick ??= followup_pick($conv, (int) $persona['id']);
+    $dueTopic = $pick === null ? chat_topic_due($conv, $now) : null;
+    $pick ??= $dueTopic === null ? followup_pick($conv, (int) $persona['id']) : [
+        'kind' => 'sujet',
+        'text' => chat_topic_context($dueTopic),
+        'topic' => true,
+    ];
     $out = ['status' => 'error', 'kind' => $pick['kind'], 'text' => '', 'error' => ''];
     $factsOn = (int) $conv['memory_enabled'] === 1 && (int) $conv['facts_enabled'] === 1;
     // souvenirs liés au dernier message seulement pour un rebond ; sinon les plus récents
@@ -235,6 +240,7 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
                                 AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'chat_followup_enabled' AND value <> '1')");
         $stmt->execute([$cid]);
         $formats = $stmt->fetchColumn();
+        $stmt->closeCursor();
         if ($formats === false || fetch_messages($cid, CHAT_MIN_RECENT, 0, true) !== $history) {
             $out['status'] = 'skip';
             return $out;
@@ -242,24 +248,29 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
         $conv['klipy_formats'] = (int) $formats;
         $klipyUrl = $pick['kind'] === 'attention' ? ''
             : chat_spontaneous_klipy($cid, $persona, $conv, $lastUserMessage, $text, modelConfig: $cfg);
-        $pdo = db();
-        $pdo->beginTransaction();
-        $ins = $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, klipy_url, spontaneous) VALUES (?, "assistant", ?, ?, ?, 1)');
-        $ins->execute([$cid, $text, (string) ($res['model'] ?? ''), $klipyUrl]);
-        if ($pick['kind'] === 'attention') {
-            // une petite attention ne repousse pas la relance habituelle après un long silence
-            $pdo->prepare('UPDATE conversations SET unread = 1, updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
-        } else {
-            $pdo->prepare('UPDATE conversations SET last_followup_at = datetime("now"), unread = 1, updated_at = datetime("now") WHERE id = ?')
-                ->execute([$cid]);
-            followup_remember($cid, (string) ($conv['followup_kinds'] ?? ''), $pick['kind']);
-        }
-        $pdo->commit();
-        $out['status'] = 'sent';
+        $sent = db_tx(static function (PDO $pdo) use ($cid, $text, $res, $klipyUrl, $pick, $conv, $dueTopic, $now): bool {
+            if ($dueTopic !== null) {
+                $check = $pdo->prepare('SELECT id, memory_enabled, facts_enabled FROM conversations WHERE id = ?');
+                $check->execute([$cid]);
+                $current = $check->fetch();
+                if (!$current || chat_topic_due($current, $now) !== $dueTopic || !chat_topic_close($pdo, $cid, (int) $dueTopic['id'])) {
+                    return false;
+                }
+            }
+            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, klipy_url, spontaneous) VALUES (?, "assistant", ?, ?, ?, 1)')
+                ->execute([$cid, $text, (string) ($res['model'] ?? ''), $klipyUrl]);
+            if ($pick['kind'] === 'attention') {
+                // une petite attention ne repousse pas la relance habituelle après un long silence
+                $pdo->prepare('UPDATE conversations SET unread = 1, updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
+            } else {
+                $pdo->prepare('UPDATE conversations SET last_followup_at = datetime("now"), unread = 1, updated_at = datetime("now") WHERE id = ?')
+                    ->execute([$cid]);
+                followup_remember($cid, (string) ($conv['followup_kinds'] ?? ''), $pick['kind']);
+            }
+            return true;
+        });
+        $out['status'] = $sent ? 'sent' : 'skip';
     } catch (Throwable $e) {
-        if (db()->inTransaction()) {
-            db()->rollBack();
-        }
         $out['error'] = 'écriture impossible (' . $e->getMessage() . ')';
     } finally {
         fclose($chatLock);

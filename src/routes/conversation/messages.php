@@ -232,6 +232,7 @@ if ($action === 'msg-edit' && $method === 'POST') {
     // modifier SON message invalide la suite : on la supprime et on rejoue la réponse.
     // Tout ou rien : modification, suppression de la suite et curseurs mémoire.
     $images = db_tx(static function (PDO $pdo) use ($cid, $mid, $content): array {
+        $pdo->prepare('DELETE FROM conversation_topics WHERE source_message_id = ?')->execute([$mid]);
         $pdo->prepare("UPDATE messages SET content = ?, split_at = 0, split_points = '', reaction = '', bubble_reactions = '', reaction_pending = '' WHERE id = ?")
             ->execute([$content, $mid]);
         // les réponses gardées répondaient à l'ancien texte : elles ne valent plus
@@ -287,6 +288,7 @@ if ($action === 'version' && $method === 'POST') {
     if ((int) $v['id'] !== (int) $msg['version_id']) {
         db_tx(static function (PDO $pdo) use ($cid, $mid, $v): void {
             $pdo->prepare("DELETE FROM user_memories WHERE subject = 'story' AND source_message_id = ?")->execute([$mid]);
+            $pdo->prepare('DELETE FROM conversation_topics WHERE source_message_id = ?')->execute([$mid]);
             $pdo->prepare("UPDATE messages SET content = ?, model = ?, split_at = 0, split_points = ?, version_id = ?, reaction = ?, bubble_reactions = ?, klipy_url = ?, reaction_pending = '' WHERE id = ?")
                 ->execute([$v['content'], $v['model'], $v['split_points'], (int) $v['id'], $v['reaction'], $v['bubble_reactions'], $v['klipy_url'], $mid]);
             chat_invalidate_summary($cid, $mid);

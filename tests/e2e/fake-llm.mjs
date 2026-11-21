@@ -212,6 +212,16 @@ http.createServer(async (req, res) => {
             text = last.includes('pastéis au bord du Tage') && last.includes('Camille prépare une exposition à Lyon')
                 ? JSON.stringify({ message: 'Ça m’a fait repenser à ton voyage à Lisbonne. Tu y retournerais ?', questions: ['Et ton exposition à Lyon, elle avance ?'] })
                 : JSON.stringify({ message: 'Tu as déjà développé une pellicule argentique ?', questions: ['Tu photographies quoi en ce moment ?'] });
+        } else if (system.includes('open_topics et closed_topics') && last.includes('On reparlera du concours de cerfs-volants.')) {
+            const source = Number(last.match(/\[(\d+)\] \((\d{4}-\d{2}-\d{2})\) Utilisateur : On reparlera du concours de cerfs-volants\./)?.[1]);
+            const day = last.match(/^Date du jour : (\d{4}-\d{2}-\d{2})/)?.[1];
+            text = JSON.stringify({ open_topics: [{ source, due_on: day, content: 'Reprendre le concours de cerfs-volants' }] });
+        } else if (system.includes('open_topics et closed_topics') && last.includes('passé au concours')) {
+            const topics = JSON.parse(last.match(/Sujets déjà suivis \(closed=1 signifie clos\) :\n([^\n]+)/)?.[1] || '[]');
+            text = JSON.stringify({ closed_topics: topics.filter((topic) => !topic.closed).map((topic) => topic.id) });
+        } else if (j.stream && (last.endsWith('Me revoilà.') || last.endsWith('Autre chose maintenant.'))) {
+            text = last.includes('Sujet laissé en suspens') && last.includes('Reprendre le concours de cerfs-volants')
+                ? 'Alors, comment ça s’est passé au concours ?' : 'Parlons de la suite.';
         } else if (last.endsWith('Test du seuil de découpage')) {
             text = 'mot '.repeat(14) + 'mot. ' + 'suite '.repeat(9) + 'suite. Dernière phrase.';
         } else if (j.stream && last.endsWith('Le départ est fixé à 17 heures.')) {

@@ -51,6 +51,7 @@ PHP 8 + SQLite, **sans framework ni build**. Un seul fichier de config, une base
   modification et exports gardent les astérisques).
 - Sur téléphone, la zone de saisie ne reprend pas le focus après une réponse (le clavier ne s'ouvre pas tout seul).
 - Édition : modifier son message efface la suite et rejoue la réponse depuis ce point.
+- Explorer une autre suite : un appui long sur une discussion permet de copier le fil visible dans une nouvelle discussion. Les souvenirs partagés et les relances y sont désactivés au départ.
 - Régénérer garde les réponses précédentes : flèches ‹ 2 / 3 › sous la dernière réponse pour
   passer de l'une à l'autre (la version affichée est celle que le modèle voit ensuite).
 - Liste des discussions façon messagerie : heure relative, « Vous : » devant son dernier message,
@@ -305,6 +306,7 @@ il en reste environ « messages récents gardés » en clair. L'anneau affiche u
 est réellement envoyé. `php bin/prompt-preview.php <id> "message"` affiche le prompt complet.
 
 **Souvenirs durables** — Réglages › Chat :
+- L’analyse repère aussi les sujets à reprendre dans le même fil, comme une promesse de donner des nouvelles. Un sujet arrivé à échéance peut revenir dans une réponse ou une relance déjà activée ; l’analyse le clôt lorsqu’il est repris ou annulé.
 - fréquence : après chaque échange, tous les N messages, seulement sur demande (« retiens que… »), jamais ;
 - moment : dès la réponse, ou quand la discussion est calme depuis X secondes (le modèle local reste
   libre pendant l'échange ; si la page est fermée avant, l'extraction se fait la fois suivante, sans perte) ;
