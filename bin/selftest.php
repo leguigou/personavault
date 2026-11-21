@@ -771,6 +771,11 @@ try {
         && !isset($rem2['memory_msg']), 'mémoire : une demande explicite impossible est signalée une seule fois');
     $ins->execute([$cid3, 'user', 'J’aime le jazz']);
     $check(!isset(facts_remember($cid3, $convRow(), $personaRow)['memory_msg']), 'mémoire : rien de signalé sans demande explicite');
+    $check(chat_memory_display_text('Mémoire mise à jour : aime le fado') === 'aime le fado'
+        && chat_memory_display_text('Memory updated: Likes fado') === 'Likes fado'
+        && chat_memory_display_text('Memoria actualizada: Le gusta el fado') === 'Le gusta el fado'
+        && chat_memory_display_text('Mémoire inchangée : demande ignorée') === 'Mémoire inchangée : demande ignorée',
+        'mémoire : les anciens préfixes de succès sont masqués dans le chat');
 
     // mots vides : une phrase faite uniquement d'indices de rappel ne cherche rien
     $ins->execute([$cid2, 'user', 'I remember we talked about it yesterday']);

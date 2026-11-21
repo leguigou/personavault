@@ -205,7 +205,6 @@ return [
 
     // --- conversación: textos guardados en la base de datos (título por defecto, avisos)
     'labels.chat.default_title'   => 'Conversación con {name}',
-    'labels.chat.memory_updated'  => 'Memoria actualizada: {facts}',
     'labels.chat.memory_failed'   => 'No he podido recordarlo: {reason}. Vuelve a intentarlo o añádelo tú a sus recuerdos.',
     'labels.facts_fail.nothing'   => 'el modelo no encontró nada que guardar',
     'labels.facts_fail.error'     => 'el modelo no respondió ({error})',

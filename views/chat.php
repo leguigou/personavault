@@ -223,7 +223,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <?php if ($role === 'memory'): ?>
                     <div class="msg-memory" data-msg-id="<?= (int) $m['id'] ?>">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a4 4 0 0 0-4 4 3 3 0 0 0 0 6 3.5 3.5 0 0 0 4 4V5Zm0 0a4 4 0 0 1 4 4 3 3 0 0 1 0 6 3.5 3.5 0 0 1-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-                        <span><?= e((string) $m['content']) ?></span>
+                        <span><?= e(chat_memory_display_text((string) $m['content'])) ?></span>
                     </div>
                 <?php elseif ($role === 'web'): ?>
                     <div class="msg-web" data-msg-id="<?= (int) $m['id'] ?>">

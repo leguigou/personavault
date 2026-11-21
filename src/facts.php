@@ -706,11 +706,9 @@ function facts_remember(int $cid, array $conv, array $persona, bool $force = fal
     }
     $res['memories'] = chat_persona_memories($pid);
 
-    $added = array_values(array_filter(array_map('strval', $res['added'] ?? [])));
+    $added = $res['added'] ?? [];
     if ($added) {
-        $label = implode(' · ', array_map(static fn (string $s): string => mb_substr($s, 0, 90), array_slice($added, 0, 2)));
-        $res['memory_msg'] = $trace(t('labels.chat.memory_updated', ['facts' => $label])
-            . (count($added) > 2 ? ' (+' . (count($added) - 2) . ')' : ''));
+        $res['memory_msg'] = $trace(implode(' · ', $added));
     } elseif ($explicit && empty($res['stale']) && (int) ($res['updated'] ?? 0) === 0) {
         // demande explicite sans résultat : on le dit plutôt que de rester muet
         $res['memory_msg'] = $failed(empty($res['ok'])

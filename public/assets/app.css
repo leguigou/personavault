@@ -1311,6 +1311,7 @@ h1, h2, h3 { letter-spacing: -.025em; margin: 0; }
     animation: fade .2s both;
 }
 .msg-memory svg { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 1px; opacity: .8; }
+.msg-memory span { min-width: 0; overflow-wrap: anywhere; }
 
 /* le persona est allé chercher une information (internet, Wikipédia, météo) */
 .msg-web {

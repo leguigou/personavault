@@ -206,6 +206,12 @@ function fetch_messages(int $conversationId, int $limit = 0, int $beforeId = 0, 
     return $stmt->fetchAll();
 }
 
+/** Les anciennes bulles de succès ont été enregistrées avec un préfixe traduit. */
+function chat_memory_display_text(string $content): string
+{
+    return preg_replace('/\A(?:Mémoire mise à jour|Memory updated|Memoria actualizada)\h*:\h*/u', '', $content) ?? $content;
+}
+
 const CHAT_REPLY_QUOTE_MAX = 6000;
 
 /** Citation enregistrée avec la réponse, même si le message d’origine disparaît. */

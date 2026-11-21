@@ -45,7 +45,7 @@ const reply = (sys) => {
             important_facts: ['Part en train'], decisions: [], open_questions: [], context_summary: 'Discussion de test.' });
     }
     if (/mémoire durable/i.test(sys)) {
-        return JSON.stringify({ memories: [{ content: 'Aime les trains de nuit', category: 'preference', confidence: 'confirme' }], forget: [],
+        return JSON.stringify({ memories: [{ content: 'Aime les trains de nuit et préfère réserver une couchette près de la fenêtre pour regarder le paysage au réveil.', category: 'preference', confidence: 'confirme' }], forget: [],
             story: [{ content: 'Camille prépare une exposition à Lyon', category: 'projet', source: 2 }] });
     }
     if (/titre très court/i.test(sys)) return 'Voyage en train';
