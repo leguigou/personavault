@@ -514,6 +514,10 @@ if (peer) {
     const partialAbort = new AbortController();
     const partial = await startRegen('partial', old.id, partialAbort.signal);
     await readUntil(partial, '"delta"');
+    const rename = await http('/chat/2/rename', {
+        method: 'POST', form: { _token: csrf, title: 'Pellicule retrouvée' }, origin: peer,
+    });
+    expect(rename.headers.get('location') === '/chat/2', 'un autre worker écrit pendant le streaming');
     partialAbort.abort();
     const saved = currentReply(await waitForStop());
     expect(saved.id !== old.id && saved.content === 'Début de la nouvelle réponse.'

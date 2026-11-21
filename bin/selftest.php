@@ -72,6 +72,46 @@ try {
     $check(in_array('directive', table_columns($legacy, 'personas'), true), 'colonnes manquantes ajoutées (personas.directive)');
     $check((int) $legacy->query('SELECT COUNT(*) FROM personas')->fetchColumn() === 1, 'données conservées');
 
+    echo "Écritures SQLite concurrentes\n";
+    $peer = new PDO('sqlite:' . config('db'), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $peer->exec("INSERT INTO settings (key, value) VALUES ('selftest_wal', 'initial')");
+    $snapshot = $pdo->prepare("SELECT value FROM settings WHERE key = 'selftest_wal'");
+    $snapshot->execute();
+    $check($snapshot->fetchColumn() === 'initial', 'instantané de lecture ouvert');
+    $peer->exec("UPDATE settings SET value = 'worker' WHERE key = 'selftest_wal'");
+
+    $save = $pdo->prepare("UPDATE settings SET value = ? WHERE key = 'selftest_wal'");
+    $save->execute(['message']);
+    $check($save->rowCount() === 1
+        && $pdo->query("SELECT value FROM settings WHERE key = 'selftest_wal'")->fetchColumn() === 'message',
+        'une écriture préparée réussit et devient visible malgré le curseur ouvert');
+
+    $rollback = new RuntimeException('annulation du test SQLite');
+    $inside = null;
+    try {
+        db_tx(static function (PDO $writer) use (&$inside, $rollback): void {
+            $writer->exec("UPDATE settings SET value = 'transaction' WHERE key = 'selftest_wal'");
+            $inside = db()->query("SELECT value FROM settings WHERE key = 'selftest_wal'")->fetchColumn();
+            throw $rollback;
+        });
+    } catch (RuntimeException $e) {
+        if ($e !== $rollback) {
+            throw $e;
+        }
+    }
+    $check($inside === 'transaction'
+        && $pdo->query("SELECT value FROM settings WHERE key = 'selftest_wal'")->fetchColumn() === 'message',
+        'les helpers voient la transaction et le rollback annule ses écritures');
+
+    db_tx(static function (PDO $writer): void {
+        $writer->exec("UPDATE settings SET value = 'réponse' WHERE key = 'selftest_wal'");
+    });
+    $check($peer->query("SELECT value FROM settings WHERE key = 'selftest_wal'")->fetchColumn() === 'réponse',
+        'la réponse est validée malgré le curseur toujours ouvert');
+    $snapshot->closeCursor();
+    $pdo->exec("DELETE FROM settings WHERE key = 'selftest_wal'");
+    unset($snapshot, $save, $peer);
+
     echo "Images\n";
     $avatar = store_upload($upload($pngFile(320, 200, [200, 40, 90])));
     $photo1 = store_upload($upload($pngFile(240, 240, [20, 120, 200])));
