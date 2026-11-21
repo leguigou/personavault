@@ -3574,17 +3574,6 @@
             scroll.appendChild(n);
         };
 
-        const typing = () => {
-            const t = document.createElement("div");
-            t.className = "msg msg-bot typing";
-            t.id = "chat-typing";
-            t.innerHTML =
-                '<span class="msg-avatar">' + avatarHTML + '</span><div class="bubble"><i></i><i></i><i></i></div>';
-            scroll.appendChild(t);
-            scrollBottom();
-        };
-
-
         const loadingLabel = (txt) => {
             let el = document.getElementById("chat-loading");
             if (!txt) {
@@ -4142,21 +4131,6 @@
         const splitDmin  = Math.max(0.2, parseFloat(chat.dataset.splitDelayMin || "1"));
         const splitDmax  = Math.max(splitDmin, parseFloat(chat.dataset.splitDelayMax || "2"));
         const loadUrl = statusUrl.replace(/\/status$/, "/load");
-
-        const startLiveBubble = () => {
-            document.getElementById("chat-typing")?.remove();
-            const wrap = document.createElement("div");
-            wrap.className = "msg msg-bot";
-            wrap.dataset.live = "1";
-            const av = document.createElement("span");
-            av.className = "msg-avatar";
-            av.innerHTML = avatarHTML;
-            const b = document.createElement("div");
-            b.className = "bubble";
-            wrap.append(av, b);
-            scroll.appendChild(wrap);
-            return b;
-        };
 
         /* --- chargement manuel du modèle, en 4 étapes --- */
         const loadBtn = document.querySelector("[data-load-model]");
@@ -5231,10 +5205,30 @@
                 }
                 scrollBottom(true, true);
             }
-            typing();
+            const liveMsg = document.createElement("div");
+            liveMsg.className = "msg msg-bot";
+            liveMsg.dataset.live = "1";
+            liveMsg.innerHTML = '<span class="msg-avatar">' + avatarHTML + '</span><div class="bubbles"></div>';
+            const liveBubbles = liveMsg.lastElementChild;
+            let pendingBubble;
+            const showTyping = () => {
+                pendingBubble = document.createElement("div");
+                pendingBubble.className = "msg-bubble typing";
+                pendingBubble.innerHTML = '<div class="bubble"><i></i><i></i><i></i></div>';
+                liveBubbles.appendChild(pendingBubble);
+                scrollBottom();
+            };
+            const startLiveBubble = () => {
+                pendingBubble.classList.remove("typing");
+                const bubble = pendingBubble.firstElementChild;
+                bubble.replaceChildren();
+                return bubble;
+            };
+            scroll.appendChild(liveMsg);
+            showTyping();
 
             if (mode === "auto" && lastStatus && lastStatus.reachable === false) {
-                document.getElementById("chat-typing")?.remove();
+                liveMsg.remove();
                 setStreaming(false);
                 restoreDraft();
                 askFallback(text, tr("chat.lms_no_answer", { url: lastStatus.url || tr("chat.configured_address") }), "down", tryFallback);
@@ -5251,7 +5245,7 @@
             let live = null;
             let streamed = "";
             let cuts = [];
-            let bubbleEls = [];
+            const bubbleEls = [];
             let splitTimer = null;
             let userId = 0;
             let afterId = 0;
@@ -5263,20 +5257,16 @@
             const revealAt = [];
             let revealTicker = null;
 
-            const clearLive = () => {
+            const stopLiveTimers = () => {
                 clearTimeout(splitTimer);
                 splitTimer = null;
                 clearInterval(revealTicker);
                 revealTicker = null;
-                [live, ...bubbleEls].forEach((b) => b?.closest(".msg")?.remove());
             };
 
-            /* fin de réponse : les bulles affichées pendant l'arrivée du texte (un bloc par bulle)
-               sont remplacées par UN message, comme après un rechargement. Sinon seule la première
-               bulle portait l'identifiant : supprimer, régénérer ou voir la date ne marchait pas
-               sur les autres, et elles restaient à l'écran après suppression du message. */
+            // Le rendu final ajoute les actions à toutes les bulles et conserve le même avatar.
             const settleLive = (reply) => {
-                clearLive();
+                stopLiveTimers();
                 if (regen) {
                     scroll.querySelectorAll(".msg-bot[data-msg-id]:not([data-reaction-reply])").forEach((el) => {
                         const id = Number(el.dataset.msgId);
@@ -5292,7 +5282,9 @@
                     fresh.dataset.ver = String(reply.versions.index);
                     fresh.dataset.vers = String(reply.versions.total);
                 }
-                scroll.appendChild(fresh);
+                fresh.firstElementChild.replaceWith(liveMsg.firstElementChild);
+                if (liveMsg.isConnected) liveMsg.replaceWith(fresh);
+                else scroll.appendChild(fresh);
                 paintVersions();
             };
 
@@ -5405,7 +5397,7 @@
                 const last = bubbleEls.length - 1;
                 if (splitTimer || cuts.length <= last || (last >= 1 && !caughtUp(last))) return;
                 const delay = splitDmin + Math.random() * (splitDmax - splitDmin);
-                typing(); // le personnage « écrit » la suite : trois points pendant la pause
+                showTyping();
                 splitTimer = setTimeout(() => {
                     bubbleEls.push(startLiveBubble());
                     revealAt[bubbleEls.length - 1] = performance.now();
@@ -5480,7 +5472,7 @@
 
                 if (!isSSE) {
                     const data = await res.json().catch(() => ({ ok: false, error: tr("common.unreadable") }));
-                    document.getElementById("chat-typing")?.remove();
+                    liveMsg.remove();
                     if (!res.ok || !data.ok) throw new Error(data.error || tr("common.send_failed"));
                     scroll.appendChild(renderMsg({
                         role: "assistant",
@@ -5541,9 +5533,7 @@
                                     if (userId && Number(n.dataset.msgId) > userId) n.remove();
                                 });
                                 webLine = renderMsg(evt.web);
-                                const typingEl = document.getElementById("chat-typing");
-                                if (typingEl) typingEl.before(webLine);
-                                else scroll.appendChild(webLine);
+                                liveMsg.before(webLine);
                                 scrollBottom(false);
                             } else if (evt.start) {
                                 userId = Number(evt.user?.id || evt.user_id || 0);
@@ -5576,9 +5566,9 @@
                     }
 
                     reader.cancel().catch(() => {});
-                    document.getElementById("chat-typing")?.remove();
                     if (failed) {
-                        clearLive();
+                        stopLiveTimers();
+                        liveMsg.remove();
                         if (!keptUser) restoreDraft();
                         if (!streamed) webLine?.remove();
                         if (keptUser && userId) {
@@ -5614,8 +5604,6 @@
                         };
                         step();
                     });
-                    clearInterval(revealTicker);
-                    revealTicker = null;
                     settleLive(finalReply);
                     if (finalNotice) notice(finalNotice.content);
                     if (mediaNotice) notice(mediaNotice);
@@ -5625,22 +5613,17 @@
                 scrollBottom();
                 maintenancePending = true;
             } catch (err) {
-                document.getElementById("chat-typing")?.remove();
+                liveMsg.remove();
                 clearInterval(probe);
-                clearTimeout(splitTimer);
+                stopLiveTimers();
                 const reply = userId || afterId ? await recoverReply() : null;
                 if (reply) settleLive(reply);
-                else clearLive();
                 if (!userId) restoreDraft();
                 if (err.name === "AbortError") notice(tr("chat.aborted"));
                 else if (err instanceof TypeError || reply) notice(tr("chat.connection_lost"));
                 else notice(tr("common.error", { message: err.message }));
                 scrollBottom();
             } finally {
-                [live, ...bubbleEls].filter(Boolean).forEach((b) => {
-                    const w = b.closest(".msg");
-                    if (w && w.isConnected && b.textContent.trim() === "" && ![...w.querySelectorAll(".bubble")].some((x) => x.textContent.trim() !== "")) w.remove();
-                });
                 controller = null;
                 clearInterval(probe);
                 loadingLabel("");
