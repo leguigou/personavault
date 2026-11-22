@@ -1483,6 +1483,7 @@ require_once __DIR__ . '/llm_log.php';
 require_once __DIR__ . '/assist.php';
 require_once __DIR__ . '/prompts.php';
 require_once __DIR__ . '/prompt_history.php';
+require_once __DIR__ . '/chat_output.php';
 require_once __DIR__ . '/reactions.php';
 require_once __DIR__ . '/klipy.php';
 require_once __DIR__ . '/chat.php';

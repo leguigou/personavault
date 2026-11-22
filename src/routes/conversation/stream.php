@@ -298,28 +298,31 @@ if ($action === 'stream' && $method === 'POST') {
     };
 
     $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort, $canReact, $mediaRequest, $godmode): array {
+        $context = new ChatContextOutput();
         $filtered = $godmode ? null : new ChatReactionStream($canReact);
+        $emit = static function (string $delta) use ($sse, &$sentAny): void {
+            if ($delta !== '') {
+                $sentAny = true;
+                $sse(['delta' => $delta]);
+            }
+        };
+        $sendVisible = static function (string $delta) use ($emit, $filtered): void {
+            if ($delta !== '') {
+                $emit($filtered?->push($delta) ?? $delta);
+            }
+        };
         $res = chat_reply_stream(
             $built['messages'],
             $conv,
-            static function (string $delta) use ($sse, &$sentAny, $filtered): void {
-                $delta = $filtered?->push($delta) ?? $delta;
-                if ($delta === '') {
-                    return;
-                }
-                $sentAny = true;
-                $sse(['delta' => $delta]);
-            },
+            static fn (string $delta) => $sendVisible($context->push($delta)),
             $mode,
             $shouldAbort
         );
-        $tail = $filtered?->finish() ?? '';
-        if ($tail !== '') {
-            $sentAny = true;
-            $sse(['delta' => $tail]);
-        }
-        $res['reaction'] = $filtered?->reaction((string) $res['content']) ?? '';
-        $res['content'] = trim($filtered?->content ?? (string) $res['content']);
+        $sendVisible($context->finish());
+        $emit($filtered?->finish() ?? '');
+        $visible = chat_strip_context((string) $res['content']);
+        $res['reaction'] = $filtered?->reaction($visible) ?? '';
+        $res['content'] = trim($filtered?->content ?? $visible);
         if ($res['content'] === '' && empty($res['aborted']) && $mediaRequest === null) {
             throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
         }

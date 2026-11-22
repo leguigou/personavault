@@ -215,7 +215,7 @@ function followup_send(array $conv, array $persona, array $history, int $gap, ar
         return $out;
     }
 
-    $text = trim((string) $res['content']);
+    $text = trim(chat_strip_context((string) $res['content']));
     if ($text === '') {
         $out['error'] = 'réponse vide';
         return $out;

@@ -1039,6 +1039,13 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         'régénérer renvoie la demande Godmode exacte après le contexte');
     const normal = await events({ message: 'Retour au persona.' });
     expect(normal.find((event) => event.done)?.reply.content === 'Réglages du persona rétablis.', 'la consigne Godmode ne devient pas permanente');
+    const contextEvents = await events({ message: 'Test du contexte invisible.' });
+    const visible = contextEvents.filter((event) => typeof event.delta === 'string').map((event) => event.delta).join('').trim();
+    const contextReply = contextEvents.find((event) => event.done)?.reply;
+    const reloaded = await (await http(path + '/messages')).json();
+    expect(visible === 'Je pensais à toi 💖' && contextReply?.content === visible
+        && reloaded.messages.some((message) => message.id === contextReply.id && message.content === visible),
+        'le modèle reçoit le contexte, qui reste invisible pendant le flux et après rechargement');
     const fork = await submit('fork', { mid: saved.id });
     const copied = await (await http(fork.headers.get('location') + '/messages')).json();
     expect(copied.messages.some((m) => m.godmode && m.content === instruction), 'une autre suite conserve le type de message Godmode');
