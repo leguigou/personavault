@@ -652,20 +652,25 @@ function chat_compress(int $cid, array $conv, bool $force = false, ?callable $on
         return ['ok' => true, 'compressed' => 0, 'reason' => t('labels.compress.below_threshold')];
     }
 
-    // on garde les messages les plus récents (au moins 4) dans la mémoire courte
+    // On garde les messages les plus récents (au moins 4) dans la mémoire courte.
     $target = chat_memory_target();
-    $keep   = [];
+    $minRecent = CHAT_MIN_RECENT - CHAT_SUMMARY_OVERLAP;
+    $keep   = 0;
     $acc    = 0;
     foreach (array_reverse($pending) as $m) {
         $t = chat_estimate_tokens((string) $m['content']);
-        if ($acc + $t > $target && count($keep) >= CHAT_MIN_RECENT - CHAT_SUMMARY_OVERLAP) {
+        if ($acc + $t > $target && $keep >= $minRecent) {
             break;
         }
         $acc += $t;
-        array_unshift($keep, $m);
+        $keep++;
     }
 
-    $toSummarize = array_slice($pending, 0, count($pending) - count($keep));
+    // Une compression manuelle reste possible quand tout le fil tient dans la cible.
+    if ($force && $keep === count($pending)) {
+        $keep = $minRecent;
+    }
+    $toSummarize = array_slice($pending, 0, count($pending) - $keep);
     if (!$toSummarize) {
         return ['ok' => true, 'compressed' => 0, 'reason' => t('labels.compress.nothing')];
     }

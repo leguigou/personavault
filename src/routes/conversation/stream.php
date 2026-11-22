@@ -164,6 +164,10 @@ if ($action === 'stream' && $method === 'POST') {
                     $stmt->closeCursor();
                     $conv = chat_with_persona($current, $persona);
                     $conv['context_window'] = $effectiveWindow;
+                    $sse(['memory' => [
+                        'summary' => $cres['summary'],
+                        'stats' => chat_memory_stats($cid, $conv),
+                    ]]);
                 }
             }
         } catch (Throwable $e) {
