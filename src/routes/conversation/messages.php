@@ -8,16 +8,17 @@ declare(strict_types=1);
 
 function chat_message_json(array $message): array
 {
-    $content = (string) $message['content'];
-    return [
+    $display = chat_message_display_fields($message);
+    if ($message['role'] === 'memory') {
+        $display['content'] = chat_memory_display_text($display['content']);
+    }
+    return $display + [
         'id' => (int) $message['id'],
         'role' => (string) $message['role'],
         'godmode' => !empty($message['godmode']),
-        'content' => $message['role'] === 'memory' ? chat_memory_display_text($content) : $content,
         'reply_to' => chat_reply_quote($message),
         'image' => (string) $message['image'],
         'klipy_url' => klipy_media_url($message['klipy_url']),
-        'split_points' => chat_message_split_points($message),
         'version_id' => (int) $message['version_id'],
         'reaction' => chat_reaction_key($message['reaction'], (string) $message['role']),
         'bubble_reactions' => (object) chat_bubble_reactions($message),
@@ -54,8 +55,10 @@ if ($action === 'find-messages' && $method === 'GET') {
     }
     $pdo = db()->readConnection();
     if ($query !== '') {
-        $pdo->sqliteCreateFunction('pv_message_matches', static fn (string $content): int => (int) (mb_stripos($content, $query) !== false), 1);
-        $sql .= ' AND pv_message_matches(content) = 1';
+        $pdo->sqliteCreateFunction('pv_message_matches', static function (string $content, string $role) use ($query): int {
+            return (int) (mb_stripos($role === 'assistant' ? chat_strip_context($content) : $content, $query) !== false);
+        }, 2);
+        $sql .= ' AND pv_message_matches(content, role) = 1';
     }
     $stmt = $pdo->prepare('SELECT COUNT(*) ' . $sql);
     $stmt->execute($params);
@@ -65,7 +68,10 @@ if ($action === 'find-messages' && $method === 'GET') {
     $stmt->execute($params);
     $results = [];
     foreach ($stmt->fetchAll() as $row) {
-        $content = $row['content'] !== '' ? $row['content'] : ($row['image'] !== '' ? t('chat.msg.photo_sent') : t('chat.klipy_alt'));
+        $content = $row['role'] === 'assistant' ? chat_strip_context($row['content']) : $row['content'];
+        if ($row['content'] === '') {
+            $content = $row['image'] !== '' ? t('chat.msg.photo_sent') : t('chat.klipy_alt');
+        }
         $pos = $query === '' ? false : mb_stripos($content, $query);
         $start = $pos === false ? 0 : max(0, $pos - 55);
         $excerpt = ($start > 0 ? '…' : '') . mb_substr($content, $start, 220) . (mb_strlen($content) > $start + 220 ? '…' : '');
@@ -297,14 +303,13 @@ if ($action === 'version' && $method === 'POST') {
         });
     }
 
-    echo json_encode([
+    $reply = ['role' => 'assistant'] + $v;
+    echo json_encode(chat_message_display_fields($reply) + [
         'ok'           => true,
-        'content'      => (string) $v['content'],
-        'split_points' => chat_message_split_points($v),
         'version_id'   => (int) $v['id'],
         'reaction'     => chat_reaction_key($v['reaction'], 'assistant'),
         'klipy_url'      => klipy_media_url($v['klipy_url']),
-        'bubble_reactions' => (object) chat_bubble_reactions(['role' => 'assistant'] + $v),
+        'bubble_reactions' => (object) chat_bubble_reactions($reply),
         'versions'     => ['index' => $pos + 1, 'total' => count($ids)],
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -442,9 +447,12 @@ if ($action === '' && $method === 'GET') {
     $messages = fetch_messages($cid, 50);
     $targetMessage = max(0, (int) ($_GET['message'] ?? 0));
     if ($targetMessage && $messages && $targetMessage < (int) $messages[0]['id']) {
-        $stmt = db()->prepare('SELECT content FROM messages WHERE id = ? AND conversation_id = ?');
+        $stmt = db()->prepare('SELECT content, role FROM messages WHERE id = ? AND conversation_id = ?');
         $stmt->execute([$targetMessage, $cid]);
-        $sourceExcerpt = $stmt->fetchColumn();
+        $source = $stmt->fetch();
+        if ($source) {
+            $sourceExcerpt = $source['role'] === 'assistant' ? chat_strip_context($source['content']) : $source['content'];
+        }
     }
     // ‹ 1/3 › : seulement sous la dernière réponse (celle qu'on peut régénérer)
     $replyVersions = null;

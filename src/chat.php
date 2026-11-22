@@ -316,7 +316,7 @@ const CHAT_REPLY_QUOTE_MAX = 6000;
 /** Citation enregistrée avec la réponse, même si le message d’origine disparaît. */
 function chat_reply_quote(array $message): ?array
 {
-    $text = (string) ($message['reply_quote'] ?? '');
+    $text = chat_strip_context((string) ($message['reply_quote'] ?? ''));
     return $text === '' ? null : [
         'id' => (int) $message['reply_to_id'],
         'bubble' => (int) $message['reply_to_bubble'],

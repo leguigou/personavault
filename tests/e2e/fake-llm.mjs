@@ -269,6 +269,9 @@ http.createServer(async (req, res) => {
                 delta('IF d’un clin d’œil]');
             } else if (last.endsWith('Test du réglage de réflexion')) {
                 delta(`Niveau reçu : ${j.reasoning_effort}.`);
+            } else if (last.endsWith('Test du contexte invisible.')) {
+                for (const part of ['<con', 'texte>', 'CONTEXTE-INTERNE-TEST', '</cont', 'exte>\n\n']) delta(part);
+                delta(last.includes('<contexte>') && last.includes('</contexte>') ? 'Je pensais à toi 💖' : 'Contexte manquant');
             } else if (last.endsWith('Merci, tu as été adorable avec moi.')) {
                 if (system.includes('[reaction:choix]')) {
                     for (const part of ['\n[re', 'action:', 'heart', ']', '\n', '\n']) delta(part);

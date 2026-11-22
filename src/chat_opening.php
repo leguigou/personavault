@@ -128,7 +128,7 @@ function chat_generate_opening(array $persona, array $prompts, array $conv): arr
         return ['content' => $greeting, 'questions' => [], 'model' => ''];
     }
 
-    $generated = is_string($data['message'] ?? null) ? trim($data['message']) : '';
+    $generated = is_string($data['message'] ?? null) ? trim(chat_strip_context($data['message'])) : '';
     $questions = [];
     foreach (is_array($data['questions'] ?? null) ? $data['questions'] : [] as $question) {
         $question = is_string($question) ? trim(preg_replace('/\s+/u', ' ', $question) ?? '') : '';

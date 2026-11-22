@@ -3103,8 +3103,8 @@
             const pts = (Array.isArray(m.split_points) ? m.split_points : [])
                 .map(Number)
                 .filter((n) => n > 0 && n < chars.length);
-            let parts = [content];
-            if (pts.length) {
+            let parts = Array.isArray(m.bubble_parts) ? m.bubble_parts : [content];
+            if (!Array.isArray(m.bubble_parts) && pts.length) {
                 const bounds = [0, ...pts, chars.length];
                 parts = bounds.slice(1).map((end, i) =>
                     // Même ensemble de caractères que trim() côté PHP.
@@ -4743,6 +4743,7 @@
                     role: "assistant",
                     content: d.content,
                     split_points: d.split_points || [],
+                    bubble_parts: d.bubble_parts,
                     version_id: d.version_id,
                     reaction: d.reaction,
                     klipy_url: d.klipy_url,

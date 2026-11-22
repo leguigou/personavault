@@ -48,6 +48,26 @@ $pngFile = static function (int $w, int $h, array $rgb) use ($tmp): string {
     return $f;
 };
 $upload = static fn (string $f): array => ['tmp_name' => $f, 'error' => UPLOAD_ERR_OK, 'size' => filesize($f)];
+
+$contextFilter = new ChatContextOutput();
+$check($contextFilter->push('Avant <con') === 'Avant '
+    && $contextFilter->push('texte>Célia vient de se réveiller.</CON') === ''
+    && $contextFilter->push('TEXTE>après.') === 'après.'
+    && $contextFilter->finish() === '', 'contexte invisible même quand les balises arrivent en plusieurs fragments');
+$check(chat_strip_context('Salut ! <contexte>Bloc interrompu') === 'Salut !'
+    && chat_strip_context('Un signe <:') === 'Un signe <:', 'un contexte interrompu reste masqué et les chevrons ordinaires restent visibles');
+$legacyContext = '<contexte>Célia vient de se réveiller.</contexte>';
+$legacyReply = [
+    'role' => 'assistant',
+    'content' => $legacyContext . "\n\nSalut 💖",
+    'split_points' => json_encode([mb_strlen($legacyContext) - 3, mb_strlen($legacyContext)]),
+    'bubble_reactions' => '{"2":"heart"}',
+];
+$display = chat_message_display_fields($legacyReply);
+$check($display['content'] === 'Salut 💖' && $display['bubble_parts'] === ['', '', 'Salut 💖']
+    && chat_bubble_reactions($legacyReply) === [2 => 'heart'], 'historique nettoyé sans décaler les réactions de bulle');
+$check(chat_message_display_fields(['role' => 'user'] + $legacyReply)['content'] === $legacyReply['content'],
+    'une balise écrite par l’utilisateur reste visible');
 $mediaExists = static fn (string $base): bool => $base !== ''
     && is_file(config('uploads') . '/' . $base . '.webp')
     && is_file(config('uploads') . '/' . $base . '.thumb.webp');

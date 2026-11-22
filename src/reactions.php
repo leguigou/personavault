@@ -73,19 +73,41 @@ function chat_message_bubbles(array $message): array
 {
     $text = (string) $message['content'];
     $points = chat_message_split_points($message);
+    $hasContext = $message['role'] === 'assistant' && stripos($text, CHAT_CONTEXT_OPEN) !== false;
     if (!$points) {
-        return [$text];
+        return [$hasContext ? chat_strip_context($text) : $text];
     }
+    $length = mb_strlen($text);
     $bubbles = [];
+    $filter = $hasContext ? new ChatContextOutput() : null;
     $start = 0;
-    foreach ([...$points, mb_strlen($text)] as $end) {
-        $part = trim(mb_substr($text, $start, $end - $start));
-        if ($part !== '') {
-            $bubbles[] = $part;
+    foreach ([...$points, $length] as $end) {
+        $part = mb_substr($text, $start, $end - $start);
+        $visible = $filter?->push($part) ?? $part;
+        if ($end === $length && $filter !== null) {
+            $visible .= $filter->finish();
+        }
+        // Garder les indices d’origine pour les citations et réactions déjà enregistrées.
+        if (trim($part) !== '') {
+            $bubbles[] = trim($visible);
         }
         $start = $end;
     }
     return $bubbles ?: [$text];
+}
+
+function chat_message_display_fields(array $message): array
+{
+    $content = (string) $message['content'];
+    if ($message['role'] === 'assistant' && stripos($content, CHAT_CONTEXT_OPEN) !== false) {
+        $bubbles = chat_message_bubbles($message);
+        return [
+            'content' => implode("\n\n", array_filter($bubbles, static fn (string $part): bool => $part !== '')),
+            'split_points' => [],
+            'bubble_parts' => $bubbles,
+        ];
+    }
+    return ['content' => $content, 'split_points' => chat_message_split_points($message)];
 }
 
 /** La première bulle conserve la réaction au format des anciennes discussions. */

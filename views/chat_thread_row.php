@@ -3,6 +3,9 @@ $hue     = hue_for((string) $c['persona_name']);
 $unread  = (int) ($c['unread'] ?? 0) === 1;
 $pinned  = (int) ($c['pinned'] ?? 0) === 1;
 $preview = trim((string) ($c['last_msg'] ?? ''));
+if (($c['last_role'] ?? '') === 'assistant') {
+    $preview = chat_strip_context($preview);
+}
 if ($preview === '' && (string) ($c['last_image'] ?? '') !== '') {
     $preview = t('chat.list.photo');
 }
