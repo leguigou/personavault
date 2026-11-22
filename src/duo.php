@@ -405,7 +405,8 @@ function duo_opening_words(string $text): string
 function duo_messages(array $me, array $other, int $who, array $lines, string $topic, string|array $extra = ''): array
 {
     $extra = is_array($extra) ? $extra : ['system' => $extra];
-    $system = implode("\n\n", chat_persona_identity($me['persona'], $me['prompts'], (string) ($me['persona']['directive'] ?? '')))
+    $identity = chat_persona_identity($me['persona'], $me['prompts'], (string) ($me['persona']['directive'] ?? ''));
+    $system = implode("\n\n", array_filter([...$identity, chat_fidelity_rule($me['persona'])]))
         . "\n\n" . duo_rules($me, $other, $topic, (string) ($extra['scene'] ?? ''))
         . (trim((string) ($extra['system'] ?? '')) !== '' ? "\n\n" . trim((string) $extra['system']) : '');
 

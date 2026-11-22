@@ -2,6 +2,26 @@
 (() => {
     "use strict";
 
+    document.querySelectorAll("[data-level-control]").forEach((control) => {
+        const slider = control.querySelector("[data-level-slider]");
+        const output = control.querySelector("[data-level-value]");
+        const useDefault = control.querySelector("[data-level-default]");
+        const amount = control.querySelector("[data-level-amount]");
+        const paint = () => {
+            if (useDefault?.checked && slider.dataset.levelInherited !== undefined) {
+                slider.value = slider.dataset.levelInherited;
+            }
+            output.textContent = slider.value;
+            if (amount) amount.hidden = useDefault.checked;
+        };
+        slider.addEventListener("input", () => {
+            if (useDefault) useDefault.checked = false;
+            paint();
+        });
+        useDefault?.addEventListener("change", paint);
+        paint();
+    });
+
     const unreadDots = document.querySelectorAll("[data-chat-unread]");
     if (unreadDots.length) {
         let checkingUnread = false;
