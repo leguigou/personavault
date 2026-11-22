@@ -162,8 +162,9 @@ await post('/chat/1/toggles', { memory_enabled: '1' });
 await post('/chat/1/directive', { directive: 'Consigne de test pour cette conversation.' });
 await post('/chat/1/facts-toggle', { enabled: '0' });
 await post('/chat/1/facts-toggle', { enabled: '1' }, '/chat/1/facts-toggle (2)');
-const comp = await post('/chat/1/compress', { force: '1' });
-expect(JSON.parse(comp).compressed > 0, 'la compression résume des messages');
+const comp = JSON.parse(await post('/chat/1/compress', { force: '1' }));
+expect(comp.ok && comp.compressed === 8 && comp.memory.unsummarized === 4 && comp.summary.includes('Sujet : Voyage'),
+    'la compression manuelle produit un résumé même quand tout le fil tient dans la mémoire courte');
 const rem = JSON.parse(await post('/chat/1/remember', { force: '1' }));
 expect(rem.added.some((fact) => fact.length > 90) && rem.memory_msg?.content === rem.added.join(' · '),
     'la bulle mémoire contient les souvenirs en entier');
@@ -1067,6 +1068,23 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const fork = await submit('fork', { mid: saved.id });
     const copied = await (await http(fork.headers.get('location') + '/messages')).json();
     expect(copied.messages.some((m) => m.godmode && m.content === instruction), 'une autre suite conserve le type de message Godmode');
+}
+// --- le flux expose le résumé sauvegardé par la compression automatique
+{
+    const fresh = await http('/chat/2/new', { method: 'POST', form: { _token: csrf } });
+    const path = fresh.headers.get('location');
+    const send = async (message) => (await (await http(path + '/stream', {
+        method: 'POST', form: { _token: csrf, message },
+    })).text()).split('\n').filter((line) => line.startsWith('data: '))
+        .map((line) => JSON.parse(line.slice(6)));
+    for (let i = 1; i <= 3; i++) {
+        const turn = await send(`Scène ${i}. ` + 'Le train poursuit son trajet. '.repeat(150));
+        expect(turn.some((event) => event.done), 'les tours de préparation de la compression sont enregistrés');
+    }
+    const events = await send('Que se passe-t-il ensuite ?');
+    const summary = events.find((event) => event.memory)?.memory;
+    expect(summary?.summary.includes('Sujet : Voyage') && summary.stats.compressions === 1
+        && events.some((event) => event.done), 'le résumé automatique est transmis au panneau sans attendre un rechargement');
 }
 await post('/logout');
 await record('GET / (après déconnexion)', await http('/'));

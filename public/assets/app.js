@@ -4013,10 +4013,11 @@
                 if (force) fd.append("force", "1");
                 const res = await fetch(chat.dataset.compress, { method: "POST", body: fd });
                 const data = await res.json();
-                if (!data.ok) return null;
-                updateFoot();
-                updateRing(data.memory);
-                updateMemPanel(data.memory, data.summary);
+                if (data?.ok) {
+                    updateFoot();
+                    updateRing(data.memory);
+                    updateMemPanel(data.memory, data.summary);
+                }
                 return data;
             } catch (e) {
                 return null;
@@ -4134,11 +4135,11 @@
             compressBtn.disabled = true;
             compressBtn.textContent = tr("chat.compressing");
             const data = await compressMemory(true);
-            if (data && data.compressed > 0) {
+            if (data?.ok && data.compressed > 0) {
                 toast(tr("chat.compressed", data.compressed));
                 setTimeout(() => window.location.reload(), 700);
             } else {
-                toast(data ? (data.reason || tr("chat.nothing_to_compress")) : tr("chat.compress_failed"), true);
+                toast(data?.reason || data?.error || tr(data?.ok ? "chat.nothing_to_compress" : "chat.compress_failed"), true);
                 compressBtn.disabled = false;
                 compressBtn.textContent = original;
             }
@@ -5570,6 +5571,9 @@
                                 if (!live) loadingLabel(tr("lms.loading"));
                             } else if (evt.phase === "memory") {
                                 if (!live) loadingLabel(tr("chat.memory_phase"));
+                            } else if (evt.memory) {
+                                updateRing(evt.memory.stats);
+                                updateMemPanel(evt.memory.stats, evt.memory.summary);
                             } else if (evt.phase === "web_search") {
                                 if (!live) loadingLabel(evt.source === "meteo" ? tr("chat.web_search_phase_meteo")
                                     : evt.source === "wikipedia" ? tr("chat.web_search_phase_wikipedia") : tr("chat.web_search_phase"));
