@@ -399,7 +399,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
 
         <!-- humeur et ressentis du persona dans cette conversation (src/feelings.php) -->
         <?php $feelRomance = !feel_persona_minor($persona); ?>
-        <section data-sheet-group="memory" class="sheet-card feel-box" data-feel data-url="/chat/<?= (int) $conv['id'] ?>/feelings"
+        <section data-sheet-group="conversation" class="sheet-card feel-box" data-feel data-url="/chat/<?= (int) $conv['id'] ?>/feelings"
                  data-token="<?= e($token) ?>" data-gauge-colors="<?= e(json_encode(duo_gauge_colors())) ?>">
             <div class="mem-head"><h3><?= e(t('feel.title')) ?></h3></div>
             <p class="duo-feel-title"><?= e(t('duo.feelings.mood_of', ['name' => (string) $persona['name']])) ?> :
@@ -436,6 +436,26 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                 <span class="hint" role="status" data-feel-draft hidden><?= e(t('feel.unsaved')) ?></span>
             </div>
             <p class="hint"><?= e($feelRomance ? t('feel.help') : t('feel.help_minor', ['age' => FEEL_MIN_AGE])) ?></p>
+            <p class="hint"><?= e(t('feel.prompt_help')) ?></p>
+            <?php $remorse = $conv['remorse_override'] ?? null; ?>
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/character" class="sheet-directive">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
+                <div class="field" data-level-control>
+                    <label>
+                        <?= e(t('character.remorse')) ?>
+                        <span data-level-amount <?= $remorse === null ? 'hidden' : '' ?>><output data-level-value><?= (int) ($remorse ?? 50) ?></output>/100</span>
+                        <input class="input" type="range" name="remorse" min="0" max="100" value="<?= (int) ($remorse ?? 50) ?>" data-level-slider>
+                    </label>
+                    <label class="check">
+                        <input type="checkbox" name="automatic_remorse" value="1" <?= $remorse === null ? 'checked' : '' ?> data-level-default>
+                        <span><?= e(t('character.remorse_auto')) ?></span>
+                    </label>
+                    <small><?= e(t('character.remorse_help')) ?></small>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
+                </div>
+            </form>
         </section>
 
         <section data-sheet-group="memory" class="sheet-ctx">
@@ -529,6 +549,34 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
 
             <ul class="fact-list recall-list" data-recall-list></ul>
         </section>
+
+        <?php if ($feelRomance): ?>
+            <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
+                <div class="mem-head"><h3><?= e(t('character.title')) ?></h3></div>
+                <?php
+                $personaFidelity = (int) ($persona['fidelity'] ?? CHAT_FIDELITY_DEFAULT);
+                $fidelity = $conv['fidelity_override'] ?? null;
+                ?>
+                <form method="post" action="/chat/<?= (int) $conv['id'] ?>/character" class="sheet-form">
+                    <input type="hidden" name="_token" value="<?= e($token) ?>">
+                    <div class="field" data-level-control>
+                        <label>
+                            <?= e(t('character.fidelity')) ?> <output data-level-value><?= (int) ($fidelity ?? $personaFidelity) ?></output>/100
+                            <input class="input" type="range" name="fidelity" min="0" max="100" value="<?= (int) ($fidelity ?? $personaFidelity) ?>"
+                                   data-level-slider data-level-inherited="<?= $personaFidelity ?>">
+                        </label>
+                        <label class="check">
+                            <input type="checkbox" name="inherit_fidelity" value="1" <?= $fidelity === null ? 'checked' : '' ?> data-level-default>
+                            <span><?= e(t('character.fidelity_inherit', ['level' => $personaFidelity])) ?></span>
+                        </label>
+                        <small><?= e(t('character.fidelity_help')) ?></small>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
+                    </div>
+                </form>
+            </section>
+        <?php endif; ?>
 
         <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
             <div class="mem-head"><h3><?= e(t('chat.sheet.behavior')) ?></h3></div>

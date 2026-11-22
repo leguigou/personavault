@@ -103,6 +103,17 @@ $action   = $isEdit ? '/p/' . $slug : '/p';
             <small><?= e(t('form.meta_hint')) ?></small>
         </label>
 
+        <div class="field" data-level-control>
+            <h3><?= e(t('character.title')) ?></h3>
+            <small><?= e(t('character.persona_help')) ?></small>
+            <?php $fidelity = (int) ($persona['fidelity'] ?? CHAT_FIDELITY_DEFAULT); ?>
+            <label>
+                <?= e(t('character.fidelity')) ?> <output data-level-value><?= $fidelity ?></output>/100
+                <input class="input" type="range" name="fidelity" min="0" max="100" value="<?= $fidelity ?>" data-level-slider>
+            </label>
+            <small><?= e(t('character.fidelity_help')) ?></small>
+        </div>
+
         <?php if ($isEdit): ?>
             <div class="persona-ai" id="ia">
                 <div class="persona-ai-head">

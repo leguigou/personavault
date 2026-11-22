@@ -147,6 +147,26 @@ if ($action === 'directive' && $method === 'POST') {
     redirect('/chat/' . $cid);
 }
 
+if ($action === 'character' && $method === 'POST') {
+    csrf_check();
+    if (array_key_exists('fidelity', $_POST) && !feel_persona_minor($persona)) {
+        $fidelity = chat_trait_level($_POST['fidelity']);
+        if (isset($_POST['inherit_fidelity']) || $fidelity !== null) {
+            db()->prepare('UPDATE conversations SET fidelity_override = ? WHERE id = ?')
+                ->execute([isset($_POST['inherit_fidelity']) ? null : $fidelity, $cid]);
+        }
+    }
+    if (array_key_exists('remorse', $_POST)) {
+        $remorse = chat_trait_level($_POST['remorse']);
+        if (isset($_POST['automatic_remorse']) || $remorse !== null) {
+            db()->prepare('UPDATE conversations SET remorse_override = ? WHERE id = ?')
+                ->execute([isset($_POST['automatic_remorse']) ? null : $remorse, $cid]);
+        }
+    }
+    flash('ok', t('character.saved'));
+    redirect('/chat/' . $cid);
+}
+
 if ($action === 'klipy' && $method === 'POST') {
     csrf_check();
     $formats = isset($_POST['inherit']) ? -1 : klipy_format_mask($_POST['klipy_formats'] ?? []);

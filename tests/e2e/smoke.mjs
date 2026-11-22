@@ -960,6 +960,10 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const set = await (await http('/chat/1/feelings', { method: 'POST', form: { _token: csrf, emotion: 'colere', intensity: '80', love: '40' } })).json();
     expect(set.ok && set.feelings.emotion === 'colere' && set.feelings.intensity === 80 && set.feelings.love === 40
         && set.notices.some((n) => n.text.includes('40')), 'humeur et ressentis se règlent à la main, avec une note dans le fil');
+    const setCharacter = (form) => http('/chat/1/character', { method: 'POST', form: { _token: csrf, ...form } });
+    const fidelity = await setCharacter({ fidelity: '0' });
+    const remorse = await setCharacter({ remorse: '85' });
+    expect(fidelity.status === 303 && remorse.status === 303, 'la fidélité et les remords s’enregistrent séparément');
     const sent = await (await http('/chat/1/stream', { method: 'POST', form: { _token: csrf, message: 'Tu boudes ?' } })).text();
     const logs = await (await http('/settings/logs')).text();
     expect(sent.includes('"done"') && logs.includes('Ton humeur et tes sentiments dans cette conversation')
@@ -967,6 +971,14 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         'l’humeur et les ressentis réglés arrivent dans le contexte de la réponse suivante');
     expect(logs.includes('Moment de la scène choisi pour cette conversation : mardi, 03h15.'),
         'le créneau forcé arrive dans le contexte de la réponse suivante');
+    expect(logs.includes('Fidélité (0/100)') && logs.includes('Remords (85/100)') && logs.includes('Une accusation seule'),
+        'les deux réglages coexistent dans le prompt et les remords dépendent d’un tort établi');
+    await setCharacter({ fidelity: '0', inherit_fidelity: '1' });
+    const inherited = await (await http('/chat/1')).text();
+    expect(/name="inherit_fidelity" value="1" checked/.test(inherited)
+        && /name="remorse" min="0" max="100" value="85"/.test(inherited),
+        'revenir à la fidélité de la fiche conserve le niveau de remords');
+    await setCharacter({ remorse: '85', automatic_remorse: '1' });
     const resetScene = await (await setScene({ op: 'reset' })).json();
     expect(resetScene.ok && resetScene.scene_day === 0 && resetScene.scene_time === '', 'le bouton rétablit le jour et l’heure actuels');
     const forged = await http('/chat/1/feelings', { method: 'POST', form: { _token: 'mauvais', emotion: 'joie' } });

@@ -137,7 +137,7 @@ if ($path === '/p' && $method === 'POST') {
         flash('error', t('flash.persona.avatar_error', ['error' => public_error($e)]));
     }
 
-    $stmt = db()->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta) VALUES (?,?,?,?,?,?,?)');
+    $stmt = db()->prepare('INSERT INTO personas (slug, name, tagline, description, avatar, tags, meta, fidelity) VALUES (?,?,?,?,?,?,?,?)');
     $stmt->execute([
         $slug,
         $name,
@@ -146,6 +146,7 @@ if ($path === '/p' && $method === 'POST') {
         $avatar,
         json_encode($tags, JSON_UNESCAPED_UNICODE),
         json_encode($meta, JSON_UNESCAPED_UNICODE),
+        chat_trait_level($_POST['fidelity'] ?? null) ?? CHAT_FIDELITY_DEFAULT,
     ]);
     $id = (int) db()->lastInsertId();
     $stmt = db()->prepare('UPDATE personas SET updated_at = datetime("now") WHERE id = ?');

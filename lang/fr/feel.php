@@ -2,6 +2,16 @@
 /* Humeur et ressentis du persona dans une conversation (src/feelings.php). */
 return [
     'feel.title' => 'Humeur et ressentis',
+    'feel.prompt_help' => 'L’humeur et les sentiments orientent le ton de la prochaine réponse.',
+    'character.title' => 'Caractère',
+    'character.persona_help' => 'Traits durables qui complètent le prompt système du personnage.',
+    'character.fidelity' => 'Fidélité',
+    'character.fidelity_help' => 'S’applique si une exclusivité est établie. À 0, la fidélité ne retient pas le personnage. Entre les deux, l’entourage et les circonstances peuvent l’influencer. À 100, le personnage respecte son engagement.',
+    'character.fidelity_inherit' => 'Utiliser la fidélité de la fiche ({level}/100)',
+    'character.remorse' => 'Remords',
+    'character.remorse_auto' => 'Adapter les remords à la scène',
+    'character.remorse_help' => 'Intervient après un tort reconnu ou établi dans la scène. À 0, le personnage assume les faits sans exprimer de regrets. Plus le niveau monte, plus ses excuses sont approfondies.',
+    'character.saved' => 'Réglage enregistré.',
     'feel.towards_you' => 'Ce que {name} ressent pour vous',
     'feel.confirm' => 'Confirmer les changements',
     'feel.unsaved' => 'Changements à confirmer',

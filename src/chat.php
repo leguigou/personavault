@@ -6,6 +6,7 @@ declare(strict_types=1);
 const CHAT_USER_PROFILE_MAX = 800;
 const CHAT_SPLIT_DELAY_MAX = 16;
 const CHAT_GODMODE_MAX = 6000;
+const CHAT_FIDELITY_DEFAULT = 50;
 
 function chat_has_unread(): bool
 {
@@ -68,11 +69,11 @@ function chat_fork_conversation(int $cid, int $mid): int
         $pdo->prepare('INSERT INTO conversations (
                 title, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
                 memory_enabled, directive, title_auto, facts_enabled, auto_followup,
-                reasoning_effort, klipy_formats, web_search, scene_day, scene_time
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, fidelity_override, remorse_override
             )
             SELECT ?, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
                 memory_enabled, directive, 0, 0, 0,
-                reasoning_effort, klipy_formats, web_search, scene_day, scene_time
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, fidelity_override, remorse_override
             FROM conversations WHERE id = ?')->execute([$title, $cid]);
         $newId = (int) $pdo->lastInsertId();
         $copy = $pdo->prepare('INSERT INTO messages (
@@ -1210,12 +1211,18 @@ function chat_estimate_tokens(string $text): int
     return (int) ceil(mb_strlen($text) / 3.6) + 1;
 }
 
-/** Prompt système = prompts « système » de la fiche + fiche + consigne de session. */
+function chat_trait_level(mixed $value): ?int
+{
+    if (!is_int($value) && !is_string($value)) {
+        return null;
+    }
+    $level = filter_var($value, FILTER_VALIDATE_INT);
+    return $level === false ? null : max(0, min(100, $level));
+}
+
 /**
- * Identité d'un persona pour le modèle : son prompt système (ou une consigne par défaut),
- * sa fiche et sa consigne de jeu. Rien sur l'utilisateur : réutilisable quand le persona
- * parle à un autre persona.
- * @return array<int, string>
+ * Identité et traits du persona, partagés entre le chat et les duos.
+ * @return list<string>
  */
 function chat_persona_identity(array $persona, array $personaPrompts, string $directive = ''): array
 {
@@ -1264,7 +1271,43 @@ function chat_persona_identity(array $persona, array $personaPrompts, string $di
     return $parts;
 }
 
-function chat_system_prompt(array $persona, array $personaPrompts, array $conv, array $facts = [], string $addressOverride = ''): string
+function chat_fidelity_rule(array $persona, array $conv = []): string
+{
+    if (feel_persona_minor($persona)) {
+        return '';
+    }
+    $fidelity = chat_trait_level($conv['fidelity_override'] ?? null)
+        ?? chat_trait_level($persona['fidelity'] ?? null) ?? CHAT_FIDELITY_DEFAULT;
+    $behavior = match (true) {
+        $fidelity === 0 => "La fidélité ne te retient pas. Tes choix dépendent de tes envies et de la situation.",
+        $fidelity < 34 => "Une tentation crédible ou l'influence d'une personne de confiance peut facilement te faire céder.",
+        $fidelity < 67 => "Tu tiens à ton engagement, mais une forte tentation ou la pression de l'entourage peut te faire céder.",
+        $fidelity < 100 => "Tu résistes à la tentation et aux pressions, sauf dans des circonstances exceptionnelles.",
+        default => "Respecte toujours ton engagement. Si tu veux agir autrement, mets d'abord fin à l'exclusivité.",
+    };
+    return "Fidélité ({$fidelity}/100). Applique ce trait aux choix à venir si une exclusivité établie est en jeu. "
+        . $behavior . " Préserve les événements passés.";
+}
+
+function chat_character_rules(array $persona, array $conv): string
+{
+    $remorse = chat_trait_level($conv['remorse_override'] ?? null);
+    $response = match (true) {
+        $remorse === null => "Excuse-toi avec une profondeur adaptée au tort et à la réaction de l'autre.",
+        $remorse === 0 => "Assume les faits, sans exprimer de regrets.",
+        $remorse < 34 => "Reconnais le tort et excuse-toi simplement.",
+        $remorse < 67 => "Présente des excuses précises et reconnais l'effet de tes actes.",
+        default => "Exprime des regrets profonds et reviens sur ta faute si la blessure est encore présente.",
+    };
+    $level = $remorse === null ? 'automatiques' : "{$remorse}/100";
+    $remorseRule = "Remords ({$level}). Seulement si l'échange porte sur un tort reconnu ou établi dans l'histoire. "
+        . "Une accusation seule n'établit rien. {$response} Préserve les faits et réponds directement, avec sérieux. "
+        . "Suspends les rires, émojis enjoués et surnoms. Face à une insulte, tu peux dire qu'elle te blesse et continuer à répondre sur le fond. "
+        . "Évite de répéter les mêmes excuses.";
+    return implode("\n\n", array_filter([chat_fidelity_rule($persona, $conv), $remorseRule]));
+}
+
+function chat_system_prompt(array $persona, array $personaPrompts, array $conv, array $facts = [], string $addressOverride = '', bool $includeCharacterRules = true): string
 {
     $parts = chat_persona_identity($persona, $personaPrompts, (string) ($conv['directive'] ?? ''));
 
@@ -1298,6 +1341,11 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
     if ($relationship !== '') {
         $parts[] = $relationship;
     }
+
+    if ($includeCharacterRules) {
+        $parts[] = chat_character_rules($persona, $conv);
+    }
+
     return implode("\n\n", $parts);
 }
 
@@ -1986,7 +2034,9 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $text = chat_fit_text($text, intdiv($budget, 2));
     // 1) Partie système en tête : fiche, consigne de jeu et résumé, puis format de réponse.
     //    LM Studio / llama.cpp peuvent réutiliser le préfixe commun entre les tours.
-    $system = chat_system_prompt($persona, $personaPrompts, $conv, [], $addressOverride) . "\n\n" . chat_reaction_instructions($canReact);
+    $system = chat_system_prompt($persona, $personaPrompts, $conv, [], $addressOverride, includeCharacterRules: false)
+        . "\n\n" . chat_reaction_instructions($canReact);
+    $characterRules = "\n\n" . chat_character_rules($persona, $conv);
     $historyReserve = min($limits['history'], intdiv($budget * 2, 3));
     // La consigne « dis que tu ne peux pas chercher ici » ne vaut que sans résultats :
     // placée avant, elle contredisait la demande d'utiliser les extraits.
@@ -2001,18 +2051,29 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     } else {
         $webRule .= " Sans résultats web fournis, ne prétends pas avoir consulté le Web. Si une vérification est nécessaire, dis que tu ne peux pas la faire ici.";
     }
-    $systemRoom = $budget - $historyReserve - $limits['memory'] - chat_estimate_tokens($text) - 256;
-    $systemLimit = max(intdiv($budget, 6), $systemRoom) - chat_estimate_tokens($webRule);
+    $textCost = chat_estimate_tokens($text);
+    $webCost = chat_estimate_tokens($webRule);
+    $systemRoom = $budget - $historyReserve - $limits['memory'] - $textCost - 256;
+    $systemFloor = intdiv($budget, 6);
+    // Les règles restent en bloc pour préserver leurs conditions d'application.
+    // Une fenêtre exceptionnellement courte doit garder la place du message en cours.
+    $characterRoom = $budget - $textCost - max($systemFloor, $webCost) - 32;
+    $characterCost = chat_estimate_tokens($characterRules);
+    if ($characterCost > $characterRoom) {
+        $characterRules = '';
+        $characterCost = 0;
+    }
+    $systemLimit = max($systemFloor, $systemRoom - $characterCost) - $webCost;
     $fittedSystem = chat_fit_text($system, $systemLimit, $omitted);
     if ($systemAudit !== null) {
         $systemAudit = [
-            'original' => $system,
-            'limit' => max(0, $systemLimit),
-            'need' => chat_estimate_tokens($system),
+            'original' => $system . $characterRules,
+            'limit' => max(0, $systemLimit) + $characterCost,
+            'need' => chat_estimate_tokens($system . $characterRules),
             'omitted' => $omitted,
         ];
     }
-    $system = $fittedSystem . $webRule;
+    $system = $fittedSystem . $characterRules . $webRule;
 
     // 2) Partie VARIABLE (heure, souvenirs, rappels) : jointe au DERNIER message,
     //    pour ne pas invalider le cache de tout ce qui précède.
