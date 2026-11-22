@@ -149,19 +149,27 @@ if ($action === 'directive' && $method === 'POST') {
 
 if ($action === 'character' && $method === 'POST') {
     csrf_check();
+    $changes = [];
     if (array_key_exists('fidelity', $_POST) && !feel_persona_minor($persona)) {
         $fidelity = chat_trait_level($_POST['fidelity']);
         if (isset($_POST['inherit_fidelity']) || $fidelity !== null) {
-            db()->prepare('UPDATE conversations SET fidelity_override = ? WHERE id = ?')
-                ->execute([isset($_POST['inherit_fidelity']) ? null : $fidelity, $cid]);
+            $changes['fidelity_override'] = isset($_POST['inherit_fidelity']) ? null : $fidelity;
         }
     }
     if (array_key_exists('remorse', $_POST)) {
         $remorse = chat_trait_level($_POST['remorse']);
         if (isset($_POST['automatic_remorse']) || $remorse !== null) {
-            db()->prepare('UPDATE conversations SET remorse_override = ? WHERE id = ?')
-                ->execute([isset($_POST['automatic_remorse']) ? null : $remorse, $cid]);
+            $changes['remorse_override'] = isset($_POST['automatic_remorse']) ? null : $remorse;
         }
+    }
+    $obedience = chat_trait_level($_POST['coerced_obedience'] ?? null);
+    if ($obedience !== null) {
+        $changes['coerced_obedience'] = $obedience;
+    }
+    if ($changes) {
+        $assignments = implode(', ', array_map(static fn (string $field): string => $field . ' = ?', array_keys($changes)));
+        db()->prepare('UPDATE conversations SET ' . $assignments . ' WHERE id = ?')
+            ->execute([...array_values($changes), $cid]);
     }
     flash('ok', t('character.saved'));
     redirect('/chat/' . $cid);

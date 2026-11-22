@@ -550,15 +550,15 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
             <ul class="fact-list recall-list" data-recall-list></ul>
         </section>
 
-        <?php if ($feelRomance): ?>
-            <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
-                <div class="mem-head"><h3><?= e(t('character.title')) ?></h3></div>
+        <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
+            <div class="mem-head"><h3><?= e(t('character.title')) ?></h3></div>
+            <form method="post" action="/chat/<?= (int) $conv['id'] ?>/character" class="sheet-directive">
+                <input type="hidden" name="_token" value="<?= e($token) ?>">
                 <?php
-                $personaFidelity = (int) ($persona['fidelity'] ?? CHAT_FIDELITY_DEFAULT);
-                $fidelity = $conv['fidelity_override'] ?? null;
+                if ($feelRomance):
+                    $personaFidelity = (int) ($persona['fidelity'] ?? CHAT_FIDELITY_DEFAULT);
+                    $fidelity = $conv['fidelity_override'] ?? null;
                 ?>
-                <form method="post" action="/chat/<?= (int) $conv['id'] ?>/character" class="sheet-form">
-                    <input type="hidden" name="_token" value="<?= e($token) ?>">
                     <div class="field" data-level-control>
                         <label>
                             <?= e(t('character.fidelity')) ?> <output data-level-value><?= (int) ($fidelity ?? $personaFidelity) ?></output>/100
@@ -571,12 +571,20 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
                         </label>
                         <small><?= e(t('character.fidelity_help')) ?></small>
                     </div>
-                    <div class="form-actions">
-                        <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
-                    </div>
-                </form>
-            </section>
-        <?php endif; ?>
+                <?php endif; ?>
+                <?php $obedience = (int) ($conv['coerced_obedience'] ?? 0); ?>
+                <div class="field" data-level-control>
+                    <label>
+                        <?= e(t('character.obedience')) ?> <output data-level-value><?= $obedience ?></output>/100
+                        <input class="input" type="range" name="coerced_obedience" min="0" max="100" value="<?= $obedience ?>" data-level-slider>
+                    </label>
+                    <small><?= e(t('character.obedience_help')) ?></small>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost btn-sm" type="submit"><?= e(t('chat.sheet.save')) ?></button>
+                </div>
+            </form>
+        </section>
 
         <section class="sheet-card sheet-settings-group" data-sheet-group="conversation">
             <div class="mem-head"><h3><?= e(t('chat.sheet.behavior')) ?></h3></div>

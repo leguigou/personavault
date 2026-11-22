@@ -4,6 +4,8 @@ return [
     'feel.title' => 'Humor y sentimientos',
     'feel.prompt_help' => 'El estado de ánimo y los sentimientos influyen en el tono de la próxima respuesta.',
     'character.title' => 'Rasgos de carácter',
+    'character.obedience' => 'Obediencia bajo coacción',
+    'character.obedience_help' => 'Con 0, el personaje responde libremente. A medida que sube el nivel, cede más ante la presión de la escena. Con 100, cumple las órdenes impuestas por una coacción establecida.',
     'character.persona_help' => 'Rasgos duraderos que complementan la instrucción de sistema del personaje.',
     'character.fidelity' => 'Fidelidad',
     'character.fidelity_help' => 'Se aplica cuando se ha establecido la exclusividad. Con 0, la fidelidad no condiciona al personaje. En niveles intermedios, el entorno y las circunstancias pueden influir. Con 100, el personaje respeta su compromiso.',

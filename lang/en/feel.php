@@ -4,6 +4,8 @@ return [
     'feel.title' => 'Mood and feelings',
     'feel.prompt_help' => 'Mood and feelings shape the tone of the next reply.',
     'character.title' => 'Character traits',
+    'character.obedience' => 'Obedience under pressure',
+    'character.obedience_help' => 'At 0, the persona responds freely. Higher levels make them more likely to give in to pressure in the scene. At 100, they carry out orders backed by an established constraint.',
     'character.persona_help' => 'Lasting traits that complement the persona’s system prompt.',
     'character.fidelity' => 'Fidelity',
     'character.fidelity_help' => 'Applies when exclusivity has been established. At 0, fidelity is no restraint. In between, other people and circumstances can have an influence. At 100, the persona honors the commitment.',

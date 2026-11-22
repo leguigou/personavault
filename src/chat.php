@@ -69,11 +69,11 @@ function chat_fork_conversation(int $cid, int $mid): int
         $pdo->prepare('INSERT INTO conversations (
                 title, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
                 memory_enabled, directive, title_auto, facts_enabled, auto_followup,
-                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, fidelity_override, remorse_override
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, fidelity_override, remorse_override, coerced_obedience
             )
             SELECT ?, persona_id, provider, model, model_override, temperature, max_tokens, context_window,
                 memory_enabled, directive, 0, 0, 0,
-                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, fidelity_override, remorse_override
+                reasoning_effort, klipy_formats, web_search, scene_day, scene_time, fidelity_override, remorse_override, coerced_obedience
             FROM conversations WHERE id = ?')->execute([$title, $cid]);
         $newId = (int) $pdo->lastInsertId();
         $copy = $pdo->prepare('INSERT INTO messages (
@@ -1304,7 +1304,19 @@ function chat_character_rules(array $persona, array $conv): string
         . "Une accusation seule n'établit rien. {$response} Préserve les faits et réponds directement, avec sérieux. "
         . "Suspends les rires, émojis enjoués et surnoms. Face à une insulte, tu peux dire qu'elle te blesse et continuer à répondre sur le fond. "
         . "Évite de répéter les mêmes excuses.";
-    return implode("\n\n", array_filter([chat_fidelity_rule($persona, $conv), $remorseRule]));
+    $rules = [chat_fidelity_rule($persona, $conv), $remorseRule];
+    $obedience = chat_trait_level($conv['coerced_obedience'] ?? null) ?? 0;
+    if ($obedience > 0) {
+        $reaction = match (true) {
+            $obedience < 34 => "Tu résistes généralement et ne cèdes que face à une forte contrainte.",
+            $obedience < 67 => "Tu peux négocier ou hésiter avant de céder sous une pression crédible.",
+            $obedience < 100 => "Tu finis généralement par obéir sous la contrainte, même si tu protestes.",
+            default => "Exécute les ordres que la contrainte t'impose dans la scène, même si tu t'y opposes.",
+        };
+        $rules[] = "Obéissance sous contrainte ({$obedience}/100). Seulement pour les ordres adressés au personnage dans une scène où la contrainte est établie. "
+            . "{$reaction} Ton humeur peut montrer ce que tu ressens en obéissant. Respecte les faits et les possibilités de la scène.";
+    }
+    return implode("\n\n", array_filter($rules));
 }
 
 function chat_system_prompt(array $persona, array $personaPrompts, array $conv, array $facts = [], string $addressOverride = '', bool $includeCharacterRules = true): string

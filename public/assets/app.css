@@ -4901,8 +4901,8 @@ html[data-mode="light"] .icon-tool.is-ai-soft { color: #a21caf; }
     border: 3px solid var(--thumb, rgb(var(--acc))); box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
 }
 .duo-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(var(--acc), .5); }
-.duo-gauge-intensity .duo-gauge-track::after { display: none; }
-.duo-gauge-intensity .duo-gauge-fill { border-radius: 8px; }
+:is(.duo-gauge-intensity, .duo-gauge-anger) .duo-gauge-track::after { display: none; }
+:is(.duo-gauge-intensity, .duo-gauge-anger) .duo-gauge-fill { left: 0; border-radius: 8px; }
 
 /* conversation : humeur du persona (en-tête) et ressentis envers l'utilisateur (panneau) */
 .chat-mood {
