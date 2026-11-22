@@ -4550,6 +4550,7 @@
             if (lastReply() === msg && scroll.querySelector(".msg-user[data-msg-id]")) {
                 actions.appendChild(toolBtn("regen", ICONS.regen, tr("chat.regen")));
             }
+            actions.appendChild(toolBtn("copy-message", ICONS.copy, tr("chat.copy_message")));
             actions.appendChild(toolBtn("del", ICONS.del, tr("chat.delete")));
             reactionPopover.hidden = false;
             positionReactions();
@@ -4594,7 +4595,7 @@
             event.stopPropagation();
             if (!reactionBubble) return;
             const option = event.target.closest("[data-reaction-option]");
-            const action = event.target.closest("[data-reply], [data-regen], [data-del]");
+            const action = event.target.closest("[data-reply], [data-regen], [data-copy-message], [data-del]");
             if (option) {
                 const item = reactionBubble;
                 closeReactions(true);
@@ -4619,6 +4620,7 @@
                 closeReactions(true);
                 if (!msg?.isConnected) return;
                 if (action.hasAttribute("data-regen")) regenerate(msg);
+                else if (action.hasAttribute("data-copy-message")) copyText(item.querySelector(".bubble").textContent, null, tr("chat.message_copied"));
                 else removeMsg(msg.dataset.msgId);
             }
         });
