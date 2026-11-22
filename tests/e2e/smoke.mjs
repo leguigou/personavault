@@ -1078,7 +1078,8 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     })).text()).split('\n').filter((line) => line.startsWith('data: '))
         .map((line) => JSON.parse(line.slice(6)));
     for (let i = 1; i <= 3; i++) {
-        await send(`Scène ${i}. ` + 'Le train poursuit son trajet. '.repeat(85));
+        const turn = await send(`Scène ${i}. ` + 'Le train poursuit son trajet. '.repeat(150));
+        expect(turn.some((event) => event.done), 'les tours de préparation de la compression sont enregistrés');
     }
     const events = await send('Que se passe-t-il ensuite ?');
     const summary = events.find((event) => event.memory)?.memory;
