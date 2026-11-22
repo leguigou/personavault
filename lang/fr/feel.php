@@ -4,6 +4,8 @@ return [
     'feel.title' => 'Humeur et ressentis',
     'feel.prompt_help' => 'L’humeur et les sentiments orientent le ton de la prochaine réponse.',
     'character.title' => 'Caractère',
+    'character.obedience' => 'Obéissance sous contrainte',
+    'character.obedience_help' => 'À 0, le personnage réagit librement. Plus le niveau monte, plus il cède à la pression dans la scène. À 100, il exécute les ordres imposés par une contrainte établie.',
     'character.persona_help' => 'Traits durables qui complètent le prompt système du personnage.',
     'character.fidelity' => 'Fidélité',
     'character.fidelity_help' => 'S’applique si une exclusivité est établie. À 0, la fidélité ne retient pas le personnage. Entre les deux, l’entourage et les circonstances peuvent l’influencer. À 100, le personnage respecte son engagement.',

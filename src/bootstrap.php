@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 27);
+define('PV_SCHEMA_VERSION', 28);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -293,6 +293,9 @@ function migrate(PDO $pdo): void
             add_column_if_missing($pdo, 'personas', 'fidelity', 'INTEGER NOT NULL DEFAULT 50');
             add_column_if_missing($pdo, 'conversations', 'fidelity_override', 'INTEGER DEFAULT NULL');
             add_column_if_missing($pdo, 'conversations', 'remorse_override', 'INTEGER DEFAULT NULL');
+        }
+        if ($version < 28) {
+            add_column_if_missing($pdo, 'conversations', 'coerced_obedience', 'INTEGER NOT NULL DEFAULT 0');
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);

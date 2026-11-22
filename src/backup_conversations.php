@@ -339,6 +339,7 @@ function backup_restore_chat(ZipArchive $zip, array $index, string $root, array 
                 'web_search' => (int) ($conversation['web_search'] ?? 1) === 0 ? 0 : 1,
                 'fidelity_override' => chat_trait_level($conversation['fidelity_override'] ?? null),
                 'remorse_override' => chat_trait_level($conversation['remorse_override'] ?? null),
+                'coerced_obedience' => chat_trait_level($conversation['coerced_obedience'] ?? null) ?? 0,
             ] + chat_scene_override($conversation['scene_day'] ?? 0, $conversation['scene_time'] ?? ''));
             $messageIds = [];
             $assistantIds = [];

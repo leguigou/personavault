@@ -5847,6 +5847,19 @@
         paint();
     }
 
+    // Amitié et amour partent du milieu. Intensité et colère partent de zéro à gauche.
+    const paintFeelingGauge = (gauge, key, value, moodColor, colors) => {
+        const linear = key === "intensity" || key === "anger";
+        const fill = gauge.querySelector(".duo-gauge-fill");
+        const color = key === "intensity" ? moodColor : colors[key]?.[value < 0 ? "neg" : "pos"];
+        fill.style.left = linear ? "0%" : Math.min(50, 50 + value / 2) + "%";
+        fill.style.width = (linear ? value : Math.abs(value) / 2) + "%";
+        fill.style.setProperty("--fill", color || "");
+        gauge.style.setProperty("--thumb", color || "");
+        gauge.classList.toggle("is-negative", !linear && value < 0);
+        gauge.querySelector(".duo-gauge-value").textContent = (!linear && value > 0 ? "+" : "") + value;
+    };
+
     /* ---------------------------------- discussions entre personas : en direct */
     /* La discussion est menée par le serveur (elle continue page fermée) : la page
        interroge son état toutes les 2 s, affiche les nouvelles lignes, les humeurs et
@@ -5928,27 +5941,6 @@
 
         const toneOf = (tone) => (tone === "positive" ? "is-positive" : tone === "negative" ? "is-negative" : "is-neutral");
 
-        // barre « à la Sims » : part du milieu, vers la droite en positif, vers la gauche en
-        // négatif, dans la couleur de la palette ; l'intensité de l'humeur part de la gauche
-        const paintGauge = (g, k, v, moodColor) => {
-            const fill = g.querySelector(".duo-gauge-fill");
-            if (k === "intensity") {
-                fill.style.left = "0";
-                fill.style.width = v + "%";
-                fill.style.setProperty("--fill", moodColor || "");
-                g.classList.remove("is-negative");
-                g.querySelector(".duo-gauge-value").textContent = String(v);
-                return;
-            }
-            const colors = gaugeColors[k] || {};
-            fill.style.left = v >= 0 ? "50%" : (50 + v / 2) + "%";
-            fill.style.width = Math.abs(v) / 2 + "%";
-            fill.style.setProperty("--fill", (v >= 0 ? colors.pos : colors.neg) || "");
-            g.style.setProperty("--thumb", (v >= 0 ? colors.pos : colors.neg) || "");
-            g.classList.toggle("is-negative", v < 0);
-            g.querySelector(".duo-gauge-value").textContent = (v > 0 ? "+" : "") + v;
-        };
-
         const paint = (st, newLines) => {
             const stick = nearBottom();
             thread.querySelector(".duo-typing")?.remove();
@@ -5980,7 +5972,7 @@
                     // on ne touche pas à une barre que l'utilisateur est en train de régler
                     if (!g || (slider && (slider.dataset.dragging || document.activeElement === slider))) return;
                     if (slider) slider.value = String(v);
-                    paintGauge(g, k, v, p.mood.color);
+                    paintFeelingGauge(g, k, v, p.mood.color, gaugeColors);
                 });
                 live.querySelector(`[data-duo-mood-label="${w}"]`).textContent = p.mood.label || "";
                 live.querySelectorAll(`[data-duo-emotion="${w}"]`).forEach((b) => {
@@ -6120,7 +6112,7 @@
             const who = Number(slider.dataset.duoSlider);
             const moodColor = () => (state.people?.[who]?.mood?.color) || "";
             slider.addEventListener("pointerdown", () => { slider.dataset.dragging = "1"; });
-            slider.addEventListener("input", () => paintGauge(g, slider.dataset.key, Number(slider.value), moodColor()));
+            slider.addEventListener("input", () => paintFeelingGauge(g, slider.dataset.key, Number(slider.value), moodColor(), gaugeColors));
             slider.addEventListener("change", async () => {
                 delete slider.dataset.dragging;
                 await saveFeelings(who, { [slider.dataset.key]: slider.value });
@@ -6180,25 +6172,6 @@
         let followUntil = 0;
         let timer = 0;
 
-        const paintGauge = (g, k, v, moodColor) => {
-            const fill = g.querySelector(".duo-gauge-fill");
-            if (k === "intensity") {
-                fill.style.left = "0";
-                fill.style.width = v + "%";
-                fill.style.setProperty("--fill", moodColor || "");
-                g.style.setProperty("--thumb", moodColor || "");
-                g.querySelector(".duo-gauge-value").textContent = String(v);
-                return;
-            }
-            const c = colors[k] || {};
-            fill.style.left = v >= 0 ? "50%" : (50 + v / 2) + "%";
-            fill.style.width = Math.abs(v) / 2 + "%";
-            fill.style.setProperty("--fill", (v >= 0 ? c.pos : c.neg) || "");
-            g.style.setProperty("--thumb", (v >= 0 ? c.pos : c.neg) || "");
-            g.classList.toggle("is-negative", v < 0);
-            g.querySelector(".duo-gauge-value").textContent = (v > 0 ? "+" : "") + v;
-        };
-
         const paintPanel = () => {
             const hasChanges = Object.keys(draft).length > 0;
             confirm.disabled = !hasChanges || saving;
@@ -6218,7 +6191,7 @@
                 const g = slider.closest("[data-feel-gauge]");
                 slider.disabled = saving || g.classList.contains("is-off");
                 if (slider.value !== String(f[k])) slider.value = String(f[k]);
-                paintGauge(g, k, f[k], color);
+                paintFeelingGauge(g, k, f[k], color, colors);
             });
             feel.querySelector("[data-feel-reason]").textContent = f.reason || "";
         };
