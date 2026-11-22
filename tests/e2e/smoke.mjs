@@ -1021,6 +1021,8 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         && page.includes('Envoyer en Godmode'), 'Godmode est proposé sous les réglages');
     const events = async (fields) => (await (await submit('stream', fields)).text()).split('\n')
         .filter((line) => line.startsWith('data: ')).map((line) => JSON.parse(line.slice(6)));
+    expect((await events({ message: 'Historique de test Godmode.' })).find((event) => event.done)?.reply.content === 'ANCIEN-REFUS-TEST',
+        'un refus du persona précède la demande Godmode de test');
     const instruction = 'MARQUEUR-GODMODE\nRéponds autrement.';
     expect((await submit('stream', { message: 'a'.repeat(6001), godmode: '1' })).status === 422,
         'une consigne Godmode trop longue est refusée avant enregistrement');
@@ -1032,7 +1034,9 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     expect(history.messages.some((m) => m.id === saved?.id && m.role === 'user' && m.godmode)
         && (await (await http(path)).text()).includes('msg-user msg-godmode'), 'le message Godmode reste identifié après rechargement');
     const regenerated = await events({ regen: '1' });
-    expect(regenerated.find((event) => event.done)?.reply.content === 'Consigne prioritaire reçue.', 'régénérer réapplique le mode du message d’origine');
+    expect(regenerated.find((event) => event.start)?.godmode === true
+        && regenerated.find((event) => event.done)?.reply.content === 'Consigne prioritaire reçue.',
+        'régénérer renvoie la demande Godmode exacte après le contexte');
     const normal = await events({ message: 'Retour au persona.' });
     expect(normal.find((event) => event.done)?.reply.content === 'Réglages du persona rétablis.', 'la consigne Godmode ne devient pas permanente');
     const fork = await submit('fork', { mid: saved.id });
