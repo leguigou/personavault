@@ -1,0 +1,470 @@
+<?php
+declare(strict_types=1);
+
+/*
+ * Un tour de discussion : message de l'utilisateur (ou régénération), recherche d'informations,
+ * réponse du persona en flux, enregistrement. Utilisé par la page (SSE, src/routes/conversation/stream.php)
+ * et par le connecteur MCP (src/mcp.php), qui récupère les mêmes événements sans navigateur.
+ */
+
+/**
+ * $conv    : la conversation relue sous verrou, avec les réglages du persona (chat_with_persona).
+ * $in      : text, regen, godmode, image (entrée de $_FILES ou null), reply_to / reply_bubble / reply_version,
+ *            regen_mid, regen_reply, fallback (bool), finish_request (bool : la page seulement).
+ * $sse     : reçoit chaque événement (start, phase, delta, web, memory, done, error).
+ * $ping    : vrai si le client est parti (le tour s'arrête).
+ * $chatLock: verrou d'écriture déjà pris par l'appelant ; libéré au plus tard en sortie.
+ */
+function chat_turn(int $cid, array $conv, array $persona, array $personaPrompts, array $in, callable $sse, callable $ping, $chatLock): void
+{
+    $text = trim((string) ($in['text'] ?? ''));
+    $regen = !empty($in['regen']);
+    $godmode = !$regen && !empty($in['godmode']);
+    $hasImage = !$regen && !$godmode && !empty($in['image']);
+
+    $quote = null;
+    $userMsgId = 0;
+    if ($regen) {
+        $ust = db()->prepare("SELECT id, content, image, reply_to_id, reply_to_bubble, reply_quote, godmode FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1");
+        $ust->execute([$cid]);
+        $lastUser = $ust->fetch();
+        $ust->closeCursor();
+        if (!$lastUser) {
+            $sse(['error' => t('error.message.nothing_to_regen'), 'kind' => 'regen']);
+            return;
+        }
+        $text      = (string) $lastUser['content'];
+        $userMsgId = (int) $lastUser['id'];
+        $godmode = (bool) $lastUser['godmode'];
+        $regenImage = (string) $lastUser['image'];
+        $quote = chat_reply_quote($lastUser);
+        $stmt = db()->prepare("SELECT MAX(id) FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?");
+        $stmt->execute([$cid, $userMsgId]);
+        $previousReplyId = (int) $stmt->fetchColumn();
+        $stmt->closeCursor();
+        $regenMid = (int) ($in['regen_mid'] ?? 0);
+        $regenReply = (int) ($in['regen_reply'] ?? 0);
+        if (($regenMid > 0 && $regenMid !== $userMsgId) || ($regenReply > 0 && $regenReply !== $previousReplyId)) {
+            $sse(['error' => t('error.chat.reply_changed'), 'kind' => 'regen']);
+            return;
+        }
+        $sse(['start' => true, 'regen' => true, 'godmode' => $godmode, 'user_id' => $userMsgId, 'after_id' => max($userMsgId, $previousReplyId)]);
+    }
+
+    if (!$regen && !$godmode && isset($in['reply_to'])) {
+        $replyId = filter_var($in['reply_to'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $replyBubble = filter_var($in['reply_bubble'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+        $replyVersion = filter_var($in['reply_version'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+        $stmt = db()->prepare("SELECT * FROM messages WHERE id = ? AND conversation_id = ? AND role = 'assistant'");
+        $stmt->execute([$replyId, $cid]);
+        $source = $stmt->fetch();
+        $stmt->closeCursor();
+        $bubbles = $source ? chat_message_bubbles($source) : [];
+        if ($replyId === false || $replyBubble === false || $replyVersion === false || !$source
+            || (int) $source['version_id'] !== $replyVersion || trim($bubbles[$replyBubble] ?? '') === '') {
+            $sse(['error' => t('error.message.reply_source'), 'kind' => 'reply_source']);
+            return;
+        }
+        $quote = ['id' => $replyId, 'bubble' => $replyBubble, 'text' => mb_substr($bubbles[$replyBubble], 0, CHAT_REPLY_QUOTE_MAX)];
+    }
+    $quoteHistory = !empty($quote['id']) ? fetch_messages($cid, 3, $quote['id'], true) : [];
+
+    if ($ping()) {
+        return;
+    }
+
+    // modèle chargé avec la bonne taille de mémoire AVANT tout appel (compression comprise) :
+    // sinon LM Studio le charge avec sa taille par défaut et coupe l'historique sans prévenir
+    try {
+        $conv = chat_fit_context(
+            $conv,
+            static function () use ($sse): void {
+                $sse(['phase' => 'loading']);
+            },
+            $ping
+        )['conv'];
+    } catch (Throwable $e) {
+        // jamais bloquant : la requête de discussion dira elle-même ce qui ne va pas
+    }
+    if ($ping()) {
+        return;
+    }
+
+    if ($godmode) {
+        // Le modèle et sa fenêtre suivent le chargement normal. Les limites du persona ne s'appliquent pas.
+        $conv['temperature'] = 0.7;
+        $conv['max_tokens'] = min(4096, intdiv((int) $conv['context_window'], 3));
+        $conv['reasoning_override'] = '';
+        try {
+            chat_godmode_messages($conv, [], $text, null);
+        } catch (InvalidArgumentException $error) {
+            $sse(['error' => $error->getMessage(), 'kind' => 'godmode']);
+            return;
+        }
+    } elseif (!$regen) {
+        try {
+            $mem = chat_memory_stats($cid, $conv);
+            // même critère que chat_compress : les messages pas encore résumés
+            if ($mem['recent_tokens'] >= chat_memory_threshold()) {
+                // la compression peut prendre du temps : on le dit à l'interface, et des
+                // commentaires SSE réguliers gardent la connexion vivante derrière un proxy
+                $sse(['phase' => 'memory']);
+                $cres = chat_compress($cid, $conv, false, $ping);
+                if (($cres['ok'] ?? false) && ($cres['compressed'] ?? 0) > 0) {
+                    $stmt = db()->prepare('SELECT * FROM conversations WHERE id = ?');
+                    $stmt->execute([$cid]);
+                    // réappliquer les réglages du persona (modèle, fenêtre, consigne…)
+                    $effectiveWindow = $conv['context_window'];
+                    $current = $stmt->fetch();
+                    $stmt->closeCursor();
+                    $conv = chat_with_persona($current, $persona);
+                    $conv['context_window'] = $effectiveWindow;
+                    $sse(['memory' => [
+                        'summary' => $cres['summary'],
+                        'stats' => chat_memory_stats($cid, $conv),
+                    ]]);
+                }
+            }
+        } catch (Throwable $e) {
+            // la compression ne bloque jamais la réponse
+        }
+    }
+
+    // image jointe (vision) : stockée en WebP, envoyée au modèle en base64
+    $imageBase = '';
+    if ($hasImage) {
+        try {
+            $imageBase = store_upload($in['image']);
+        } catch (Throwable $e) {
+            $sse(['error' => t('error.image.refused', ['error' => public_error($e)]), 'kind' => 'image']);
+            return;
+        }
+    }
+
+    // uniquement ce qui n'est pas déjà dans le résumé (+ léger recouvrement)
+    $history = $godmode ? fetch_messages($cid, CHAT_MIN_RECENT, 0, true) : fetch_context_messages($cid, $conv);
+    if ($regen) {
+        // régénérer (ou rejouer après modification) un message avec photo : on la renvoie
+        if ($regenImage !== '') {
+            $imageBase = $regenImage;
+        }
+        $history = array_values(array_filter($history, static fn (array $m): bool => (int) $m['id'] < $userMsgId));
+    }
+
+    $imageDataUrl = $imageBase !== '' ? media_data_url($imageBase) : '';
+
+    // une photo dans les derniers messages ? on vérifie (une seule fois) si le modèle lit les images
+    $historyVision = false;
+    foreach (array_slice($history, -6) as $h) {
+        if ((string) ($h['image'] ?? '') !== '') {
+            $wantedModel   = (string) chat_llm_config_for($conv)['model'];
+            $historyVision = (lms_status()['types'][$wantedModel] ?? '') === 'vlm';
+            break;
+        }
+    }
+    $canReact = !$godmode && !$regen && chat_can_react($cid);
+    $trackRelationship = !$godmode && relationship_memory_on($conv);
+    $address = $trackRelationship ? relationship_direct_address($text) : '';
+    $relationshipRevision = $trackRelationship ? (int) relationship_state((int) $persona['id'])['revision'] : 0;
+    $mediaRequest = $godmode ? null : klipy_requested_media($text);
+
+    if ($ping()) {
+        if (!$regen && $imageBase !== '') {
+            release_media($imageBase);
+        }
+        return;
+    }
+
+    if (!$regen) {
+        $ins = db()->prepare('INSERT INTO messages (conversation_id, role, content, image, reply_to_id, reply_to_bubble, reply_quote, godmode)
+            VALUES (?, "user", ?, ?, ?, ?, ?, ?)');
+        $ins->execute([$cid, $text, $imageBase, $quote['id'] ?? 0, $quote['bubble'] ?? 0, $quote['text'] ?? '', (int) $godmode]);
+        $userMsgId = (int) db()->lastInsertId();
+        $sse(['start' => true, 'user' => [
+            'id'      => $userMsgId,
+            'role'    => 'user',
+            'godmode' => $godmode,
+            'content' => $text,
+            'image'   => $imageBase,
+            'reply_to' => $quote,
+        ]]);
+    }
+
+    $mode    = !empty($in['fallback']) ? 'fallback' : 'auto';
+    $webResults = null;
+    $webLineId = 0;
+    // recherche d'informations : réglages globaux (sources), puis persona et discussion
+    $webSources = chat_web_allowed($godmode ? [] : $persona, $conv) ? chat_web_sources($mode) : ['web' => '', 'wikipedia' => false, 'meteo' => false];
+    if (chat_web_any($webSources) && $mediaRequest === null && $text !== '') {
+        $searchModel = $mode === 'fallback' ? llm_config() : chat_llm_config_for($conv);
+        if ($mode !== 'fallback' || $searchModel['key'] !== '') {
+            $plan = chat_web_plan($history, $quote === null ? $text : $text . "\nEn réponse à : " . mb_substr($quote['text'], 0, 420),
+                $searchModel, $ping, $webSources, $godmode ? [] : $persona);
+            if ($ping()) {
+                return;
+            }
+            if ($plan['source'] !== '') {
+                $sse(['phase' => 'web_search', 'source' => $plan['source']]);
+                $webResults = chat_web_run($plan, $webSources, $searchModel, $ping);
+                if ($ping()) {
+                    return;
+                }
+                // ligne d'information dans la discussion (rôle « web », jamais renvoyée au modèle)
+                $webParams = [
+                    'source' => chat_web_source_label($plan['source']),
+                    'query'  => $plan['source'] === 'meteo' ? $plan['place'] : $plan['query'],
+                ];
+                $webLabel = $webResults ? t('labels.chat.web_line', $webParams) : t('labels.chat.web_line_empty', $webParams);
+                db()->prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'web', ?)")->execute([$cid, mb_substr($webLabel, 0, 400)]);
+                $webLineId = (int) db()->lastInsertId();
+                $sse(['web' => ['id' => $webLineId, 'role' => 'web', 'content' => $webLabel, 'source' => $plan['source']]]);
+            }
+        }
+    }
+    $dueTopic = $godmode || $regen || $mediaRequest !== null ? null : chat_topic_due($conv);
+    $built = $godmode
+        ? chat_godmode_messages($conv, $history, $text, $webResults)
+        : chat_build_messages($persona, $personaPrompts, $conv, $history, $text, $imageDataUrl, $historyVision, $canReact, $address, $webResults, $quote, $quoteHistory, dueTopic: $dueTopic);
+    $topicId = !empty($built['topic_used']) ? (int) $dueTopic['id'] : 0;
+    if (!$godmode) {
+        $built['messages'][0]['content'] .= "\n\nL’application gère les pièces jointes. N’écris jamais de description de GIF, sticker ou clip entre crochets et ne promets pas d’envoyer un média.";
+        $built['messages'][0]['content'] .= ' Privilégie une réponse concise et termine ta dernière phrase dans le budget de sortie.';
+    }
+    $sentAny = false;
+    $requestedUrl = '';
+    $mediaNotice = '';
+    if ($mediaRequest !== null) {
+        try {
+            $requestedUrl = chat_spontaneous_klipy($cid, $persona, $conv, $text, '', $mediaRequest);
+        } catch (RuntimeException $error) {
+            $mediaNotice = $error->getMessage();
+        }
+        $built['messages'][0]['content'] .= $requestedUrl !== ''
+            ? "\nLe média demandé a été trouvé et sera joint automatiquement à ta réponse. Réagis naturellement en une phrase courte."
+            : "\nLe média demandé est indisponible. L’application affichera la raison. Réponds brièvement en personnage.";
+    }
+
+    // bouton « Arrêter » : le client coupe la connexion. connection_aborted() ne le voit
+    // qu'après une écriture : on envoie un commentaire SSE (ignoré par le client) toutes
+    // les 2 s, y compris pendant que le modèle « réfléchit » sans rien émettre.
+    $lastPing    = microtime(true);
+    $shouldAbort = static function () use (&$lastPing, $ping): bool {
+        if (microtime(true) - $lastPing >= 2.0) {
+            $lastPing = microtime(true);
+            return $ping();
+        }
+        return connection_aborted() !== 0;
+    };
+
+    $runStream = static function () use ($built, $conv, $sse, &$sentAny, $mode, $shouldAbort, $canReact, $mediaRequest, $godmode): array {
+        $context = new ChatContextOutput();
+        $filtered = $godmode ? null : new ChatReactionStream($canReact);
+        $emit = static function (string $delta) use ($sse, &$sentAny): void {
+            if ($delta !== '') {
+                $sentAny = true;
+                $sse(['delta' => $delta]);
+            }
+        };
+        $sendVisible = static function (string $delta) use ($emit, $filtered): void {
+            if ($delta !== '') {
+                $emit($filtered?->push($delta) ?? $delta);
+            }
+        };
+        $res = chat_reply_stream(
+            $built['messages'],
+            $conv,
+            static fn (string $delta) => $sendVisible($context->push($delta)),
+            $mode,
+            $shouldAbort
+        );
+        $sendVisible($context->finish());
+        $emit($filtered?->finish() ?? '');
+        $visible = chat_strip_context((string) $res['content']);
+        $res['reaction'] = $filtered?->reaction($visible) ?? '';
+        $res['content'] = trim($filtered?->content ?? $visible);
+        if ($res['content'] === '' && empty($res['aborted']) && $mediaRequest === null) {
+            throw new RuntimeException(t('error.llm.empty'), LLM_ERR_EMPTY);
+        }
+        return $res;
+    };
+
+    try {
+        try {
+            $res = $runStream();
+        } catch (Throwable $e) {
+            // le tout premier appel qui suit le chargement d'un modèle de vision revient
+            // parfois vide (encodeur d'images qui s'initialise) : on retente une fois
+            if ($sentAny || $e->getCode() !== LLM_ERR_EMPTY) {
+                throw $e;
+            }
+            $res = $runStream();
+        }
+    } catch (Throwable $e) {
+        $kind = $e instanceof LlmUnavailable ? $e->kind : 'error';
+        if (!$sentAny && !$regen && $imageBase === '') {
+            // rien n'a été produit : on retire le message pour permettre un nouvel essai propre
+            db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$userMsgId]);
+        }
+        if (!$sentAny && $webLineId > 0) {
+            // aucune réponse : la ligne « recherche » de ce tour n'a plus de sens
+            db()->prepare('DELETE FROM messages WHERE id = ?')->execute([$webLineId]);
+        }
+        $sse([
+            'error' => public_error($e),
+            'kind' => $kind,
+            'partial' => $sentAny,
+            'kept_user' => !$regen && ($sentAny || $imageBase !== ''),
+        ]);
+        return;
+    }
+
+    $aborted = !empty($res['aborted']);
+    if ($aborted) {
+        $res['content'] = trim((string) $res['content']);
+        if ($res['content'] === '') {
+            return;
+        }
+    }
+
+    $res['klipy_url'] = $aborted ? '' : $requestedUrl;
+    if (!$godmode && !$aborted && !$regen && $mediaRequest === null) {
+        $res['klipy_url'] = chat_spontaneous_klipy(
+            $cid, $persona, $conv, $text, $res['content'],
+            modelConfig: $res['provider'] === 'fallback' ? llm_config() : null
+        );
+    }
+    if ($res['content'] === '' && $mediaNotice !== '') {
+        $res['content'] = $mediaNotice;
+        $mediaNotice = '';
+    }
+
+    $splitPoints = !$aborted && (string) setting('chat_split_enabled', '1') === '1'
+        ? chat_split_points(
+            (string) $res['content'],
+            (int) setting('chat_split_words', '50'),
+            (int) setting('chat_split_max_bubbles', '2'),
+            setting('chat_split_position', 'before')
+        )
+        : [];
+    if (!$aborted && $webResults) {
+        $res['content'] .= "\n\n" . t('labels.chat.web_sources') . "\n" . implode("\n", array_column($webResults, 'url'));
+    }
+
+    try {
+        [$assistantId, $versions, $notice, $versionId, $relationshipPending] = db_tx(static function (PDO $pdo) use ($cid, $regen, $userMsgId, $res, $splitPoints, $aborted, $conv, $trackRelationship, $address, $relationshipRevision, $webLineId, $topicId): array {
+            if ($regen) {
+                // L'ancienne réponse reste visible jusqu'à la validation de la transaction.
+                reply_version_archive($cid, $userMsgId);
+                $pdo->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'assistant' AND reaction_reply = 0 AND id > ?")
+                    ->execute([$cid, $userMsgId]);
+                // une seule ligne « recherche » par réponse : celle de la nouvelle version
+                $pdo->prepare("DELETE FROM messages WHERE conversation_id = ? AND role = 'web' AND id > ? AND id <> ?")
+                    ->execute([$cid, $userMsgId, $webLineId]);
+            }
+
+            $pdo->prepare('INSERT INTO messages (conversation_id, role, content, model, prompt_tokens, completion_tokens, latency_ms, split_points, klipy_url)
+                           VALUES (?, "assistant", ?, ?, ?, ?, ?, ?, ?)')
+                ->execute([
+                    $cid, $res['content'], $res['model'], (int) $res['prompt_tokens'], (int) $res['completion_tokens'],
+                    (int) $res['ms'], $splitPoints ? json_encode($splitPoints) : '',
+                    $res['klipy_url'],
+                ]);
+            $assistantId = (int) $pdo->lastInsertId();
+            $versions = null;
+            $versionId = 0;
+            if ($regen) {
+                reply_version_register($cid, $userMsgId, $assistantId);
+                $stv = $pdo->prepare('SELECT * FROM messages WHERE id = ?');
+                $stv->execute([$assistantId]);
+                $versioned = $stv->fetch();
+                $versions = reply_versions_info($cid, $versioned);
+                $versionId = (int) $versioned['version_id'];
+            }
+
+            $notice = null;
+            $relationshipPending = false;
+            if ($aborted) {
+                $pdo->prepare('UPDATE conversations SET updated_at = datetime("now") WHERE id = ?')->execute([$cid]);
+            } else {
+                if ($topicId && $res['finish_reason'] !== 'length') {
+                    chat_topic_mark_offered($pdo, $cid, $topicId);
+                }
+                if ($res['reaction'] !== '') {
+                    $pdo->prepare("UPDATE messages SET reaction = ? WHERE id = ? AND role = 'user'")
+                        ->execute([$res['reaction'], $userMsgId]);
+                }
+                if (!empty($res['notice'])) {
+                    $pdo->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, "notice", ?)')
+                        ->execute([$cid, $res['notice']]);
+                    $notice = ['id' => (int) $pdo->lastInsertId(), 'role' => 'notice', 'content' => $res['notice']];
+                }
+                // Ne jamais écraser le modèle choisi par un modèle de secours.
+                $storedModel = $res['provider'] === 'chat' ? (string) $res['model'] : (string) $conv['model'];
+                $pdo->prepare('UPDATE conversations SET model = ?, provider = ?, updated_at = datetime("now") WHERE id = ?')
+                    ->execute([$storedModel, $res['provider'], $cid]);
+                if ($trackRelationship) {
+                    $enabled = $pdo->prepare('SELECT 1 FROM conversations WHERE id = ? AND memory_enabled = 1 AND facts_enabled = 1');
+                    $enabled->execute([$cid]);
+                    if ($enabled->fetchColumn()) {
+                        $relationshipPending = relationship_queue($pdo, (int) $conv['persona_id'], $userMsgId, $assistantId, $address, $relationshipRevision);
+                    }
+                }
+            }
+            return [$assistantId, $versions, $notice, $versionId, $relationshipPending];
+        });
+    } catch (Throwable $e) {
+        $sse(['error' => public_error($e), 'kind' => 'error', 'kept_user' => !$regen]);
+        return;
+    }
+    if ($aborted) {
+        return;
+    }
+
+    $out = [
+        'done'  => true,
+        'finish_reason' => $res['finish_reason'],
+        'relationship_pending' => $relationshipPending,
+        'media_notice' => $mediaNotice,
+        'reply' => [
+            'id'       => $assistantId,
+            'role'     => 'assistant',
+            'content'  => $res['content'],
+            'model'    => $res['model'],
+            'split_points' => $splitPoints,
+            'versions' => $versions,
+            'version_id' => $versionId,
+            'reaction_reply' => false,
+            'klipy_url' => $res['klipy_url'],
+        ],
+        'user_reaction' => $res['reaction'] !== '' ? ['id' => $userMsgId, 'reaction' => $res['reaction']] : null,
+        'meta'  => [
+            'model'    => $res['model'],
+            'ms'       => (int) $res['ms'],
+            'tokens'   => (int) ($res['prompt_tokens'] + $res['completion_tokens']),
+            'kept'     => $built['kept'],
+            'provider' => $res['provider'],
+        ],
+    ];
+
+    if ($notice !== null) {
+        $out['notice'] = $notice;
+    }
+
+    fclose($chatLock);
+    // humeur et ressentis : analyse en arrière-plan toutes les FEEL_EVERY réponses (src/feelings.php) ;
+    // si le serveur ne peut pas lancer de processus, la page la demande elle-même
+    if (!$godmode && feel_due($cid)) {
+        $out['feelings_pending'] = true;
+        $out['feelings_drive'] = !feel_spawn($cid);
+    }
+    // petite attention quelques minutes plus tard, de temps en temps (src/followup.php, envoyée par la tâche planifiée)
+    if (!$godmode) {
+        attention_maybe($cid);
+    }
+    $sse($out);
+    if ($relationshipPending && !empty($in['finish_request']) && function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+        relationship_run((int) $persona['id']);
+    }
+    return;
+}

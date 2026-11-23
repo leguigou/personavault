@@ -767,6 +767,52 @@ try {
     $check((int) db()->query("SELECT web_search FROM personas WHERE id = $pidW")->fetchColumn() === 1
         && (int) db()->query('SELECT web_search FROM conversations LIMIT 1')->fetchColumn() === 1, 'migration : interrupteurs actifs par défaut');
 
+    echo PHP_EOL . '— connecteur MCP' . PHP_EOL;
+    $rpc = static fn (string $m, array $p = [], int $id = 1): ?array => mcp_handle(['jsonrpc' => '2.0', 'id' => $id, 'method' => $m, 'params' => $p]);
+    $tool = static fn (string $n, array $a = []): array => $rpc('tools/call', ['name' => $n, 'arguments' => $a])['result'];
+    $check(!mcp_enabled() && !mcp_token_ok('pv_x'), 'MCP : désactivé par défaut, aucun jeton accepté');
+    $mcpToken = mcp_token_new();
+    set_setting('mcp_enabled', '1');
+    $check(mcp_enabled() && mcp_token_ok($mcpToken) && !mcp_token_ok($mcpToken . 'x') && !str_contains(setting('mcp_token_hash'), $mcpToken),
+        'MCP : jeton vérifié par son empreinte, jamais gardé en clair');
+    $check(mcp_request_token('/mcp/' . $mcpToken) === $mcpToken && mcp_request_token('/mcp') === '', 'MCP : jeton lu dans l’adresse');
+    $check($rpc('initialize', ['protocolVersion' => '2025-03-26'])['result']['protocolVersion'] === '2025-03-26'
+        && $rpc('initialize', ['protocolVersion' => '1999-01-01'])['result']['protocolVersion'] === MCP_PROTOCOL_VERSIONS[0],
+        'MCP : version du protocole négociée');
+    $mcpTools = $rpc('tools/list')['result']['tools'];
+    $check(count($mcpTools) === 11 && !array_filter($mcpTools, static fn ($t) => ($t['inputSchema']['type'] ?? '') !== 'object' || !isset($t['annotations']['readOnlyHint'])),
+        'MCP : 11 outils décrits, avec schéma et indication lecture seule');
+    $check(mcp_handle(['jsonrpc' => '2.0', 'method' => 'notifications/initialized']) === null
+        && $rpc('nope')['error']['code'] === -32601 && $rpc('tools/call', ['name' => 'nope'])['error']['code'] === -32602,
+        'MCP : notification sans réponse, méthode et outil inconnus refusés');
+    $created = $tool('create_persona', ['name' => 'Nina MCP', 'tagline' => 'Fleuriste', 'tags' => ['Fleurs'], 'attributes' => ['Âge' => '28', 'Ville' => 'Nice'],
+        'system_prompt' => 'Tu es Nina.', 'directive' => 'Messages courts.'])['structuredContent'];
+    $check(!empty($created['created']) && $created['attributes']->{'Ville'} === 'Nice' && $created['tags'] === ['Fleurs']
+        && $created['prompts'][0]['body'] === 'Tu es Nina.' && $created['directive'] === 'Messages courts.', 'MCP : création d’un persona avec prompt et attributs');
+    $upd = $tool('update_persona', ['persona' => 'Nina MCP', 'attributes' => ['Âge' => '29'], 'web_search' => false])['structuredContent'];
+    $check($upd['updated'] === ['meta', 'web_search'] && (array) $upd['attributes'] === ['Âge' => '29'] && $upd['settings']['web_search'] === false,
+        'MCP : modification partielle (attributs remplacés, recherche coupée)');
+    $setP = $tool('set_persona_prompt', ['persona' => (string) $created['id'], 'kind' => 'system', 'body' => 'Tu es Nina, fleuriste à Nice.'])['structuredContent'];
+    $check($setP['replaced'] === true && count(fetch_prompts((int) $created['id'])) === 1 && count(prompt_versions($setP['prompt_id'])) === 1,
+        'MCP : prompt système remplacé, ancien texte dans l’historique');
+    $missing = $tool('get_persona', ['persona' => 'Personne Inconnue']);
+    $check($missing['isError'] === true && str_contains($missing['structuredContent']['error'], 'introuvable'), 'MCP : erreur d’outil lisible par le modèle');
+    $mcpCid = $tool('create_conversation', ['persona' => $created['slug'], 'title' => 'Essai MCP'])['structuredContent']['conversation_id'];
+    $asUser = $tool('send_user_message', ['conversation_id' => $mcpCid, 'text' => 'Salut Nina', 'reply' => false])['structuredContent'];
+    $asPersona = $tool('write_as_persona', ['conversation_id' => $mcpCid, 'text' => 'Coucou ! Je ferme la boutique.'])['structuredContent'];
+    $mcpConv = $tool('get_conversation', ['conversation_id' => $mcpCid])['structuredContent'];
+    $check($asUser['user_message_id'] > 0 && $asPersona['message_id'] > $asUser['user_message_id'] && $mcpConv['title'] === 'Essai MCP'
+        && array_column($mcpConv['messages'], 'role') === ['user', 'persona'] && !empty($mcpConv['messages'][1]['written_by_connector'])
+        && (int) db()->query('SELECT unread FROM conversations WHERE id = ' . (int) $mcpCid)->fetchColumn() === 1,
+        'MCP : écrire comme l’utilisateur, puis comme le persona (badge « Nouveau » dans l’app)');
+    $lockMcp = chat_try_lock((int) $mcpCid);
+    $busy = $tool('write_as_persona', ['conversation_id' => $mcpCid, 'text' => 'Encore']);
+    fclose($lockMcp);
+    $check($busy['isError'] === true, 'MCP : refuse d’écrire pendant une réponse en cours dans l’app');
+    $listed = $tool('list_conversations', ['persona' => 'nina-mcp'])['structuredContent']['conversations'];
+    $check(count($listed) === 1 && $listed[0]['messages'] === 2 && str_contains($listed[0]['last_message'], 'boutique'), 'MCP : discussions d’un persona');
+    set_setting('mcp_enabled', '0');
+
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
     set_setting('chat_title_model', 'off');
