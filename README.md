@@ -221,6 +221,12 @@ le conteneur : appelle-les depuis le cron de l'hôte, par exemple
 docker compose exec -T app php bin/followup.php
 ```
 
+La recherche d'informations s'appuie sur le service `personavault-searxng` du compose (interne,
+jamais publié). Il lui faut un `settings.yml` contenant `search.formats: [html, json]` et
+`server.limiter: false`, monté depuis un **chemin absolu** (variable `PV_SEARXNG_CONFIG` : Dokploy
+recrée le dossier de déploiement à chaque fois), plus la variable `SEARXNG_SECRET`. Renseigne
+ensuite `http://personavault-searxng:8080` dans Réglages → Recherche d'informations.
+
 ---
 
 ## Modèles de langage
