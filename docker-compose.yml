@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    image: personavault:latest
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      - PV_PASSWORD=${PV_PASSWORD}
+      - PV_PASSWORD_HASH=${PV_PASSWORD_HASH}
+      - PV_TRUST_PROXY=true
+    volumes:
+      - personavault_storage:/var/www/html/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  personavault_storage:
+    name: personavault_storage

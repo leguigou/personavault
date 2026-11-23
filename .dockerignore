@@ -1,0 +1,8 @@
+.git
+.github
+storage
+config.local.php
+tests
+Dockerfile
+docker-compose.yml
+.dockerignore
