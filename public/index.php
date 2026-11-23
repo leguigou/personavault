@@ -68,6 +68,10 @@ if ($p0 === 'assets') {
     exit;
 }
 
+// connecteur MCP : appelé par un assistant extérieur, sans cookie ni session
+if ($p0 === 'mcp') {
+    define('PV_NO_SESSION', true);
+}
 require dirname(__DIR__) . '/src/bootstrap.php';
 
 /* ------------------------------------------------------- envoi trop lourd */
@@ -99,6 +103,7 @@ if ($method === 'POST' && post_too_large()) {
 // L'ordre compte : les routes publiques d'abord, puis require_login().
 
 $routes = dirname(__DIR__) . '/src/routes/';
+require $routes . 'mcp.php';
 require $routes . 'media.php';
 require $routes . 'auth.php';
 

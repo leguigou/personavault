@@ -1497,6 +1497,7 @@ require_once __DIR__ . '/klipy.php';
 require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/chat_web.php';
 require_once __DIR__ . '/chat_turn.php';
+require_once __DIR__ . '/mcp.php';
 require_once __DIR__ . '/chat_opening.php';
 require_once __DIR__ . '/facts.php';
 require_once __DIR__ . '/conversation_topics.php';

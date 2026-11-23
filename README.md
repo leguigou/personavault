@@ -458,6 +458,48 @@ php bin/duo-test.php camille-lefebvre hugo-bernard --sujet="Partir vivre à la c
     --objectif-a="Convaincre Hugo de partir" --objectif-b="Défendre la vie en ville"
 ```
 
+### Connecteur MCP : piloter PersonaVault depuis ChatGPT (ou Claude)
+
+PersonaVault expose un serveur [MCP](https://modelcontextprotocol.io/) : un assistant extérieur peut
+gérer les fiches et intervenir dans les discussions, à ta place **ou** à la place du persona.
+
+| Outil | Effet |
+|---|---|
+| `list_personas`, `get_persona` | liste et fiche complète (attributs, consigne, prompts) |
+| `create_persona`, `update_persona` | créer, modifier (champs fournis seulement), archiver |
+| `set_persona_prompt` | écrire un prompt (système, image…) ; l'ancien texte reste dans l'historique |
+| `list_conversations`, `get_conversation` | suivre les discussions : messages, humeur, résumé de mémoire |
+| `create_conversation` | ouvrir une discussion |
+| `send_user_message` | écrire **comme l'utilisateur** ; le persona répond avec son modèle, exactement comme dans l'app (mémoire, recherche, humeur, relation). `reply: false` : le message seul |
+| `write_as_persona` | écrire **comme le persona**, sans son modèle |
+| `generate_persona_reply` | faire répondre le persona au dernier message (une réponse existante passe dans les versions ‹ 1/2 ›) |
+
+Les messages arrivés par le connecteur apparaissent dans l'app avec le badge « Nouveau ».
+
+**Mise en route**
+
+1. PersonaVault doit être joignable **en HTTPS depuis internet** : ChatGPT appelle le serveur depuis
+   ses propres machines, pas depuis ton navigateur (reverse proxy, voir « Production », ou un tunnel).
+2. **Réglages › IA › Connecteur MCP › Activer et créer un jeton.** Le jeton n'est affiché qu'une fois.
+3. Dans ChatGPT, ajoute un connecteur personnalisé (mode développeur) avec l'adresse
+   `https://ton-domaine/mcp/<jeton>` et l'authentification « aucune » : le jeton est dans l'adresse.
+   Un client qui sait envoyer un en-tête peut utiliser `https://ton-domaine/mcp` avec
+   `Authorization: Bearer <jeton>`. Les menus et les offres de ChatGPT qui l'autorisent évoluent :
+   vérifie la documentation d'OpenAI.
+
+**À savoir**
+
+- **Confidentialité** : ce que l'assistant lit (fiches, discussions) part chez son fournisseur
+  (OpenAI pour ChatGPT). Désactive le connecteur quand tu ne t'en sers pas.
+- **Jeton** : seule son empreinte est enregistrée. « Nouveau jeton » invalide l'ancien. Dans l'adresse,
+  il peut apparaître dans les journaux du serveur ou du proxy : garde-les privés.
+- **Durée** : `send_user_message` et `generate_persona_reply` attendent la réponse complète du
+  persona. Avec un modèle local lent, l'assistant peut abandonner avant la fin : la réponse est
+  quand même enregistrée, `get_conversation` la retrouve.
+- Pas d'images ni de suppression par le connecteur. Si une réponse est en cours dans l'app, les
+  outils qui écrivent dans cette discussion demandent de réessayer.
+- Transport : `POST` JSON-RPC, réponses JSON, sans flux ni session (`src/mcp.php`).
+
 ### Relances spontanées (tâche planifiée)
 
 Les messages spontanés sont envoyés par un script à lancer régulièrement, par exemple toutes les
@@ -549,7 +591,9 @@ personavault/
 │   ├── i18n.php            # traductions : t(), langue, pluriels
 │   ├── llm.php             # client OpenAI-compatible (streaming inclus)
 │   ├── chat.php            # moteur de discussion, mémoire, bulles
+│   ├── chat_turn.php       # un tour de discussion (réponse du persona), pour la page et le connecteur MCP
 │   ├── chat_web.php        # recherche d'informations : SearXNG, Brave, LM Studio, Wikipédia, météo
+│   ├── mcp.php             # connecteur MCP : protocole et outils (ChatGPT, Claude…)
 │   ├── facts.php           # souvenirs + recherche FTS5
 │   ├── prompts.php         # prompts internes éditables
 │   ├── backup.php          # export / import ZIP
@@ -646,6 +690,9 @@ Après un changement voulu de statut ou de route : `bash tests/e2e/run.sh --upda
   « Tester » n'envoie la clé enregistrée qu'à l'adresse enregistrée.
 - Les erreurs techniques sont écrites dans le journal PHP (`error_log`) ; le navigateur ne reçoit
   qu'un message générique.
+- **Connecteur MCP** désactivé par défaut. Une fois activé, `/mcp` ne demande ni mot de passe ni
+  session, seulement le jeton (192 bits, comparé par empreinte) : qui le possède contrôle tes personas et
+  tes discussions. Désactiver le connecteur coupe tout accès ; « Nouveau jeton » révoque l'ancien.
 
 L'app est pensée pour un usage personnel. Si tu l'exposes sur Internet, place-la **obligatoirement
 derrière HTTPS** (reverse proxy, voir « Production ») — sinon le mot de passe et le cookie de session

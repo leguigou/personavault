@@ -7,6 +7,24 @@ declare(strict_types=1);
 
 /* ---------------------------------------------------------------- réglages */
 
+/* --- connecteur MCP (ChatGPT, Claude…) : activer, couper, nouveau jeton (src/mcp.php) --- */
+if ($path === '/settings/mcp-server' && $method === 'POST') {
+    csrf_check();
+    $do = (string) ($_POST['do'] ?? '');
+    if ($do === 'enable' || $do === 'token') {
+        if ($do === 'token' || setting('mcp_token_hash', '') === '') {
+            // affiché une seule fois sur la page des réglages, jamais enregistré en clair
+            $_SESSION['mcp_new_token'] = mcp_token_new();
+        }
+        set_setting('mcp_enabled', '1');
+        flash('ok', $do === 'token' ? t('settings.mcp.flash_token') : t('settings.mcp.flash_on'));
+    } elseif ($do === 'disable') {
+        set_setting('mcp_enabled', '0');
+        flash('ok', t('settings.mcp.flash_off'));
+    }
+    redirect('/settings');
+}
+
 /* --- journal des échanges avec les modèles (20 derniers) --- */
 if ($path === '/settings/logs' && $method === 'GET') {
     render('llm_logs', [
@@ -263,8 +281,11 @@ if ($path === '/settings') {
         'brave' => secret_preview(chat_web_search_key()),
     ];
     unset($llmCfg['key'], $chatCfg['key']);
+    $mcpNewToken = (string) ($_SESSION['mcp_new_token'] ?? '');
+    unset($_SESSION['mcp_new_token']);
     render('settings', [
         'title'      => t('nav.settings'),
+        'mcpNewToken' => $mcpNewToken,
         'llm'        => $llmCfg,
         'keyPreviews' => $keyPreviews,
         'searchMcp' => chat_web_mcp_config(),

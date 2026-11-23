@@ -742,6 +742,50 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
             'le chat local utilise le MCP LM Studio en priorité et conserve les liens réellement retournés');
     }
 }
+// --- connecteur MCP : jeton, protocole, écrire comme l'utilisateur ou le persona, réponse du persona
+{
+    const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });
+    const rpc = async (url, method, params = {}, headers = {}) => {
+        const r = await fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers },
+            // une notification (notifications/…) n'a pas d'identifiant et n'attend pas de réponse
+            body: JSON.stringify(method.startsWith('notifications/') ? { jsonrpc: '2.0', method } : { jsonrpc: '2.0', id: 1, method, params }) });
+        return { status: r.status, body: r.status === 202 ? null : await r.json().catch(() => null) };
+    };
+    expect((await rpc('/mcp', 'tools/list')).status === 404, 'MCP : désactivé par défaut');
+    await submit('/settings/mcp-server', { do: 'enable' });
+    const shown = await (await http('/settings')).text();
+    const token = shown.match(/\/mcp\/(pv_[0-9a-f]{48})/)?.[1] || '';
+    const again = await (await http('/settings')).text();
+    expect(token !== '' && !again.includes(token), 'MCP : jeton affiché une seule fois dans les réglages');
+    expect((await rpc('/mcp', 'tools/list')).status === 401 && (await rpc('/mcp/pv_faux', 'tools/list')).status === 401,
+        'MCP : sans le bon jeton, aucun accès');
+    const url = '/mcp/' + token;
+    const init = await rpc(url, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    expect(init.status === 200 && init.body?.result?.protocolVersion === '2025-06-18' && init.body.result.serverInfo.name === 'PersonaVault',
+        'MCP : initialisation');
+    expect((await rpc(url, 'notifications/initialized')).status === 202, 'MCP : notification acceptée sans réponse');
+    const viaHeader = await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + token });
+    expect(viaHeader.body?.result?.tools?.length === 11, 'MCP : jeton accepté dans l’en-tête Authorization');
+    const call = async (name, args) => (await rpc(url, 'tools/call', { name, arguments: args })).body?.result;
+    const personas = (await call('list_personas', {})).structuredContent.personas;
+    const target = personas.find((p) => p.conversations > 0) || personas[0];
+    const cid = (await call('create_conversation', { persona: String(target.id), title: 'Pilotée par MCP' })).structuredContent.conversation_id;
+    const turn = (await call('send_user_message', { conversation_id: cid, text: 'Bonjour, tu vas bien ?' })).structuredContent;
+    expect(turn.user_message_id > 0 && turn.reply?.content.includes('faux modèle') && turn.reply.author === target.name,
+        'MCP : écrire comme l’utilisateur, le persona répond avec son modèle');
+    const written = (await call('write_as_persona', { conversation_id: cid, text: 'Je reviens dans cinq minutes.' })).structuredContent;
+    await call('send_user_message', { conversation_id: cid, text: 'D’accord, je t’attends.', reply: false });
+    const regen = (await call('generate_persona_reply', { conversation_id: cid })).structuredContent;
+    const read = (await call('get_conversation', { conversation_id: cid })).structuredContent;
+    expect(written.message_id > 0 && regen.reply?.id > 0
+        && read.messages.map((m) => m.role).join(',') === 'user,persona,persona,user,persona'
+        && read.messages[2].written_by_connector === true && read.title === 'Pilotée par MCP',
+        'MCP : écrire comme le persona, puis le faire répondre ; la discussion se relit');
+    const page = await (await http('/chat/' + cid)).text();
+    expect(page.includes('Je reviens dans cinq minutes.') && page.includes('D’accord, je t’attends.'), 'MCP : les messages apparaissent dans l’app');
+    await submit('/settings/mcp-server', { do: 'disable' });
+    expect((await rpc(url, 'tools/list')).status === 404, 'MCP : désactivé, plus aucun accès');
+}
 // --- recherche d'informations : SearXNG, Wikipédia, météo, ligne bleue, interrupteurs
 {
     const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });
