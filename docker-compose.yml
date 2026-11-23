@@ -18,6 +18,20 @@ services:
       retries: 3
       start_period: 20s
 
+  # Recherche d'informations (SearXNG) : service privé, jamais exposé publiquement.
+  # Le fichier de configuration est monté depuis un chemin ABSOLU hors du dossier de
+  # déploiement (Dokploy recrée /etc/dokploy/compose/<app>/code à chaque déploiement).
+  personavault-searxng:
+    image: ghcr.io/searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+      - SEARXNG_SECRET=${PV_SEARXNG_SECRET}
+    volumes:
+      - ${PV_SEARXNG_CONFIG:-/opt/personavault/searxng/settings.yml}:/etc/searxng/settings.yml:ro
+    expose:
+      - "8080"
+
 volumes:
   personavault_storage:
     name: personavault_storage
