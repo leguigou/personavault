@@ -433,4 +433,6 @@ return [
     'settings.mcp.flash_revoked' => 'Conexiones revocadas.',
     'settings.mcp.flash_redirects' => 'URL de retorno guardadas.',
     'settings.mcp.redirects_invalid' => 'Solo se guardaron las direcciones https://.',
+    'settings.mcp.oauth_missing' => 'El conector se activó antes de que existiera OAuth: crea el ID de cliente y el secreto para copiarlos en ChatGPT.',
+    'settings.mcp.oauth_create' => 'Crear las credenciales OAuth',
 ];

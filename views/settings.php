@@ -172,6 +172,11 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
             <?php endif; ?>
 
             <h4 class="mcp-sub"><?= e(t('settings.mcp.oauth_title')) ?></h4>
+            <?php if (!mcp_oauth_ready()): ?>
+                <!-- connecteur activé avant l'arrivée d'OAuth : pas encore d'identifiants -->
+                <p class="hint"><?= e(t('settings.mcp.oauth_missing')) ?></p>
+                <div class="form-actions"><?= $mcpAction('secret', t('settings.mcp.oauth_create'), 'btn-primary') ?></div>
+            <?php else: ?>
             <p class="hint"><?= e(t('settings.mcp.oauth_hint')) ?></p>
             <?php if (($mcpNewSecret ?? '') !== ''): ?>
                 <p class="inline-warn" role="note"><?= e(t('settings.mcp.secret_once')) ?></p>
@@ -206,6 +211,7 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
                 <?= $mcpAction('revoke', t('settings.mcp.revoke'), 'btn-ghost', t('settings.mcp.revoke_confirm')) ?>
                 <?= $mcpAction('secret', t('settings.mcp.new_secret'), 'btn-ghost', t('settings.mcp.new_secret_confirm')) ?>
             </div>
+            <?php endif; ?>
 
             <details class="mcp-simple"<?= ($mcpNewToken ?? '') !== '' ? ' open' : '' ?>>
                 <summary><?= e(t('settings.mcp.simple_title')) ?></summary>
