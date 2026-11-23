@@ -18,6 +18,8 @@ if ($p0 === 'mcp') {
     }
     if (!mcp_token_ok(mcp_request_token($path))) {
         http_response_code(401);
+        // découverte OAuth (spécification MCP) : où trouver l'autorité qui délivre les jetons
+        header('WWW-Authenticate: Bearer resource_metadata="' . mcp_public_base() . '/.well-known/oauth-protected-resource"');
         echo json_encode(mcp_error(null, -32001, 'Unauthorized'));
         exit;
     }

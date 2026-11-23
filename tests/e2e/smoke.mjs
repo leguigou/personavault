@@ -783,6 +783,44 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         'MCP : écrire comme le persona, puis le faire répondre ; la discussion se relit');
     const page = await (await http('/chat/' + cid)).text();
     expect(page.includes('Je reviens dans cinq minutes.') && page.includes('D’accord, je t’attends.'), 'MCP : les messages apparaissent dans l’app');
+    // OAuth, comme ChatGPT : découverte, autorisation dans PersonaVault, code + PKCE → jeton, appel de /mcp
+    const clientId = shown.match(/id="mcp-o-client"[^>]*value="(pvc_[0-9a-f]+)"/)?.[1] || '';
+    const secret = shown.match(/id="mcp-o-secret"[^>]*value="(pvs_[0-9a-f]+)"/)?.[1] || '';
+    expect(clientId !== '' && secret !== '' && !again.includes(secret) && again.includes(clientId),
+        'OAuth : ID client toujours visible, secret affiché une seule fois');
+    const unauth = await fetch(base + '/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const metaUrl = (unauth.headers.get('www-authenticate') || '').match(/resource_metadata="([^"]+)"/)?.[1] || '';
+    const resource = await (await fetch(metaUrl.replace(/^https?:\/\/[^/]+/, base))).json();
+    const server = await (await fetch(base + '/.well-known/oauth-authorization-server')).json();
+    expect(unauth.status === 401 && resource.resource.endsWith('/mcp') && server.token_endpoint.endsWith('/oauth/token')
+        && server.code_challenge_methods_supported.includes('S256'), 'OAuth : découverte depuis la réponse 401 de /mcp');
+    const verifier = 'v'.repeat(64);
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
+    const callback = 'https://chatgpt.com/connector/oauth/test-e2e';
+    const params = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: callback, state: 'etat42',
+        code_challenge: challenge, code_challenge_method: 'S256', scope: 'personavault' });
+    const anon = await http('/oauth/authorize?' + params, { anonymous: true });
+    expect(anon.status === 303 && anon.headers.get('location') === '/login', 'OAuth : sans session, la page d’autorisation demande la connexion');
+    const evil = await http('/oauth/authorize?' + new URLSearchParams({ ...Object.fromEntries(params), redirect_uri: 'https://evil.example/cb' }));
+    expect(evil.status === 400, 'OAuth : URL de rappel inconnue refusée sans redirection');
+    const consent = await (await http('/oauth/authorize?' + params)).text();
+    expect(consent.includes('chatgpt.com') && consent.includes('name="decision" value="allow"'), 'OAuth : page « Autoriser l’accès »');
+    const denied = await http('/oauth/authorize', { method: 'POST', form: { _token: csrf, ...Object.fromEntries(params), decision: 'deny' } });
+    expect((denied.headers.get('location') || '').startsWith(callback + '?error=access_denied'), 'OAuth : refuser renvoie access_denied');
+    const allowed = await http('/oauth/authorize', { method: 'POST', form: { _token: csrf, ...Object.fromEntries(params), decision: 'allow' } });
+    const back = new URL(allowed.headers.get('location') || 'http://x');
+    expect(allowed.status === 302 && back.origin + back.pathname === callback && back.searchParams.get('state') === 'etat42',
+        'OAuth : autoriser renvoie vers ChatGPT avec un code et l’état');
+    const tokenRes = await fetch(base + '/oauth/token', { method: 'POST',
+        headers: { Authorization: 'Basic ' + Buffer.from(clientId + ':' + secret).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'authorization_code', code: back.searchParams.get('code') || '', redirect_uri: callback, code_verifier: verifier }) });
+    const tokens = await tokenRes.json();
+    expect(tokenRes.status === 200 && tokens.token_type === 'Bearer' && tokens.refresh_token, 'OAuth : code échangé contre un jeton (client_secret_basic, PKCE)');
+    const oauthCall = await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + tokens.access_token });
+    expect(oauthCall.body?.result?.tools?.length === 11, 'OAuth : le jeton d’accès ouvre les outils MCP');
+    await submit('/settings/mcp-server', { do: 'revoke' });
+    expect((await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + tokens.access_token })).status === 401, 'OAuth : connexions révoquées');
+
     await submit('/settings/mcp-server', { do: 'disable' });
     expect((await rpc(url, 'tools/list')).status === 404, 'MCP : désactivé, plus aucun accès');
 }

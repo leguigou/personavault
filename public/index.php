@@ -69,7 +69,8 @@ if ($p0 === 'assets') {
 }
 
 // connecteur MCP : appelé par un assistant extérieur, sans cookie ni session
-if ($p0 === 'mcp') {
+// connecteur MCP et son OAuth (métadonnées, jeton) : appelés par l'assistant, sans cookie ni session
+if ($p0 === 'mcp' || $p0 === '.well-known' || $path === '/oauth/token') {
     define('PV_NO_SESSION', true);
 }
 require dirname(__DIR__) . '/src/bootstrap.php';
@@ -104,6 +105,7 @@ if ($method === 'POST' && post_too_large()) {
 
 $routes = dirname(__DIR__) . '/src/routes/';
 require $routes . 'mcp.php';
+require $routes . 'oauth.php';
 require $routes . 'media.php';
 require $routes . 'auth.php';
 

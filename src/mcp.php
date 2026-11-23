@@ -15,10 +15,10 @@ declare(strict_types=1);
 const MCP_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MCP_SOURCE_MODEL = 'mcp';
 
-/** Le connecteur est-il activé, avec un jeton ? */
+/** Le connecteur est-il activé, avec un moyen d'accès (jeton simple ou client OAuth) ? */
 function mcp_enabled(): bool
 {
-    return setting('mcp_enabled', '0') === '1' && setting('mcp_token_hash', '') !== '';
+    return setting('mcp_enabled', '0') === '1' && (setting('mcp_token_hash', '') !== '' || mcp_oauth_ready());
 }
 
 /** Nouveau jeton : seule son empreinte est gardée, le jeton n'est affiché qu'une fois. */
@@ -29,24 +29,31 @@ function mcp_token_new(): string
     return $token;
 }
 
+/** Jeton simple des réglages, ou jeton d'accès OAuth (ChatGPT) encore valide. */
 function mcp_token_ok(string $token): bool
 {
     $hash = setting('mcp_token_hash', '');
-    return $hash !== '' && $token !== '' && hash_equals($hash, hash('sha256', $token));
+    return ($hash !== '' && $token !== '' && hash_equals($hash, hash('sha256', $token))) || mcp_oauth_access_ok($token);
 }
 
-/** Jeton de la requête : en-tête Authorization, sinon dernier segment de l'adresse (/mcp/<jeton>). */
-function mcp_request_token(string $path): string
+/** En-tête Authorization de la requête (Apache mod_php ne le met pas toujours dans $_SERVER). */
+function mcp_authorization_header(): string
 {
     $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
     if ($auth === '' && function_exists('getallheaders')) {
-        // Apache (mod_php) ne transmet pas toujours cet en-tête dans $_SERVER
         foreach ((array) getallheaders() as $name => $value) {
             if (strcasecmp((string) $name, 'Authorization') === 0) {
                 $auth = (string) $value;
             }
         }
     }
+    return trim($auth);
+}
+
+/** Jeton de la requête : en-tête Authorization, sinon dernier segment de l'adresse (/mcp/<jeton>). */
+function mcp_request_token(string $path): string
+{
+    $auth = mcp_authorization_header();
     if (preg_match('/^Bearer\s+(\S+)$/i', trim($auth), $m)) {
         return $m[1];
     }

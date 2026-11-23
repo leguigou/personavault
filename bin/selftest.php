@@ -813,6 +813,45 @@ try {
     $check(count($listed) === 1 && $listed[0]['messages'] === 2 && str_contains($listed[0]['last_message'], 'boutique'), 'MCP : discussions d’un persona');
     set_setting('mcp_enabled', '0');
 
+    echo PHP_EOL . '— connecteur MCP : OAuth (ChatGPT)' . PHP_EOL;
+    $oSecret = mcp_oauth_new_client();
+    $oClient = mcp_oauth_client_id();
+    set_setting('mcp_enabled', '1');
+    $check(mcp_oauth_ready() && mcp_oauth_client_ok($oClient, $oSecret) && !mcp_oauth_client_ok($oClient, $oSecret . 'x')
+        && !str_contains(setting('mcp_oauth_secret_hash'), $oSecret), 'OAuth : client créé, secret vérifié par empreinte');
+    $cb = 'https://chatgpt.com/connector/oauth/abc123';
+    $check(mcp_oauth_redirect_ok($cb) && !mcp_oauth_redirect_ok('https://evil.example/cb') && !mcp_oauth_redirect_ok('http://chatgpt.com/connector/oauth/x'),
+        'OAuth : seules les URL de rappel de ChatGPT (ou enregistrées) sont acceptées');
+    set_setting('mcp_oauth_redirects', "https://claude.ai/api/mcp/auth_callback");
+    $check(mcp_oauth_redirect_ok('https://claude.ai/api/mcp/auth_callback'), 'OAuth : URL de rappel ajoutée dans les réglages');
+    $check(mcp_oauth_check_request(['client_id' => $oClient, 'redirect_uri' => $cb]) === ''
+        && mcp_oauth_check_request(['client_id' => 'autre', 'redirect_uri' => $cb]) !== ''
+        && mcp_oauth_request_error(['response_type' => 'token']) === 'unsupported_response_type'
+        && mcp_oauth_request_error(['response_type' => 'code', 'code_challenge' => str_repeat('a', 43), 'code_challenge_method' => 'plain']) === 'invalid_request',
+        'OAuth : demande d’autorisation vérifiée (client, type de réponse, PKCE S256)');
+    $verifier = str_repeat('v', 50);
+    $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+    $code = mcp_oauth_issue_code($cb, $challenge, '');
+    [$st1] = mcp_oauth_token_response(['grant_type' => 'authorization_code', 'code' => $code, 'code_verifier' => 'mauvais'], [$oClient, $oSecret]);
+    $code = mcp_oauth_issue_code($cb, $challenge, '');
+    [$st2] = mcp_oauth_token_response(['grant_type' => 'authorization_code', 'code' => $code, 'code_verifier' => $verifier], [$oClient, 'faux']);
+    [$st3, $tok] = mcp_oauth_token_response(['grant_type' => 'authorization_code', 'code' => $code, 'code_verifier' => $verifier, 'redirect_uri' => $cb], [$oClient, $oSecret]);
+    [$st4] = mcp_oauth_token_response(['grant_type' => 'authorization_code', 'code' => $code, 'code_verifier' => $verifier], [$oClient, $oSecret]);
+    $check($st1 === 400 && $st2 === 401 && $st3 === 200 && $tok['token_type'] === 'Bearer' && $st4 === 400,
+        'OAuth : code échangé une seule fois, avec le bon secret et le bon vérificateur PKCE');
+    $check(mcp_token_ok($tok['access_token']) && !mcp_token_ok('pvt_inconnu'), 'OAuth : le jeton d’accès ouvre /mcp');
+    [$st5, $tok2] = mcp_oauth_token_response(['grant_type' => 'refresh_token', 'refresh_token' => $tok['refresh_token'],
+        'client_id' => $oClient, 'client_secret' => $oSecret], null);
+    [$st6] = mcp_oauth_token_response(['grant_type' => 'refresh_token', 'refresh_token' => $tok['refresh_token']], [$oClient, $oSecret]);
+    $check($st5 === 200 && $tok2['access_token'] !== $tok['access_token'] && $st6 === 400 && mcp_oauth_active_count() === 1,
+        'OAuth : renouvellement (secret dans le corps aussi), l’ancien jeton de renouvellement ne sert qu’une fois');
+    $meta = mcp_oauth_server_metadata();
+    $check(str_ends_with($meta['token_endpoint'], '/oauth/token') && $meta['code_challenge_methods_supported'] === ['S256']
+        && str_ends_with(mcp_oauth_resource_metadata()['resource'], '/mcp'), 'OAuth : métadonnées de découverte');
+    mcp_oauth_revoke_all();
+    $check(!mcp_token_ok($tok2['access_token']) && mcp_oauth_active_count() === 0, 'OAuth : révocation des connexions');
+    set_setting('mcp_enabled', '0');
+
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
     set_setting('chat_title_model', 'off');

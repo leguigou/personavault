@@ -7,9 +7,16 @@ declare(strict_types=1);
 
 /* ------------------------------------------------------------------ login */
 
+// après la connexion : la page demandée avant (autorisation OAuth du connecteur MCP), sinon les discussions
+$afterLogin = static function (): never {
+    $next = (string) ($_SESSION['login_next'] ?? '');
+    unset($_SESSION['login_next']);
+    redirect(str_starts_with($next, '/oauth/authorize?') ? $next : '/chat');
+};
+
 if ($path === '/login') {
     if (is_logged()) {
-        redirect('/chat');
+        $afterLogin();
     }
     $error = '';
     if ($method === 'POST') {
@@ -18,7 +25,7 @@ if ($path === '/login') {
         if ($wait > 0) {
             $error = t('login.blocked', (int) ceil($wait / 60));
         } elseif (attempt_login((string) ($_POST['password'] ?? ''))) {
-            redirect('/chat');
+            $afterLogin();
         } else {
             $error = t('login.wrong');
             $wait  = login_blocked_for();
