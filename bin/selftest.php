@@ -780,8 +780,8 @@ try {
         && $rpc('initialize', ['protocolVersion' => '1999-01-01'])['result']['protocolVersion'] === MCP_PROTOCOL_VERSIONS[0],
         'MCP : version du protocole négociée');
     $mcpTools = $rpc('tools/list')['result']['tools'];
-    $check(count($mcpTools) === 11 && !array_filter($mcpTools, static fn ($t) => ($t['inputSchema']['type'] ?? '') !== 'object' || !isset($t['annotations']['readOnlyHint'])),
-        'MCP : 11 outils décrits, avec schéma et indication lecture seule');
+    $check(count($mcpTools) === 12 && !array_filter($mcpTools, static fn ($t) => ($t['inputSchema']['type'] ?? '') !== 'object' || !isset($t['annotations']['readOnlyHint'])),
+        'MCP : 12 outils décrits, avec schéma et indication lecture seule');
     $check(mcp_handle(['jsonrpc' => '2.0', 'method' => 'notifications/initialized']) === null
         && $rpc('nope')['error']['code'] === -32601 && $rpc('tools/call', ['name' => 'nope'])['error']['code'] === -32602,
         'MCP : notification sans réponse, méthode et outil inconnus refusés');
@@ -809,6 +809,11 @@ try {
     $busy = $tool('write_as_persona', ['conversation_id' => $mcpCid, 'text' => 'Encore']);
     fclose($lockMcp);
     $check($busy['isError'] === true, 'MCP : refuse d’écrire pendant une réponse en cours dans l’app');
+    $avatarErr = static fn (string $url): string => (string) ($tool('set_persona_avatar', ['persona' => 'nina-mcp', 'image_url' => $url])['structuredContent']['error'] ?? '');
+    $check(str_contains($avatarErr('http://example.com/a.png'), 'https://') && str_contains($avatarErr('https://10.0.0.5/a.png'), 'réseau local')
+        && str_contains($avatarErr('https://127.0.0.1/a.png'), 'réseau local') && str_contains($avatarErr('https://user:pw@example.com/a.png'), 'https://')
+        && str_contains($avatarErr('file:///etc/passwd'), 'https://'),
+        'MCP : portrait téléchargé seulement depuis une adresse https:// publique (ni http, ni réseau local, ni fichier)');
     $listed = $tool('list_conversations', ['persona' => 'nina-mcp'])['structuredContent']['conversations'];
     $check(count($listed) === 1 && $listed[0]['messages'] === 2 && str_contains($listed[0]['last_message'], 'boutique'), 'MCP : discussions d’un persona');
     set_setting('mcp_enabled', '0');

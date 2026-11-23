@@ -765,7 +765,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         'MCP : initialisation');
     expect((await rpc(url, 'notifications/initialized')).status === 202, 'MCP : notification acceptée sans réponse');
     const viaHeader = await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + token });
-    expect(viaHeader.body?.result?.tools?.length === 11, 'MCP : jeton accepté dans l’en-tête Authorization');
+    expect(viaHeader.body?.result?.tools?.length === 12, 'MCP : jeton accepté dans l’en-tête Authorization');
     const call = async (name, args) => (await rpc(url, 'tools/call', { name, arguments: args })).body?.result;
     const personas = (await call('list_personas', {})).structuredContent.personas;
     const target = personas.find((p) => p.conversations > 0) || personas[0];
@@ -773,6 +773,12 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const turn = (await call('send_user_message', { conversation_id: cid, text: 'Bonjour, tu vas bien ?' })).structuredContent;
     expect(turn.user_message_id > 0 && turn.reply?.content.includes('faux modèle') && turn.reply.author === target.name,
         'MCP : écrire comme l’utilisateur, le persona répond avec son modèle');
+    const imgBase = `http://127.0.0.1:${llmPort}/img/`;
+    const avatar = await call('set_persona_avatar', { persona: String(target.id), image_url: imgBase + 'redirect' });
+    const notImage = await call('set_persona_avatar', { persona: String(target.id), image_url: imgBase + 'text' });
+    expect(avatar.isError === false && avatar.structuredContent.avatar_updated === true
+        && (await call('get_persona', { persona: String(target.id) })).structuredContent.has_avatar === true
+        && notImage.isError === true, 'MCP : portrait téléchargé (redirection suivie), un fichier qui n’est pas une image est refusé');
     const written = (await call('write_as_persona', { conversation_id: cid, text: 'Je reviens dans cinq minutes.' })).structuredContent;
     await call('send_user_message', { conversation_id: cid, text: 'D’accord, je t’attends.', reply: false });
     const regen = (await call('generate_persona_reply', { conversation_id: cid })).structuredContent;
@@ -817,7 +823,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const tokens = await tokenRes.json();
     expect(tokenRes.status === 200 && tokens.token_type === 'Bearer' && tokens.refresh_token, 'OAuth : code échangé contre un jeton (client_secret_basic, PKCE)');
     const oauthCall = await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + tokens.access_token });
-    expect(oauthCall.body?.result?.tools?.length === 11, 'OAuth : le jeton d’accès ouvre les outils MCP');
+    expect(oauthCall.body?.result?.tools?.length === 12, 'OAuth : le jeton d’accès ouvre les outils MCP');
     await submit('/settings/mcp-server', { do: 'revoke' });
     expect((await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + tokens.access_token })).status === 401, 'OAuth : connexions révoquées');
 
