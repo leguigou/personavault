@@ -20,9 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY deploy/php.ini /usr/local/etc/php/conf.d/zz-personavault.ini
 COPY deploy/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+COPY deploy/apache-servername.conf /etc/apache2/conf-available/servername.conf
 COPY deploy/entrypoint.sh /usr/local/bin/pv-entrypoint
 COPY deploy/make-config.php /usr/local/bin/pv-make-config
-RUN chmod +x /usr/local/bin/pv-entrypoint
+RUN chmod +x /usr/local/bin/pv-entrypoint && a2enconf servername
 
 WORKDIR /var/www/html
 COPY . /var/www/html

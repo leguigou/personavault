@@ -196,6 +196,33 @@ WantedBy=multi-user.target
 
 ---
 
+### Docker
+
+Le dépôt fournit une image **PHP 8.4 + Apache** prête à l'emploi (`Dockerfile`) : GD/WebP, SQLite,
+ZIP et intl sont compilés, et toutes les URL passent par `public/index.php` comme avec `php -S`.
+Le mot de passe et `trust_proxy` sont lus dans l'environnement au démarrage
+(`deploy/make-config.php`) : ils ne sont jamais écrits dans l'image ni versionnés.
+
+```bash
+# PV_PASSWORD (en clair, haché au démarrage) ou PV_PASSWORD_HASH (bcrypt)
+docker compose up -d --build
+```
+
+Le volume `personavault_storage` porte la base SQLite, les uploads, les sessions et les
+sauvegardes : le supprimer efface toutes les données. Le conteneur écoute sur le port 80 ;
+place-le derrière un reverse proxy HTTPS (Traefik, Caddy, nginx) qui envoie
+`X-Forwarded-Proto` et `X-Forwarded-For` (`PV_TRUST_PROXY=true`, valeur par défaut dans le
+`docker-compose.yml`).
+
+Les tâches de fond (relances spontanées, analyse des ressentis) ne tournent pas toutes seules dans
+le conteneur : appelle-les depuis le cron de l'hôte, par exemple
+
+```bash
+docker compose exec -T app php bin/followup.php
+```
+
+---
+
 ## Modèles de langage
 
 Deux fournisseurs, réglables dans **Réglages** :
