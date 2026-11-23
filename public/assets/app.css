@@ -3481,6 +3481,8 @@ form.is-dirty .save-bar { border-color: rgba(251, 191, 36, .28); }
 
 /* maintenance LM Studio, séparée du formulaire */
 .settings-maint { margin-top: 14px; }
+/* adresse et jeton du connecteur MCP : longues chaînes sans espace, coupées plutôt que de déborder */
+.settings-mcp code { overflow-wrap: anywhere; }
 
 /* sauvegarde : sélecteur de fichier dans le thème */
 .file-pick {

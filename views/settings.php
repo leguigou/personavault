@@ -145,7 +145,7 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
     $mcpOn = mcp_enabled();
     $mcpBase = (request_is_https() ? 'https' : 'http') . '://' . preg_replace('/[^A-Za-z0-9.:\[\]-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost')) . '/mcp';
     ?>
-    <section class="backup-card" id="mcp">
+    <section class="backup-card settings-maint settings-mcp" id="mcp">
         <h3><?= e(t('settings.mcp.title')) ?> <?= $info('mcp', t('settings.mcp.title')) ?></h3>
         <p class="hint"><?= e(t('settings.mcp.hint')) ?></p>
         <p class="hint"><strong><?= e($mcpOn ? t('settings.mcp.state_on') : t('settings.mcp.state_off')) ?></strong></p>
@@ -153,7 +153,7 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
             <div class="inline-warn" role="note">
                 <p><?= e(t('settings.mcp.token_once')) ?></p>
                 <p><?= e(t('settings.mcp.url_label')) ?><br><code data-copy><?= e($mcpBase . '/' . $mcpNewToken) ?></code></p>
-                <p><?= e(t('settings.mcp.header_label')) ?><br><code><?= e($mcpBase) ?></code> · <code>Authorization: Bearer <?= e($mcpNewToken) ?></code></p>
+                <p><?= e(t('settings.mcp.header_label')) ?><br><code><?= e($mcpBase) ?></code><br><code>Authorization: Bearer <?= e($mcpNewToken) ?></code></p>
             </div>
         <?php elseif ($mcpOn): ?>
             <p class="hint"><?= e(t('settings.mcp.url_hidden')) ?> <code><?= e($mcpBase) ?>/pv_…</code></p>
