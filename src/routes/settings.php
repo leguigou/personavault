@@ -11,13 +11,30 @@ declare(strict_types=1);
 if ($path === '/settings/mcp-server' && $method === 'POST') {
     csrf_check();
     $do = (string) ($_POST['do'] ?? '');
-    if ($do === 'enable' || $do === 'token') {
-        if ($do === 'token' || setting('mcp_token_hash', '') === '') {
-            // affiché une seule fois sur la page des réglages, jamais enregistré en clair
+    // secrets affichés une seule fois sur la page des réglages, jamais enregistrés en clair
+    if ($do === 'enable') {
+        if (!mcp_oauth_ready()) {
+            $_SESSION['mcp_new_secret'] = mcp_oauth_new_client();
+        }
+        if (setting('mcp_token_hash', '') === '') {
             $_SESSION['mcp_new_token'] = mcp_token_new();
         }
         set_setting('mcp_enabled', '1');
-        flash('ok', $do === 'token' ? t('settings.mcp.flash_token') : t('settings.mcp.flash_on'));
+        flash('ok', t('settings.mcp.flash_on'));
+    } elseif ($do === 'token') {
+        $_SESSION['mcp_new_token'] = mcp_token_new();
+        flash('ok', t('settings.mcp.flash_token'));
+    } elseif ($do === 'secret') {
+        $_SESSION['mcp_new_secret'] = mcp_oauth_new_client();
+        flash('ok', t('settings.mcp.flash_secret'));
+    } elseif ($do === 'revoke') {
+        mcp_oauth_revoke_all();
+        flash('ok', t('settings.mcp.flash_revoked'));
+    } elseif ($do === 'redirects') {
+        $lines = array_filter(array_map('trim', preg_split('/\R/', (string) ($_POST['redirects'] ?? '')) ?: []));
+        $valid = array_values(array_filter($lines, static fn (string $l): bool => (bool) preg_match('~^https://[^\s#]+$~i', $l)));
+        set_setting('mcp_oauth_redirects', implode("\n", array_slice($valid, 0, 10)));
+        flash(count($valid) === count($lines) ? 'ok' : 'error', count($valid) === count($lines) ? t('settings.mcp.flash_redirects') : t('settings.mcp.redirects_invalid'));
     } elseif ($do === 'disable') {
         set_setting('mcp_enabled', '0');
         flash('ok', t('settings.mcp.flash_off'));
@@ -282,10 +299,12 @@ if ($path === '/settings') {
     ];
     unset($llmCfg['key'], $chatCfg['key']);
     $mcpNewToken = (string) ($_SESSION['mcp_new_token'] ?? '');
-    unset($_SESSION['mcp_new_token']);
+    $mcpNewSecret = (string) ($_SESSION['mcp_new_secret'] ?? '');
+    unset($_SESSION['mcp_new_token'], $_SESSION['mcp_new_secret']);
     render('settings', [
         'title'      => t('nav.settings'),
         'mcpNewToken' => $mcpNewToken,
+        'mcpNewSecret' => $mcpNewSecret,
         'llm'        => $llmCfg,
         'keyPreviews' => $keyPreviews,
         'searchMcp' => chat_web_mcp_config(),

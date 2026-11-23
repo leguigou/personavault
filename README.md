@@ -480,25 +480,37 @@ Les messages arrivés par le connecteur apparaissent dans l'app avec le badge «
 
 1. PersonaVault doit être joignable **en HTTPS depuis internet** : ChatGPT appelle le serveur depuis
    ses propres machines, pas depuis ton navigateur (reverse proxy, voir « Production », ou un tunnel).
-2. **Réglages › IA › Connecteur MCP › Activer et créer un jeton.** Le jeton n'est affiché qu'une fois.
-3. Dans ChatGPT, ajoute un connecteur personnalisé (mode développeur) avec l'adresse
-   `https://ton-domaine/mcp/<jeton>` et l'authentification « aucune » : le jeton est dans l'adresse.
-   Un client qui sait envoyer un en-tête peut utiliser `https://ton-domaine/mcp` avec
-   `Authorization: Bearer <jeton>`. Les menus et les offres de ChatGPT qui l'autorisent évoluent :
-   vérifie la documentation d'OpenAI.
+2. **Réglages › IA › Connecteur MCP › Activer le connecteur.** Le bloc « ChatGPT (authentification
+   OAuth) » affiche chaque valeur avec un bouton pour la copier ; le **secret** n'est affiché qu'une fois.
+3. Dans ChatGPT : **Ajouter un serveur MCP personnalisé**, connexion « URL du serveur », authentification
+   **OAuth**. Copie l'URL du serveur (`https://ton-domaine/mcp`), l'ID client, le secret, la méthode
+   `client_secret_basic` ; les portées peuvent rester vides. ChatGPT trouve seul les adresses
+   d'autorisation et de jeton (`/.well-known/oauth-authorization-server`), affichées aussi au besoin.
+4. À la création, ChatGPT ouvre une page PersonaVault **« Autoriser l'accès »** (connexion demandée si
+   besoin) : clique sur **Autoriser**. ChatGPT reçoit un jeton d'accès (1 h) qu'il renouvelle seul
+   (jeton de renouvellement valable 90 jours, remplacé à chaque usage).
+
+Les URL de rappel `https://chatgpt.com/connector/oauth/…` sont acceptées d'office ; pour un autre
+client OAuth, colle la sienne dans « URL de rappel ». **Jeton simple** (replié) : pour un client qui
+accepte un jeton fixe (`https://ton-domaine/mcp/<jeton>` ou en-tête `Authorization: Bearer <jeton>`).
+Derrière un proxy HTTPS, active `trust_proxy` ou indique `'public_url' => 'https://ton-domaine'` dans
+`config.local.php` : les adresses annoncées à ChatGPT doivent être en `https://`.
 
 **À savoir**
 
 - **Confidentialité** : ce que l'assistant lit (fiches, discussions) part chez son fournisseur
   (OpenAI pour ChatGPT). Désactive le connecteur quand tu ne t'en sers pas.
-- **Jeton** : seule son empreinte est enregistrée. « Nouveau jeton » invalide l'ancien. Dans l'adresse,
-  il peut apparaître dans les journaux du serveur ou du proxy : garde-les privés.
+- **Secrets** : secret du client OAuth, jetons et codes ne sont enregistrés qu'en empreinte.
+  « Révoquer les connexions » coupe l'accès de ChatGPT (il redemandera l'autorisation) ; « Nouveau
+  secret » révoque aussi. Le jeton simple placé dans l'adresse peut apparaître dans les journaux du
+  serveur ou du proxy : garde-les privés.
 - **Durée** : `send_user_message` et `generate_persona_reply` attendent la réponse complète du
   persona. Avec un modèle local lent, l'assistant peut abandonner avant la fin : la réponse est
   quand même enregistrée, `get_conversation` la retrouve.
 - Pas d'images ni de suppression par le connecteur. Si une réponse est en cours dans l'app, les
   outils qui écrivent dans cette discussion demandent de réessayer.
-- Transport : `POST` JSON-RPC, réponses JSON, sans flux ni session (`src/mcp.php`).
+- Transport : `POST` JSON-RPC, réponses JSON, sans flux ni session (`src/mcp.php`). OAuth 2.1 avec
+  PKCE S256 et découverte RFC 9728 / RFC 8414 (`src/mcp_oauth.php`).
 
 ### Relances spontanées (tâche planifiée)
 
@@ -594,6 +606,7 @@ personavault/
 │   ├── chat_turn.php       # un tour de discussion (réponse du persona), pour la page et le connecteur MCP
 │   ├── chat_web.php        # recherche d'informations : SearXNG, Brave, LM Studio, Wikipédia, météo
 │   ├── mcp.php             # connecteur MCP : protocole et outils (ChatGPT, Claude…)
+│   ├── mcp_oauth.php       # OAuth du connecteur : autorisation, jetons, découverte
 │   ├── facts.php           # souvenirs + recherche FTS5
 │   ├── prompts.php         # prompts internes éditables
 │   ├── backup.php          # export / import ZIP
@@ -691,8 +704,10 @@ Après un changement voulu de statut ou de route : `bash tests/e2e/run.sh --upda
 - Les erreurs techniques sont écrites dans le journal PHP (`error_log`) ; le navigateur ne reçoit
   qu'un message générique.
 - **Connecteur MCP** désactivé par défaut. Une fois activé, `/mcp` ne demande ni mot de passe ni
-  session, seulement le jeton (192 bits, comparé par empreinte) : qui le possède contrôle tes personas et
-  tes discussions. Désactiver le connecteur coupe tout accès ; « Nouveau jeton » révoque l'ancien.
+  session, seulement un jeton : jeton d'accès OAuth (obtenu après ton accord sur la page « Autoriser
+  l'accès », connexion exigée) ou jeton simple. Jetons de 192 bits, codes à usage unique (10 min) avec
+  PKCE, URL de rappel limitées à ChatGPT ou à celles enregistrées, tout comparé par empreinte.
+  Désactiver le connecteur coupe tout accès.
 
 L'app est pensée pour un usage personnel. Si tu l'exposes sur Internet, place-la **obligatoirement
 derrière HTTPS** (reverse proxy, voir « Production ») — sinon le mot de passe et le cookie de session

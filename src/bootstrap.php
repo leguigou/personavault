@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 28);
+define('PV_SCHEMA_VERSION', 29);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -296,6 +296,17 @@ function migrate(PDO $pdo): void
         }
         if ($version < 28) {
             add_column_if_missing($pdo, 'conversations', 'coerced_obedience', 'INTEGER NOT NULL DEFAULT 0');
+        }
+        if ($version < 29) {
+            // connecteur MCP en OAuth (ChatGPT) : codes d'autorisation et jetons, par empreinte seulement (src/mcp_oauth.php)
+            $pdo->exec("CREATE TABLE IF NOT EXISTS mcp_oauth_codes (
+                code_hash TEXT PRIMARY KEY, client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL,
+                code_challenge TEXT NOT NULL DEFAULT '', scope TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL
+            )");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS mcp_oauth_tokens (
+                token_hash TEXT PRIMARY KEY, kind TEXT NOT NULL, client_id TEXT NOT NULL,
+                scope TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+            )");
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -1498,6 +1509,7 @@ require_once __DIR__ . '/chat.php';
 require_once __DIR__ . '/chat_web.php';
 require_once __DIR__ . '/chat_turn.php';
 require_once __DIR__ . '/mcp.php';
+require_once __DIR__ . '/mcp_oauth.php';
 require_once __DIR__ . '/chat_opening.php';
 require_once __DIR__ . '/facts.php';
 require_once __DIR__ . '/conversation_topics.php';

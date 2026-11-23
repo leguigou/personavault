@@ -143,43 +143,86 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
     <!-- connecteur MCP : un assistant extérieur (ChatGPT, Claude…) pilote personas et discussions -->
     <?php
     $mcpOn = mcp_enabled();
-    $mcpBase = (request_is_https() ? 'https' : 'http') . '://' . preg_replace('/[^A-Za-z0-9.:\[\]-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost')) . '/mcp';
+    $mcpPublic = mcp_public_base();
+    $mcpBase = $mcpPublic . '/mcp';
+    $copySvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+    // une valeur à reporter dans le client : champ lecture seule + bouton qui la copie
+    $mcpValue = static function (string $id, string $label, string $value, string $note = '') use ($copySvg): string {
+        $copy = e(t('settings.mcp.copy', ['what' => $label]));
+        return '<div class="mcp-value"><label class="mcp-value-label" for="' . $id . '">' . e($label) . '</label>'
+            . '<div class="mcp-value-row"><input class="input mcp-value-input" id="' . $id . '" type="text" value="' . e($value) . '" readonly spellcheck="false" autocomplete="off">'
+            . '<button type="button" class="icon-btn mcp-copy" data-copy="#' . $id . '" data-copy-toast="' . e(t('settings.mcp.copied')) . '" aria-label="' . $copy . '" title="' . $copy . '">' . $copySvg . '</button></div>'
+            . ($note !== '' ? '<small class="mcp-value-note">' . e($note) . '</small>' : '') . '</div>';
+    };
+    $mcpAction = static function (string $do, string $label, string $kind = 'btn-ghost', string $confirm = ''): string {
+        return '<form method="post" action="/settings/mcp-server"' . ($confirm !== '' ? ' data-confirm="' . e($confirm) . '"' : '') . '>'
+            . '<input type="hidden" name="_token" value="' . e(csrf_token()) . '"><input type="hidden" name="do" value="' . $do . '">'
+            . '<button class="btn ' . $kind . '" type="submit">' . e($label) . '</button></form>';
+    };
     ?>
     <section class="backup-card settings-maint settings-mcp" id="mcp">
         <h3><?= e(t('settings.mcp.title')) ?> <?= $info('mcp', t('settings.mcp.title')) ?></h3>
         <p class="hint"><?= e(t('settings.mcp.hint')) ?></p>
         <p class="hint"><strong><?= e($mcpOn ? t('settings.mcp.state_on') : t('settings.mcp.state_off')) ?></strong></p>
-        <?php if (($mcpNewToken ?? '') !== ''): ?>
-            <p class="inline-warn" role="note"><?= e(t('settings.mcp.token_once')) ?></p>
-            <?php
-            $copySvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
-            $mcpValues = [
-                'mcp-url-token' => [t('settings.mcp.value_url_token'), $mcpBase . '/' . $mcpNewToken],
-                'mcp-url'       => [t('settings.mcp.value_url'), $mcpBase],
-                'mcp-token'     => [t('settings.mcp.value_token'), $mcpNewToken],
-            ];
-            ?>
-            <?php foreach ($mcpValues as $id => [$label, $value]): ?>
+        <?php if (!$mcpOn): ?>
+            <div class="form-actions"><?= $mcpAction('enable', t('settings.mcp.enable'), 'btn-primary') ?></div>
+        <?php else: ?>
+            <?php if (!str_starts_with($mcpPublic, 'https://')): ?>
+                <p class="inline-warn" role="note"><?= e(t('settings.mcp.not_https')) ?></p>
+            <?php endif; ?>
+
+            <h4 class="mcp-sub"><?= e(t('settings.mcp.oauth_title')) ?></h4>
+            <p class="hint"><?= e(t('settings.mcp.oauth_hint')) ?></p>
+            <?php if (($mcpNewSecret ?? '') !== ''): ?>
+                <p class="inline-warn" role="note"><?= e(t('settings.mcp.secret_once')) ?></p>
+            <?php endif; ?>
+            <?= $mcpValue('mcp-o-url', t('settings.mcp.o_url'), $mcpBase, t('settings.mcp.o_url_note')) ?>
+            <?= $mcpValue('mcp-o-client', t('settings.mcp.o_client'), mcp_oauth_client_id()) ?>
+            <?php if (($mcpNewSecret ?? '') !== ''): ?>
+                <?= $mcpValue('mcp-o-secret', t('settings.mcp.o_secret'), $mcpNewSecret) ?>
+            <?php else: ?>
                 <div class="mcp-value">
-                    <label class="mcp-value-label" for="<?= $id ?>"><?= e($label) ?></label>
-                    <div class="mcp-value-row">
-                        <input class="input mcp-value-input" id="<?= $id ?>" type="text" value="<?= e($value) ?>" readonly spellcheck="false" autocomplete="off">
-                        <button type="button" class="icon-btn mcp-copy" data-copy="#<?= $id ?>" data-copy-toast="<?= e(t('settings.mcp.copied')) ?>" aria-label="<?= e(t('settings.mcp.copy', ['what' => $label])) ?>" title="<?= e(t('settings.mcp.copy', ['what' => $label])) ?>"><?= $copySvg ?></button>
-                    </div>
+                    <span class="mcp-value-label"><?= e(t('settings.mcp.o_secret')) ?></span>
+                    <small class="mcp-value-note"><?= e(t('settings.mcp.o_secret_hidden')) ?></small>
                 </div>
-            <?php endforeach; ?>
-        <?php elseif ($mcpOn): ?>
-            <p class="hint"><?= e(t('settings.mcp.url_hidden')) ?> <code><?= e($mcpBase) ?>/pv_…</code></p>
+            <?php endif; ?>
+            <?= $mcpValue('mcp-o-method', t('settings.mcp.o_method'), 'client_secret_basic') ?>
+            <?= $mcpValue('mcp-o-scope', t('settings.mcp.o_scope'), MCP_OAUTH_SCOPE, t('settings.mcp.o_scope_note')) ?>
+            <?= $mcpValue('mcp-o-authorize', t('settings.mcp.o_authorize'), $mcpPublic . '/oauth/authorize', t('settings.mcp.o_endpoints_note')) ?>
+            <?= $mcpValue('mcp-o-token', t('settings.mcp.o_token'), $mcpPublic . '/oauth/token') ?>
+
+            <form method="post" action="/settings/mcp-server" class="mcp-value">
+                <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+                <input type="hidden" name="do" value="redirects">
+                <label class="mcp-value-label" for="mcp-o-redirects"><?= e(t('settings.mcp.o_redirects')) ?></label>
+                <textarea class="input mcp-value-input" id="mcp-o-redirects" name="redirects" rows="2" spellcheck="false"
+                          placeholder="https://chatgpt.com/connector/oauth/…"><?= e(setting('mcp_oauth_redirects', '')) ?></textarea>
+                <small class="mcp-value-note"><?= e(t('settings.mcp.o_redirects_note')) ?></small>
+                <div class="form-actions"><button class="btn btn-ghost btn-sm" type="submit"><?= e(t('settings.save')) ?></button></div>
+            </form>
+
+            <p class="hint"><?= e(t('settings.mcp.connections', ['count' => mcp_oauth_active_count()])) ?></p>
+            <div class="form-actions">
+                <?= $mcpAction('revoke', t('settings.mcp.revoke'), 'btn-ghost', t('settings.mcp.revoke_confirm')) ?>
+                <?= $mcpAction('secret', t('settings.mcp.new_secret'), 'btn-ghost', t('settings.mcp.new_secret_confirm')) ?>
+            </div>
+
+            <details class="mcp-simple"<?= ($mcpNewToken ?? '') !== '' ? ' open' : '' ?>>
+                <summary><?= e(t('settings.mcp.simple_title')) ?></summary>
+                <p class="hint"><?= e(t('settings.mcp.simple_hint')) ?></p>
+                <?php if (($mcpNewToken ?? '') !== ''): ?>
+                    <p class="inline-warn" role="note"><?= e(t('settings.mcp.token_once')) ?></p>
+                    <?= $mcpValue('mcp-url-token', t('settings.mcp.value_url_token'), $mcpBase . '/' . $mcpNewToken) ?>
+                    <?= $mcpValue('mcp-url', t('settings.mcp.value_url'), $mcpBase) ?>
+                    <?= $mcpValue('mcp-token', t('settings.mcp.value_token'), $mcpNewToken) ?>
+                <?php else: ?>
+                    <p class="hint"><?= e(t('settings.mcp.url_hidden')) ?> <code><?= e($mcpBase) ?>/pv_…</code></p>
+                <?php endif; ?>
+                <div class="form-actions"><?= $mcpAction('token', t('settings.mcp.new_token'), 'btn-ghost', t('settings.mcp.new_token_confirm')) ?></div>
+            </details>
+
+            <div class="form-actions mcp-off"><?= $mcpAction('disable', t('settings.mcp.disable')) ?></div>
         <?php endif; ?>
-        <div class="form-actions">
-            <?php foreach ($mcpOn ? ['token' => t('settings.mcp.new_token'), 'disable' => t('settings.mcp.disable')] : ['enable' => t('settings.mcp.enable')] as $do => $label): ?>
-                <form method="post" action="/settings/mcp-server"<?= $do === 'token' ? ' data-confirm="' . e(t('settings.mcp.new_token_confirm')) . '"' : '' ?>>
-                    <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
-                    <input type="hidden" name="do" value="<?= $do ?>">
-                    <button class="btn <?= $do === 'enable' ? 'btn-primary' : 'btn-ghost' ?>" type="submit"><?= e($label) ?></button>
-                </form>
-            <?php endforeach; ?>
-        </div>
     </section>
     </div>
 

@@ -3496,6 +3496,19 @@ form.is-dirty .save-bar { border-color: rgba(251, 191, 36, .28); }
 .mcp-copy { flex: 0 0 auto; width: 44px; height: 44px; border-color: var(--border); }
 .mcp-copy svg { width: 19px; height: 19px; }
 .mcp-copy.is-done { color: var(--ok-t, #9ff0c8); }
+.mcp-value-note { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+textarea.mcp-value-input { resize: vertical; white-space: pre; overflow-x: auto; }
+.settings-mcp .mcp-sub { margin-top: 16px; font-size: 13px; font-weight: 650; }
+.settings-mcp .form-actions { margin-top: 12px; }
+.mcp-simple { margin-top: 16px; border-top: 1px solid var(--border-soft, var(--border)); padding-top: 12px; }
+.mcp-simple summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.mcp-simple[open] summary { margin-bottom: 8px; }
+.mcp-off { border-top: 1px solid var(--border-soft, var(--border)); padding-top: 12px; }
+/* page « Autoriser ChatGPT ? » (OAuth du connecteur MCP) */
+.oauth-card .login-brand h1 { font-size: 20px; }
+.oauth-lead { font-size: 14px; line-height: 1.5; margin: 4px 0 10px; }
+.oauth-list { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; line-height: 1.45; }
+.oauth-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
 
 /* sauvegarde : sélecteur de fichier dans le thème */
 .file-pick {
