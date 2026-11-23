@@ -183,7 +183,9 @@ function backup_restore_conversations(ZipArchive $zip, array $index, string $roo
             $source = $conversationIds[backup_id($memory['source_conversation_id'] ?? null)] ?? null;
             $story = ($memory['subject'] ?? '') === 'story';
             $sourceMessage = $story ? ($source['messages'][backup_id($memory['source_message_id'] ?? null)] ?? null) : null;
-            if ($story && (!$personaId || $personaId !== ($source['persona_id'] ?? null) || !$sourceMessage)) {
+            // histoire ajoutée à la main (connecteur MCP) : ni discussion ni message d'origine, seulement le persona
+            $manualStory = $story && ($memory['source_conversation_id'] ?? null) === null && ($memory['source_message_id'] ?? null) === null;
+            if ($story && ($manualStory ? !$personaId : (!$personaId || $personaId !== ($source['persona_id'] ?? null) || !$sourceMessage))) {
                 $stats['errors'][] = t('error.backup.invalid_chat_data');
                 continue;
             }

@@ -197,6 +197,8 @@ try {
         ->execute([$sourceMid, $replyMid, $cid]);
     facts_add($pid, 'Souvenir de sauvegarde', 'preference', 'confirme', $cid);
     facts_add($pid, 'Lisa prépare une exposition', 'projet', 'confirme', $cid, $replyMid);
+    // histoire ajoutée à la main (connecteur MCP) : sans discussion ni message d'origine
+    db()->prepare("UPDATE user_memories SET subject = 'story' WHERE id = ?")->execute([facts_add($pid, 'Lisa a grandi à Sète', 'fait')]);
     $pdo->prepare("UPDATE conversations SET opening_questions = '[\"Ton exposition avance ?\"]' WHERE id = ?")->execute([$cid]);
     $pdo->exec("INSERT INTO user_memories (content) VALUES ('Souvenir global de sauvegarde')");
     $check(relationship_direct_address('Vous pouvez me tutoyer, s’il vous plaît ?') === 'tu'
@@ -231,7 +233,7 @@ try {
     $res = backup_import_zip($zip['path']);
     $check($res['personas'] === 1 && $res['photos'] === 2 && $res['prompts'] === 2 && !$res['errors'],
         'import : 1 persona, 2 photos, 2 prompts (' . json_encode($res, JSON_UNESCAPED_UNICODE) . ')');
-    $check($res['conversations'] === 1 && $res['messages'] === 2 && $res['memories'] === 3, 'import : 1 conversation, 2 messages et 3 souvenirs');
+    $check($res['conversations'] === 1 && $res['messages'] === 2 && $res['memories'] === 4, 'import : 1 conversation, 2 messages et 4 souvenirs');
     $new = db()->query("SELECT * FROM personas WHERE slug = 'lisa-2'")->fetch();
     $check(is_array($new), 'persona importé sous un nouveau slug');
     if (is_array($new)) {
@@ -279,6 +281,10 @@ try {
         $check(($story['source_message_id'] ?? 0) === $copiedReply['id']
             && json_list($copy['opening_questions']) === ['Ton exposition avance ?'],
             'les souvenirs du persona sont rattachés au message importé et les questions sont restaurées');
+        $manualStory = $pdo->prepare("SELECT source_message_id FROM user_memories WHERE persona_id = ? AND subject = 'story' AND content = 'Lisa a grandi à Sète'");
+        $manualStory->execute([$nid]);
+        $manualRow = $manualStory->fetch();
+        $check($manualRow !== false && $manualRow['source_message_id'] === null, 'histoire ajoutée à la main (sans message d’origine) restaurée');
         $relation = relationship_entries($nid)[0] ?? [];
         $check(relationship_state($nid)['address'] === 'tu' && !relationship_pending($nid)
             && !empty($relation['resolved']) && ($relation['source_message_id'] ?? 0) === $copiedReply['id'],
@@ -312,7 +318,7 @@ try {
     $restored = backup_import_zip($zip['path']);
     $check($restored['slugs'] === ['lisa'] && !$restored['errors']
         && (int) $pdo->query('SELECT COUNT(*) FROM conversations')->fetchColumn() === 1
-        && (int) $pdo->query('SELECT COUNT(*) FROM user_memories')->fetchColumn() === 3
+        && (int) $pdo->query('SELECT COUNT(*) FROM user_memories')->fetchColumn() === 4
         && $mediaExists((string) $pdo->query("SELECT image FROM messages WHERE role = 'user'")->fetchColumn()),
         'restauration des fiches, discussions, souvenirs et pièces jointes sur des données vides');
     $check(count(chat_persona_search((int) $pdo->query('SELECT id FROM personas')->fetchColumn(), 'regarde')) === 1,
@@ -780,8 +786,8 @@ try {
         && $rpc('initialize', ['protocolVersion' => '1999-01-01'])['result']['protocolVersion'] === MCP_PROTOCOL_VERSIONS[0],
         'MCP : version du protocole négociée');
     $mcpTools = $rpc('tools/list')['result']['tools'];
-    $check(count($mcpTools) === 12 && !array_filter($mcpTools, static fn ($t) => ($t['inputSchema']['type'] ?? '') !== 'object' || !isset($t['annotations']['readOnlyHint'])),
-        'MCP : 12 outils décrits, avec schéma et indication lecture seule');
+    $check(count($mcpTools) === 18 && !array_filter($mcpTools, static fn ($t) => ($t['inputSchema']['type'] ?? '') !== 'object' || !isset($t['annotations']['readOnlyHint'])),
+        'MCP : 18 outils décrits, avec schéma et indication lecture seule');
     $check(mcp_handle(['jsonrpc' => '2.0', 'method' => 'notifications/initialized']) === null
         && $rpc('nope')['error']['code'] === -32601 && $rpc('tools/call', ['name' => 'nope'])['error']['code'] === -32602,
         'MCP : notification sans réponse, méthode et outil inconnus refusés');
@@ -816,6 +822,30 @@ try {
         'MCP : portrait téléchargé seulement depuis une adresse https:// publique (ni http, ni réseau local, ni fichier)');
     $listed = $tool('list_conversations', ['persona' => 'nina-mcp'])['structuredContent']['conversations'];
     $check(count($listed) === 1 && $listed[0]['messages'] === 2 && str_contains($listed[0]['last_message'], 'boutique'), 'MCP : discussions d’un persona');
+    $preview = $tool('get_prompt_preview', ['conversation_id' => $mcpCid, 'message' => 'Tu fermes à quelle heure ?'])['structuredContent'];
+    $check(str_contains($preview['system_prompt'], 'Tu es Nina, fleuriste à Nice.') && str_contains($preview['system_prompt'], 'Âge : 29')
+        && !str_contains($preview['system_prompt'], 'Accroche') && str_contains($preview['last_message'], 'Tu fermes à quelle heure ?')
+        && $preview['history_messages_kept'] === 2, 'MCP : aperçu du prompt envoyé (fiche, attributs, historique, message)');
+    $found = $tool('search_messages', ['query' => 'boutique', 'persona' => 'nina-mcp'])['structuredContent']['results'];
+    $none = $tool('search_messages', ['query' => 'boutique', 'conversation_id' => 999999])['structuredContent']['results'];
+    $check(count($found) === 1 && $found[0]['author'] === 'Nina MCP' && $found[0]['conversation_title'] === 'Essai MCP' && $none === [],
+        'MCP : recherche dans les messages, filtrée par persona ou discussion');
+    $memA = $tool('add_memory', ['persona' => 'nina-mcp', 'content' => 'L’utilisateur vit à Toulon', 'category' => 'fait'])['structuredContent'];
+    $memDup = $tool('add_memory', ['persona' => 'nina-mcp', 'content' => 'l’utilisateur vit à toulon']);
+    $memB = $tool('add_memory', ['persona' => 'nina-mcp', 'content' => 'Nina a repris la boutique de sa tante', 'subject' => 'story'])['structuredContent'];
+    $memStoryGlobal = $tool('add_memory', ['persona' => 'nina-mcp', 'content' => 'Histoire globale', 'subject' => 'story', 'global' => true]);
+    $stories = $tool('list_memories', ['persona' => 'nina-mcp', 'subject' => 'story'])['structuredContent']['memories'];
+    $check($memA['subject'] === 'user' && $memA['global'] === false && $memDup['isError'] === true && $memB['subject'] === 'story'
+        && $memStoryGlobal['isError'] === true && array_column($stories, 'id') === [$memB['id']],
+        'MCP : souvenirs ajoutés (utilisateur, histoire), doublon et histoire globale refusés');
+    $memU = $tool('update_memory', ['memory_id' => $memA['id'], 'content' => 'L’utilisateur vit à Toulon, près du port', 'confidence' => 'hypothese'])['structuredContent'];
+    $delTool = array_values(array_filter($mcpTools, static fn ($t) => $t['name'] === 'delete_memory'))[0];
+    $memD = $tool('delete_memory', ['memory_id' => $memB['id']])['structuredContent'];
+    $check($memU['content'] === 'L’utilisateur vit à Toulon, près du port' && $memU['confidence'] === 'hypothese' && $memU['category'] === 'fait'
+        && $memD['deleted'] === true && $delTool['annotations']['destructiveHint'] === true
+        && $tool('list_memories', ['persona' => 'nina-mcp', 'subject' => 'story'])['structuredContent']['memories'] === []
+        && $tool('delete_memory', ['memory_id' => $memB['id']])['isError'] === true,
+        'MCP : souvenir corrigé (champs fournis seulement), supprimé (outil marqué destructif)');
     set_setting('mcp_enabled', '0');
 
     echo PHP_EOL . '— connecteur MCP : OAuth (ChatGPT)' . PHP_EOL;

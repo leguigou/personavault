@@ -397,7 +397,7 @@ return [
     'settings.mcp.flash_on' => 'MCP connector turned on.',
     'settings.mcp.flash_off' => 'MCP connector turned off: no outside access any more.',
     'settings.mcp.flash_token' => 'New token created: the old one no longer works.',
-    'settings.mcp.info_html' => '<p>The connector follows the MCP protocol: <code>POST /mcp</code>, JSON replies. Tools: list, read, create and edit personas, their prompts and portrait; list, read and open chats; write as the user (the persona replies with its model); write as the persona; make the persona reply.</p><p>Your chats are sent to the assistant’s provider (OpenAI for ChatGPT). Turn the connector off when you don’t use it. A token in the address may show up in your server and proxy logs.</p>',
+    'settings.mcp.info_html' => '<p>The connector follows the MCP protocol: <code>POST /mcp</code>, JSON replies. Tools: list, read, create and edit personas, their prompts and portrait; list, read, search and open chats; see the prompt sent; manage memories; write as the user (the persona replies with its model); write as the persona; make the persona reply.</p><p>Your chats are sent to the assistant’s provider (OpenAI for ChatGPT). Turn the connector off when you don’t use it. A token in the address may show up in your server and proxy logs.</p>',
     'settings.mcp.value_url_token' => 'Address for ChatGPT (token included, “no authentication” mode)',
     'settings.mcp.value_url' => 'Address only (if the client can send a header)',
     'settings.mcp.value_token' => 'Token (“Authorization: Bearer …” header)',

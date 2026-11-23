@@ -398,7 +398,7 @@ return [
     'settings.mcp.flash_on' => 'Conector MCP activado.',
     'settings.mcp.flash_off' => 'Conector MCP desactivado: ya no hay acceso externo.',
     'settings.mcp.flash_token' => 'Nuevo token creado: el anterior ya no funciona.',
-    'settings.mcp.info_html' => '<p>El conector sigue el protocolo MCP: <code>POST /mcp</code>, respuestas JSON. Herramientas: listar, leer, crear y editar personas, sus prompts y su retrato; listar, leer y abrir conversaciones; escribir como el usuario (el persona responde con su modelo); escribir como el persona; hacer responder al persona.</p><p>Tus conversaciones se envían al proveedor del asistente (OpenAI para ChatGPT). Desactiva el conector cuando no lo uses. El token en la dirección puede aparecer en los registros de tu servidor y de tu proxy.</p>',
+    'settings.mcp.info_html' => '<p>El conector sigue el protocolo MCP: <code>POST /mcp</code>, respuestas JSON. Herramientas: listar, leer, crear y editar personas, sus prompts y su retrato; listar, leer, buscar y abrir conversaciones; ver el prompt enviado; gestionar los recuerdos; escribir como el usuario (el persona responde con su modelo); escribir como el persona; hacer responder al persona.</p><p>Tus conversaciones se envían al proveedor del asistente (OpenAI para ChatGPT). Desactiva el conector cuando no lo uses. El token en la dirección puede aparecer en los registros de tu servidor y de tu proxy.</p>',
     'settings.mcp.value_url_token' => 'Dirección para ChatGPT (token incluido, modo «sin autenticación»)',
     'settings.mcp.value_url' => 'Solo la dirección (si el cliente puede enviar una cabecera)',
     'settings.mcp.value_token' => 'Token (cabecera «Authorization: Bearer …»)',

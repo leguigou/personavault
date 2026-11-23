@@ -197,6 +197,58 @@ function mcp_tools(): array
             'required'    => ['persona', 'image_url'],
             'annotations' => ['readOnlyHint' => false, 'destructiveHint' => false, 'openWorldHint' => true, 'title' => 'Changer le portrait'],
         ],
+        'get_prompt_preview' => [
+            'description' => 'Prompt complet tel que le persona le reçoit pour un message donné : partie fixe (prompt système, fiche, '
+                . 'consigne, résumé, règles) et contexte variable (heure, souvenirs, humeur). Pour diagnostiquer une fiche : '
+                . 'redondances, informations manquantes, consignes contradictoires. N’envoie rien au modèle.',
+            'properties'  => ['conversation_id' => $cid, 'message' => ['type' => 'string', 'description' => 'Message de l’utilisateur supposé (défaut : « Bonjour »).']],
+            'required'    => ['conversation_id'],
+            'annotations' => $read + ['title' => 'Voir le prompt envoyé'],
+        ],
+        'search_messages' => [
+            'description' => 'Recherche plein texte dans les messages (tous les mots, en début de mot, accents ignorés), les plus récents d’abord. '
+                . 'Filtre facultatif par persona ou par discussion.',
+            'properties'  => ['query' => ['type' => 'string'], 'persona' => $persona, 'conversation_id' => $cid,
+                'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50]],
+            'required'    => ['query'],
+            'annotations' => $read + ['title' => 'Chercher dans les discussions'],
+        ],
+        'list_memories' => [
+            'description' => 'Souvenirs durables d’un persona : « user » = ce que l’on sait de l’utilisateur (dont les souvenirs globaux, '
+                . 'partagés par tous les personas), « story » = histoire du persona et moments partagés. Filtre facultatif sur le texte.',
+            'properties'  => ['persona' => $persona, 'subject' => ['type' => 'string', 'enum' => ['all', 'user', 'story']], 'query' => ['type' => 'string']],
+            'required'    => ['persona'],
+            'annotations' => $read + ['title' => 'Lister les souvenirs'],
+        ],
+        'add_memory' => [
+            'description' => 'Ajoute un souvenir durable : une phrase courte à la 3e personne, un seul fait. Évite les doublons (list_memories d’abord) '
+                . 'et les détails du moment. global=true : souvenir sur l’utilisateur partagé par tous les personas.',
+            'properties'  => [
+                'persona' => $persona, 'content' => ['type' => 'string'],
+                'subject' => ['type' => 'string', 'enum' => ['user', 'story'], 'default' => 'user'],
+                'category' => ['type' => 'string', 'enum' => array_keys(facts_categories())],
+                'confidence' => ['type' => 'string', 'enum' => array_keys(facts_confidences())],
+                'global' => ['type' => 'boolean'],
+            ],
+            'required'    => ['persona', 'content'],
+            'annotations' => $write + ['title' => 'Ajouter un souvenir'],
+        ],
+        'update_memory' => [
+            'description' => 'Corrige un souvenir (list_memories) : seuls les champs fournis changent.',
+            'properties'  => [
+                'memory_id' => ['type' => 'integer'], 'content' => ['type' => 'string'],
+                'category' => ['type' => 'string', 'enum' => array_keys(facts_categories())],
+                'confidence' => ['type' => 'string', 'enum' => array_keys(facts_confidences())],
+            ],
+            'required'    => ['memory_id'],
+            'annotations' => $write + ['title' => 'Corriger un souvenir', 'idempotentHint' => true],
+        ],
+        'delete_memory' => [
+            'description' => 'Supprime définitivement un souvenir (list_memories). Demande confirmation à l’utilisateur avant.',
+            'properties'  => ['memory_id' => ['type' => 'integer']],
+            'required'    => ['memory_id'],
+            'annotations' => ['readOnlyHint' => false, 'destructiveHint' => true, 'openWorldHint' => false, 'title' => 'Supprimer un souvenir'],
+        ],
         'list_conversations' => [
             'description' => 'Liste les discussions, les plus récentes d’abord (id, persona, titre, nombre de messages, dernier message).',
             'properties'  => ['persona' => $persona, 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100]],
@@ -631,6 +683,140 @@ function mcp_tool_set_persona_avatar(array $args): array
         release_media((string) $p['avatar']);
     }
     return ['avatar_updated' => true] + mcp_persona_summary($p);
+}
+
+/* --------------------------------------------------------------------------- outils : diagnostic et recherche */
+
+function mcp_tool_get_prompt_preview(array $args): array
+{
+    [$conv, $persona] = mcp_conversation(mcp_int($args, 'conversation_id'));
+    $cid = (int) $conv['id'];
+    $message = mcp_str($args, 'message', 2000) ?: 'Bonjour';
+    $conv = chat_with_persona($conv, $persona);
+    $built = chat_build_messages($persona, fetch_prompts((int) $persona['id']), $conv, fetch_context_messages($cid, $conv), $message,
+        canReact: chat_can_react($cid));
+    $last = end($built['messages']);
+    $lastText = is_array($last['content']) ? (string) ($last['content'][0]['text'] ?? '') : (string) $last['content'];
+    return [
+        'conversation_id' => $cid,
+        'persona'         => mcp_persona_summary($persona),
+        'model'           => (string) ($conv['model'] ?? ''),
+        'system_prompt'   => (string) $built['messages'][0]['content'],
+        'last_message'    => $lastText,
+        'history_messages_kept' => (int) $built['kept'],
+        'estimated_tokens' => (int) ($built['tokens'] ?? 0),
+    ];
+}
+
+function mcp_tool_search_messages(array $args): array
+{
+    $query = mcp_str($args, 'query', 200) ?? '';
+    $words = array_slice(text_words($query, 1), 0, 8);
+    if (!$words) {
+        throw new McpToolError('Recherche vide.');
+    }
+    $where = "m.role IN ('user', 'assistant')";
+    $params = [];
+    if (isset($args['persona']) && (string) $args['persona'] !== '') {
+        $where .= ' AND c.persona_id = ?';
+        $params[] = (int) mcp_persona((string) $args['persona'])['id'];
+    }
+    if (mcp_int($args, 'conversation_id') > 0) {
+        $where .= ' AND c.id = ?';
+        $params[] = mcp_int($args, 'conversation_id');
+    }
+    $limit = max(1, min(50, mcp_int($args, 'limit', 20)));
+    $select = 'SELECT m.id, m.conversation_id, m.role, m.content, m.created_at, c.title, p.name AS persona_name
+               FROM %s JOIN conversations c ON c.id = m.conversation_id JOIN personas p ON p.id = c.persona_id
+               WHERE %s ORDER BY m.id DESC LIMIT ' . $limit;
+    try {
+        $st = db()->prepare(sprintf($select, 'messages_fts f JOIN messages m ON m.id = f.rowid', 'messages_fts MATCH ? AND ' . $where));
+        $st->execute([fts_query($words, 'AND'), ...$params]);
+    } catch (Throwable $e) {
+        // index plein texte indisponible : recherche de sous-chaîne
+        $st = db()->prepare(sprintf($select, 'messages m', $where . " AND m.content LIKE ? ESCAPE '\\'"));
+        $st->execute([...$params, '%' . chat_like_escape($query) . '%']);
+    }
+    return ['results' => array_map(static fn (array $r): array => [
+        'message_id' => (int) $r['id'], 'conversation_id' => (int) $r['conversation_id'], 'conversation_title' => (string) $r['title'],
+        'author' => $r['role'] === 'user' ? 'utilisateur' : (string) $r['persona_name'],
+        'content' => mb_substr((string) $r['content'], 0, 600), 'created_at' => (string) $r['created_at'],
+    ], $st->fetchAll())];
+}
+
+/* --------------------------------------------------------------------------- outils : souvenirs */
+
+function mcp_memory_row(array $m): array
+{
+    return [
+        'id' => (int) $m['id'],
+        'subject' => (string) ($m['subject'] ?? 'user'),
+        'global' => $m['persona_id'] === null,
+        'category' => (string) $m['category'],
+        'confidence' => (string) $m['confidence'],
+        'content' => (string) $m['content'],
+        'updated_at' => (string) $m['updated_at'],
+    ];
+}
+
+function mcp_memory(int $id): array
+{
+    $st = db()->prepare('SELECT * FROM user_memories WHERE id = ?');
+    $st->execute([$id]);
+    return $st->fetch() ?: throw new McpToolError("Souvenir introuvable : {$id} (list_memories).");
+}
+
+function mcp_tool_list_memories(array $args): array
+{
+    $p = mcp_persona((string) ($args['persona'] ?? ''));
+    $subject = (string) ($args['subject'] ?? 'all');
+    $rows = array_filter(facts_list((int) $p['id'], mcp_str($args, 'query', 100) ?? '', 300),
+        static fn (array $m): bool => $subject === 'all' || ($m['subject'] ?? 'user') === $subject);
+    return ['persona' => mcp_persona_summary($p), 'memories' => array_values(array_map('mcp_memory_row', $rows))];
+}
+
+function mcp_tool_add_memory(array $args): array
+{
+    $p = mcp_persona((string) ($args['persona'] ?? ''));
+    $content = mcp_str($args, 'content', 400) ?? '';
+    if ($content === '') {
+        throw new McpToolError('Le souvenir est vide.');
+    }
+    $story = ($args['subject'] ?? 'user') === 'story';
+    if ($story && !empty($args['global'])) {
+        throw new McpToolError('Un souvenir de l’histoire du persona ne peut pas être global.');
+    }
+    foreach (facts_list((int) $p['id'], '', 300) as $m) {
+        if (facts_norm((string) $m['content']) === facts_norm($content)) {
+            throw new McpToolError('Ce souvenir existe déjà (id ' . (int) $m['id'] . ').');
+        }
+    }
+    $id = facts_add(!empty($args['global']) ? 0 : (int) $p['id'], $content, (string) ($args['category'] ?? 'fait'),
+        (string) ($args['confidence'] ?? 'confirme'));
+    if ($story) {
+        // histoire du persona ajoutée à la main : pas de message d'origine (source_message_id reste vide)
+        db()->prepare("UPDATE user_memories SET subject = 'story' WHERE id = ?")->execute([$id]);
+    }
+    return ['added' => true] + mcp_memory_row(mcp_memory($id));
+}
+
+function mcp_tool_update_memory(array $args): array
+{
+    $m = mcp_memory(mcp_int($args, 'memory_id'));
+    $content = mcp_str($args, 'content', 400);
+    if ($content === '') {
+        throw new McpToolError('Le souvenir ne peut pas être vide : utilise delete_memory.');
+    }
+    facts_update((int) $m['id'], $content ?? (string) $m['content'], (string) ($args['category'] ?? $m['category']),
+        (string) ($args['confidence'] ?? $m['confidence']));
+    return ['updated' => true] + mcp_memory_row(mcp_memory((int) $m['id']));
+}
+
+function mcp_tool_delete_memory(array $args): array
+{
+    $m = mcp_memory(mcp_int($args, 'memory_id'));
+    facts_delete((int) $m['id']);
+    return ['deleted' => true, 'id' => (int) $m['id'], 'content' => (string) $m['content']];
 }
 
 /* --------------------------------------------------------------------------- outils : discussions */
