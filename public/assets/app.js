@@ -606,7 +606,8 @@
         if (!btn) return;
         const target = document.querySelector(btn.dataset.copy);
         if (!target) return;
-        copyText(target.value ?? target.textContent ?? "", btn);
+        // message propre au bouton (data-copy-toast), sinon « Prompt copié »
+        copyText(target.value ?? target.textContent ?? "", btn, btn.dataset.copyToast || undefined);
     });
 
     /* ------------------------------------- éditeur de prompt (v3, mobile d'abord)

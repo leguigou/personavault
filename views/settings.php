@@ -150,11 +150,24 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
         <p class="hint"><?= e(t('settings.mcp.hint')) ?></p>
         <p class="hint"><strong><?= e($mcpOn ? t('settings.mcp.state_on') : t('settings.mcp.state_off')) ?></strong></p>
         <?php if (($mcpNewToken ?? '') !== ''): ?>
-            <div class="inline-warn" role="note">
-                <p><?= e(t('settings.mcp.token_once')) ?></p>
-                <p><?= e(t('settings.mcp.url_label')) ?><br><code data-copy><?= e($mcpBase . '/' . $mcpNewToken) ?></code></p>
-                <p><?= e(t('settings.mcp.header_label')) ?><br><code><?= e($mcpBase) ?></code><br><code>Authorization: Bearer <?= e($mcpNewToken) ?></code></p>
-            </div>
+            <p class="inline-warn" role="note"><?= e(t('settings.mcp.token_once')) ?></p>
+            <?php
+            $copySvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+            $mcpValues = [
+                'mcp-url-token' => [t('settings.mcp.value_url_token'), $mcpBase . '/' . $mcpNewToken],
+                'mcp-url'       => [t('settings.mcp.value_url'), $mcpBase],
+                'mcp-token'     => [t('settings.mcp.value_token'), $mcpNewToken],
+            ];
+            ?>
+            <?php foreach ($mcpValues as $id => [$label, $value]): ?>
+                <div class="mcp-value">
+                    <label class="mcp-value-label" for="<?= $id ?>"><?= e($label) ?></label>
+                    <div class="mcp-value-row">
+                        <input class="input mcp-value-input" id="<?= $id ?>" type="text" value="<?= e($value) ?>" readonly spellcheck="false" autocomplete="off">
+                        <button type="button" class="icon-btn mcp-copy" data-copy="#<?= $id ?>" data-copy-toast="<?= e(t('settings.mcp.copied')) ?>" aria-label="<?= e(t('settings.mcp.copy', ['what' => $label])) ?>" title="<?= e(t('settings.mcp.copy', ['what' => $label])) ?>"><?= $copySvg ?></button>
+                    </div>
+                </div>
+            <?php endforeach; ?>
         <?php elseif ($mcpOn): ?>
             <p class="hint"><?= e(t('settings.mcp.url_hidden')) ?> <code><?= e($mcpBase) ?>/pv_…</code></p>
         <?php endif; ?>
