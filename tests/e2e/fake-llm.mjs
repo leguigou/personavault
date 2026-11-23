@@ -313,6 +313,20 @@ http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ query: { pages: [{ title: q.get('titles'), fullurl: 'https://fr.wikipedia.org/wiki/' + String(q.get('titles')).replace(/ /g, '_'),
             extract: 'Sherlock Holmes est un détective de fiction créé par Arthur Conan Doyle. '.repeat(8) }] } }));
     }
+    // images pour le portrait envoyé par le connecteur MCP : PNG, redirection, texte
+    if (req.url === '/img/portrait.png') {
+        res.setHeader('Content-Type', 'image/png');
+        return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
+    }
+    if (req.url === '/img/redirect') {
+        res.statusCode = 302;
+        res.setHeader('Location', '/img/portrait.png');
+        return res.end();
+    }
+    if (req.url === '/img/text') {
+        res.setHeader('Content-Type', 'text/plain');
+        return res.end('pas une image');
+    }
     // faux SearXNG (format JSON exigé, comme une instance où il n'est pas activé renvoie 403)
     if (req.url.startsWith('/searxng/search?')) {
         const q = new URL(req.url, 'http://x').searchParams;

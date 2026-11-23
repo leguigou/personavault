@@ -190,6 +190,13 @@ function mcp_tools(): array
             'required'    => ['persona', 'kind', 'body'],
             'annotations' => $write + ['title' => 'Écrire un prompt', 'idempotentHint' => true],
         ],
+        'set_persona_avatar' => [
+            'description' => 'Remplace le portrait (avatar) du persona par une image téléchargée depuis une adresse https:// publique '
+                . '(JPEG, PNG, WebP ou GIF, 15 Mo au plus). L’image doit être accessible sans connexion ; elle est réencodée comme un import.',
+            'properties'  => ['persona' => $persona, 'image_url' => ['type' => 'string', 'description' => 'Adresse https:// de l’image.']],
+            'required'    => ['persona', 'image_url'],
+            'annotations' => ['readOnlyHint' => false, 'destructiveHint' => false, 'openWorldHint' => true, 'title' => 'Changer le portrait'],
+        ],
         'list_conversations' => [
             'description' => 'Liste les discussions, les plus récentes d’abord (id, persona, titre, nombre de messages, dernier message).',
             'properties'  => ['persona' => $persona, 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100]],
@@ -419,6 +426,7 @@ function mcp_tool_get_persona(array $args): array
             'max_tokens' => (int) ($p['max_tokens'] ?? 400), 'web_search' => (int) ($p['web_search'] ?? 1) === 1,
         ],
         'archived'    => (int) $p['archived'] === 1,
+        'has_avatar'  => (string) $p['avatar'] !== '',
         'prompts'     => array_map(static fn (array $pr): array => [
             'id' => (int) $pr['id'], 'kind' => (string) $pr['kind'], 'title' => (string) $pr['title'], 'body' => (string) $pr['body'],
         ], fetch_prompts((int) $p['id'])),
@@ -527,6 +535,102 @@ function mcp_tool_set_persona_prompt(array $args): array
     }
     db()->prepare('UPDATE personas SET updated_at = datetime("now") WHERE id = ?')->execute([(int) $p['id']]);
     return ['prompt_id' => $id, 'kind' => $kind, 'replaced' => $target !== null];
+}
+
+/**
+ * Télécharge une image pour le serveur, sans jamais atteindre le réseau local : https seulement,
+ * adresse IP publique vérifiée et imposée à cURL (pas de changement d'IP entre la vérification et
+ * la connexion), redirections suivies une à une avec la même vérification, taille plafonnée.
+ * config « mcp_avatar_allow_local » : tests seulement (http et 127.0.0.1 permis).
+ * @return array{0:string, 1:int} [fichier temporaire, taille]
+ */
+function mcp_fetch_image(string $url): array
+{
+    $local = (bool) config('mcp_avatar_allow_local', false);
+    $max = (int) config('max_upload', 15 * 1024 * 1024);
+    for ($hop = 0; $hop <= 3; $hop++) {
+        $parts = parse_url($url) ?: [];
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = trim((string) ($parts['host'] ?? ''), '[]');
+        if (!($scheme === 'https' || ($local && $scheme === 'http')) || $host === '' || isset($parts['user']) || isset($parts['pass'])) {
+            throw new McpToolError('Adresse refusée : une adresse https:// publique est attendue.');
+        }
+        $port = (int) ($parts['port'] ?? ($scheme === 'https' ? 443 : 80));
+        $ips = filter_var($host, FILTER_VALIDATE_IP) ? [$host] : (gethostbynamel($host) ?: []);
+        if (!filter_var($host, FILTER_VALIDATE_IP)) {
+            foreach ((array) @dns_get_record($host, DNS_AAAA) as $rec) {
+                if (is_string($rec['ipv6'] ?? null)) {
+                    $ips[] = $rec['ipv6'];
+                }
+            }
+        }
+        if (!$ips) {
+            throw new McpToolError('Adresse introuvable : ' . $host);
+        }
+        foreach ($ips as $ip) {
+            $public = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
+                && !str_starts_with(strtolower($ip), '::ffff:');
+            if (!$public && !$local) {
+                throw new McpToolError('Adresse refusée : elle mène au réseau local.');
+            }
+        }
+        $ip = $ips[0];
+        $tmp = (string) tempnam(sys_get_temp_dir(), 'pvav');
+        $fh = fopen($tmp, 'wb');
+        $size = 0;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RESOLVE        => [$host . ':' . $port . ':' . (str_contains($ip, ':') ? '[' . $ip . ']' : $ip)],
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS      => $local ? (CURLPROTO_HTTPS | CURLPROTO_HTTP) : CURLPROTO_HTTPS,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_HTTPHEADER     => ['Accept: image/*', CHAT_WEB_USER_AGENT],
+            CURLOPT_WRITEFUNCTION  => static function ($ch, string $data) use ($fh, &$size, $max): int {
+                $size += strlen($data);
+                return $size > $max ? 0 : (int) fwrite($fh, $data);
+            },
+        ]);
+        $ok = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $next = (string) curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+        curl_close($ch);
+        fclose($fh);
+        if ($status >= 300 && $status < 400 && $next !== '') {
+            @unlink($tmp);
+            $url = $next;
+            continue;
+        }
+        if ($size > $max) {
+            @unlink($tmp);
+            throw new McpToolError(t('error.image.too_heavy', ['max' => human_bytes($max)]));
+        }
+        if ($ok === false || $status !== 200 || $size === 0) {
+            @unlink($tmp);
+            throw new McpToolError("Téléchargement impossible (HTTP {$status}) : l’image doit être accessible sans connexion.");
+        }
+        return [$tmp, $size];
+    }
+    throw new McpToolError('Trop de redirections.');
+}
+
+function mcp_tool_set_persona_avatar(array $args): array
+{
+    $p = mcp_persona((string) ($args['persona'] ?? ''));
+    $url = mcp_str($args, 'image_url', 4000) ?? '';
+    [$tmp, $size] = mcp_fetch_image($url);
+    try {
+        // même traitement qu'un portrait importé : contrôle, rotation, WebP sans métadonnées
+        $avatar = store_upload(['tmp_name' => $tmp, 'size' => $size, 'error' => UPLOAD_ERR_OK]);
+    } finally {
+        @unlink($tmp);
+    }
+    db()->prepare('UPDATE personas SET avatar = ?, updated_at = datetime("now") WHERE id = ?')->execute([$avatar, (int) $p['id']]);
+    if ((string) $p['avatar'] !== '' && (string) $p['avatar'] !== $avatar) {
+        // l'ancien portrait peut encore servir dans la galerie : supprimé seulement s'il n'est plus référencé
+        release_media((string) $p['avatar']);
+    }
+    return ['avatar_updated' => true] + mcp_persona_summary($p);
 }
 
 /* --------------------------------------------------------------------------- outils : discussions */

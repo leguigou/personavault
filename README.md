@@ -474,6 +474,7 @@ gérer les fiches et intervenir dans les discussions, à ta place **ou** à la p
 | `list_personas`, `get_persona` | liste et fiche complète (attributs, consigne, prompts) |
 | `create_persona`, `update_persona` | créer, modifier (champs fournis seulement), archiver |
 | `set_persona_prompt` | écrire un prompt (système, image…) ; l'ancien texte reste dans l'historique |
+| `set_persona_avatar` | remplacer le portrait par une image téléchargée depuis une adresse `https://` publique (JPEG, PNG, WebP, GIF, 15 Mo max), réencodée comme un import |
 | `list_conversations`, `get_conversation` | suivre les discussions : messages, humeur, résumé de mémoire |
 | `create_conversation` | ouvrir une discussion |
 | `send_user_message` | écrire **comme l'utilisateur** ; le persona répond avec son modèle, exactement comme dans l'app (mémoire, recherche, humeur, relation). `reply: false` : le message seul |
@@ -513,8 +514,11 @@ Derrière un proxy HTTPS, active `trust_proxy` ou indique `'public_url' => 'http
 - **Durée** : `send_user_message` et `generate_persona_reply` attendent la réponse complète du
   persona. Avec un modèle local lent, l'assistant peut abandonner avant la fin : la réponse est
   quand même enregistrée, `get_conversation` la retrouve.
-- Pas d'images ni de suppression par le connecteur. Si une réponse est en cours dans l'app, les
-  outils qui écrivent dans cette discussion demandent de réessayer.
+- **Portrait** : PersonaVault télécharge lui-même l'image ; elle doit être accessible sans connexion
+  (les liens temporaires d'une image générée par ChatGPT peuvent ne pas l'être). Jamais d'adresse
+  du réseau local (adresse vérifiée à chaque redirection).
+- Pas de suppression par le connecteur. Si une réponse est en cours dans l'app, les outils qui
+  écrivent dans cette discussion demandent de réessayer.
 - Transport : `POST` JSON-RPC, réponses JSON, sans flux ni session (`src/mcp.php`). OAuth 2.1 avec
   PKCE S256 et découverte RFC 9728 / RFC 8414 (`src/mcp_oauth.php`).
 

@@ -43,6 +43,8 @@ return [
     'chat_web_search_url' => 'http://127.0.0.1:$LLM_PORT/web/search',
     'chat_web_lmstudio_mcp' => getenv('PV_E2E_LMS_MCP') ? ['id' => 'mcp/test-search', 'tool' => 'web_search'] : [],
     'web_weather_geo_url' => 'http://127.0.0.1:$LLM_PORT/meteo/geo',
+    // portrait envoyé par le connecteur MCP depuis le faux serveur local (interdit hors tests)
+    'mcp_avatar_allow_local' => true,
     'web_weather_url' => 'http://127.0.0.1:$LLM_PORT/meteo/forecast',
     // humeur et ressentis : pas d'analyse en arrière-plan pendant le parcours (tests/e2e/feelings.php l'appelle directement)
     'feelings_background' => false,
