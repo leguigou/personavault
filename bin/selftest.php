@@ -786,8 +786,8 @@ try {
         && $rpc('initialize', ['protocolVersion' => '1999-01-01'])['result']['protocolVersion'] === MCP_PROTOCOL_VERSIONS[0],
         'MCP : version du protocole négociée');
     $mcpTools = $rpc('tools/list')['result']['tools'];
-    $check(count($mcpTools) === 18 && !array_filter($mcpTools, static fn ($t) => ($t['inputSchema']['type'] ?? '') !== 'object' || !isset($t['annotations']['readOnlyHint'])),
-        'MCP : 18 outils décrits, avec schéma et indication lecture seule');
+    $check(count($mcpTools) === 21 && !array_filter($mcpTools, static fn ($t) => ($t['inputSchema']['type'] ?? '') !== 'object' || !isset($t['annotations']['readOnlyHint'])),
+        'MCP : 21 outils décrits, avec schéma et indication lecture seule');
     $check(mcp_handle(['jsonrpc' => '2.0', 'method' => 'notifications/initialized']) === null
         && $rpc('nope')['error']['code'] === -32601 && $rpc('tools/call', ['name' => 'nope'])['error']['code'] === -32602,
         'MCP : notification sans réponse, méthode et outil inconnus refusés');
@@ -846,6 +846,25 @@ try {
         && $tool('list_memories', ['persona' => 'nina-mcp', 'subject' => 'story'])['structuredContent']['memories'] === []
         && $tool('delete_memory', ['memory_id' => $memB['id']])['isError'] === true,
         'MCP : souvenir corrigé (champs fournis seulement), supprimé (outil marqué destructif)');
+    $convSet = $tool('update_conversation', ['conversation_id' => $mcpCid, 'title' => 'Test colère', 'directive' => 'Réponds en une phrase.',
+        'memory_enabled' => false, 'web_search' => false])['structuredContent'];
+    $convRow = db()->query('SELECT * FROM conversations WHERE id = ' . (int) $mcpCid)->fetch();
+    $check($convSet['updated'] === ['title', 'directive', 'memory_enabled', 'web_search'] && $convRow['title'] === 'Test colère'
+        && (int) $convRow['title_auto'] === 0 && $convRow['directive'] === 'Réponds en une phrase.' && (int) $convRow['memory_enabled'] === 0
+        && (int) $convRow['web_search'] === 0 && (int) $convRow['pinned'] === 0 && $tool('update_conversation', ['conversation_id' => $mcpCid])['isError'] === true,
+        'MCP : réglages d’une discussion (titre figé, consigne, mémoire, recherche), seuls les champs fournis changent');
+    $feel = $tool('set_feelings', ['conversation_id' => $mcpCid, 'emotion' => 'colere', 'intensity' => 85, 'anger' => 80, 'friendship' => -30])['structuredContent'];
+    $badFeel = $tool('set_feelings', ['conversation_id' => $mcpCid, 'emotion' => 'furie']);
+    $check($feel['feelings']['emotion'] === 'colere' && $feel['feelings']['intensity'] === 85 && $feel['feelings']['anger'] === 80
+        && $feel['feelings']['friendship'] === -30 && $feel['changed'] !== '' && $badFeel['isError'] === true
+        && str_contains(feel_context((int) $mcpCid, db()->query('SELECT * FROM personas WHERE slug = \'nina-mcp\'')->fetch()), 'colère'),
+        'MCP : humeur et jauges réglées comme à la main (transmises au persona), émotion inconnue refusée');
+    $check($tool('try_persona_reply', ['conversation_id' => $mcpCid, 'message' => ''])['isError'] === true, 'MCP : essai sans message refusé');
+    $logRows = mcp_log_list(500);
+    $check($logRows[0]['tool'] === 'try_persona_reply' && (int) $logRows[0]['ok'] === 0 && $logRows[0]['target'] === 'discussion #' . $mcpCid
+        && count(array_filter($logRows, static fn ($r) => $r['tool'] === 'set_feelings')) === 2
+        && str_contains(implode(' ', array_column($logRows, 'args')), 'Test colère'),
+        'MCP : chaque appel est inscrit au journal (outil, cible, paramètres, échec)');
     set_setting('mcp_enabled', '0');
 
     echo PHP_EOL . '— connecteur MCP : OAuth (ChatGPT)' . PHP_EOL;

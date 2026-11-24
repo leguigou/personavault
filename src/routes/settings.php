@@ -42,6 +42,18 @@ if ($path === '/settings/mcp-server' && $method === 'POST') {
     redirect('/settings');
 }
 
+/* --- journal du connecteur MCP : ce que l'assistant a lu ou modifié --- */
+if ($path === '/settings/mcp-log' && $method === 'GET') {
+    render('mcp_log', ['title' => t('mcplog.title'), 'rows' => mcp_log_list()]);
+    exit;
+}
+if ($path === '/settings/mcp-log/clear' && $method === 'POST') {
+    csrf_check();
+    db()->exec('DELETE FROM mcp_log');
+    flash('ok', t('mcplog.cleared'));
+    redirect('/settings/mcp-log');
+}
+
 /* --- journal des échanges avec les modèles (20 derniers) --- */
 if ($path === '/settings/logs' && $method === 'GET') {
     render('llm_logs', [

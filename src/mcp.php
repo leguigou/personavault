@@ -249,6 +249,42 @@ function mcp_tools(): array
             'required'    => ['memory_id'],
             'annotations' => ['readOnlyHint' => false, 'destructiveHint' => true, 'openWorldHint' => false, 'title' => 'Supprimer un souvenir'],
         ],
+        'try_persona_reply' => [
+            'description' => 'ESSAI : le persona répond à un message avec son modèle, comme dans l’app, mais RIEN n’est enregistré '
+                . '(ni le message ni la réponse). Pour régler une fiche : system_prompt et directive remplacent ceux du persona '
+                . 'le temps de l’essai seulement. Sans recherche web ni média.',
+            'properties'  => [
+                'conversation_id' => $cid, 'message' => ['type' => 'string'],
+                'system_prompt' => ['type' => 'string', 'description' => 'Prompt système à essayer à la place de celui du persona (non enregistré).'],
+                'directive' => ['type' => 'string', 'description' => 'Consigne de jeu à essayer à la place de celle du persona et de la discussion (non enregistrée).'],
+            ],
+            'required'    => ['conversation_id', 'message'],
+            'annotations' => $read + ['title' => 'Essayer une réponse (sans enregistrer)'],
+        ],
+        'update_conversation' => [
+            'description' => 'Réglages d’une discussion : titre, consigne propre à la discussion (s’ajoute à celle du persona), mémoire '
+                . '(résumé glissant), souvenirs partagés avec les autres discussions, recherche d’informations, épinglage. Seuls les champs fournis changent.',
+            'properties'  => [
+                'conversation_id' => $cid, 'title' => ['type' => 'string'], 'directive' => ['type' => 'string'],
+                'memory_enabled' => ['type' => 'boolean'], 'shared_memories' => ['type' => 'boolean'],
+                'web_search' => ['type' => 'boolean'], 'pinned' => ['type' => 'boolean'],
+            ],
+            'required'    => ['conversation_id'],
+            'annotations' => $write + ['title' => 'Régler une discussion', 'idempotentHint' => true],
+        ],
+        'set_feelings' => [
+            'description' => 'Règle l’humeur du persona dans une discussion (émotion et intensité 0-100) et ce qu’il ressent pour '
+                . 'l’utilisateur (amitié et amour de -100 à 100, colère de 0 à 100), comme le réglage à la main de l’app. Seuls les champs fournis changent.',
+            'properties'  => [
+                'conversation_id' => $cid, 'emotion' => ['type' => 'string', 'enum' => array_keys(duo_emotions())],
+                'intensity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100],
+                'friendship' => ['type' => 'integer', 'minimum' => -100, 'maximum' => 100],
+                'love' => ['type' => 'integer', 'minimum' => -100, 'maximum' => 100],
+                'anger' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100],
+            ],
+            'required'    => ['conversation_id'],
+            'annotations' => $write + ['title' => 'Régler l’humeur', 'idempotentHint' => true],
+        ],
         'list_conversations' => [
             'description' => 'Liste les discussions, les plus récentes d’abord (id, persona, titre, nombre de messages, dernier message).',
             'properties'  => ['persona' => $persona, 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100]],
@@ -320,11 +356,59 @@ function mcp_tools_call(array $params): array
         $data = ['error' => public_error($e)];
         $isError = true;
     }
+    mcp_log_write($name, $args, $isError, $data);
     return [
         'content'           => [['type' => 'text', 'text' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)]],
         'structuredContent' => $data,
         'isError'           => $isError,
     ];
+}
+
+/* --------------------------------------------------------------------------- journal */
+
+const MCP_LOG_KEEP = 500;
+
+/** Ce que l'assistant a fait : outil, cible, paramètres (abrégés), résultat. Les 500 derniers appels. */
+function mcp_log_write(string $tool, array $args, bool $isError, array $data): void
+{
+    try {
+        $target = match (true) {
+            isset($args['conversation_id']) => 'discussion #' . (int) $args['conversation_id'],
+            isset($args['memory_id']) => 'souvenir #' . (int) $args['memory_id'],
+            isset($args['persona']) && is_scalar($args['persona']) => 'persona ' . mb_substr((string) $args['persona'], 0, 80),
+            isset($args['name']) && is_scalar($args['name']) => 'persona ' . mb_substr((string) $args['name'], 0, 80),
+            default => '',
+        };
+        $result = $isError ? (string) ($data['error'] ?? '') : mcp_log_summary($data);
+        db()->prepare('INSERT INTO mcp_log (tool, target, args, ok, result) VALUES (?, ?, ?, ?, ?)')->execute([
+            $tool, $target, mb_substr(json_encode($args, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '', 0, 1000),
+            $isError ? 0 : 1, mb_substr($result, 0, 400),
+        ]);
+        db()->exec('DELETE FROM mcp_log WHERE id <= (SELECT MAX(id) FROM mcp_log) - ' . MCP_LOG_KEEP);
+    } catch (Throwable $e) {
+        error_log('[PersonaVault] journal MCP : ' . $e->getMessage()); // le journal ne bloque jamais un outil
+    }
+}
+
+/** Résumé court d'un résultat : la réponse du persona, sinon les clés et le nombre d'éléments. */
+function mcp_log_summary(array $data): string
+{
+    if (isset($data['reply']['content'])) {
+        return 'réponse : ' . mb_substr((string) $data['reply']['content'], 0, 300);
+    }
+    $parts = [];
+    foreach ($data as $k => $v) {
+        $parts[] = is_array($v) ? $k . ' (' . count($v) . ')' : $k . (is_scalar($v) && mb_strlen((string) $v) <= 60 ? ' = ' . var_export($v, true) : '');
+        if (count($parts) >= 6) {
+            break;
+        }
+    }
+    return implode(', ', $parts);
+}
+
+function mcp_log_list(int $limit = 200): array
+{
+    return db()->query('SELECT * FROM mcp_log ORDER BY id DESC LIMIT ' . max(1, $limit))->fetchAll();
 }
 
 /* --------------------------------------------------------------------------- aides */
@@ -742,6 +826,116 @@ function mcp_tool_search_messages(array $args): array
         'author' => $r['role'] === 'user' ? 'utilisateur' : (string) $r['persona_name'],
         'content' => mb_substr((string) $r['content'], 0, 600), 'created_at' => (string) $r['created_at'],
     ], $st->fetchAll())];
+}
+
+/* --------------------------------------------------------------------------- outils : essai et réglages */
+
+/** Essai sans rien enregistrer : même préparation que chat_turn, sans insertion, sans recherche ni média. */
+function mcp_tool_try_persona_reply(array $args): array
+{
+    [$conv, $persona] = mcp_conversation(mcp_int($args, 'conversation_id'));
+    $cid = (int) $conv['id'];
+    $message = mcp_str($args, 'message', 8000) ?? '';
+    if ($message === '') {
+        throw new McpToolError('Le message est vide.');
+    }
+    $prompts = fetch_prompts((int) $persona['id']);
+    $overrides = [];
+    $system = mcp_str($args, 'system_prompt', 20000);
+    if ($system !== null && $system !== '') {
+        $prompts = array_values(array_filter($prompts, static fn (array $p): bool => $p['kind'] !== 'system'));
+        $prompts[] = ['kind' => 'system', 'title' => 'essai', 'body' => $system];
+        $overrides[] = 'system_prompt';
+    }
+    $conv = chat_with_persona($conv, $persona);
+    $directive = mcp_str($args, 'directive', 2000);
+    if ($directive !== null) {
+        $conv['directive'] = $directive;
+        $overrides[] = 'directive';
+    }
+    @set_time_limit(600);
+    try {
+        $conv = chat_fit_context($conv)['conv'];
+    } catch (Throwable $e) {
+        // jamais bloquant : l'appel au modèle dira lui-même ce qui ne va pas
+    }
+    $built = chat_build_messages($persona, $prompts, $conv, fetch_context_messages($cid, $conv), $message, canReact: false);
+    $built['messages'][0]['content'] .= ' Privilégie une réponse concise et termine ta dernière phrase dans le budget de sortie.';
+    $context = new ChatContextOutput();
+    $filtered = new ChatReactionStream(false);
+    $res = chat_reply_stream($built['messages'], $conv, static function (string $delta) use ($context, $filtered): void {
+        $filtered->push($context->push($delta));
+    });
+    $filtered->push($context->finish());
+    $filtered->finish();
+    $content = trim($filtered->content !== '' ? $filtered->content : chat_strip_context((string) $res['content']));
+    if ($content === '') {
+        throw new RuntimeException(t('error.llm.empty'));
+    }
+    return [
+        'saved'     => false,
+        'persona'   => (string) $persona['name'],
+        'reply'     => ['author' => (string) $persona['name'], 'content' => $content],
+        'overrides' => $overrides,
+        'model'     => (string) $res['model'],
+        'finish_reason' => (string) ($res['finish_reason'] ?? ''),
+        'tokens'    => (int) ($res['prompt_tokens'] ?? 0) + (int) ($res['completion_tokens'] ?? 0),
+        'ms'        => (int) ($res['ms'] ?? 0),
+    ];
+}
+
+function mcp_tool_update_conversation(array $args): array
+{
+    [$conv] = mcp_conversation(mcp_int($args, 'conversation_id'));
+    $set = [];
+    $title = mcp_str($args, 'title', 120);
+    if ($title !== null) {
+        if ($title === '') {
+            throw new McpToolError('Le titre ne peut pas être vide.');
+        }
+        $set['title'] = $title;
+        $set['title_auto'] = 0;
+    }
+    $directive = mcp_str($args, 'directive', 2000);
+    if ($directive !== null) {
+        $set['directive'] = $directive;
+    }
+    foreach (['memory_enabled' => 'memory_enabled', 'shared_memories' => 'facts_enabled', 'web_search' => 'web_search', 'pinned' => 'pinned'] as $arg => $column) {
+        if (array_key_exists($arg, $args)) {
+            $set[$column] = $args[$arg] ? 1 : 0;
+        }
+    }
+    if (!$set) {
+        throw new McpToolError('Aucun réglage à modifier.');
+    }
+    db()->prepare('UPDATE conversations SET ' . implode(', ', array_map(static fn (string $c): string => $c . ' = ?', array_keys($set)))
+        . ' WHERE id = ?')->execute([...array_values($set), (int) $conv['id']]);
+    $st = db()->prepare('SELECT * FROM conversations WHERE id = ?');
+    $st->execute([(int) $conv['id']]);
+    $c = $st->fetch();
+    return ['updated' => array_keys(array_diff_key($set, ['title_auto' => 1])), 'conversation_id' => (int) $c['id'], 'title' => (string) $c['title'],
+        'directive' => (string) $c['directive'], 'memory_enabled' => (int) $c['memory_enabled'] === 1,
+        'shared_memories' => (int) $c['facts_enabled'] === 1, 'web_search' => (int) $c['web_search'] === 1, 'pinned' => (int) $c['pinned'] === 1];
+}
+
+function mcp_tool_set_feelings(array $args): array
+{
+    [$conv, $persona] = mcp_conversation(mcp_int($args, 'conversation_id'));
+    $values = array_intersect_key($args, array_flip(['emotion', 'intensity', 'friendship', 'love', 'anger']));
+    if (isset($values['emotion']) && !isset(duo_emotions()[(string) $values['emotion']])) {
+        throw new McpToolError('Émotion inconnue : ' . (string) $values['emotion']);
+    }
+    if (!$values) {
+        throw new McpToolError('Aucune valeur à régler.');
+    }
+    $changed = feel_set((int) $conv['id'], $persona, array_map(static fn ($v) => is_scalar($v) ? (string) $v : '', $values));
+    $f = feel_get((int) $conv['id'], $persona);
+    return [
+        'changed' => $changed,
+        'feelings' => ['emotion' => $f['emotion'], 'intensity' => $f['intensity'], 'friendship' => $f['friendship'],
+            'love' => $f['love'], 'anger' => $f['anger']],
+        'note' => $f['romance'] ? '' : 'Persona mineur : l’amour reste à 0.',
+    ];
 }
 
 /* --------------------------------------------------------------------------- outils : souvenirs */

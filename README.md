@@ -477,6 +477,9 @@ gérer les fiches et intervenir dans les discussions, à ta place **ou** à la p
 | `set_persona_avatar` | remplacer le portrait par une image téléchargée depuis une adresse `https://` publique (JPEG, PNG, WebP, GIF, 15 Mo max), réencodée comme un import |
 | `list_conversations`, `get_conversation` | suivre les discussions : messages, humeur, résumé de mémoire |
 | `search_messages` | recherche plein texte dans les messages, filtrée par persona ou par discussion |
+| `try_persona_reply` | **essai** : le persona répond à un message avec son modèle, mais rien n'est enregistré ; `system_prompt` et `directive` remplacent ceux du persona le temps de l'essai (pour régler une fiche). Sans recherche ni média |
+| `update_conversation` | titre, consigne propre à la discussion, mémoire, souvenirs partagés, recherche, épinglage |
+| `set_feelings` | humeur (émotion, intensité) et jauges (amitié, amour, colère), comme le réglage à la main |
 | `get_prompt_preview` | le prompt complet tel que le persona le reçoit (fiche, consigne, mémoire, humeur) : pour diagnostiquer une fiche, sans rien envoyer au modèle |
 | `list_memories`, `add_memory`, `update_memory`, `delete_memory` | gérer les souvenirs durables (sur l'utilisateur, ou histoire du persona) ; la suppression est marquée destructive, l'assistant demande confirmation |
 | `create_conversation` | ouvrir une discussion |
@@ -485,6 +488,8 @@ gérer les fiches et intervenir dans les discussions, à ta place **ou** à la p
 | `generate_persona_reply` | faire répondre le persona au dernier message (une réponse existante passe dans les versions ‹ 1/2 ›) |
 
 Les messages arrivés par le connecteur apparaissent dans l'app avec le badge « Nouveau ».
+**Journal du connecteur** (lien dans Réglages › IA › Connecteur MCP) : chaque appel d'outil, lecture ou
+écriture, avec sa cible, ses paramètres et son résultat (500 derniers appels).
 
 **Mise en route**
 

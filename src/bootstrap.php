@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 29);
+define('PV_SCHEMA_VERSION', 30);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -306,6 +306,14 @@ function migrate(PDO $pdo): void
             $pdo->exec("CREATE TABLE IF NOT EXISTS mcp_oauth_tokens (
                 token_hash TEXT PRIMARY KEY, kind TEXT NOT NULL, client_id TEXT NOT NULL,
                 scope TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+            )");
+        }
+        if ($version < 30) {
+            // journal des appels du connecteur MCP : ce que l'assistant a lu ou modifié (src/mcp.php)
+            $pdo->exec("CREATE TABLE IF NOT EXISTS mcp_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL DEFAULT (datetime('now')),
+                tool TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', args TEXT NOT NULL DEFAULT '',
+                ok INTEGER NOT NULL DEFAULT 1, result TEXT NOT NULL DEFAULT ''
             )");
         }
         if ($version < PV_SCHEMA_VERSION) {
