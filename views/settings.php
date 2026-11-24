@@ -163,6 +163,7 @@ $klipyHasKey = $keyPreviews['klipy'] !== '';
     <section class="backup-card settings-maint settings-mcp" id="mcp">
         <h3><?= e(t('settings.mcp.title')) ?> <?= $info('mcp', t('settings.mcp.title')) ?></h3>
         <p class="hint"><?= e(t('settings.mcp.hint')) ?></p>
+        <p class="hint"><a href="/settings/mcp-log"><?= e(t('mcplog.link', ['count' => (int) db()->query('SELECT COUNT(*) FROM mcp_log')->fetchColumn()])) ?></a></p>
         <p class="hint"><strong><?= e($mcpOn ? t('settings.mcp.state_on') : t('settings.mcp.state_off')) ?></strong></p>
         <?php if (!$mcpOn): ?>
             <div class="form-actions"><?= $mcpAction('enable', t('settings.mcp.enable'), 'btn-primary') ?></div>

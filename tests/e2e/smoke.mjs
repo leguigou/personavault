@@ -765,7 +765,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         'MCP : initialisation');
     expect((await rpc(url, 'notifications/initialized')).status === 202, 'MCP : notification acceptée sans réponse');
     const viaHeader = await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + token });
-    expect(viaHeader.body?.result?.tools?.length === 12, 'MCP : jeton accepté dans l’en-tête Authorization');
+    expect(viaHeader.body?.result?.tools?.length === 21, 'MCP : jeton accepté dans l’en-tête Authorization');
     const call = async (name, args) => (await rpc(url, 'tools/call', { name, arguments: args })).body?.result;
     const personas = (await call('list_personas', {})).structuredContent.personas;
     const target = personas.find((p) => p.conversations > 0) || personas[0];
@@ -787,6 +787,20 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         && read.messages.map((m) => m.role).join(',') === 'user,persona,persona,user,persona'
         && read.messages[2].written_by_connector === true && read.title === 'Pilotée par MCP',
         'MCP : écrire comme le persona, puis le faire répondre ; la discussion se relit');
+    const preview = (await call('get_prompt_preview', { conversation_id: cid, message: 'Tu es là ?' })).structuredContent;
+    const found = (await call('search_messages', { query: 'cinq minutes', conversation_id: cid })).structuredContent.results;
+    expect(preview.system_prompt.length > 50 && preview.last_message.includes('Tu es là ?') && found.length === 1 && found[0].author === target.name,
+        'MCP : aperçu du prompt et recherche dans la discussion');
+    const before = (await call('get_conversation', { conversation_id: cid, limit: 200 })).structuredContent.messages.length;
+    const essay = (await call('try_persona_reply', { conversation_id: cid, message: 'Essai sans trace',
+        system_prompt: 'Tu es un persona d’essai MARQUEUR-ESSAI-42.' })).structuredContent;
+    const after = (await call('get_conversation', { conversation_id: cid, limit: 200 })).structuredContent.messages.length;
+    const llmLogs = await (await http('/settings/logs')).text();
+    expect(essay.saved === false && essay.reply.content.includes('faux modèle') && essay.overrides.includes('system_prompt')
+        && before === after && llmLogs.includes('MARQUEUR-ESSAI-42'),
+        'MCP : essai de réponse avec un prompt d’essai, rien n’est enregistré dans la discussion');
+    const mcpLog = await (await http('/settings/mcp-log')).text();
+    expect(mcpLog.includes('Essayer une réponse') && mcpLog.includes('discussion #' + cid), 'MCP : le journal du connecteur liste les appels');
     const page = await (await http('/chat/' + cid)).text();
     expect(page.includes('Je reviens dans cinq minutes.') && page.includes('D’accord, je t’attends.'), 'MCP : les messages apparaissent dans l’app');
     // OAuth, comme ChatGPT : découverte, autorisation dans PersonaVault, code + PKCE → jeton, appel de /mcp
@@ -823,7 +837,7 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     const tokens = await tokenRes.json();
     expect(tokenRes.status === 200 && tokens.token_type === 'Bearer' && tokens.refresh_token, 'OAuth : code échangé contre un jeton (client_secret_basic, PKCE)');
     const oauthCall = await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + tokens.access_token });
-    expect(oauthCall.body?.result?.tools?.length === 12, 'OAuth : le jeton d’accès ouvre les outils MCP');
+    expect(oauthCall.body?.result?.tools?.length === 21, 'OAuth : le jeton d’accès ouvre les outils MCP');
     await submit('/settings/mcp-server', { do: 'revoke' });
     expect((await rpc('/mcp', 'tools/list', {}, { Authorization: 'Bearer ' + tokens.access_token })).status === 401, 'OAuth : connexions révoquées');
 

@@ -476,12 +476,20 @@ gérer les fiches et intervenir dans les discussions, à ta place **ou** à la p
 | `set_persona_prompt` | écrire un prompt (système, image…) ; l'ancien texte reste dans l'historique |
 | `set_persona_avatar` | remplacer le portrait par une image téléchargée depuis une adresse `https://` publique (JPEG, PNG, WebP, GIF, 15 Mo max), réencodée comme un import |
 | `list_conversations`, `get_conversation` | suivre les discussions : messages, humeur, résumé de mémoire |
+| `search_messages` | recherche plein texte dans les messages, filtrée par persona ou par discussion |
+| `try_persona_reply` | **essai** : le persona répond à un message avec son modèle, mais rien n'est enregistré ; `system_prompt` et `directive` remplacent ceux du persona le temps de l'essai (pour régler une fiche). Sans recherche ni média |
+| `update_conversation` | titre, consigne propre à la discussion, mémoire, souvenirs partagés, recherche, épinglage |
+| `set_feelings` | humeur (émotion, intensité) et jauges (amitié, amour, colère), comme le réglage à la main |
+| `get_prompt_preview` | le prompt complet tel que le persona le reçoit (fiche, consigne, mémoire, humeur) : pour diagnostiquer une fiche, sans rien envoyer au modèle |
+| `list_memories`, `add_memory`, `update_memory`, `delete_memory` | gérer les souvenirs durables (sur l'utilisateur, ou histoire du persona) ; la suppression est marquée destructive, l'assistant demande confirmation |
 | `create_conversation` | ouvrir une discussion |
 | `send_user_message` | écrire **comme l'utilisateur** ; le persona répond avec son modèle, exactement comme dans l'app (mémoire, recherche, humeur, relation). `reply: false` : le message seul |
 | `write_as_persona` | écrire **comme le persona**, sans son modèle |
 | `generate_persona_reply` | faire répondre le persona au dernier message (une réponse existante passe dans les versions ‹ 1/2 ›) |
 
 Les messages arrivés par le connecteur apparaissent dans l'app avec le badge « Nouveau ».
+**Journal du connecteur** (lien dans Réglages › IA › Connecteur MCP) : chaque appel d'outil, lecture ou
+écriture, avec sa cible, ses paramètres et son résultat (500 derniers appels).
 
 **Mise en route**
 
@@ -515,7 +523,8 @@ Derrière un proxy HTTPS, active `trust_proxy` ou indique `'public_url' => 'http
   persona. Avec un modèle local lent, l'assistant peut abandonner avant la fin : la réponse est
   quand même enregistrée, `get_conversation` la retrouve.
 - **Portrait** : PersonaVault télécharge lui-même l'image ; elle doit être accessible sans connexion
-  (les liens temporaires d'une image générée par ChatGPT peuvent ne pas l'être). Jamais d'adresse
+  et en ligne. Une image **générée par ChatGPT** reste dans son espace de travail (`/mnt/data/…`), sans
+  adresse publique : télécharge-la et importe-la dans la fiche (Modifier › Portrait). Jamais d'adresse
   du réseau local (adresse vérifiée à chaque redirection).
 - Pas de suppression par le connecteur. Si une réponse est en cours dans l'app, les outils qui
   écrivent dans cette discussion demandent de réessayer.
