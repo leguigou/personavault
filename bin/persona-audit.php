@@ -56,7 +56,9 @@ foreach ($rows as $persona) {
     if ($cut) {
         $alerts[] = 'prompt coupé';
     }
-    if (mb_strlen($system) < AUDIT_SHORT_PROMPT) {
+    if (mb_strlen($system) < AUDIT_SHORT_PROMPT && $metaCount < 5) {
+        // un prompt court est compensé par des attributs fournis : ne pas crier au loup
+        // (Eva, Amy et Elena sont à 3,75 avec un prompt de 1 300-1 400 car. et 7 à 9 attributs)
         $alerts[] = 'prompt court';
     }
     if ($directive === '') {
