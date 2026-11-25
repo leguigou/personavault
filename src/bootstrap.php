@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 32);
+define('PV_SCHEMA_VERSION', 33);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -335,6 +335,15 @@ function migrate(PDO $pdo): void
             add_column_if_missing($pdo, 'persona_psy_runs', 'grid', "TEXT NOT NULL DEFAULT 'personnalite'");
             add_column_if_missing($pdo, 'persona_psy_runs', 'grid_name', "TEXT NOT NULL DEFAULT ''");
             $pdo->exec('CREATE INDEX IF NOT EXISTS idx_psy_persona ON persona_psy_runs(persona_id, id)');
+        }
+        if ($version < 33) {
+            // MemoryGuard (src/memory_guard.php) : d'où vient un souvenir, l'extrait qui le prouve,
+            // combien de fois il a été confirmé, quand il expire. Anciens souvenirs : origine '' (sans preuve).
+            add_column_if_missing($pdo, 'user_memories', 'origin', "TEXT NOT NULL DEFAULT ''");
+            add_column_if_missing($pdo, 'user_memories', 'evidence', "TEXT NOT NULL DEFAULT ''");
+            add_column_if_missing($pdo, 'user_memories', 'confirmations', 'INTEGER NOT NULL DEFAULT 1');
+            add_column_if_missing($pdo, 'user_memories', 'last_confirmed_at', "TEXT NOT NULL DEFAULT ''");
+            add_column_if_missing($pdo, 'user_memories', 'expires_at', "TEXT NOT NULL DEFAULT ''");
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -1550,6 +1559,7 @@ require_once __DIR__ . '/followup.php';
 require_once __DIR__ . '/planning.php';
 require_once __DIR__ . '/harness.php';
 require_once __DIR__ . '/psy.php';
+require_once __DIR__ . '/memory_guard.php';
 
 function render(string $view, array $data = []): void
 {

@@ -876,6 +876,16 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
         && customPage.includes('Situation de test A pour t2') && customPage.includes('Personnalisée') && customPage.includes('psy-history'),
         'empreinte : grille personnalisée (3 traits min.), radar à ses libellés, historique des deux tests : ' + (job.error || job.state));
 }
+// --- MemoryGuard : un souvenir commun inventé par l'utilisateur → consigne de doute envoyée au modèle
+{
+    const path = (await http('/chat/1/new', { method: 'POST', form: { _token: csrf } })).headers.get('location');
+    const sent = await (await http(path + '/stream', { method: 'POST', form: { _token: csrf, message: 'Tu te souviens de notre week-end à Bratislava ?' } })).text();
+    const logs = await (await http('/settings/logs')).text();
+    const memories = await (await http('/memories')).text();
+    expect(sent.includes('"done"') && logs.includes('ne retrouves dans aucun de tes souvenirs') && logs.includes('pas libre de réécrire celle de l')
+        && /class="mguard mguard-(fiable|probable|incertain)"/.test(memories),
+        'MemoryGuard : consigne de doute pour un souvenir introuvable, règle de base envoyée, fiabilité affichée dans Souvenirs');
+}
 // --- recherche d'informations : SearXNG, Wikipédia, météo, ligne bleue, interrupteurs
 {
     const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });

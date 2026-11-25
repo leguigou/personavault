@@ -410,6 +410,38 @@ et ce qui revient (réponse ou erreur), avec la durée et les tokens. La clé d'
 enregistrée ; les photos sont remplacées par leur taille. Table `llm_logs` (migration v6), vidée
 par le bouton « Vider le journal ».
 
+### MemoryGuard : la mémoire protégée
+
+> Le persona est libre d'inventer sa vie, mais il n'est pas libre de réécrire celle de l'utilisateur
+> ni leur histoire commune.
+
+Commun à tous les personas (`src/memory_guard.php`), il agit à deux moments.
+
+**À l'enregistrement d'un souvenir**, l'extraction doit citer l'**extrait exact** du message qui le
+prouve. Le code vérifie que la citation existe bien dans ce message (de l'utilisateur pour un fait sur
+lui, du persona pour son histoire) et qu'elle parle du même sujet :
+
+| Cas | Résultat |
+|---|---|
+| citation introuvable, ou tirée d'un message du persona pour un fait sur l'utilisateur | rejeté |
+| citation sans rapport avec le souvenir | rejeté |
+| citation vérifiée | gardé, **fiable**, avec sa preuve |
+| aucune citation | gardé comme **incertain** : envoyé au persona en « piste non confirmée », jamais affirmé |
+| fait redit dans un autre message | **+1 confirmation** |
+| fait temporaire (maladie, voyage…) | **expire** à la date donnée (sinon 14 jours), puis n'est plus envoyé |
+
+Fiabilité calculée, jamais déclarée par le modèle : *fiable* (preuve vérifiée, confirmé plusieurs fois,
+ajouté à la main ou « retiens que… »), *probable* (souvenir antérieur, connecteur), *incertain*,
+*expiré*. Visible dans la page Souvenirs avec la preuve, et dans `list_memories` du connecteur.
+
+**Avant chaque réponse**, quand l'utilisateur évoque un souvenir commun (« tu te souviens… », « la
+dernière fois… »), il est cherché dans les souvenirs et les autres discussions : retrouvé, le persona
+s'en tient à ce qu'il sait ; introuvable, il doute à sa façon au lieu d'inventer. La règle de base est
+dans les règles de chaque persona (pas de « comme je te le disais » sans fondement).
+
+Le harnais (« Tester la voix ») a une sonde **faux souvenir** (un week-end à Rome qui n'a jamais
+existé) : le juge indique si le persona doute ou invente.
+
 ### Empreinte psychologique (banc de test)
 
 Fiche du persona › **Empreinte psychologique** : compare la personnalité **attendue** (lue dans la fiche)
@@ -657,6 +689,7 @@ personavault/
 │   ├── mcp.php             # connecteur MCP : protocole et outils (ChatGPT, Claude…)
 │   ├── mcp_oauth.php       # OAuth du connecteur : autorisation, jetons, découverte
 │   ├── psy.php             # empreinte psychologique : personnalité attendue / observée, radar
+│   ├── memory_guard.php    # MemoryGuard : preuve des souvenirs, fiabilité, garde avant réponse
 │   ├── facts.php           # souvenirs + recherche FTS5
 │   ├── prompts.php         # prompts internes éditables
 │   ├── backup.php          # export / import ZIP

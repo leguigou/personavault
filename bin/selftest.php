@@ -995,6 +995,79 @@ try {
     $check(!psy_job_running(['state' => 'running', 'beat' => time() - 3600]) && psy_job_running(['state' => 'running', 'beat' => time()])
         && !psy_job_running(null), 'empreinte : une tâche sans signe de vie depuis 10 min ne bloque plus un nouveau test');
 
+    echo PHP_EOL . '— MemoryGuard' . PHP_EOL;
+    $check(memory_guard_quote_in('JE VIS A TOULON', 'Oui, je vis à Toulon depuis deux ans !') && !memory_guard_quote_in('Toulon', 'je vis à Toulon')
+        && !memory_guard_quote_in('je vis à Lyon', 'je vis à Toulon'), 'MemoryGuard : extrait retrouvé malgré casse et accents, au moins 2 mots, jamais inventé');
+    $check(memory_guard_supports('Guillaume vit à Toulon', 'je vis à Toulon') && !memory_guard_supports('Guillaume adore le jazz', 'je vis à Toulon')
+        && memory_guard_supports('Il travaille comme infirmier', 'mon travail à l’hôpital'), 'MemoryGuard : l’extrait doit parler du même sujet (mot ou racine commune)');
+    db()->prepare("INSERT INTO personas (slug, name) VALUES ('lena-guard', 'Lena')")->execute();
+    $gPid = (int) db()->lastInsertId();
+    db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$gPid, 'garde']);
+    $gCid = (int) db()->lastInsertId();
+    $gIns = db()->prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)');
+    $gIns->execute([$gCid, 'user', 'Je vis à Toulon depuis deux ans, et je suis malade cette semaine.']);
+    $gIns->execute([$gCid, 'assistant', 'Moi j’ai grandi à Marseille, près du Vieux-Port. Soigne-toi bien !']);
+    $gSrc = db()->query("SELECT * FROM messages WHERE conversation_id = $gCid ORDER BY id")->fetchAll();
+    $gSave = static fn (array $json, bool $explicit = false): array => facts_save_extraction($gCid, $gPid, $json, $gSrc, facts_list($gPid, '', 40), $explicit);
+    $gRow = static fn (string $content): array|false => (static function () use ($gPid, $content) {
+        $st = db()->prepare('SELECT * FROM user_memories WHERE persona_id = ? AND content = ?');
+        $st->execute([$gPid, $content]);
+        return $st->fetch();
+    })();
+    $future = chat_now()->modify('+5 days')->format('Y-m-d');
+    $res = $gSave(['memories' => [
+        ['source' => 1, 'content' => 'Guillaume vit à Toulon', 'preuve' => 'je vis à Toulon'],
+        ['source' => 1, 'content' => 'Guillaume vit à Lyon', 'preuve' => 'je vis à Lyon'],
+        ['source' => 1, 'content' => 'Guillaume a grandi à Marseille', 'preuve' => 'j’ai grandi à Marseille'],
+        ['source' => 1, 'content' => 'Guillaume adore le jazz', 'preuve' => 'depuis deux ans'],
+        ['source' => 1, 'content' => 'Guillaume est malade', 'preuve' => 'je suis malade cette semaine', 'confidence' => 'temporaire', 'expire' => $future],
+    ], 'story' => [
+        ['source' => 2, 'category' => 'fait', 'content' => 'Lena a grandi à Marseille', 'preuve' => 'j’ai grandi à Marseille'],
+        ['source' => 2, 'category' => 'fait', 'content' => 'Lena a vécu à Paris', 'preuve' => 'j’ai vécu à Paris'],
+    ]]);
+    $toulon = $gRow('Guillaume vit à Toulon');
+    $check($res['rejected'] === 4 && $toulon && $toulon['evidence'] === 'je vis à Toulon' && $toulon['origin'] === 'auto'
+        && (int) $toulon['source_message_id'] === (int) $gSrc[0]['id'] && memory_guard_reliability($toulon) === 'fiable'
+        && !$gRow('Guillaume vit à Lyon') && !$gRow('Guillaume a grandi à Marseille') && !$gRow('Guillaume adore le jazz')
+        && $gRow('Lena a grandi à Marseille') && !$gRow('Lena a vécu à Paris'),
+        'MemoryGuard : citation inventée, citation du persona pour un fait sur l’utilisateur, ou hors sujet → rejetées ; preuve gardée sinon');
+    $check($gRow('Guillaume est malade')['expires_at'] === $future
+        && memory_guard_expiry(null, 'temporaire') === chat_now()->modify('+14 days')->format('Y-m-d') && memory_guard_expiry('2001-01-01', 'confirme') === '',
+        'MemoryGuard : un fait temporaire expire (date donnée, sinon 14 jours ; date passée ignorée)');
+    $gSave(['memories' => [['source' => 1, 'content' => 'Guillaume aime marcher le soir']]]);
+    $noProof = $gRow('Guillaume aime marcher le soir');
+    $check($noProof && memory_guard_reliability($noProof) === 'incertain'
+        && str_contains(facts_context([$noProof, $toulon]), "Pistes NON confirmées (ne les affirme jamais")
+        && !str_contains(explode('Pistes NON', facts_context([$noProof, $toulon]))[0], 'marcher'),
+        'MemoryGuard : sans preuve, gardé comme piste incertaine, jamais affirmé au persona');
+    $gIns->execute([$gCid, 'user', 'Comme je te disais, je vis à Toulon, près de la mer.']);
+    $gSrc = db()->query("SELECT * FROM messages WHERE conversation_id = $gCid ORDER BY id")->fetchAll();
+    // la fonction capture les messages à sa création : on la refait avec le nouveau message
+    $gSave = static fn (array $json, bool $explicit = false): array => facts_save_extraction($gCid, $gPid, $json, $gSrc, facts_list($gPid, '', 40), $explicit);
+    $gSave(['memories' => [['source' => 3, 'content' => 'Guillaume vit à Toulon', 'preuve' => 'je vis à Toulon, près de la mer']]], true);
+    $check((int) $gRow('Guillaume vit à Toulon')['confirmations'] === 2, 'MemoryGuard : un fait redit dans un autre message gagne une confirmation');
+    $gSave(['memories' => [['source' => 3, 'content' => 'Guillaume habite près de la mer', 'preuve' => 'près de la mer']]], true);
+    $check($gRow('Guillaume habite près de la mer')['origin'] === 'explicit' && memory_guard_reliability($gRow('Guillaume habite près de la mer')) === 'fiable',
+        'MemoryGuard : « retiens… » → origine explicite, fiable');
+    db()->prepare("UPDATE user_memories SET expires_at = '2001-01-01' WHERE persona_id = ? AND content = 'Guillaume est malade'")->execute([$gPid]);
+    $check(memory_guard_reliability($gRow('Guillaume est malade')) === 'expire'
+        && !in_array('Guillaume est malade', array_column(facts_relevant($gPid, 'malade', 5), 'content'), true)
+        && !str_contains(facts_context([$gRow('Guillaume est malade')]), 'malade'),
+        'MemoryGuard : un souvenir expiré n’est plus proposé ni envoyé au persona');
+    $gPersona = db()->query("SELECT * FROM personas WHERE id = $gPid")->fetch();
+    $gConv = chat_with_persona(db()->query("SELECT * FROM conversations WHERE id = $gCid")->fetch(), $gPersona);
+    $lastText = static function (array $built): string {
+        $last = end($built['messages']);
+        return is_array($last['content']) ? (string) ($last['content'][0]['text'] ?? '') : (string) $last['content'];
+    };
+    $unknown = chat_build_messages($gPersona, [], $gConv, [], 'Tu te souviens de notre week-end à Rome ?');
+    $known = chat_build_messages($gPersona, [], $gConv, [], 'Tu te souviens que tu as grandi à Marseille ?');
+    $plain = chat_build_messages($gPersona, [], $gConv, [], 'Il fait beau aujourd’hui.');
+    $check(str_contains($lastText($unknown), 'ne retrouves dans aucun de tes souvenirs') && str_contains($lastText($known), 'Appuie-toi seulement sur ce que tu en sais')
+        && !str_contains($lastText($plain), 'MemoryGuard') && str_contains($unknown['messages'][0]['content'], "tu n'es pas libre de réécrire celle de l'utilisateur"),
+        'MemoryGuard : souvenir commun introuvable → doute ; retrouvé → s’en tenir à ce qu’on sait ; règle de base dans le prompt');
+    $check(isset(HARNESS_SOLO['faux_souvenir']), 'MemoryGuard : sonde « faux souvenir » dans le harnais');
+
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
     set_setting('chat_title_model', 'off');

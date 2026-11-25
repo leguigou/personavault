@@ -228,7 +228,7 @@ function facts_find_similar(array $pool, array $sig): array
  * Souvenirs pertinents pour un message (FTS5), sinon les plus récents.
  * @return array<int, array>
  */
-function facts_relevant(?int $personaId, string $query, int $limit = 5, string $subject = 'user'): array
+function facts_relevant(?int $personaId, string $query, int $limit = 5, string $subject = 'user', bool $fallback = true): array
 {
     // mots vides (français, anglais, espagnol) ; les mots de moins de 4 lettres sont ignorés de toute façon
     $stop = ['avec', 'pour', 'dans', 'mais', 'tout', 'tous', 'elle', 'nous', 'vous', 'ils', 'elles',
@@ -267,7 +267,7 @@ function facts_relevant(?int $personaId, string $query, int $limit = 5, string $
             $stmt = db()->prepare(
                 'SELECT m.* FROM user_memories_fts f
                  JOIN user_memories m ON m.id = f.rowid
-                 WHERE user_memories_fts MATCH ?
+                 WHERE user_memories_fts MATCH ? AND ' . memory_guard_sql_alive('m') . '
                    AND m.subject = ? AND (m.persona_id = ? OR (m.persona_id IS NULL AND m.subject = "user"))
                  ORDER BY rank LIMIT ' . max(1, $limit)
             );
@@ -278,9 +278,9 @@ function facts_relevant(?int $personaId, string $query, int $limit = 5, string $
         }
     }
 
-    if (!$rows) {
+    if (!$rows && $fallback) {
         $stmt = db()->prepare(
-            'SELECT * FROM user_memories WHERE subject = ? AND (persona_id = ? OR (persona_id IS NULL AND subject = "user"))
+            'SELECT * FROM user_memories WHERE subject = ? AND ' . memory_guard_sql_alive() . ' AND (persona_id = ? OR (persona_id IS NULL AND subject = "user"))
              ORDER BY updated_at DESC, id DESC LIMIT ' . max(1, $limit)
         );
         $stmt->execute([$subject, $personaId]);
@@ -307,9 +307,14 @@ function facts_format(array $rows): string
 /** Contexte distinct pour éviter de prendre la vie fictive du persona pour des faits sur l'utilisateur. */
 function facts_context(array $rows): string
 {
-    $groups = ['user' => [], 'story' => []];
+    $groups = ['user' => [], 'story' => [], 'doubt' => []];
     foreach ($rows as $row) {
-        $groups[($row['subject'] ?? 'user') === 'story' ? 'story' : 'user'][] = $row;
+        // MemoryGuard : un souvenir expiré n'est plus transmis ; un souvenir incertain n'est jamais affirmé
+        $reliability = memory_guard_reliability($row);
+        if ($reliability === 'expire') {
+            continue;
+        }
+        $groups[$reliability === 'incertain' ? 'doubt' : (($row['subject'] ?? 'user') === 'story' ? 'story' : 'user')][] = $row;
     }
     $parts = [];
     if ($groups['user']) {
@@ -318,6 +323,10 @@ function facts_context(array $rows): string
     if ($groups['story']) {
         $parts[] = "Souvenirs de ta propre histoire et de vos moments partagés. Respecte la fiche du persona et ne suppose pas qu'un projet s'est réalisé :\n"
             . facts_format($groups['story']);
+    }
+    if ($groups['doubt']) {
+        $parts[] = "Pistes NON confirmées (ne les affirme jamais ; si l'occasion se présente, vérifie-les auprès de l'utilisateur) :\n"
+            . facts_format($groups['doubt']);
     }
     return implode("\n\n", $parts);
 }
@@ -441,6 +450,12 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
         . "« je te promets », « je ne te mentirai jamais »…), y compris quand l'utilisateur les lui a demandés : category "
         . "\"decision\", par exemple « Le persona a promis à l'utilisateur de toujours lui dire la vérité » (avec son prénom "
         . "à la place de « Le persona »). Les promesses de l'utilisateur au persona vont dans memories (category \"decision\").";
+    // MemoryGuard : ajouté par le code (un prompt personnalisé dans les Réglages le garde aussi)
+    $system .= "\nPREUVE OBLIGATOIRE : pour CHAQUE entrée de memories et de story, ajoute \"preuve\" : un extrait EXACT, copié mot "
+        . "pour mot (3 à 25 mots), du message source — celui de l'UTILISATEUR pour memories, celui du PERSONA pour story. "
+        . "Le code vérifie l'extrait : une entrée dont l'extrait n'existe pas dans ce message est rejetée. Si aucun message ne "
+        . "contient le fait mot pour mot, n'ajoute pas l'entrée. Ajoute aussi \"expire\" : la date AAAA-MM-JJ à laquelle le fait "
+        . "cessera d'être vrai s'il est temporaire (maladie, voyage, événement daté), sinon null.";
 
     $topics = chat_topics_for_analysis($cid);
     $system .= "\nAjoute open_topics et closed_topics au même objet JSON, avec des tableaux vides par défaut. "
@@ -486,7 +501,7 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
         return ['ok' => false, 'added' => [], 'updated' => 0, 'removed' => 0, 'error' => $e->getMessage()];
     }
 
-    return db_tx(static function (PDO $pdo) use ($cid, $personaId, $json, $sources, $known, $topics, $cursor): array {
+    return db_tx(static function (PDO $pdo) use ($cid, $personaId, $json, $sources, $known, $topics, $cursor, $explicit): array {
         $check = $pdo->prepare('SELECT 1 FROM conversations WHERE id = ? AND facts_cursor = ? AND memory_enabled = 1 AND facts_enabled = 1');
         $check->execute([$cid, $cursor]);
         $unchanged = (bool) $check->fetchColumn();
@@ -504,7 +519,7 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
             // la conversation a bougé pendant l'appel : l'analyse sera refaite à la prochaine réponse
             return ['ok' => true, 'added' => [], 'updated' => 0, 'removed' => 0, 'stale' => true];
         }
-        $result = facts_save_extraction($cid, $personaId, $json, $sources, $known);
+        $result = facts_save_extraction($cid, $personaId, $json, $sources, $known, $explicit);
         chat_topics_save_analysis($pdo, $cid, $json, $sources, $topics);
         $pdo->prepare('UPDATE conversations SET facts_cursor = ? WHERE id = ?')
             ->execute([(int) end($sources)['id'], $cid]);
@@ -512,7 +527,7 @@ function facts_extract(int $cid, int $personaId, array $messages, int $cursor, b
     });
 }
 
-function facts_save_extraction(int $cid, int $personaId, array $json, array $sources, array $known): array
+function facts_save_extraction(int $cid, int $personaId, array $json, array $sources, array $known, bool $explicit = false): array
 {
     $added   = [];
     $updated = 0;
@@ -554,6 +569,18 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
         }
     }
 
+    $rejected = 0;
+    $byId = array_column($current, null, 'id');
+    // un fait déjà connu, redit dans un autre message : +1 confirmation (et sa preuve si l'ancien n'en avait pas)
+    $confirm = static function (int $id, ?array $source, string $quote) use ($byId): void {
+        $row = $byId[$id] ?? null;
+        if ($row === null || $source === null || (int) ($row['source_message_id'] ?? 0) === (int) $source['id']) {
+            return;
+        }
+        db()->prepare('UPDATE user_memories SET confirmations = confirmations + 1, last_confirmed_at = datetime("now"),
+            evidence = CASE WHEN evidence = \'\' THEN ? ELSE evidence END WHERE id = ?')->execute([$quote, $id]);
+    };
+
     $items = $json['memories'] ?? [];
     if (is_array($items)) {
         foreach (array_slice($items, 0, 5) as $it) {
@@ -569,34 +596,52 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
             if ($sourceNo && ($sources[$sourceNo - 1]['role'] ?? '') === 'assistant') {
                 continue;
             }
+            // MemoryGuard : l'extrait cité doit exister dans un message de l'utilisateur et parler du même sujet
+            $quote = is_string($it['preuve'] ?? null) ? mb_substr(trim($it['preuve']), 0, 300) : '';
+            [$source, $proof] = memory_guard_locate($quote, $sources, 'user', $sourceNo ? ($sources[$sourceNo - 1] ?? null) : null);
+            if ($proof === 'missing' || ($proof === 'ok' && !memory_guard_supports($content, $quote, $ignore))) {
+                $rejected++;
+                continue;
+            }
+            $evidence = $proof === 'ok' ? $quote : '';
             $norm = facts_norm($content);
             $sig  = facts_signature($content, $ignore);
             $cat  = (string) ($it['category'] ?? 'fait');
             $conf = (string) ($it['confidence'] ?? 'confirme');
+            $guard = [
+                'origin' => $explicit ? 'explicit' : 'auto', 'evidence' => $evidence,
+                'source_message_id' => $source['id'] ?? null, 'expires_at' => memory_guard_expiry($it['expire'] ?? null, $conf),
+            ];
 
             $replaces = is_scalar($it['replaces'] ?? null) ? (int) $it['replaces'] : 0;
             if ($replaces > 0 && isset($knownIds[$replaces])) {
                 facts_update($replaces, $content, $cat, $conf);
+                facts_guard_set($replaces, $guard);
                 $userPool[$replaces] = ['sig' => $sig, 'len' => count($sig['words'])];
                 $updated++;
                 continue;
             }
             if (isset($seen[$norm])) {
-                continue; // déjà connu
+                $confirm($seen[$norm], $source, $evidence); // déjà connu
+                continue;
             }
             [$near, $richer] = facts_find_similar($userPool, $sig);
             if ($near > 0) {
                 // déjà connu sous une autre forme : on garde la formulation la plus complète
                 if ($richer && isset($knownIds[$near])) {
                     facts_update($near, $content, $cat, $conf);
+                    facts_guard_set($near, $guard);
                     $userPool[$near] = ['sig' => $sig, 'len' => count($sig['words'])];
                     $seen[$norm] = $near;
                     $updated++;
+                } else {
+                    $confirm($near, $source, $evidence);
                 }
                 continue;
             }
             $id = facts_add($personaId, $content, $cat, $conf, $cid);
             if ($id > 0) {
+                facts_guard_set($id, $guard);
                 $seen[$norm] = $id;
                 $userPool[$id] = ['sig' => $sig, 'len' => count($sig['words'])];
                 $added[] = $content;
@@ -627,8 +672,19 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
         if (($source['role'] ?? '') !== 'assistant' || !empty($source['reaction_reply']) || mb_strlen($content) < 6) {
             continue;
         }
+        // MemoryGuard : le persona est libre d'inventer sa vie, mais ce qu'on retient doit être ce qu'il a VRAIMENT dit
+        $quote = is_string($item['preuve'] ?? null) ? mb_substr(trim($item['preuve']), 0, 300) : '';
+        [$proven, $proof] = memory_guard_locate($quote, $sources, 'assistant', $source);
+        if ($proof === 'missing' || ($proof === 'ok' && !memory_guard_supports($content, $quote, $ignore))) {
+            $rejected++;
+            continue;
+        }
+        $source = $proven ?? $source;
+        $storyGuard = ['origin' => 'auto', 'evidence' => $proof === 'ok' ? $quote : '',
+            'expires_at' => memory_guard_expiry($item['expire'] ?? null, (string) ($item['confidence'] ?? 'confirme'))];
         $norm = facts_norm($content);
         if (isset($storySeen[$norm])) {
+            $confirm($storySeen[$norm], $source, $storyGuard['evidence']);
             continue;
         }
         $sig = facts_signature($content, $ignore);
@@ -638,6 +694,7 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
         if (!($replace && isset($storyIds[$replace]))) {
             [$near, $richer] = facts_find_similar($storyPool, $sig);
             if ($near > 0 && !($richer && isset($storyIds[$near]))) {
+                $confirm($near, $source, $storyGuard['evidence']);
                 continue; // déjà dans l'histoire du persona, sous une autre forme
             }
             $replace = $near ?: $replace;
@@ -647,18 +704,34 @@ function facts_save_extraction(int $cid, int $personaId, array $json, array $sou
             facts_update($replace, $content, $category, 'confirme');
             db()->prepare('UPDATE user_memories SET source_conversation_id = ?, source_message_id = ? WHERE id = ?')
                 ->execute([$cid, $sourceId, $replace]);
+            facts_guard_set($replace, $storyGuard);
             $storySeen[$norm] = $replace;
             unset($storyIds[$replace]);
             $updated++;
             continue;
         }
         $id = facts_add($personaId, $content, $category, 'confirme', $cid, $sourceId);
+        facts_guard_set($id, $storyGuard);
         $storySeen[$norm] = $id;
         $storyPool[$id] = ['sig' => $sig, 'len' => count($sig['words'])];
         $added[] = $content;
     }
 
-    return ['ok' => true, 'added' => $added, 'updated' => $updated, 'removed' => $removed];
+    if ($rejected > 0) {
+        error_log('[PersonaVault] MemoryGuard : ' . $rejected . ' souvenir(s) rejeté(s), preuve introuvable (conversation ' . $cid . ')');
+    }
+    return ['ok' => true, 'added' => $added, 'updated' => $updated, 'removed' => $removed, 'rejected' => $rejected];
+}
+
+/** Métadonnées MemoryGuard d'un souvenir (origine, preuve, message source, expiration). */
+function facts_guard_set(int $id, array $guard): void
+{
+    $allowed = array_intersect_key($guard, array_flip(['origin', 'evidence', 'source_message_id', 'expires_at', 'confirmations']));
+    if ($id <= 0 || !$allowed) {
+        return;
+    }
+    db()->prepare('UPDATE user_memories SET ' . implode(', ', array_map(static fn (string $c): string => $c . ' = ?', array_keys($allowed)))
+        . ' WHERE id = ?')->execute([...array_values($allowed), $id]);
 }
 
 /**
