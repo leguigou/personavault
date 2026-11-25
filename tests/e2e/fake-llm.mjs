@@ -39,7 +39,23 @@ const assist = (sys, user) => {
     }
     return null;
 };
+// empreinte psychologique (src/psy.php) : attendu, questions, observé (confiance +35), conclusion
+// les clés de traits sont lues dans la consigne (« - clé : nom — définition ») : toutes les grilles marchent
+const psyKeys = (sys) => [...sys.matchAll(/^- ([a-z0-9_]+) : /gm)].map((m) => m[1]);
+const psyTraits = (sys, base, over) => Object.fromEntries(psyKeys(sys).map((k) => [k, { score: over[k] ?? base, raison: 'Raison de test pour ' + k }]));
 const reply = (sys) => {
+    if (/Tu lis la FICHE d'un personnage/.test(sys)) return JSON.stringify({ traits: psyTraits(sys, 60, { humour: 80, confiance: 40 }) });
+    if (/Tu prépares un test de caractère/.test(sys)) {
+        // la grille « personnalité » : un seul message, le reste vient des messages de secours
+        const keys = psyKeys(sys);
+        return JSON.stringify({ questions: keys.includes('empathie')
+            ? [{ trait: 'empathie', message: 'Mon chat est mort ce matin.' }, { trait: 'inconnu', message: 'ignorée' }]
+            : keys.flatMap((k) => [{ trait: k, message: 'Situation de test A pour ' + k }, { trait: k, message: 'Situation de test B pour ' + k }]) });
+    }
+    if (/Tu observes UNIQUEMENT les réponses/.test(sys)) return JSON.stringify({ traits: psyTraits(sys, 60, { humour: 80, confiance: 75 }) });
+    if (/Tu compares le profil ATTENDU/.test(sys)) {
+        return JSON.stringify({ conclusion: 'Conclusion de test : nettement plus confiante que prévu.', corrections: ['Ajouter au prompt système une part de doute.'] });
+    }
     if (/moteur de mémoire/i.test(sys)) {
         return JSON.stringify({ current_topic: 'Voyage', conversation_goal: 'Préparer le voyage',
             important_facts: ['Part en train'], decisions: [], open_questions: [], context_summary: 'Discussion de test.' });

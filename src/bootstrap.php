@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 31);
+define('PV_SCHEMA_VERSION', 32);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -321,6 +321,20 @@ function migrate(PDO $pdo): void
             // coupée au milieu sans que rien ne le signale. Les fiches restées au défaut passent
             // à 16384 ; celles réglées à la main (32768…) ne sont pas touchées.
             $pdo->exec('UPDATE personas SET context_window = 16384 WHERE context_window = 8192');
+        }
+        if ($version < 32) {
+            // empreinte psychologique : personnalité attendue / observée, résultats gardés (src/psy.php)
+            $pdo->exec("CREATE TABLE IF NOT EXISTS persona_psy_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                persona_id INTEGER NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                local_model TEXT NOT NULL DEFAULT '', remote_model TEXT NOT NULL DEFAULT '',
+                fidelity INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '{}'
+            )");
+            // grille mesurée (personnalité, caractère, relation, ton, personnalisée)
+            add_column_if_missing($pdo, 'persona_psy_runs', 'grid', "TEXT NOT NULL DEFAULT 'personnalite'");
+            add_column_if_missing($pdo, 'persona_psy_runs', 'grid_name', "TEXT NOT NULL DEFAULT ''");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_psy_persona ON persona_psy_runs(persona_id, id)');
         }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
@@ -1535,6 +1549,7 @@ require_once __DIR__ . '/feelings.php';
 require_once __DIR__ . '/followup.php';
 require_once __DIR__ . '/planning.php';
 require_once __DIR__ . '/harness.php';
+require_once __DIR__ . '/psy.php';
 
 function render(string $view, array $data = []): void
 {

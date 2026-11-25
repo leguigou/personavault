@@ -844,6 +844,38 @@ expect(/Discussions restaurées \([1-9]\d*\), messages \([1-9]\d*\), souvenirs \
     await submit('/settings/mcp-server', { do: 'disable' });
     expect((await rpc(url, 'tools/list')).status === 404, 'MCP : désactivé, plus aucun accès');
 }
+// --- empreinte psychologique : tâche en arrière-plan, progression, radar et conclusion
+{
+    const slug = 'hugo-bernard';
+    const launch = () => http('/p/' + slug + '/psy', { method: 'POST', form: { _token: csrf }, ajax: true });
+    const page0 = await (await http('/p/' + slug + '/psy')).text();
+    expect(page0.includes('data-psy-run') && (await (await http('/p/' + slug)).text()).includes('/p/' + slug + '/psy'),
+        'empreinte : bouton sur la fiche et page de lancement');
+    const first = await (await launch()).json();
+    const second = await launch();
+    expect(first.ok === true && second.status === 409, 'empreinte : test lancé en arrière-plan, un second lancement simultané refusé');
+    let job = {};
+    for (let i = 0; i < 120 && !['done', 'error'].includes(job.state); i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        job = (await (await http('/p/' + slug + '/psy/status')).json()).job || {};
+    }
+    const result = await (await http('/p/' + slug + '/psy')).text();
+    expect(job.state === 'done' && result.includes('class="psy-radar"') && result.includes('Conclusion de test')
+        && result.includes('<strong>96</strong>') && result.includes('+35') && result.includes('Mon chat est mort ce matin.'),
+        'empreinte : radar, fidélité (96), écart de confiance (+35), conclusion et mises en situation affichés : ' + (job.error || job.state));
+    const tooFew = await http('/p/' + slug + '/psy', { method: 'POST', form: { _token: csrf, grid: 'custom', custom: 'Jaloux\nRomantique' }, ajax: true });
+    const custom = await (await http('/p/' + slug + '/psy', { method: 'POST', ajax: true,
+        form: { _token: csrf, grid: 'custom', custom: 'Jaloux\nRomantique : cherche les gestes tendres\nSarcastique' } })).json();
+    job = {};
+    for (let i = 0; i < 120 && !['done', 'error'].includes(job.state); i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        job = (await (await http('/p/' + slug + '/psy/status')).json()).job || {};
+    }
+    const customPage = await (await http('/p/' + slug + '/psy')).text();
+    expect(tooFew.status === 400 && custom.ok && job.state === 'done' && customPage.includes('>Jaloux<') && customPage.includes('>Sarcastique<')
+        && customPage.includes('Situation de test A pour t2') && customPage.includes('Personnalisée') && customPage.includes('psy-history'),
+        'empreinte : grille personnalisée (3 traits min.), radar à ses libellés, historique des deux tests : ' + (job.error || job.state));
+}
 // --- recherche d'informations : SearXNG, Wikipédia, météo, ligne bleue, interrupteurs
 {
     const submit = (path, fields) => http(path, { method: 'POST', form: { _token: csrf, ...fields } });

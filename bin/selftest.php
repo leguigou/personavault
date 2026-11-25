@@ -943,6 +943,58 @@ try {
     $check(!mcp_token_ok($tok2['access_token']) && mcp_oauth_active_count() === 0, 'OAuth : révocation des connexions');
     set_setting('mcp_enabled', '0');
 
+    echo PHP_EOL . '— empreinte psychologique' . PHP_EOL;
+    $gridOk = true;
+    foreach (['personnalite', 'caractere', 'relation', 'ton'] as $gk) {
+        $g = psy_grid($gk);
+        foreach ($g['traits'] as $k => $t) {
+            $gridOk = $gridOk && $t['label'] !== '' && $t['label'] !== 'psy.trait.' . $k && count($t['fallback']) === PSY_PER_TRAIT;
+        }
+        $gridOk = $gridOk && count($g['traits']) === 8 && $g['key'] === $gk;
+    }
+    $check($gridOk && psy_grid('inconnue')['key'] === 'personnalite', 'empreinte : 4 grilles de 8 traits, libellés traduits, 2 messages de secours par trait');
+    $persoGrid = psy_grid('personnalite');
+    $psyClean = psy_clean_scores(['empathie' => ['score' => 140, 'raison' => 'Très à l’écoute'], 'humour' => 30, 'pirate' => 99], $persoGrid);
+    $check(count($psyClean) === 8 && $psyClean['empathie'] === ['score' => 100, 'raison' => 'Très à l’écoute']
+        && $psyClean['humour']['score'] === 30 && $psyClean['loyaute']['score'] === 50 && !isset($psyClean['pirate']),
+        'empreinte : notes bornées 0-100, trait absent à 50, trait inconnu ignoré');
+    $psyExp = psy_clean_scores(array_fill_keys(psy_keys($persoGrid), 60), $persoGrid);
+    $psyObs = psy_clean_scores(['confiance' => 100] + array_fill_keys(psy_keys($persoGrid), 60), $persoGrid);
+    $psyFid = psy_fidelity($psyExp, $psyObs);
+    $check($psyFid['gaps']['confiance'] === 40 && $psyFid['gaps']['humour'] === 0 && $psyFid['fidelity'] === 95,
+        'empreinte : écarts par trait et fidélité (100 − écart moyen)');
+    $psyLabels = array_map(static fn (array $t): string => $t['label'], $persoGrid['traits']);
+    $psySvg = psy_radar_svg($psyExp, $psyObs, $psyLabels);
+    $check(substr_count($psySvg, 'class="psy-ring"') === 5 && substr_count($psySvg, '<text') === 8 && str_contains($psySvg, 'psy-observed')
+        && str_contains($psySvg, 'psy-expected') && str_contains($psySvg, '>' . t('psy.trait.empathie') . '<'),
+        'empreinte : radar SVG (5 cercles, 8 traits, attendu et observé)');
+    $customList = psy_parse_custom("Jaloux\n- Romantique : cherche les gestes tendres\njaloux\n\nSarcastique");
+    $customGrid = psy_grid('custom', $customList);
+    $customSvg = psy_radar_svg(psy_clean_scores([], $customGrid), psy_clean_scores([], $customGrid), array_column($customGrid['traits'], 'label'));
+    $check(array_column($customList, 'label') === ['Jaloux', 'Romantique', 'Sarcastique'] && $customList[1]['definition'] === 'cherche les gestes tendres'
+        && psy_keys($customGrid) === ['t1', 't2', 't3'] && $customGrid['traits']['t1']['definition'] === 'Jaloux'
+        && substr_count($customSvg, '<text') === 3 && count(psy_parse_custom(str_repeat("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n", 1))) === PSY_CUSTOM_MAX,
+        'empreinte : grille personnalisée (doublons et lignes vides ignorés, définition facultative, 8 traits au plus), radar à 3 axes');
+    $check($throws(static fn () => psy_grid('custom', psy_parse_custom("Jaloux\nRomantique"))), 'empreinte : grille personnalisée de moins de 3 traits refusée');
+    $psyQ = psy_questions(['name' => 'Test', 'meta' => '[]'], psy_grid('caractere'));
+    $check(count($psyQ) === 16 && count(array_filter($psyQ, static fn ($q) => $q['trait'] === 'grincheux')) === 2,
+        'empreinte : sans réponse du générateur, 2 mises en situation de secours par trait');
+    $check($throws(static fn () => psy_questions(['name' => 'Test', 'meta' => '[]'], $customGrid), 'Jaloux'),
+        'empreinte : grille personnalisée sans mises en situation : erreur claire (pas de messages de secours)');
+    $psyPid = (int) db()->query('SELECT id FROM personas ORDER BY id LIMIT 1')->fetchColumn();
+    $psyResult = ['grid' => 'caractere', 'grid_name' => 'Caractère', 'expected' => $psyExp, 'observed' => $psyObs, 'gaps' => $psyFid['gaps'],
+        'fidelity' => 95, 'qa' => [], 'conclusion' => 'ok', 'corrections' => [], 'local_model' => 'local-x', 'remote_model' => 'distant-y'];
+    for ($i = 0; $i < 22; $i++) {
+        $psyLast = psy_save_run($psyPid, ['fidelity' => 70 + $i] + $psyResult);
+    }
+    $check(count(psy_runs($psyPid)) === 20 && psy_runs($psyPid)[0]['fidelity'] === 91 && psy_runs($psyPid)[0]['grid_name'] === 'Caractère'
+        && psy_run_get($psyPid, $psyLast)['expected']['confiance']['score'] === 60 && psy_run_get($psyPid + 999, $psyLast) === null,
+        'empreinte : résultats gardés (20 derniers par persona, avec leur grille), relus par persona seulement');
+    $check(psy_result_labels(['expected' => []])['loyaute'] === t('psy.trait.loyaute') && psy_result_labels(['labels' => ['t1' => 'Jaloux']]) === ['t1' => 'Jaloux'],
+        'empreinte : libellés d’un ancien résultat (sans grille) retrouvés');
+    $check(!psy_job_running(['state' => 'running', 'beat' => time() - 3600]) && psy_job_running(['state' => 'running', 'beat' => time()])
+        && !psy_job_running(null), 'empreinte : une tâche sans signe de vie depuis 10 min ne bloque plus un nouveau test');
+
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
     set_setting('chat_title_model', 'off');
