@@ -1879,7 +1879,7 @@ function chat_time_context(array $conv, array $history, bool $skipSpontaneous = 
 
 /** Fréquences absolues : dans une consigne de jeu, elles font appliquer le tic à 100 % des messages.
  *  Les formes niées (« pas souvent », « jamais systématiquement ») sont justement les bonnes. */
-const DIRECTIVE_ABSOLUTE_RX = '/(?<!pas )(?<!pas à )(?<!jamais )(?<!ni )(?<!sans )\b(souvent|régulièrement|regulièrement|toujours|systématiquement|en permanence|chaque message|à chaque message)\b/iu';
+const DIRECTIVE_ABSOLUTE_RX = '/(?<!pas )(?<!pas à )(?<!jamais )(?<!ni )(?<!sans )(?<!presque )\b(souvent|régulièrement|regulièrement|toujours|systématiquement|en permanence|chaque message|à chaque message)\b/iu';
 
 /**
  * Propose une « consigne de jeu » à partir du prompt système du persona.
