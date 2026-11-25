@@ -9,6 +9,15 @@ declare(strict_types=1);
 if ($action === 'prompt-audit' && in_array($method, ['GET', 'POST'], true)) {
     if ($method === 'POST') {
         csrf_check();
+        // Proposition acceptée depuis l'audit : la fenêtre de contexte passe à la valeur calculée.
+        $apply = (int) ($_POST['apply_window'] ?? 0);
+        if ($apply > 0) {
+            $window = max(2048, min(131072, (int) round($apply / 1024) * 1024));
+            db()->prepare('UPDATE personas SET context_window = ?, updated_at = datetime("now") WHERE id = ?')
+                ->execute([$window, $pid]);
+            flash('ok', t('persona.audit.window_applied', ['n' => fmt_number($window)]));
+            redirect('/p/' . rawurlencode((string) $persona['slug']) . '/prompt-audit');
+        }
     }
     header('Cache-Control: no-store');
     require_once __DIR__ . '/../../persona_prompt_audit.php';

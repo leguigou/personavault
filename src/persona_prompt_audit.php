@@ -64,10 +64,13 @@ function persona_prompt_audit(array $persona, array $prompts, array $conversatio
         systemAudit: $systemAudit,
     );
 
+    $margin = $systemAudit['limit'] - $systemAudit['need'];
+
     return [
         'limit' => $systemAudit['limit'],
         'need' => $systemAudit['need'],
-        'margin' => $systemAudit['limit'] - $systemAudit['need'],
+        'margin' => $margin,
+        'suggestion' => persona_prompt_audit_window($persona, $conv, $systemAudit, $configuredWindow, $loadedWindow),
         'configuredWindow' => $configuredWindow,
         'effectiveWindow' => max(1024, $conv['context_window']),
         'loadedWindow' => $loadedWindow,
@@ -75,5 +78,44 @@ function persona_prompt_audit(array $persona, array $prompts, array $conversatio
         'rows' => persona_prompt_audit_rows($prompts, $systemAudit),
         'otherPrompts' => array_filter($prompts, static fn (array $p): bool => $p['kind'] !== 'system'),
         'system' => $built['messages'][0]['content'],
+    ];
+}
+
+/**
+ * Fenêtre de contexte qui ferait tenir le bloc système : la plus petite possible et une
+ * confortable (marge d'environ un huitième), arrondies au pas de 1024 du formulaire.
+ * null quand le prompt tient déjà ou quand même la fenêtre maximale ne suffit pas.
+ */
+function persona_prompt_audit_window(array $persona, array $conv, array $systemAudit, int $configuredWindow, ?int $loadedWindow): ?array
+{
+    if ($systemAudit['limit'] >= $systemAudit['need']) {
+        return null;
+    }
+    $needSystem = (int) $systemAudit['needSystem'];
+    // Les règles du personnage peuvent avoir été écartées faute de place : leur coût réel
+    // doit tout de même être réservé pour la fenêtre proposée.
+    $rulesCost = max((int) $systemAudit['rulesCost'], chat_estimate_tokens("\n\n" . chat_character_rules($persona, $conv)));
+    $textCost = (int) $systemAudit['textCost'];
+    $webRule = (string) $systemAudit['webRule'];
+    $minimum = null;
+    $window = null;
+    for ($candidate = 2048; $candidate <= 131072; $candidate += 1024) {
+        $probe = $conv;
+        $probe['context_window'] = $candidate;
+        $room = chat_system_limits($probe, $textCost, $webRule, $rulesCost)['system'];
+        if ($minimum === null && $room >= $needSystem) {
+            $minimum = $candidate;
+        }
+        if ($minimum !== null && $room - $needSystem >= max(192, intdiv($needSystem, 8))) {
+            $window = $candidate;
+            break;
+        }
+    }
+    return [
+        'minimum' => $minimum,
+        'window' => $window ?? $minimum,
+        'shortfall' => (int) $systemAudit['need'] - (int) $systemAudit['limit'],
+        'configured' => $configuredWindow,
+        'reload' => $loadedWindow !== null && ($window ?? $minimum ?? 0) > $loadedWindow,
     ];
 }

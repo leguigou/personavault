@@ -2643,6 +2643,28 @@ a.badge-tag:hover { background: rgba(var(--acc), .32); border-color: rgba(var(--
 .prompt-audit-metrics dd { margin: 4px 0 0; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
 .prompt-audit-omission { padding: 8px 12px; }
 .prompt-audit-omission summary, summary.prompt-audit-omission { cursor: pointer; }
+.prompt-audit-ok, .prompt-audit-cut {
+    margin: 12px 0 0;
+    padding: 8px 12px;
+    border: 1px solid rgba(52, 211, 153, .28);
+    border-radius: 10px;
+    background: rgba(52, 211, 153, .07);
+    color: var(--ok-t, #a7f3d0);
+    font-size: .92rem;
+}
+.prompt-audit-cut {
+    border-color: rgba(251, 191, 36, .28);
+    background: rgba(251, 191, 36, .07);
+    color: var(--warn-t, #fcd34d);
+}
+.prompt-audit-fix {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 10px;
+}
+.prompt-audit-fix .hint { margin: 0; }
 
 .prompt {
     border: 1px solid var(--border-soft);

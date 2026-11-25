@@ -399,7 +399,35 @@ function chat_token_budget(array $conv): array
     ];
 }
 
-/** Variante stricte. L'audit peut récupérer l'intervalle d'octets retiré, hors marqueur […]. */
+/**
+ * Place réservée au bloc système (tokens) : le début du prompt qui reste identique d'un tour
+ * à l'autre. La limite baisse quand les règles du personnage doivent tenir dans le budget,
+ * et quand la consigne web s'ajoute en queue.
+ *
+ * @return array{system:int, character:int} system = place du prompt système seul,
+ *                                           character = place disponible pour les règles
+ */
+function chat_system_limits(array $conv, int $textCost, string $webRule, int $characterCost = 0): array
+{
+    $limits = chat_token_budget($conv);
+    $budget = $limits['input'] - 8;
+    $historyReserve = min($limits['history'], intdiv($budget * 2, 3));
+    $webCost = chat_estimate_tokens($webRule);
+    $systemRoom = $budget - $historyReserve - $limits['memory'] - $textCost - 256;
+    $systemFloor = intdiv($budget, 6);
+    return [
+        'system' => max($systemFloor, $systemRoom - $characterCost) - $webCost,
+        'character' => $budget - $textCost - max($systemFloor, $webCost) - 32,
+    ];
+}
+
+/**
+ * Coupe un texte pour tenir dans un nombre de tokens.
+ * Le milieu est retiré au plus juste, par blocs entiers (paragraphes) quand c'est possible :
+ * une section disparaît d'un coup au lieu d'une phrase coupée en deux, et le début comme la fin
+ * sont préservés (identité du personnage en tête, règles de jeu en queue).
+ * L'audit récupère l'intervalle d'octets retiré, hors marqueur […].
+ */
 function chat_fit_text(string $text, int $tokens, ?array &$omitted = null): string
 {
     $omitted = null;
@@ -416,9 +444,132 @@ function chat_fit_text(string $text, int $tokens, ?array &$omitted = null): stri
         $omitted = [strlen($head), strlen($text)];
         return $head;
     }
-    $half = intdiv($chars - 5, 2);
-    $head = rtrim(mb_substr($text, 0, $half));
-    $tail = ltrim(mb_substr($text, -$half));
+    $blocks = chat_text_blocks($text);
+    if (count($blocks) < 3) {
+        return chat_fit_edges($text, $chars, $omitted);
+    }
+    $excess = mb_strlen($text) - ($chars - 6); // 6 caractères pour le marqueur « […] »
+    $last   = count($blocks) - 1;
+    $mid    = intdiv($last, 2);
+    $order  = [];
+    for ($distance = 0; $distance <= $last; $distance++) {
+        $left  = $mid - $distance;
+        $right = $mid + $distance;
+        if ($left !== $right && $left >= 1 && $left <= $last - 1) {
+            $order[] = $left;
+        }
+        if ($right >= 1 && $right <= $last - 1) {
+            $order[] = $right;
+        }
+    }
+    $start   = null; // bornes (octets) de la zone retirée
+    $end     = null;
+    $removed = 0;
+    foreach ($order as $index) {
+        if ($removed >= $excess) {
+            break;
+        }
+        $missing = $excess - $removed;
+        if ($blocks[$index]['size'] <= $missing) {
+            $removed += $blocks[$index]['size'] + 2; // + le séparateur de paragraphe
+            $start = $start === null ? $blocks[$index]['start'] : min($start, $blocks[$index]['start']);
+            $end   = $end === null ? $blocks[$index]['end'] : max($end, $blocks[$index]['end']);
+            continue;
+        }
+        // Bloc trop gros pour partir en entier : on ne retire que le nécessaire, adossé à la
+        // zone déjà retirée, pour ne couper qu'une seule fois et sur une frontière de phrase.
+        if ($start === null) {
+            $start = chat_cut_back($text, $blocks[$index]['start'], $blocks[$index]['end'],
+                $blocks[$index]['size'] - $missing);
+            $end = $blocks[$index]['end'];
+        } elseif ($blocks[$index]['start'] < $start) {
+            $start = chat_cut_back($text, $blocks[$index]['start'], $blocks[$index]['end'],
+                $blocks[$index]['size'] - $missing);
+        } else {
+            $end = chat_cut_forward($text, $blocks[$index]['start'], $blocks[$index]['end'], $missing);
+        }
+        break;
+    }
+    if ($start === null || $start >= $end) {
+        return chat_fit_edges($text, $chars, $omitted);
+    }
+    $head   = rtrim(substr($text, 0, $start), " \t");
+    $tail   = ltrim(substr($text, $end), " \t");
+    $result = $head . ' […] ' . $tail;
+    if (chat_estimate_tokens($result) > $tokens) {
+        return chat_fit_edges($text, $chars, $omitted);
+    }
+    $omitted = [strlen($head), strlen($text) - strlen($tail)];
+    return $result;
+}
+
+/** Paragraphes d'un texte, avec leurs bornes en octets. */
+function chat_text_blocks(string $text): array
+{
+    $parts  = preg_split('/\R(?:[ \t]*\R)+/u', $text, -1, PREG_SPLIT_OFFSET_CAPTURE) ?: [];
+    $blocks = [];
+    foreach ($parts as [$chunk, $offset]) {
+        $lead = strlen($chunk) - strlen(ltrim($chunk));
+        $body = rtrim(ltrim($chunk));
+        if ($body === '') {
+            continue;
+        }
+        $start    = $offset + $lead;
+        $blocks[] = ['start' => $start, 'end' => $start + strlen($body), 'size' => mb_strlen($body)];
+    }
+    return $blocks;
+}
+
+/** Début de la zone à retirer dans un bloc, au plus près d'une fin de phrase (sinon d'un mot). */
+function chat_cut_back(string $text, int $blockStart, int $blockEnd, int $keepChars): int
+{
+    $block = substr($text, $blockStart, $blockEnd - $blockStart);
+    $pos   = $blockStart + strlen(mb_substr($block, 0, max(0, $keepChars)));
+    $floor = max($blockStart, $pos - 64);
+    for ($i = $pos; $i > $floor; $i--) {
+        if ($text[$i - 1] === "\n") {
+            return $i;
+        }
+        if ($text[$i - 1] === ' ' && $i >= 2 && in_array($text[$i - 2], ['.', '!', '?', ':'], true)) {
+            return $i;
+        }
+    }
+    for ($i = $pos; $i > $floor; $i--) {
+        if ($text[$i - 1] === ' ') {
+            return $i;
+        }
+    }
+    return $pos;
+}
+
+/** Fin de la zone à retirer dans un bloc, au plus près d'une fin de phrase (sinon d'un mot). */
+function chat_cut_forward(string $text, int $blockStart, int $blockEnd, int $removeChars): int
+{
+    $block = substr($text, $blockStart, $blockEnd - $blockStart);
+    $pos   = $blockStart + strlen(mb_substr($block, 0, max(0, $removeChars)));
+    $ceil  = min($blockEnd, $pos + 64);
+    for ($i = $pos; $i < $ceil; $i++) {
+        if ($text[$i] === "\n") {
+            return $i;
+        }
+        if ($text[$i] === '.' && $i + 1 < $blockEnd && $text[$i + 1] === ' ') {
+            return $i + 2;
+        }
+    }
+    for ($i = $pos; $i < $ceil; $i++) {
+        if ($text[$i] === ' ') {
+            return $i;
+        }
+    }
+    return $pos;
+}
+
+/** Coupe franche début/fin, pour un texte d'un seul tenant (sans paragraphe exploitable). */
+function chat_fit_edges(string $text, int $chars, ?array &$omitted): string
+{
+    $half    = intdiv($chars - 5, 2);
+    $head    = rtrim(mb_substr($text, 0, $half));
+    $tail    = ltrim(mb_substr($text, -$half));
     $omitted = [strlen($head), strlen($text) - strlen($tail)];
     return $head . ' […] ' . $tail;
 }
@@ -2054,7 +2205,6 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     $system = chat_system_prompt($persona, $personaPrompts, $conv, [], $addressOverride, includeCharacterRules: false)
         . "\n\n" . chat_reaction_instructions($canReact);
     $characterRules = "\n\n" . chat_character_rules($persona, $conv);
-    $historyReserve = min($limits['history'], intdiv($budget * 2, 3));
     // La consigne « dis que tu ne peux pas chercher ici » ne vaut que sans résultats :
     // placée avant, elle contredisait la demande d'utiliser les extraits.
     $webRule = "\n\nRéponds dans ce message. Ne demande pas d’attendre et ne promets aucune recherche ou réponse ultérieure.";
@@ -2069,18 +2219,16 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
         $webRule .= " Sans résultats web fournis, ne prétends pas avoir consulté le Web. Si une vérification est nécessaire, dis que tu ne peux pas la faire ici.";
     }
     $textCost = chat_estimate_tokens($text);
-    $webCost = chat_estimate_tokens($webRule);
-    $systemRoom = $budget - $historyReserve - $limits['memory'] - $textCost - 256;
-    $systemFloor = intdiv($budget, 6);
+    $characterCost = chat_estimate_tokens($characterRules);
     // Les règles restent en bloc pour préserver leurs conditions d'application.
     // Une fenêtre exceptionnellement courte doit garder la place du message en cours.
-    $characterRoom = $budget - $textCost - max($systemFloor, $webCost) - 32;
-    $characterCost = chat_estimate_tokens($characterRules);
-    if ($characterCost > $characterRoom) {
+    $place = chat_system_limits($conv, $textCost, $webRule, $characterCost);
+    if ($characterCost > $place['character']) {
         $characterRules = '';
         $characterCost = 0;
+        $place = chat_system_limits($conv, $textCost, $webRule, 0);
     }
-    $systemLimit = max($systemFloor, $systemRoom - $characterCost) - $webCost;
+    $systemLimit = $place['system'];
     $fittedSystem = chat_fit_text($system, $systemLimit, $omitted);
     if ($systemAudit !== null) {
         $systemAudit = [
@@ -2088,6 +2236,11 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
             'limit' => max(0, $systemLimit) + $characterCost,
             'need' => chat_estimate_tokens($system . $characterRules),
             'omitted' => $omitted,
+            // pièces du calcul, pour proposer une fenêtre suffisante sans rejouer la formule
+            'needSystem' => chat_estimate_tokens($system),
+            'rulesCost' => $characterCost,
+            'textCost' => $textCost,
+            'webRule' => $webRule,
         ];
     }
     $system = $fittedSystem . $characterRules . $webRule;
