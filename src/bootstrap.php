@@ -331,6 +331,9 @@ function migrate(PDO $pdo): void
                 local_model TEXT NOT NULL DEFAULT '', remote_model TEXT NOT NULL DEFAULT '',
                 fidelity INTEGER NOT NULL DEFAULT 0, result TEXT NOT NULL DEFAULT '{}'
             )");
+            // grille mesurée (personnalité, caractère, relation, ton, personnalisée)
+            add_column_if_missing($pdo, 'persona_psy_runs', 'grid', "TEXT NOT NULL DEFAULT 'personnalite'");
+            add_column_if_missing($pdo, 'persona_psy_runs', 'grid_name', "TEXT NOT NULL DEFAULT ''");
             $pdo->exec('CREATE INDEX IF NOT EXISTS idx_psy_persona ON persona_psy_runs(persona_id, id)');
         }
         if ($version < PV_SCHEMA_VERSION) {

@@ -37,7 +37,16 @@ if ($psyAction === '' && $method === 'POST') {
     if (!psy_ready()) {
         $fail(400, t('psy.not_ready'));
     }
-    psy_job_put($slug, ['state' => 'running', 'step' => 'demarrage', 'done' => 0, 'total' => 0, 'started' => time(), 'beat' => time()]);
+    $gridKey = (string) ($_POST['grid'] ?? 'personnalite');
+    $custom = psy_parse_custom((string) ($_POST['custom'] ?? ''));
+    try {
+        $grid = psy_grid($gridKey, $custom);
+    } catch (RuntimeException $e) {
+        $fail(400, $e->getMessage());
+    }
+    // la grille passe au processus d'arrière-plan par le fichier de la tâche
+    psy_job_put($slug, ['state' => 'running', 'step' => 'demarrage', 'done' => 0, 'total' => 0, 'started' => time(), 'beat' => time(),
+        'grid' => $grid['key'], 'grid_name' => $grid['name'], 'custom' => $grid['key'] === 'custom' ? $custom : []]);
     if (!psy_spawn($slug)) {
         psy_job_put($slug, ['state' => 'error', 'error' => t('psy.no_spawn'), 'finished' => time()]);
         $fail(500, t('psy.no_spawn'));

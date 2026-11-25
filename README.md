@@ -413,11 +413,21 @@ par le bouton « Vider le journal ».
 ### Empreinte psychologique (banc de test)
 
 Fiche du persona › **Empreinte psychologique** : compare la personnalité **attendue** (lue dans la fiche)
-à la personnalité **observée** (dans ses réponses), sur 8 traits : empathie, sociabilité, humour,
-confiance, indépendance, sensibilité, impulsivité, loyauté.
+au profil **observé** (dans ses réponses), sur la grille choisie au lancement :
+
+| Grille | Traits |
+|---|---|
+| Personnalité | empathie, sociabilité, humour, confiance, indépendance, sensibilité, impulsivité, loyauté |
+| Caractère | enjoué, grincheux, calme, anxieux, patient, susceptible, chaleureux, rancunier |
+| Relation | affectueux, protecteur, jaloux, possessif, taquin, romantique, pudique, loyal |
+| Ton | drôle, sarcastique, sérieux, direct, diplomate, timide, confiant, mélancolique |
+| Personnalisée | 3 à 8 traits de ton choix, un par ligne (« trait : définition » pour préciser) |
+
+Les grilles prêtes ont des mises en situation de secours ; la grille personnalisée dépend du
+générateur (si un trait n'en reçoit aucune, le test s'arrête avec un message clair).
 
 1. Le modèle des Réglages › IA (ex. DeepSeek) lit la fiche et note chaque trait de 0 à 100.
-2. Il rédige 16 mises en situation (2 par trait), des messages concrets qui ne nomment jamais le trait.
+2. Il rédige 2 mises en situation par trait, des messages concrets qui ne nomment jamais le trait.
 3. Le persona y répond avec son **modèle de discussion**, dans une conversation factice : aucune trace
    dans les discussions.
 4. Le juge note ce qu'il observe dans les **seules réponses**, sans voir la fiche (pas de biais).
@@ -427,7 +437,8 @@ confiance, indépendance, sensibilité, impulsivité, loyauté.
 Résultat : radar (attendu en pointillés, observé en surface), **fidélité** = 100 − écart moyen, tableau
 trait par trait avec les justifications, échanges. Le test tourne en arrière-plan (on peut quitter la
 page) ; les 20 derniers résultats de chaque persona sont gardés pour suivre l'effet d'une correction.
-En ligne de commande : `php bin/persona-psy.php <slug>`.
+En ligne de commande : `php bin/persona-psy.php <slug> [--grid=caractere]` ou
+`--custom="Jaloux,Romantique,Sarcastique"`.
 
 ### Humeur et ressentis dans les conversations
 

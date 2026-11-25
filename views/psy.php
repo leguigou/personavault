@@ -4,7 +4,10 @@ $slug    = (string) $persona['slug'];
 $token   = csrf_token();
 $running = psy_job_running($job);
 $failed  = !$running && ($job['state'] ?? '') === 'error';
-$labels  = psy_trait_labels();
+$labels  = $run ? psy_result_labels($run) : [];
+$gridNames = psy_grid_labels();
+// grille proposée : celle du test affiché, sinon « personnalité »
+$gridOn = (string) ($run['grid'] ?? 'personnalite');
 $steps   = [
     'demarrage'  => t('psy.step.start'),
     'attendu'    => t('psy.step.expected'),
@@ -37,6 +40,24 @@ $steps   = [
         <?php else: ?>
             <p class="hint is-error" data-psy-error hidden></p>
         <?php endif; ?>
+        <fieldset class="psy-grids">
+            <legend><?= e(t('psy.grid_label')) ?></legend>
+            <?php foreach ($gridNames as $gk => $gname): ?>
+                <label class="harness-choice psy-grid<?= $gk === $gridOn ? ' is-on' : '' ?>">
+                    <input type="radio" name="psy_grid" value="<?= e($gk) ?>" <?= $gk === $gridOn ? 'checked' : '' ?>>
+                    <span class="harness-choice-body">
+                        <strong><?= e($gname) ?></strong>
+                        <small><?= e($gk === 'custom' ? t('psy.grid_custom_hint')
+                            : implode(', ', array_map(static fn (array $t): string => $t['label'], psy_grid($gk)['traits']))) ?></small>
+                    </span>
+                </label>
+            <?php endforeach; ?>
+        </fieldset>
+        <label class="field psy-custom" data-psy-custom <?= $gridOn === 'custom' ? '' : 'hidden' ?>>
+            <span><?= e(t('psy.custom_label')) ?></span>
+            <textarea class="input" rows="5" data-psy-custom-text placeholder="<?= e(t('psy.custom_placeholder')) ?>"></textarea>
+            <small><?= e(t('psy.custom_help')) ?></small>
+        </label>
         <button class="btn btn-primary" type="button" data-psy-run <?= $ready && $can_run ? '' : 'disabled' ?>>
             <?= e($run ? t('psy.relaunch') : t('psy.run')) ?>
         </button>
@@ -44,6 +65,7 @@ $steps   = [
     </div>
 
     <div class="psy-state" data-psy-running <?= $running ? '' : 'hidden' ?>>
+        <?php if ($running && !empty($job['grid_name'])): ?><p class="hint"><strong><?= e((string) $job['grid_name']) ?></strong></p><?php endif; ?>
         <p class="hint" data-psy-step><?= e(t('psy.step.start')) ?></p>
         <div class="harness-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-psy-bar><span style="width:0%"></span></div>
         <p class="hint"><?= e(t('psy.leave_hint')) ?></p>
@@ -54,7 +76,7 @@ $steps   = [
     <section class="panel panel-wide psy-result">
         <header class="panel-head psy-head">
             <div>
-                <h2><?= e(t('psy.result_title')) ?></h2>
+                <h2><?= e(t('psy.result_title')) ?> · <?= e((string) ($run['grid_name'] ?? $gridNames['personnalite'])) ?></h2>
                 <p class="hint"><?= e(t('psy.result_meta', ['date' => fr_date((string) $run['created_at']), 'local' => (string) $run['local_model'], 'remote' => (string) $run['remote_model']])) ?></p>
             </div>
             <div class="psy-fidelity" title="<?= e(t('psy.fidelity_hint')) ?>">
@@ -64,7 +86,7 @@ $steps   = [
         </header>
 
         <figure class="psy-figure">
-            <?= psy_radar_svg($run['expected'], $run['observed']) ?>
+            <?= psy_radar_svg($run['expected'], $run['observed'], $labels) ?>
             <figcaption class="psy-legend">
                 <span class="psy-key psy-key-expected"><?= e(t('psy.expected')) ?></span>
                 <span class="psy-key psy-key-observed"><?= e(t('psy.observed')) ?></span>
@@ -87,7 +109,7 @@ $steps   = [
                     <span role="columnheader"><?= e(t('psy.col_observed')) ?></span>
                     <span role="columnheader"><?= e(t('psy.col_gap')) ?></span>
                 </div>
-                <?php foreach (PSY_TRAITS as $k): ?>
+                <?php foreach (array_keys($run['expected']) as $k): ?>
                     <?php $gap = (int) ($run['gaps'][$k] ?? 0); ?>
                     <details class="psy-row-wrap">
                         <summary class="psy-row" role="row">
@@ -123,7 +145,7 @@ $steps   = [
             <?php foreach ($runs as $r): ?>
                 <li<?= $run && (int) $r['id'] === (int) $run['id'] ? ' class="is-on"' : '' ?>>
                     <a href="/p/<?= e(rawurlencode($slug)) ?>/psy?run=<?= (int) $r['id'] ?>">
-                        <span><?= e(fr_date((string) $r['created_at'])) ?> · <?= e((string) $r['local_model']) ?></span>
+                        <span><?= e(fr_date((string) $r['created_at'])) ?> · <?= e((string) ($r['grid_name'] ?? '')) ?> · <?= e((string) $r['local_model']) ?></span>
                         <strong><?= (int) $r['fidelity'] ?>/100</strong>
                     </a>
                 </li>
@@ -162,6 +184,11 @@ $steps   = [
     };
     if (!running.hidden) setTimeout(poll, 1000);
     const btn = box.querySelector('[data-psy-run]');
+    const customBox = box.querySelector('[data-psy-custom]');
+    box.querySelectorAll('input[name="psy_grid"]').forEach((radio) => radio.addEventListener('change', () => {
+        box.querySelectorAll('.psy-grid').forEach((l) => l.classList.toggle('is-on', l.contains(radio) && radio.checked));
+        customBox.hidden = radio.value !== 'custom';
+    }));
     btn?.addEventListener('click', async () => {
         btn.disabled = true;
         err.hidden = true;
@@ -169,7 +196,11 @@ $steps   = [
             const r = await fetch(box.dataset.runUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
-                body: '_token=' + encodeURIComponent(box.dataset.token),
+                body: new URLSearchParams({
+                    _token: box.dataset.token,
+                    grid: box.querySelector('input[name="psy_grid"]:checked')?.value || 'personnalite',
+                    custom: box.querySelector('[data-psy-custom-text]').value,
+                }).toString(),
             });
             const j = await r.json();
             if (!j.ok) throw new Error(j.error || box.dataset.error);
