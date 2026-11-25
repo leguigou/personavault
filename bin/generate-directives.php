@@ -16,6 +16,7 @@ require __DIR__ . '/../src/bootstrap.php';
 $dry   = in_array('--dry', $argv ?? [], true) && !in_array('--apply', $argv ?? [], true);
 $force = in_array('--force', $argv ?? [], true);
 $absolute = in_array('--absolute', $argv ?? [], true);
+$ticks    = in_array('--ticks', $argv ?? [], true);
 $only  = null;
 foreach ($argv ?? [] as $arg) {
     if (str_starts_with($arg, '--only=')) {
@@ -37,11 +38,15 @@ foreach ($rows as $persona) {
     if ($only !== null && $persona['slug'] !== $only) {
         continue;
     }
+    if ($ticks && !preg_match('/\b(tics?|glisse)\b/iu', (string) $persona['directive'])) {
+        $skipped++; // consigne sans tic nommé : on n'y touche pas
+        continue;
+    }
     if ($absolute && !preg_match(DIRECTIVE_ABSOLUTE_RX, (string) $persona['directive'])) {
         $skipped++; // déjà saine : on n'y touche pas
         continue;
     }
-    if (!$force && !$absolute && trim((string) $persona['directive']) !== '') {
+    if (!$force && !$absolute && !$ticks && trim((string) $persona['directive']) !== '') {
         $skipped++;
         continue;
     }

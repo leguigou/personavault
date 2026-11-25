@@ -80,6 +80,11 @@ function harness_conv(array $persona, string $directive = ''): array
         'web_search'     => 0,
         'created_at'     => gmdate('Y-m-d H:i:s'),
     ];
+    if (trim($directive) !== '') {
+        // chat_with_persona CONCATÈNE la consigne du persona et celle de la conversation :
+        // sans vider la première, un essai testait la nouvelle consigne AJOUTÉE à l'ancienne.
+        $persona['directive'] = '';
+    }
     return chat_with_persona($conv, $persona);
 }
 
