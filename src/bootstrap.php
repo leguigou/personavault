@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('PV_ROOT', dirname(__DIR__));
-define('PV_SCHEMA_VERSION', 30);
+define('PV_SCHEMA_VERSION', 31);
 
 $GLOBALS['pv_config'] = require PV_ROOT . '/config.php';
 // surcharges de test (bin/selftest.php) : base et dossiers temporaires
@@ -316,6 +316,12 @@ function migrate(PDO $pdo): void
                 ok INTEGER NOT NULL DEFAULT 1, result TEXT NOT NULL DEFAULT ''
             )");
         }
+        if ($version < 31) {
+            // 8192 ne laisse que ~1200 tokens au prompt système : une fiche un peu fournie était
+            // coupée au milieu sans que rien ne le signale. Les fiches restées au défaut passent
+            // à 16384 ; celles réglées à la main (32768…) ne sont pas touchées.
+            $pdo->exec('UPDATE personas SET context_window = 16384 WHERE context_window = 8192');
+        }
         if ($version < PV_SCHEMA_VERSION) {
             $pdo->exec('PRAGMA user_version = ' . PV_SCHEMA_VERSION);
         }
@@ -393,7 +399,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     model             TEXT NOT NULL DEFAULT '',
     temperature       REAL NOT NULL DEFAULT 0.85,
     max_tokens        INTEGER NOT NULL DEFAULT 400,
-    context_window    INTEGER NOT NULL DEFAULT 8192,
+    context_window    INTEGER NOT NULL DEFAULT 16384,
     memory_enabled    INTEGER NOT NULL DEFAULT 1,
     directive         TEXT NOT NULL DEFAULT '',
     summary           TEXT NOT NULL DEFAULT '',
@@ -469,7 +475,7 @@ SQL);
     add_column_if_missing($pdo, 'personas', 'model', "TEXT NOT NULL DEFAULT ''");
     add_column_if_missing($pdo, 'personas', 'temperature', 'REAL NOT NULL DEFAULT 0.85');
     add_column_if_missing($pdo, 'personas', 'max_tokens', 'INTEGER NOT NULL DEFAULT 400');
-    add_column_if_missing($pdo, 'personas', 'context_window', 'INTEGER NOT NULL DEFAULT 8192');
+    add_column_if_missing($pdo, 'personas', 'context_window', 'INTEGER NOT NULL DEFAULT 16384');
     add_column_if_missing($pdo, 'personas', 'directive', "TEXT NOT NULL DEFAULT ''");
 
     // coupe d'une réponse en bulles, image jointe (vision)
@@ -1528,6 +1534,7 @@ require_once __DIR__ . '/duo.php';
 require_once __DIR__ . '/feelings.php';
 require_once __DIR__ . '/followup.php';
 require_once __DIR__ . '/planning.php';
+require_once __DIR__ . '/harness.php';
 
 function render(string $view, array $data = []): void
 {

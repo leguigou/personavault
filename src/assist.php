@@ -73,7 +73,23 @@ function assist_clean(array $d): array
     $out['tags'] = $tags;
     $meta = [];
     $seen = [];
-    foreach ((array) ($d['meta'] ?? []) as $row) {
+    // Les modèles renvoient « meta » sous trois formes selon le jour : [{k,v}] (attendu),
+    // {"Âge": "38"} (objet associatif) ou ["Âge : 38"] (liste de chaînes). Sans cette
+    // normalisation, les attributs étaient jetés en silence et la fiche perdait son résumé.
+    $rawMeta = $d['meta'] ?? [];
+    $normMeta = [];
+    if (is_array($rawMeta)) {
+        foreach ($rawMeta as $key => $val) {
+            if (is_array($val) && isset($val['k'])) {
+                $normMeta[] = $val;
+            } elseif (is_string($key) && is_scalar($val) && trim((string) $val) !== '') {
+                $normMeta[] = ['k' => $key, 'v' => (string) $val];
+            } elseif (is_string($val) && preg_match('/^\s*([^:=]{2,40})\s*[:=]\s*(.{1,200})$/u', $val, $m)) {
+                $normMeta[] = ['k' => $m[1], 'v' => $m[2]];
+            }
+        }
+    }
+    foreach ($normMeta as $row) {
         if (!is_array($row) || !isset($row['k']) || !is_scalar($row['k'])) {
             continue;
         }
@@ -86,9 +102,11 @@ function assist_clean(array $d): array
         $meta[] = ['k' => $k, 'v' => $v];
     }
     foreach ($meta as &$row) {
-        if (assist_is_work_label($row['k'])) {
-            $out['work'] = $out['work'] !== '' ? $out['work'] : $row['v'];
-            $row['v'] = $out['work'];
+        // Un attribut « Métier » aide quand le champ work est vide ; s'il est déjà rempli,
+        // on garde la valeur COURTE de l'attribut (l'écraser avec les trois phrases de work
+        // produisait un attribut de 200 caractères affiché tel quel sur la fiche).
+        if (assist_is_work_label($row['k']) && $out['work'] === '') {
+            $out['work'] = $row['v'];
         }
     }
     unset($row);
@@ -281,6 +299,15 @@ function assist_turn(array $draft, array $history, string $action, string $answe
     $focus = in_array($focus, ASSIST_REQUIRED_FIELDS, true) ? $focus : '';
     $stalls = max(0, min(ASSIST_MAX_STALLED_TURNS, $stalls));
     $isNew = $persona === null;
+    // Création par brief : un seul appel remplit toute la fiche, le reste de la conversation
+    // ne sert plus qu'à corriger.
+    if ($action === 'brief') {
+        $res = assist_brief_fill($draft, $answer, $persona, $prompts, $history);
+        if ($res !== null) {
+            return $res;
+        }
+        $action = 'reply'; // le modèle n'a pas rendu de fiche : on traite le brief comme une réponse
+    }
     // Les formulations directes ouvrent la relecture sans refaire analyser le brouillon.
     if ($action === 'reply' && $pendingCanon === null && preg_match(
         '~^(?:(?:ok|oui|c[’\x27]est bon)[,.! ]+)?(?:je valide(?: (?:la|cette) fiche)?'
@@ -598,6 +625,51 @@ TXT;
             ? ['label' => t('assist.canon.found', ['title' => $ref['title']]), 'url' => $ref['url']]
             : ['label' => t('assist.canon.memory', ['name' => $canon['name']]), 'url' => ''];
     return $result;
+}
+
+/**
+ * Création par brief : une ou deux phrases décrivent le persona voulu, le modèle remplit
+ * TOUTE la fiche d'un coup. Même principe que assist_canon_fill(), mais pour un personnage
+ * inventé : après ça, la conversation continue normalement, par corrections.
+ */
+function assist_brief_fill(array $draft, string $brief, ?array $persona, array $prompts, array $history): ?array
+{
+    $system = <<<TXT
+Tu inventes un PERSONNAGE de fiction complet à partir d'un brief, et tu remplis TOUTE sa fiche d'un coup.
+
+Le brief est une intention courte : tu en tires un personnage concret, pas une liste d'adjectifs.
+
+- name : un prénom plausible pour l'âge et le milieu ; s'il figure dans le brief, garde-le.
+- tagline : une ligne qui dit QUI elle est (90 caractères max), pas un compliment.
+- description : 2 ou 3 phrases de situation, sans portrait physique.
+- tags : 3 à 6 mots-clés en minuscules ; meta : 4 à 8 attributs courts sous la forme EXACTE [{"k":"Âge","v":"38"},{"k":"Ville","v":"Lille"},{"k":"Métier","v":"Prof d'histoire de l'art"}], faits durs seulement, 40 caractères max par valeur, jamais d'histoire ni de trait de caractère.
+- looks : apparence physique PRÉCISE, utilisable pour générer une image (visage, yeux, cheveux, silhouette, tenue, signe distinctif).
+- style : rendu visuel voulu.
+- history : un événement vécu et sa conséquence aujourd'hui.
+- family et friends : des gens nommés, avec des liens et des tensions concrètes, pas « sa famille » ni « ses amis ».
+- work : son quotidien réel, ce qu'elle fait de ses journées.
+- goals : un désir actuel et ce qui l'en empêche.
+- personality : des traits ET une contradiction qui la rend humaine.
+- voice : registre, longueur des réponses, et un ou deux tics DONNÉS EN FRÉQUENCE (« une réponse sur quatre », « quand elle est gênée ») — jamais « toujours » ni « à chaque message ».
+- relation : comment elle se comporte avec l'utilisateur qu'elle découvre.
+- rules : 3 ou 4 limites concrètes, y compris ce qu'elle refuse de faire.
+
+Interdits : des adjectifs creux sans situation (« douce et attentionnée » tout seul ne dit rien) ; une fiche qui se présente comme un assistant, un service ou un outil ; des tics en fréquence absolue. Chaque champ de fond reste sous 170 caractères, et rien n'est inventé qui contredise le brief.
+
+Réponds en français, UNIQUEMENT avec un objet JSON :
+{"draft": {la fiche complète}, "reply": "une phrase : ce que tu as posé, puis la question la plus utile pour affiner"}
+TXT;
+
+    $user = ($persona ? "MODE : compléter une fiche existante — ne contredis rien de ce qui est déjà écrit.\n" . assist_existing_context($persona, $prompts) . "\n\n" : '')
+        . "FICHE EN COURS\n" . json_encode($draft, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n"
+        . ($history !== [] ? "CONVERSATION\n" . assist_history($history) . "\n\n" : '')
+        . "BRIEF\n" . mb_substr(trim($brief), 0, 2000) . "\n";
+
+    $j = assist_llm_json($system, $user, 3000, 0.75);
+    if (!is_array($j['draft'] ?? null)) {
+        return null;
+    }
+    return assist_turn_result($draft, ['draft' => $j['draft'], 'reply' => (string) ($j['reply'] ?? '')], 'start', $prompts);
 }
 
 /**

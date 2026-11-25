@@ -1346,6 +1346,25 @@
                 scrollEnd();
             }
         };
+        /* « Remplir d'un coup » : visible seulement tant que la conversation n'a pas commencé */
+        const briefBtn = asRoot.querySelector("[data-as-brief]");
+        const syncBrief = () => {
+            // l'assistant a déjà parlé au démarrage : c'est la présence d'un message
+            // UTILISATEUR qui compte, pas la longueur de l'historique
+            if (briefBtn) briefBtn.hidden = busy || state.history.some((m) => m.role === "user");
+        };
+        if (briefBtn) {
+            briefBtn.addEventListener("click", () => {
+                const text = String(input.value || "").trim();
+                if (!text || busy) { input.focus(); return; }
+                state.history.push({ role: "user", content: text });
+                pushMsg({ role: "user", text });
+                save();
+                input.value = "";
+                autosize();
+                turn("brief", text);
+            });
+        }
         const paintChips = () => {
             const list = state.choices.map((c) => {
                 const b = el("button", "as-chip", c);
@@ -1359,6 +1378,7 @@
                 sug.addEventListener("click", suggest);
                 list.unshift(sug);
             }
+            syncBrief();
             asRoot.querySelector("[data-as-create]").disabled = busy || Boolean(state.pendingCanon);
             if ((state.history.length > 1 || state.ready) && !state.pendingCanon) {
                 const now = el("button", "as-chip is-now", isNew ? tr("assist.create_now") : tr("assist.apply_now"));
@@ -1505,6 +1525,36 @@
             }
         });
         reviewBack.addEventListener("click", () => review.close());
+        /* Tester la voix du brouillon avant de créer : 4 sondes + un juge, ~30 s en local */
+        const testBtn = review.querySelector("[data-as-test-run]");
+        const testOut = review.querySelector("[data-as-test-out]");
+        if (testBtn) testBtn.addEventListener("click", async () => {
+            if (busy) return;
+            busy = true;
+            testBtn.disabled = true;
+            testOut.hidden = false;
+            testOut.replaceChildren(el("p", "as-test-summary", tr("assist.test_running")));
+            try {
+                const r = await post("/assist/test", { fields: state.review, provider: asRoot.dataset.testProvider || "local" });
+                if (!r.ok) throw new Error(r.error || tr("assist.failed"));
+                const s = r.scores || {};
+                const rnd = (v) => Math.round(Number(v) || 0);
+                testOut.replaceChildren();
+                testOut.append(el("p", "as-test-head", tr("assist.test_scores", {
+                    coh: rnd(s.coherence), voix: rnd(s.voix), lim: rnd(s.limites), nat: rnd(s.naturel),
+                })));
+                if (r.resume) testOut.append(el("p", "as-test-summary", r.resume));
+                const omitted = (r.audit && r.audit.omitted) ? String(r.audit.omitted).trim() : "";
+                if (omitted) testOut.append(el("p", "as-test-bad", tr("assist.test_truncated")));
+                (r.problemes || []).forEach((p) => testOut.append(el("p", "as-test-bad", "✗ " + p)));
+                (r.corrections || []).forEach((c) => testOut.append(el("p", "as-test-tip", "→ " + c)));
+            } catch (err) {
+                testOut.replaceChildren(el("p", "as-test-bad", err.message || tr("assist.failed")));
+            } finally {
+                busy = false;
+                testBtn.disabled = false;
+            }
+        });
         review.addEventListener("cancel", (event) => { if (busy) event.preventDefault(); });
         reviewForm.addEventListener("submit", async (event) => {
             event.preventDefault();

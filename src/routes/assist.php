@@ -49,13 +49,14 @@ if ($method === 'GET' && preg_match('#^/p/(?:([a-z0-9-]+)/)?assist$#', $path, $m
     exit;
 }
 
-if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/status', '/assist/preview', '/assist/create'], true)) {
+if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/status', '/assist/preview', '/assist/create', '/assist/test'], true)) {
     header('Content-Type: application/json; charset=utf-8');
     csrf_check_json();
     if ($path !== '/assist/create') {
         session_write_close(); // appel long : ne bloque pas les autres requêtes
         @set_time_limit(300); // personnage existant : recherche en ligne + deux appels au modèle
-        if ($path !== '/assist/status' && !llm_ready()) {
+        // /assist/test choisit son fournisseur (local ou distant) : il vérifie lui-même.
+        if ($path !== '/assist/status' && $path !== '/assist/test' && !llm_ready()) {
             http_response_code(400);
             echo json_encode(['ok' => false, 'error' => t('error.ai.configure_settings')], JSON_UNESCAPED_UNICODE);
             exit;
@@ -74,7 +75,7 @@ if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/status', '/a
         $history = is_array($history) ? $history : [];
         if ($path === '/assist/turn') {
             $action  = (string) ($_POST['action'] ?? 'reply');
-            $action  = in_array($action, ['start', 'reply', 'suggest'], true) ? $action : 'reply';
+            $action  = in_array($action, ['start', 'reply', 'suggest', 'brief'], true) ? $action : 'reply';
             $pending = assist_canon_ref(json_decode((string) ($_POST['pending_canon'] ?? 'null'), true));
             $res     = assist_turn($draft, $history, $action, (string) ($_POST['answer'] ?? ''), $persona, $prompts, $pending,
                 (string) ($_POST['focus'] ?? ''), (int) ($_POST['stalls'] ?? 0));
@@ -91,6 +92,47 @@ if ($method === 'POST' && in_array($path, ['/assist/turn', '/assist/status', '/a
             }
             echo json_encode(['ok' => true, 'fields' => assist_review_fields($final, $persona, $prompts),
                 'progress' => assist_progress($final['draft'], $prepared)], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        /* --- tester la voix du brouillon AVANT de créer la fiche --- */
+        if ($path === '/assist/test') {
+            $fields = json_decode((string) ($_POST['fields'] ?? ''), true);
+            if (!is_array($fields) || $fields === []) {
+                throw new RuntimeException(t('assist.error.no_review'));
+            }
+            $provider = harness_provider_clean((string) ($_POST['provider'] ?? 'local'));
+            if (!harness_config_ready($provider)) {
+                http_response_code(400);
+                echo json_encode(['ok' => false, 'error' => t($provider === 'remote' ? 'harness.no_remote' : 'harness.no_local')], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            $final = assist_review_final($fields, $persona);
+            [$hPersona, $hPrompts] = harness_draft_entities($final);
+            $res = harness_run($hPersona, $hPrompts, harness_config($provider), [
+                'judge' => true,
+                'only'  => HARNESS_QUICK,
+            ]);
+            $juge = is_array($res['juge'] ?? null) ? $res['juge'] : [];
+            $sondes = [];
+            foreach (($res['sondes'] ?? []) as $label => $s) {
+                $sondes[$label] = ['text' => (string) ($s['text'] ?? ''), 'prompt' => (string) ($s['prompt'] ?? '')];
+            }
+            echo json_encode([
+                'ok'        => true,
+                'provider'  => $provider,
+                'scores'    => [
+                    'coherence' => (float) ($juge['coherence'] ?? 0),
+                    'voix'      => (float) ($juge['voix'] ?? 0),
+                    'limites'   => (float) ($juge['limites'] ?? 0),
+                    'naturel'   => (float) ($juge['naturel'] ?? 0),
+                    'hors_role' => (float) ($juge['hors_role'] ?? 0),
+                ],
+                'resume'     => (string) ($juge['resume'] ?? ''),
+                'problemes'  => array_values((array) ($juge['problemes'] ?? [])),
+                'corrections'=> array_values((array) ($juge['corrections'] ?? [])),
+                'audit'      => $res['audit'] ?? [],
+                'sondes'     => $sondes,
+            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
         $fields = json_decode((string) ($_POST['fields'] ?? ''), true);

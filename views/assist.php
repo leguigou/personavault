@@ -14,7 +14,8 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
          data-token="<?= e($token) ?>"
          data-draft="<?= e((string) json_encode($draft, JSON_UNESCAPED_UNICODE)) ?>"
          data-progress="<?= e((string) json_encode($progress, JSON_UNESCAPED_UNICODE)) ?>"
-         data-new="<?= $isNew ? '1' : '0' ?>">
+         data-new="<?= $isNew ? '1' : '0' ?>"
+         data-test-provider="<?= harness_config_ready('local') ? 'local' : (harness_config_ready('remote') ? 'remote' : 'local') ?>">
     <header class="as-head">
         <a class="as-hbtn" href="<?= e($back) ?>" aria-label="<?= e(t('assist.back')) ?>">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -56,6 +57,11 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
 
         <div class="as-bottom">
             <div class="as-chips" data-as-chips></div>
+            <button type="button" class="as-brief" data-as-brief>
+                <?= $SPARK ?>
+                <span><?= e(t('assist.brief_btn')) ?></span>
+                <small><?= e(t('assist.brief_hint')) ?></small>
+            </button>
             <form class="as-compose" data-as-form>
                 <label class="sr-only" for="as-input"><?= e(t('assist.input_label')) ?></label>
                 <textarea id="as-input" class="as-input" rows="1" maxlength="2000" data-as-input placeholder="<?= e(t('assist.input_placeholder')) ?>"></textarea>
@@ -87,6 +93,13 @@ $SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5
                 </div>
                 <footer>
                     <p class="as-review-error" data-as-review-error role="alert" hidden></p>
+                    <div class="as-testbar">
+                        <button type="button" class="as-testbtn" data-as-test-run>
+                            <span><?= e(t('assist.test_btn')) ?></span>
+                            <small><?= e(t('assist.test_hint')) ?></small>
+                        </button>
+                        <div class="as-testout" data-as-test-out hidden></div>
+                    </div>
                     <div class="as-review-actions">
                         <button type="button" class="btn btn-ghost" data-as-review-back><?= e(t('assist.review_back')) ?></button>
                         <button type="submit" class="btn btn-primary" data-as-review-save><?= e($isNew ? t('assist.create') : t('assist.apply')) ?></button>
