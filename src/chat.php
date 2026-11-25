@@ -1877,6 +1877,10 @@ function chat_time_context(array $conv, array $history, bool $skipSpontaneous = 
     return implode("\n", $lines);
 }
 
+/** Fréquences absolues : dans une consigne de jeu, elles font appliquer le tic à 100 % des messages.
+ *  Les formes niées (« pas souvent », « jamais systématiquement ») sont justement les bonnes. */
+const DIRECTIVE_ABSOLUTE_RX = '/(?<!pas )(?<!pas à )(?<!jamais )(?<!ni )(?<!sans )\b(souvent|régulièrement|regulièrement|toujours|systématiquement|en permanence|chaque message|à chaque message)\b/iu';
+
 /**
  * Propose une « consigne de jeu » à partir du prompt système du persona.
  * @return array{directive:string, temperature:float}
@@ -1917,6 +1921,10 @@ function persona_ai_directive(array $persona, array $prompts): array
         . "les habitudes de langage (abréviations, ponctuation relâchée, majuscules), l'usage des emojis "
         . "(lesquels, à quelle fréquence), un ou deux tics de langage concrets, et ce que le personnage "
         . "ne fait jamais (pas de listes, pas de ton d'assistant, pas de questions en rafale…). "
+        . "IMPORTANT : chaque tic et chaque emoji doit être donné AVEC SA FRÉQUENCE RELATIVE « une réponse sur "
+        . "trois », « quand elle est gênée », « de temps en temps », « une fois sur quatre ». N'écris jamais "
+        . "« souvent », « régulièrement », « toujours », « systématiquement » ni « à chaque message » : le "
+        . "modèle appliquerait le tic à tous ses messages et le personnage radoterait. "
         . "Ne résume pas le personnage, ne décris pas son physique, ne répète pas le prompt système : "
         . "uniquement des règles de forme, utilisables telles quelles. 420 caractères maximum, sans markdown. "
         . "Propose aussi une température de génération entre 0.6 et 1.1 (plus le personnage est expressif, "
@@ -1941,6 +1949,31 @@ function persona_ai_directive(array $persona, array $prompts): array
         throw new RuntimeException(t('error.ai.empty_reply'));
     }
     $temp = (float) ($json['temperature'] ?? 0.85);
+
+    // Garde-fou : « souvent », « régulièrement »… font appliquer le tic à CHAQUE message.
+    // Une seule seconde chance, avec la raison ; sinon on rend la consigne telle quelle.
+    if (preg_match(DIRECTIVE_ABSOLUTE_RX, $dir)) {
+        try {
+            $fix = llm_request(
+                [
+                    ['role' => 'system', 'content' => 'Réécris cette consigne de jeu en remplaçant toute fréquence '
+                        . 'absolue (« souvent », « régulièrement », « toujours », « systématiquement », « à chaque '
+                        . 'message ») par une fréquence RELATIVE (« une réponse sur trois », « quand elle est gênée », '
+                        . '« de temps en temps »). Garde le reste mot pour mot. Réponds uniquement par un JSON : '
+                        . '{"directive":"..."}'],
+                    ['role' => 'user', 'content' => $dir],
+                ],
+                $cfg,
+                ['temperature' => 0.2, 'max_tokens' => 420, 'timeout' => 90, 'json' => true, 'purpose' => 'directive']
+            );
+            $retry = trim((string) (llm_json((string) $fix['content'])['directive'] ?? ''));
+            if ($retry !== '' && !preg_match(DIRECTIVE_ABSOLUTE_RX, $retry)) {
+                $dir = $retry;
+            }
+        } catch (Throwable $ignored) {
+            // on garde la première version : mieux vaut une consigne imparfaite qu'aucune
+        }
+    }
 
     return [
         'directive'   => mb_substr($dir, 0, 600),

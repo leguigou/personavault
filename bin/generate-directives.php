@@ -8,11 +8,14 @@
  *   php bin/generate-directives.php --apply        (écrit en base)
  *   php bin/generate-directives.php --apply --force (réécrit même celles déjà remplies)
  *   php bin/generate-directives.php --apply --only=lisa
+ *   php bin/generate-directives.php --apply --absolute   (seulement celles qui radotent :
+ *       fréquence absolue « souvent / régulièrement / toujours » = tic à 100 % des messages)
  */
 require __DIR__ . '/../src/bootstrap.php';
 
 $dry   = in_array('--dry', $argv ?? [], true) && !in_array('--apply', $argv ?? [], true);
 $force = in_array('--force', $argv ?? [], true);
+$absolute = in_array('--absolute', $argv ?? [], true);
 $only  = null;
 foreach ($argv ?? [] as $arg) {
     if (str_starts_with($arg, '--only=')) {
@@ -34,7 +37,11 @@ foreach ($rows as $persona) {
     if ($only !== null && $persona['slug'] !== $only) {
         continue;
     }
-    if (!$force && trim((string) $persona['directive']) !== '') {
+    if ($absolute && !preg_match(DIRECTIVE_ABSOLUTE_RX, (string) $persona['directive'])) {
+        $skipped++; // déjà saine : on n'y touche pas
+        continue;
+    }
+    if (!$force && !$absolute && trim((string) $persona['directive']) !== '') {
         $skipped++;
         continue;
     }
