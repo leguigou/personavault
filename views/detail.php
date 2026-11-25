@@ -114,6 +114,10 @@ $token    = csrf_token();
             <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
         </header>
         <div class="action-list">
+            <a class="action-row action-row-2" href="/p/<?= e(rawurlencode($persona['slug'])) ?>/harness">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 16 0M7 12v4a2 2 0 0 0 2 2h1M17 12v4a2 2 0 0 1-2 2h-1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 6v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                <span><strong><?= e(t('harness.open')) ?></strong><small><?= e(t('harness.open_hint')) ?></small></span>
+            </a>
             <button type="button" class="action-row action-row-2" data-open-modal="#export-modal">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span><strong><?= e(t('cards.export')) ?></strong><small><?= e(t('persona.more_export_hint')) ?></small></span>
@@ -282,6 +286,7 @@ $token    = csrf_token();
         <h2><?= e(t('persona.prompts_title')) ?> <span class="count"><?= count($prompts) ?></span></h2>
         <div class="prompt-tools">
             <a class="btn btn-ghost btn-sm" href="/p/<?= e(rawurlencode($persona['slug'])) ?>/prompt-audit"><?= e(t('persona.audit.title')) ?></a>
+            <a class="btn btn-ghost btn-sm" href="/p/<?= e(rawurlencode($persona['slug'])) ?>/harness"><?= e(t('harness.open')) ?></a>
             <button class="btn btn-ghost btn-sm" type="button" data-prompt-new>
                 <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
                 <?= e(t('persona.add')), "\n" ?>
