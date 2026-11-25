@@ -164,6 +164,25 @@ $isAssist = (bool) preg_match('#^/p/(?:[a-z0-9-]+/)?assist$#', $currentPath);
     <div class="lb-dots" data-lb-dots aria-hidden="true"></div>
 </div>
 
+<?php $ctxAsk = ctx_purge_ask_read(); ?>
+<!-- fenêtre de contexte : le modèle chargé garde l'ancienne valeur -->
+<div class="modal" id="ctx-modal" data-modal hidden
+     data-token="<?= e(csrf_token()) ?>"
+     <?php if ($ctxAsk): ?>data-ask="<?= e(json_encode($ctxAsk, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP)) ?>"<?php endif; ?>>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ctx-modal-title">
+        <header class="modal-head">
+            <h2 id="ctx-modal-title"><?= e(t('ctx_purge.title')) ?></h2>
+            <button type="button" class="icon-btn btn-close" data-close-modal aria-label="<?= e(t('common.close')) ?>">&times;</button>
+        </header>
+        <p class="fb-msg" data-ctx-msg></p>
+        <p class="fb-hint"><?= e(t('ctx_purge.hint')) ?></p>
+        <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-close-modal><?= e(t('ctx_purge.later')) ?></button>
+            <button type="button" class="btn btn-primary" data-ctx-purge><?= e(t('ctx_purge.purge')) ?></button>
+        </div>
+    </div>
+</div>
+
 <script type="application/json" id="pv-i18n"><?= json_encode((object) i18n_js(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 <script src="<?= e(asset_url('app.js')) ?>" defer></script>
 </body>

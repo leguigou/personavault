@@ -4,6 +4,12 @@
  * The js.modal.*, js.unsaved.* and js.chat.jump keys are in common.php.
  */
 return [
+    'js.ctx_purge.body_ask' => 'The context window of {name} changes from {old} to {new} tokens. The loaded model keeps the old value: purge it?',
+    'js.ctx_purge.body_chat' => 'This conversation asks for {new} tokens, but the model is loaded with {old}. Purge it so it adapts?',
+    'js.ctx_purge.purging' => 'Purging…',
+    'js.ctx_purge.done' => 'Model purged. It will load again with the new window.',
+    'js.ctx_purge.nothing' => 'No model loaded: nothing to purge.',
+    'js.ctx_purge.failed' => 'Unable to purge.',
     'js.chat.retry_last_message' => 'Retry response',
     'js.chat.pending_actions' => 'Queued · {count}',
     'js.facts.story' => 'Persona’s story',

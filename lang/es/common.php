@@ -5,6 +5,12 @@
 return [
     '_name' => 'Español',
 
+    // --- ventana de contexto (modal «¿purgar el modelo?»)
+    'ctx_purge.title'  => 'Modelo cargado con otra ventana',
+    'ctx_purge.hint'   => 'El modelo toma la nueva ventana la próxima vez que se cargue. Sin purgar, mantiene el valor anterior hasta descargarse.',
+    'ctx_purge.purge'  => 'Purgar el modelo',
+    'ctx_purge.later'  => 'Más tarde',
+
     // --- general
     'app.default_title'   => 'Personas',
     'common.close'        => 'Cerrar',

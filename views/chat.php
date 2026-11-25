@@ -48,6 +48,7 @@ $questions = chat_opening_questions($conv, $messages, $totalMsgs);
              data-facts-timing="<?= e($__facts['frequency'] === 'off' ? 'off' : $__facts['timing']) ?>"
              data-facts-idle="<?= (int) $__facts['idle'] ?>"
              data-status="/chat/<?= (int) $conv['id'] ?>/status"
+             data-ctx-wanted="<?= (int) $conv['context_window'] ?>"
              data-relationship="/chat/<?= (int) $conv['id'] ?>/relationship"
              <?php if (relationship_memory_on($conv)): ?>data-relationship-window="<?= relationship_wait_ms((int) $persona['id']) ?>"<?php endif; ?>
              <?php if ($openingPending): ?>data-opening="/chat/<?= (int) $conv['id'] ?>/opening"<?php endif; ?>

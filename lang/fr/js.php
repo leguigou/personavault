@@ -4,6 +4,12 @@
  * Les clés js.modal.*, js.unsaved.* et js.chat.jump sont dans common.php.
  */
 return [
+    'js.ctx_purge.body_ask' => 'La fenêtre de contexte de {name} passe de {old} à {new} tokens. Le modèle chargé garde l’ancienne valeur : le purger ?',
+    'js.ctx_purge.body_chat' => 'Cette discussion demande {new} tokens, mais le modèle est chargé avec {old}. Le purger pour qu’il s’adapte ?',
+    'js.ctx_purge.purging' => 'Purge…',
+    'js.ctx_purge.done' => 'Modèle purgé. Il se rechargera avec la nouvelle fenêtre.',
+    'js.ctx_purge.nothing' => 'Aucun modèle chargé : rien à purger.',
+    'js.ctx_purge.failed' => 'Purge impossible.',
     'js.chat.retry_last_message' => 'Relancer la réponse',
     'js.chat.pending_actions' => 'En attente · {count}',
     'js.facts.story' => 'Histoire du persona',

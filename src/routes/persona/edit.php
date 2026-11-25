@@ -51,6 +51,10 @@ if ($action === '' && $method === 'POST') {
         chat_trait_level($_POST['fidelity'] ?? null) ?? (int) $persona['fidelity'],
         $pid,
     ]);
+    if ($aiCtx !== (int) $persona['context_window']) {
+        // le modèle déjà chargé garde l'ancienne fenêtre : demander s'il faut le purger
+        ctx_purge_ask($name, (int) $persona['context_window'], $aiCtx);
+    }
     if ((string) $avatar !== (string) $persona['avatar']) {
         // l'ancien portrait peut encore servir dans la galerie : supprimé seulement s'il n'est plus référencé
         release_media((string) $persona['avatar']);

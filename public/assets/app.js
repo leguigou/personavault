@@ -3690,6 +3690,21 @@
             }
         };
 
+        /* le modèle peut être chargé avec une autre fenêtre que celle de cette discussion
+           (autre fiche, fenêtre modifiée depuis) : on demande s'il faut le purger pour s'adapter */
+        const wantCtx = parseInt(chat.dataset.ctxWanted || "0", 10);
+        const checkCtxWindow = async () => {
+            if (!wantCtx) return;
+            const d = await fetchStatus();
+            if (!d || !d.ok) return;
+            const inst = (d.loaded || []).find((l) => l.key === d.wanted || l.id === d.wanted);
+            if (!inst || !Number(inst.ctx) || Number(inst.ctx) === wantCtx) return;
+            document.dispatchEvent(new CustomEvent("pv:ctx-ask", {
+                detail: { kind: "chat", name: d.wanted, old: Number(inst.ctx), new: wantCtx },
+            }));
+        };
+        checkCtxWindow();
+
         const paintStatus = (d) => {
             lastStatus = d;
             if (!d || d.ok === false) {
@@ -6311,6 +6326,61 @@
             if (!fstate) load();
         });
         load();
+    }
+
+    /* ---------------------- fenêtre de contexte : purger le modèle pour qu'il s'adapte */
+    const ctxModal = document.querySelector("#ctx-modal");
+    if (ctxModal) {
+        const ctxMsg = ctxModal.querySelector("[data-ctx-msg]");
+        const ctxBtn = ctxModal.querySelector("[data-ctx-purge]");
+        const num = (n) => new Intl.NumberFormat().format(Number(n) || 0);
+
+        const ctxAsk = (kind, name, oldCtx, newCtx) => {
+            if (ctxMsg) {
+                ctxMsg.textContent = tr(kind === "chat" ? "ctx_purge.body_chat" : "ctx_purge.body_ask", {
+                    name: name || "",
+                    old: num(oldCtx),
+                    new: num(newCtx),
+                });
+            }
+            modalOpen(ctxModal);
+        };
+
+        // demande laissée par le serveur (fenêtre changée dans la fiche ou depuis l'audit)
+        if (ctxModal.dataset.ask) {
+            try {
+                const ask = JSON.parse(ctxModal.dataset.ask);
+                ctxAsk("ask", ask.name, ask.old, ask.new);
+            } catch (e) { /* demande illisible */ }
+        }
+        // demande du chat : la fenêtre de la discussion ne correspond pas à celle du modèle chargé
+        document.addEventListener("pv:ctx-ask", (e) => {
+            const d = e.detail || {};
+            ctxAsk(d.kind || "chat", d.name, d.old, d.new);
+        });
+
+        ctxBtn?.addEventListener("click", async () => {
+            const original = ctxBtn.textContent;
+            ctxBtn.disabled = true;
+            ctxBtn.textContent = tr("ctx_purge.purging");
+            try {
+                const fd = new FormData();
+                fd.append("_token", ctxModal.dataset.token || "");
+                const res = await fetch("/settings/purge", { method: "POST", body: fd });
+                const data = await res.json().catch(() => ({ ok: false }));
+                if (!res.ok || !data.ok) throw new Error(data.error || tr("ctx_purge.failed"));
+                const n = (data.unloaded || []).length;
+                modalClose(ctxModal);
+                toast(n ? tr("ctx_purge.done", { n }) : tr("ctx_purge.nothing"));
+                // le modèle repart avec la bonne fenêtre : on relance le chargement s'il est là
+                document.querySelector("[data-load-model]")?.click();
+            } catch (err) {
+                toast(tr("common.error", { message: err.message }), true);
+            } finally {
+                ctxBtn.disabled = false;
+                ctxBtn.textContent = original;
+            }
+        });
     }
 
     /* ------------------------------------------------- purge mémoire LM Studio */
