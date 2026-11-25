@@ -36,6 +36,25 @@ $kinds = prompt_kinds();
         <div><dt><?= e(t('persona.audit.need')) ?></dt><dd><?= (int) $audit['need'] ?></dd></div>
         <div><dt><?= e(t('persona.audit.margin')) ?></dt><dd><?= sprintf('%+d', $audit['margin']) ?></dd></div>
     </dl>
+    <?php $fix = $audit['suggestion']; ?>
+    <?php if ($fix === null): ?>
+        <p class="prompt-audit-ok"><?= e(t('persona.audit.fits', ['margin' => fmt_number($audit['margin'])])) ?></p>
+    <?php elseif ($fix['window'] === null): ?>
+        <p class="prompt-audit-cut"><?= e(t('persona.audit.cut', ['missing' => fmt_number($fix['shortfall']), 'maximum' => fmt_number(131072)])) ?></p>
+        <p class="hint"><?= e(t('persona.audit.window_impossible')) ?></p>
+    <?php else: ?>
+        <p class="prompt-audit-cut"><?= e(t('persona.audit.cut', ['missing' => fmt_number($fix['shortfall']), 'maximum' => fmt_number(131072)])) ?></p>
+        <form class="prompt-audit-fix" method="post" action="<?= e($profileUrl) ?>/prompt-audit"
+              data-confirm="<?= e(t('persona.audit.window_confirm', ['configured' => fmt_number($fix['configured']), 'window' => fmt_number($fix['window'])])) ?>">
+            <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+            <input type="hidden" name="apply_window" value="<?= (int) $fix['window'] ?>">
+            <button class="btn btn-primary" type="submit"><?= e(t('persona.audit.window_apply', ['window' => fmt_number($fix['window'])])) ?></button>
+            <span class="hint"><?= e(t('persona.audit.window_min', ['minimum' => fmt_number((int) $fix['minimum'])])) ?></span>
+        </form>
+        <?php if ($fix['reload']): ?>
+            <p class="hint"><?= e(t('persona.audit.window_reload')) ?></p>
+        <?php endif; ?>
+    <?php endif; ?>
     <p class="hint"><?= e(t('persona.audit.window', ['configured' => $audit['configuredWindow'], 'effective' => $audit['effectiveWindow']])) ?>
         <?= e($audit['loadedWindow'] > 0 ? t('persona.audit.loaded', ['n' => $audit['loadedWindow']]) : t('persona.audit.unverified')) ?>
         <?php if ($audit['model'] !== ''): ?><code><?= e($audit['model']) ?></code><?php endif; ?>

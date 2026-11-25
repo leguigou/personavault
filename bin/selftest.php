@@ -602,6 +602,43 @@ try {
         && str_starts_with($tightAudit['system'], substr($repeated, 0, strlen($repeated) - strlen($tightOmissions[0]['text'])) . ' […] '),
         'audit : modèle chargé, aperçu identique à la discussion et coupe partielle ou complète de paragraphes identiques');
 
+    // Coupe : le milieu part par sections entières, jamais une phrase coupée en deux.
+    $sectionTitles = ['IDENTITÉ', 'ESSENCE', 'APPARENCE', 'HABITUDES', 'PROJETS', 'RÈGLES'];
+    $sectionTexts  = [];
+    foreach ($sectionTitles as $title) {
+        $sectionTexts[] = $title . "\n" . str_repeat('Phrase de la section. ', 30) . 'Fin ' . $title . '.';
+    }
+    $blockText = implode("\n\n", $sectionTexts);
+    $blockTokens = chat_estimate_tokens($blockText);
+    $blockOmitted = null;
+    $blockFitted = chat_fit_text($blockText, $blockTokens - 300, $blockOmitted);
+    $present = 0;
+    $partial = 0;
+    foreach ($sectionTitles as $title) {
+        if (!str_contains($blockFitted, $title)) {
+            continue;
+        }
+        $present++;
+        $partial += str_contains($blockFitted, 'Fin ' . $title . '.') ? 0 : 1;
+    }
+    $check(chat_estimate_tokens($blockFitted) <= $blockTokens - 300 && $present >= 3
+        && $partial <= 1 && str_starts_with($blockFitted, 'IDENTITÉ')
+        && str_ends_with($blockFitted, 'Fin RÈGLES.')
+        && str_contains($blockFitted, '[…]'),
+        'coupe : les sections du milieu partent entières (début et fin préservés), pas de phrase tronquée');
+
+    // Fenêtre insuffisante : l'audit propose la valeur qui ferait tenir le prompt.
+    $tightPersona = ['context_window' => 8192, 'max_tokens' => 400] + $auditPersona;
+    $tightFixed = persona_prompt_audit($tightPersona,
+        [['kind' => 'system', 'title' => 'Sections', 'body' => $blockText]],
+        ['id' => 0, 'memory_enabled' => 0], 'Salut', []);
+    $check($offlineAudit['suggestion'] === null
+        && $tightFixed['margin'] < 0
+        && (int) ($tightFixed['suggestion']['minimum'] ?? 0) > 8192
+        && (int) ($tightFixed['suggestion']['window'] ?? 0) >= (int) ($tightFixed['suggestion']['minimum'] ?? 0)
+        && (int) ($tightFixed['suggestion']['shortfall'] ?? 0) === -$tightFixed['margin'],
+        'audit : une fenêtre trop courte propose une fenêtre suffisante, sans doublon quand tout tient');
+
     echo PHP_EOL . '— index plein texte des messages' . PHP_EOL;
     db()->prepare('INSERT INTO conversations (persona_id, title) VALUES (?, ?)')->execute([$pid, 'ailleurs']);
     $cid2 = (int) db()->lastInsertId();
