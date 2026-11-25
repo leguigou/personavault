@@ -31,13 +31,14 @@ if ($path === '/memories' && $method === 'POST') {
         flash('error', t('flash.memory.empty'));
         redirect('/memories');
     }
-    facts_add(
+    // ajouté à la main : l'utilisateur l'affirme lui-même (MemoryGuard : fiable)
+    facts_guard_set(facts_add(
         (int) ($_POST['persona_id'] ?? 0),
         $content,
         (string) ($_POST['category'] ?? 'fait'),
         (string) ($_POST['confidence'] ?? 'confirme'),
         null
-    );
+    ), ['origin' => 'manual']);
     flash('ok', t('flash.memory.added'));
     redirect('/memories');
 }

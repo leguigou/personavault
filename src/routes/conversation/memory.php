@@ -109,6 +109,7 @@ if (($action === 'fact-add' || $action === 'fact-delete') && $method === 'POST')
             $cat = 'fait';
         }
         $id = facts_add($pid, $content, $cat, 'confirme', $cid);
+        facts_guard_set($id, ['origin' => 'manual']);
         echo json_encode(['ok' => true, 'id' => $id, 'memories' => chat_persona_memories($pid)], JSON_UNESCAPED_UNICODE);
         exit;
     }

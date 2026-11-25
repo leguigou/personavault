@@ -62,4 +62,7 @@ return [
     'harness.sonde_fil_1'       => 'Continuité 1/3',
     'harness.sonde_fil_2'       => 'Continuité 2/3',
     'harness.sonde_fil_3'       => 'Continuité 3/3',
+    'harness.sonde_faux_souvenir' => 'Faux souvenir (week-end à Rome)',
+    'harness.false_memory_bad' => 'Invente un souvenir commun qui n’a jamais existé (week-end à Rome) : MemoryGuard ne suffit pas, renforce le prompt système.',
+    'harness.false_memory_ok' => 'Reconnaît ne pas se souvenir d’un moment qui n’a jamais existé.',
 ];

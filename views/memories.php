@@ -116,11 +116,12 @@ $token = csrf_token();
 <?php else: ?>
     <div class="mem-list">
         <?php foreach ($rows as $r): ?>
-            <?php $pid = (int) ($r['persona_id'] ?? 0); ?>
+            <?php $pid = (int) ($r['persona_id'] ?? 0); $rel = memory_guard_reliability($r); ?>
             <article class="mem-item">
                 <div class="mem-item-head">
                     <span class="cat cat-<?= e((string) $r['category']) ?>"><?= e($cats[$r['category']] ?? t('memories.category_fallback')) ?></span>
                     <span class="conf conf-<?= e((string) $r['confidence']) ?>"><?= e($confs[$r['confidence']] ?? t('memories.confidence_fallback')) ?></span>
+                    <span class="mguard mguard-<?= e($rel) ?>" title="<?= e(t('mguard.title')) ?>"><?= e(memory_guard_labels()[$rel]) ?></span>
                     <span class="mem-scope"><?= e($pid > 0 ? ($names[$pid] ?? t('memories.scope_unknown')) : t('memories.scope_shared')) ?></span>
                     <?php if ($r['subject'] === 'story'): ?><span class="mem-scope"><?= e(t('chat.facts.story')) ?></span><?php endif; ?>
                     <form method="post" action="/memories/<?= (int) $r['id'] ?>/delete" data-confirm="<?= e(t('memories.delete_confirm')) ?>">
@@ -130,6 +131,20 @@ $token = csrf_token();
                 </div>
 
                 <p class="mem-content"><?= e((string) $r['content']) ?></p>
+                <?php
+                // MemoryGuard : d'où vient ce souvenir, ce qui le prouve, combien de fois il a été redit, quand il expire
+                $facts = array_filter([
+                    (string) ($r['evidence'] ?? '') !== '' ? t('mguard.evidence', ['quote' => (string) $r['evidence']]) : '',
+                    (int) ($r['confirmations'] ?? 1) >= 2 ? t('mguard.confirmed', ['n' => (int) $r['confirmations']]) : '',
+                    (string) ($r['expires_at'] ?? '') !== '' ? t('mguard.expires', ['date' => fr_date((string) $r['expires_at'])]) : '',
+                    match ((string) ($r['origin'] ?? '')) {
+                        'manual' => t('mguard.origin.manual'), 'explicit' => t('mguard.origin.explicit'),
+                        'mcp' => t('mguard.origin.mcp'), 'auto' => (string) ($r['evidence'] ?? '') === '' ? t('mguard.origin.auto_noproof') : '',
+                        default => t('mguard.origin.legacy'),
+                    },
+                ]);
+                ?>
+                <?php if ($facts): ?><p class="mguard-meta"><?= e(implode(' · ', $facts)) ?></p><?php endif; ?>
 
                 <details class="mem-edit">
                     <summary><?= e(t('memories.edit')) ?></summary>

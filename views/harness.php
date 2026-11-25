@@ -22,6 +22,7 @@ $sondeKeys = [
     'limites'     => 'harness.sonde_limites',
     'court'       => 'harness.sonde_court',
     'fuite'       => 'harness.sonde_fuite',
+    'faux_souvenir' => 'harness.sonde_faux_souvenir',
     'fil_1'       => 'harness.sonde_fil_1',
     'fil_2'       => 'harness.sonde_fil_2',
     'fil_3'       => 'harness.sonde_fil_3',
@@ -149,11 +150,16 @@ $sondeKeys = [
 
         <?php /* ---------- verdict du juge ---------- */ ?>
         <?php $verdict = (array) ($job['juge'] ?? []); ?>
-        <?php if (!empty($verdict['resume']) || !empty($verdict['problemes']) || !empty($verdict['corrections'])): ?>
+        <?php if (!empty($verdict['resume']) || !empty($verdict['problemes']) || !empty($verdict['corrections']) || !empty($verdict['faux_souvenir'])): ?>
             <div class="harness-block">
                 <h3><?= e(t('harness.verdict_title')) ?></h3>
                 <?php if (!empty($verdict['resume'])): ?>
                     <p class="harness-summary"><?= e((string) $verdict['resume']) ?></p>
+                <?php endif; ?>
+                <?php if (($verdict['faux_souvenir'] ?? '') === 'invente'): ?>
+                    <p class="harness-flag is-bad">✗ <?= e(t('harness.false_memory_bad')) ?></p>
+                <?php elseif (($verdict['faux_souvenir'] ?? '') === 'doute'): ?>
+                    <p class="harness-flag is-good">✓ <?= e(t('harness.false_memory_ok')) ?></p>
                 <?php endif; ?>
                 <?php foreach ((array) ($verdict['problemes'] ?? []) as $p): ?>
                     <p class="harness-flag is-bad">✗ <?= e((string) $p) ?></p>

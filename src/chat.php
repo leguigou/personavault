@@ -1503,7 +1503,8 @@ function chat_system_prompt(array $persona, array $personaPrompts, array $conv, 
         . "Langue : celle de l'utilisateur. N'invente pas de faits sur l'utilisateur et ne contredis jamais la fiche "
         . "(ville, âge, métier, apparence) : si un détail manque, reste vague plutôt que d'inventer. "
         . "Le dernier message peut commencer par un bloc <contexte>…</contexte> : ce sont des informations "
-        . "pour toi seul (heure, souvenirs), invisibles pour l'utilisateur. Utilise-les sans jamais citer ce bloc.";
+        . "pour toi seul (heure, souvenirs), invisibles pour l'utilisateur. Utilise-les sans jamais citer ce bloc. "
+        . memory_guard_rule();
 
     $relationship = relationship_context((int) $persona['id'], $conv, $addressOverride);
     if ($relationship !== '') {
@@ -2342,11 +2343,19 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
             . "(sers-t'en comme de souvenirs, ne les cite pas mot pour mot, ne les mentionne pas comme "
             . "des « extraits ») :\n" . implode("\n", $lines);
     }
-    $memoryRoom = min($limits['memory'] - $summaryCost, $contextRoom - chat_estimate_tokens($time));
+    // MemoryGuard : « tu te souviens de… » → le persona s'appuie sur ce qu'il retrouve, ou doute au lieu d'inventer.
+    // Consigne courte, hors du bloc mémoire (qui peut être raccourci faute de place).
+    $guard = '';
+    if (chat_has_recall_cue($memoryQuery)) {
+        $found = $recall !== [] || ($factsOn && (facts_relevant($pid, $memoryQuery, 1, 'user', false) !== []
+            || facts_relevant($pid, $memoryQuery, 1, 'story', false) !== []));
+        $guard = memory_guard_context($found);
+    }
+    $memoryRoom = min($limits['memory'] - $summaryCost, $contextRoom - chat_estimate_tokens($time) - chat_estimate_tokens($guard));
     $memory = chat_fit_text(implode("\n\n", $context), $memoryRoom);
     // humeur et ressentis du persona dans cette conversation (src/feelings.php)
     $feelings = (int) ($conv['id'] ?? 0) > 0 ? feel_context((int) $conv['id'], $persona) : '';
-    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $planning, $feelings, $replyContext, $memory, $web, $topicText]))) . "\n</contexte>";
+    $contextBlock = "<contexte>\n" . trim(implode("\n\n", array_filter([$time, $planning, $feelings, $replyContext, $memory, $guard, $web, $topicText]))) . "\n</contexte>";
 
     $text = $contextBlock . "\n\n" . $text;
     $used = chat_estimate_tokens($system) + chat_estimate_tokens($text);

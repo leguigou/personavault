@@ -177,7 +177,13 @@ function backup_restore_conversations(ZipArchive $zip, array $index, string $roo
             $fields = backup_fields($memory, [
                 'category' => 'fait', 'content' => '', 'confidence' => 'confirme',
                 'created_at' => $now, 'updated_at' => backup_str($memory['created_at'] ?? $now),
+                // MemoryGuard : origine, preuve, confirmations, expiration
+                'origin' => '', 'evidence' => '', 'confirmations' => 1, 'last_confirmed_at' => '', 'expires_at' => '',
             ]);
+            $fields['origin'] = in_array($fields['origin'], ['', 'auto', 'explicit', 'manual', 'mcp'], true) ? $fields['origin'] : '';
+            $fields['evidence'] = mb_substr($fields['evidence'], 0, 300);
+            $fields['confirmations'] = max(1, min(1000, $fields['confirmations']));
+            $fields['expires_at'] = preg_match('/^\d{4}-\d{2}-\d{2}$/', $fields['expires_at']) ? $fields['expires_at'] : '';
             $fields['category'] = isset($categories[$fields['category']]) ? $fields['category'] : 'fait';
             $fields['confidence'] = isset($confidences[$fields['confidence']]) ? $fields['confidence'] : 'confirme';
             $source = $conversationIds[backup_id($memory['source_conversation_id'] ?? null)] ?? null;

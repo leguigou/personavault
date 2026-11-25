@@ -949,6 +949,11 @@ function mcp_memory_row(array $m): array
         'category' => (string) $m['category'],
         'confidence' => (string) $m['confidence'],
         'content' => (string) $m['content'],
+        'reliability' => memory_guard_reliability($m),
+        'origin' => (string) ($m['origin'] ?? ''),
+        'evidence' => (string) ($m['evidence'] ?? ''),
+        'confirmations' => (int) ($m['confirmations'] ?? 1),
+        'expires_at' => (string) ($m['expires_at'] ?? ''),
         'updated_at' => (string) $m['updated_at'],
     ];
 }
@@ -987,6 +992,7 @@ function mcp_tool_add_memory(array $args): array
     }
     $id = facts_add(!empty($args['global']) ? 0 : (int) $p['id'], $content, (string) ($args['category'] ?? 'fait'),
         (string) ($args['confidence'] ?? 'confirme'));
+    facts_guard_set($id, ['origin' => 'mcp']);
     if ($story) {
         // histoire du persona ajoutée à la main : pas de message d'origine (source_message_id reste vide)
         db()->prepare("UPDATE user_memories SET subject = 'story' WHERE id = ?")->execute([$id]);
