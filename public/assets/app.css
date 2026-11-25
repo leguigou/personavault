@@ -5303,3 +5303,40 @@ html[data-mode="light"] .as-chip.is-suggest { color: #a21caf; }
 .harness-sonde-q .hint { margin: 0; }
 .harness-sonde-a { margin: 0; font-size: 13.5px; line-height: 1.5; }
 .harness-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+
+/* ------------------------------------------------ empreinte psychologique (views/psy.php) */
+.psy-state { display: grid; gap: 10px; margin-top: 12px; justify-items: start; }
+.psy-result { --psy-obs: 79, 174, 155; --psy-exp: 160, 168, 188; }
+html[data-mode="light"] .psy-result { --psy-obs: 30, 128, 110; --psy-exp: 110, 118, 140; }
+.psy-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.psy-fidelity { display: grid; justify-items: end; line-height: 1; flex: 0 0 auto; }
+.psy-fidelity strong { font-size: 34px; font-weight: 750; color: rgb(var(--psy-obs)); }
+.psy-fidelity small { font-size: 13px; color: var(--muted); margin-left: 2px; }
+.psy-fidelity span { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.psy-figure { margin: 8px 0 4px; display: grid; justify-items: center; gap: 8px; }
+.psy-radar { width: 100%; max-width: 520px; height: auto; overflow: visible; }
+.psy-ring { fill: none; stroke: rgba(var(--ink), .14); stroke-width: 1; }
+.psy-spoke { stroke: rgba(var(--ink), .12); stroke-width: 1; }
+.psy-label { font-size: 15px; fill: var(--text); font-family: inherit; }
+.psy-observed { fill: rgba(var(--psy-obs), .2); stroke: rgb(var(--psy-obs)); stroke-width: 3; stroke-linejoin: round; }
+.psy-expected { fill: none; stroke: rgb(var(--psy-exp)); stroke-width: 2.5; stroke-dasharray: 7 6; stroke-linejoin: round; }
+.psy-dot { fill: rgb(var(--psy-obs)); }
+.psy-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.psy-key { display: inline-flex; align-items: center; gap: 7px; }
+.psy-key::before { content: ""; width: 22px; height: 0; border-top: 3px solid rgb(var(--psy-obs)); }
+.psy-key-expected::before { border-top: 2.5px dashed rgb(var(--psy-exp)); }
+.psy-conclusion { font-size: 15px; line-height: 1.6; margin: 14px 0 8px; padding-top: 14px; border-top: 1px solid var(--border-soft, var(--border)); }
+.psy-table { display: grid; gap: 2px; font-size: 13.5px; }
+.psy-row { display: grid; grid-template-columns: 1fr 64px 64px 56px; gap: 8px; align-items: center; padding: 8px 4px; list-style: none; cursor: pointer; }
+.psy-row::-webkit-details-marker { display: none; }
+.psy-row span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.psy-row-head { color: var(--muted); font-size: 12px; cursor: default; border-bottom: 1px solid var(--border-soft, var(--border)); }
+.psy-row-wrap { border-bottom: 1px solid var(--border-soft, var(--border)); }
+.psy-row-wrap > .hint { margin: 0 4px 8px; }
+.psy-gap { font-weight: 650; }
+.psy-gap.is-big { color: var(--warn-t, #fcd34d); }
+.psy-qa > summary { cursor: pointer; list-style: none; }
+.psy-qa > summary h3 { display: inline; }
+.psy-history { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.psy-history a { display: flex; justify-content: space-between; gap: 10px; padding: 9px 10px; border-radius: 10px; color: inherit; text-decoration: none; font-size: 13.5px; }
+.psy-history a:hover, .psy-history .is-on a { background: rgba(var(--ink), .06); }

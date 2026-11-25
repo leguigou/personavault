@@ -943,6 +943,35 @@ try {
     $check(!mcp_token_ok($tok2['access_token']) && mcp_oauth_active_count() === 0, 'OAuth : révocation des connexions');
     set_setting('mcp_enabled', '0');
 
+    echo PHP_EOL . '— empreinte psychologique' . PHP_EOL;
+    $psyClean = psy_clean_scores(['empathie' => ['score' => 140, 'raison' => 'Très à l’écoute'], 'humour' => 30, 'pirate' => 99]);
+    $check(count($psyClean) === 8 && $psyClean['empathie'] === ['score' => 100, 'raison' => 'Très à l’écoute']
+        && $psyClean['humour']['score'] === 30 && $psyClean['loyaute']['score'] === 50 && !isset($psyClean['pirate']),
+        'empreinte : notes bornées 0-100, trait absent à 50, trait inconnu ignoré');
+    $psyExp = psy_clean_scores(array_fill_keys(PSY_TRAITS, 60));
+    $psyObs = psy_clean_scores(['confiance' => 100] + array_fill_keys(PSY_TRAITS, 60));
+    $psyFid = psy_fidelity($psyExp, $psyObs);
+    $check($psyFid['gaps']['confiance'] === 40 && $psyFid['gaps']['humour'] === 0 && $psyFid['fidelity'] === 95,
+        'empreinte : écarts par trait et fidélité (100 − écart moyen)');
+    $psySvg = psy_radar_svg($psyExp, $psyObs);
+    $check(substr_count($psySvg, 'class="psy-ring"') === 5 && substr_count($psySvg, '<text') === 8 && str_contains($psySvg, 'psy-observed')
+        && str_contains($psySvg, 'psy-expected') && str_contains($psySvg, '>' . t('psy.trait.empathie') . '<'),
+        'empreinte : radar SVG (5 cercles, 8 traits, attendu et observé)');
+    $psyQ = psy_questions(['name' => 'Test', 'meta' => '[]']);
+    $check(count($psyQ) === 16 && count(array_filter($psyQ, static fn ($q) => $q['trait'] === 'loyaute')) === 2,
+        'empreinte : sans réponse du générateur, 2 mises en situation de secours par trait');
+    $psyPid = (int) db()->query('SELECT id FROM personas ORDER BY id LIMIT 1')->fetchColumn();
+    $psyResult = ['expected' => $psyExp, 'observed' => $psyObs, 'gaps' => $psyFid['gaps'], 'fidelity' => 95, 'qa' => [],
+        'conclusion' => 'ok', 'corrections' => [], 'local_model' => 'local-x', 'remote_model' => 'distant-y'];
+    for ($i = 0; $i < 22; $i++) {
+        $psyLast = psy_save_run($psyPid, ['fidelity' => 70 + $i] + $psyResult);
+    }
+    $check(count(psy_runs($psyPid)) === 20 && psy_runs($psyPid)[0]['fidelity'] === 91
+        && psy_run_get($psyPid, $psyLast)['expected']['confiance']['score'] === 60 && psy_run_get($psyPid + 999, $psyLast) === null,
+        'empreinte : résultats gardés (20 derniers par persona), relus par persona seulement');
+    $check(!psy_job_running(['state' => 'running', 'beat' => time() - 3600]) && psy_job_running(['state' => 'running', 'beat' => time()])
+        && !psy_job_running(null), 'empreinte : une tâche sans signe de vie depuis 10 min ne bloque plus un nouveau test');
+
     echo PHP_EOL . '— titres automatiques' . PHP_EOL;
     $check(chat_title_mode() === 'remote', 'par défaut : modèle distant (comportement d’origine)');
     set_setting('chat_title_model', 'off');

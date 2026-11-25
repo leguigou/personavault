@@ -39,7 +39,18 @@ const assist = (sys, user) => {
     }
     return null;
 };
+// empreinte psychologique (src/psy.php) : attendu, questions, observé (confiance +35), conclusion
+const psyTraits = (base, over) => Object.fromEntries(['empathie', 'sociabilite', 'humour', 'confiance', 'independance', 'sensibilite', 'impulsivite', 'loyaute']
+    .map((k) => [k, { score: over[k] ?? base, raison: 'Raison de test pour ' + k }]));
 const reply = (sys) => {
+    if (/Tu lis la FICHE d'un personnage/.test(sys)) return JSON.stringify({ traits: psyTraits(60, { humour: 80, confiance: 40 }) });
+    if (/Tu prépares un test de personnalité/.test(sys)) {
+        return JSON.stringify({ questions: [{ trait: 'empathie', message: 'Mon chat est mort ce matin.' }, { trait: 'inconnu', message: 'ignorée' }] });
+    }
+    if (/Tu observes UNIQUEMENT les réponses/.test(sys)) return JSON.stringify({ traits: psyTraits(60, { humour: 80, confiance: 75 }) });
+    if (/Tu compares la personnalité ATTENDUE/.test(sys)) {
+        return JSON.stringify({ conclusion: 'Conclusion de test : nettement plus confiante que prévu.', corrections: ['Ajouter au prompt système une part de doute.'] });
+    }
     if (/moteur de mémoire/i.test(sys)) {
         return JSON.stringify({ current_topic: 'Voyage', conversation_goal: 'Préparer le voyage',
             important_facts: ['Part en train'], decisions: [], open_questions: [], context_summary: 'Discussion de test.' });
