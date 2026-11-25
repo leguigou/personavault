@@ -2389,6 +2389,27 @@ function chat_build_messages(array $persona, array $personaPrompts, array $conv,
     ];
 }
 
+/**
+ * La fenêtre de contexte d'une fiche a changé : le modèle déjà chargé garde l'ancienne valeur,
+ * il faut le purger puis le recharger pour qu'il s'adapte. On demande confirmation à l'utilisateur
+ * sur la page suivante (ctx_purge_ask_read() dans le gabarit).
+ */
+function ctx_purge_ask(string $name, int $old, int $new): void
+{
+    if ($old === $new || $new <= 0) {
+        return;
+    }
+    $_SESSION['ctx_purge_ask'] = ['name' => $name, 'old' => $old, 'new' => $new];
+}
+
+/** Demande en attente, lue une seule fois. */
+function ctx_purge_ask_read(): ?array
+{
+    $ask = $_SESSION['ctx_purge_ask'] ?? null;
+    unset($_SESSION['ctx_purge_ask']);
+    return is_array($ask) ? $ask : null;
+}
+
 /** État du serveur LM Studio : joignable ? quel(s) modèle(s) chargé(s) ? */
 function lms_status(): array
 {

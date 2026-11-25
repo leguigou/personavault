@@ -15,6 +15,7 @@ if ($action === 'prompt-audit' && in_array($method, ['GET', 'POST'], true)) {
             $window = max(2048, min(131072, (int) round($apply / 1024) * 1024));
             db()->prepare('UPDATE personas SET context_window = ?, updated_at = datetime("now") WHERE id = ?')
                 ->execute([$window, $pid]);
+            ctx_purge_ask((string) $persona['name'], (int) $persona['context_window'], $window);
             flash('ok', t('persona.audit.window_applied', ['n' => fmt_number($window)]));
             redirect('/p/' . rawurlencode((string) $persona['slug']) . '/prompt-audit');
         }

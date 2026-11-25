@@ -8,6 +8,12 @@
 return [
     '_name' => 'Français',
 
+    // --- fenêtre de contexte (modale « purger le modèle ? »)
+    'ctx_purge.title'  => 'Modèle chargé avec une autre fenêtre',
+    'ctx_purge.hint'   => 'Le modèle prend la nouvelle fenêtre au prochain chargement. Sans purge, il garde l’ancienne valeur jusqu’à son déchargement.',
+    'ctx_purge.purge'  => 'Purger le modèle',
+    'ctx_purge.later'  => 'Plus tard',
+
     // --- général
     'app.default_title'   => 'Personas',
     'common.close'        => 'Fermer',

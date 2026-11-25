@@ -5,6 +5,12 @@
 return [
     '_name' => 'English',
 
+    // --- context window ("purge the model?" modal)
+    'ctx_purge.title'  => 'Model loaded with another window',
+    'ctx_purge.hint'   => 'The model picks up the new window the next time it loads. Without purging, it keeps the old value until it is unloaded.',
+    'ctx_purge.purge'  => 'Purge the model',
+    'ctx_purge.later'  => 'Later',
+
     // --- general
     'app.default_title'   => 'Personas',
     'common.close'        => 'Close',
